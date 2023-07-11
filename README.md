@@ -84,7 +84,7 @@ Jiaming Liu (jiaming.liu@wustl.edu) for reconstruction sample code
 
 ## Citing LEAP
 
-Please cite the following paper if you need to reference LEAP in your publications:
+Please cite the following paper if you need to reference LEAP in your publications:  
 Hyojin Kim and Kyle Champley, Differentiable Forward Projector for X-ray Computed Tomography, Arxiv, 2023
 
 
