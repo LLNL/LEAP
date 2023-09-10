@@ -103,8 +103,9 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
+            print('HERE I AM!')
             g = input[batch].to('cuda')
-            next(g.is_cuda())
+            print(g.is_cuda())
             leapct.backproject_gpu(param_id, g, f_xyz) # compute input (f) from proj (g)
             f_zyx = torch.Tensor.contiguous(torch.permute(f_xyz, (2, 1, 0)))
             vol[batch] = f_zyx
