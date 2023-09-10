@@ -36,6 +36,8 @@ class ProjectorFunctionCPU(torch.autograd.Function):
             f = vol[batch]
             f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = grad_output[batch]
+            device = torch.device('cuda') if cuda_available else torch.device('cpu')
+            g = g.to('cpu')
             leapct.backproject_cpu(param_id, g, f_xyz) # compute input (f) from proj (g)
             f_zyx = torch.Tensor.contiguous(torch.permute(f_xyz, (2, 1, 0)))
             vol[batch] = f_zyx
@@ -48,7 +50,7 @@ class ProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = input[batch]
             f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
-            g = proj[batch]
+            g = proj[batch].to('cuda')
             leapct.project_gpu(param_id, g, f_xyz) # compute proj (g) from input (f)
             proj[batch] = g
         ctx.save_for_backward(input, proj, vol, param_id)
