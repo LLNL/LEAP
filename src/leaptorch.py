@@ -36,6 +36,7 @@ class ProjectorFunctionCPU(torch.autograd.Function):
             f = vol[batch]
             f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = grad_output[batch]
+            print('HERE I AM!')
             device = torch.device('cuda') if cuda_available else torch.device('cpu')
             g = g.to(device)
             leapct.backproject_cpu(param_id, g, f_xyz) # compute input (f) from proj (g)
