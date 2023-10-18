@@ -10,12 +10,6 @@
 # and Deblurring Problems," in IEEE Transactions on Image Processing, vol. 18, no. 11, pp. 2419-2434, Nov. 2009
 ################################################################################
 
-# example:
-# param_fn=/p/vast1/mlct/CT_COE_Imatron/param_parallel512.cfg
-# data_dir=/usr/workspace/kim63/src/ctnetplus_techmat/results/20230222_la512/test/
-# python test_recon_TV.py --param-fn ${param_fn}  --init-fn ${data_dir}/S_193_0100_pred.npy  --proj-fn ${data_dir}/S_193_0100_sino.npy --mask-fn ${data_dir}/S_193_0100_mask.npy
-# python test_recon_TV.py --param-fn ${param_fn}  --proj-fn ${data_dir}/S_193_0100_sino3.npy
-
 import os
 import sys
 sys.stdout.flush()
@@ -33,9 +27,7 @@ from TVGPUClass import TVGPUClass
 
 # program arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--init-fn", default="", help="path to image file for initial guess (image prior)")
 parser.add_argument("--proj-fn", default="sample_data/FORBILD_head_64_sino.npy", help="path to input projection data file")
-parser.add_argument("--mask-fn", default="", help="path to input projection mask file")
 parser.add_argument("--param-fn", default="sample_data/param_parallel64.cfg", help="path to projection geometry configuration file")
 parser.add_argument("--output-dir", default="sample_data", help="directory storing intermediate files")
 parser.add_argument("--use-fov", action='store_true', default=False, help="whether fov is used or not")
@@ -61,11 +53,12 @@ class Reconstructor:
     """
     Accelerated Proximal Gradient Descent with TV
     """
-    def __init__(self, projector, device_name, learning_rate=1., use_decay=False,
+    def __init__(self, projector, projectors, device_name, learning_rate=1., use_decay=False,
                  iter_count=2000, stop_criterion=1e-1, save_dir='.', save_freq=10, verbose=1):
 
         # set nn_model and projector
         self.projector = projector
+        self.projectors = projectors
         self.device_name = device_name
 
         # set up hyperparameters
@@ -85,6 +78,8 @@ class Reconstructor:
     def reconstruct(self, g, g_mask, f_init, f_fov=None, fn_prefix="output"):
         # if no neural network is used, make f trainable
         self.projector.train()
+        for proj in self.projectors:
+            proj.train()
         
         x = f_init.clone() # x is the image vector update during iterartions
         s = x.clone() # acceleration vector 
@@ -97,7 +92,21 @@ class Reconstructor:
 
             # compute loss
             s.requires_grad = True
+
+            # forward project using a single LEAP projector
             g_pred = self.projector(s).cpu().float()
+
+            # forward project using multiple LEAP projectors
+            g_pred_list = []
+            for proj in self.projectors:
+                pred = proj(s).cpu().float() # 1x1x1x64
+                g_pred_list.append(pred) 
+            g_pred2 = torch.cat(g_pred_list, dim=1) # 1x90x1x64
+
+            #g_diff = torch.sum(torch.abs(g_pred - g_pred2))
+            #print("g_diff: ", g_diff)
+            g_pred2 = g_pred
+
             if g_mask != None:
                 g_pred_ = g_pred * g_mask.cpu().float()
                 g_pred = g_pred_
@@ -173,32 +182,38 @@ else:
 
 # read arguments
 output_dir = args.output_dir
-init_fn = args.init_fn
 proj_fn = args.proj_fn
-mask_fn = args.mask_fn
 param_fn = args.param_fn
 use_fov = args.use_fov
 
 # initialize projector and load parameters
-proj = Projector(use_static=False, use_gpu=use_cuda, gpu_device=device, batch_size=1)
+
+# original projector instance  (90x1x64, arange=180, parallel-beam)
+proj = Projector(use_gpu=use_cuda, gpu_device=device, batch_size=1)
 proj.load_param(param_fn)
 proj.set_projector(1)
 proj.print_param()
+
+# created 90 LEAP projectors
+projs = []
+for n in range(90):
+    proj2 = Projector(use_gpu=use_cuda, gpu_device=device, batch_size=1)
+    pdic = proj2.parse_param_dic(param_fn)
+    pdic['proj_phis'] = str(n*2)
+    pdic['proj_nangles'] = 1
+    pdic['proj_arange'] = 2
+    proj2.load_param(pdic, param_type=1)
+    proj2.set_projector(1)
+    projs.append(proj2)
+projs = nn.ModuleList(projs)
+
 
 # load g and initialize f
 g = np.load(proj_fn)
 g = g.reshape((1, g.shape[0], 1, g.shape[1]))
 g = torch.from_numpy(g)
 
-if len(mask_fn) > 0:
-    g_mask = np.load(mask_fn)
-    g_mask = g_mask.reshape((1, g_mask.shape[0], 1, g_mask.shape[1]))
-    g_mask = torch.from_numpy(g_mask)
-else:
-    g_mask = None
-
 mout = torch.zeros_like(g)
-#mout[0:720,...] = 1
 mout[0:g.shape[0],...] = 1
 g = mout*g.clone()
 
@@ -212,13 +227,8 @@ views, rows, cols = proj.get_projection_dim()
 M = dimz
 N = dimx
 
-# load image prior if available
-if len(init_fn) > 0:
-    f_init = np.load(init_fn)
-    f_init = f_init.reshape((1,1,f_init.shape[0],f_init.shape[1]))
-else:
-    # initialize f to be solved, given g above
-    f_init = np.zeros((1, M, N, N)).astype(np.float32) ## modified by jiaming to simulate batch_size=4
+# initialize f to be solved, given g above
+f_init = np.zeros((1, M, N, N)).astype(np.float32) ## modified by jiaming to simulate batch_size=4
 f_init = torch.from_numpy(f_init).to(device)
 
 # set mask for field of view
@@ -233,8 +243,8 @@ else:
 # initialize and run reconstructor (solver)
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
-solver = Reconstructor(proj, device_name, learning_rate=0.01, use_decay=False, stop_criterion=1e-7, save_dir=output_dir)
-f_final = solver.reconstruct(g, g_mask, f_init, f_fov, "f")
+solver = Reconstructor(proj, projs, device_name, learning_rate=0.01, use_decay=False, stop_criterion=1e-7, save_dir=output_dir)
+f_final = solver.reconstruct(g, None, f_init, f_fov, "f")
 
 # save final reconstructed image
 f_np = f_final[0,0,:,:].cpu().detach().numpy()

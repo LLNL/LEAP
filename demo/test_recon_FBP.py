@@ -1,9 +1,9 @@
 ################################################################################
-# Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
+# Copyright 2022-2022 Lawrence Livermore National Security, LLC and other 
 # LEAP project developers. See the LICENSE file for details.
 # SPDX-License-Identifier: MIT
 #
-# LivermorE AI Projector for Computed Tomography (LEAP)
+# LivermorE AI Projector for tomographic reconstruction (LEAP)
 # demo: test example of FBP reconstruction using projector class
 ################################################################################
 

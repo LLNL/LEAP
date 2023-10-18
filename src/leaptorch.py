@@ -176,7 +176,7 @@ class Projector(torch.nn.Module):
         dim = dim_tensor.cpu().detach().numpy()
         return dim[0], dim[1], dim[2]
 
-    def load_param(self, param_fn):
+    def parse_param_dic(self, param_fn):
         pdic = {}
         with open(param_fn, 'r') as f:
             lines = f.readlines()
@@ -189,6 +189,14 @@ class Projector(torch.nn.Module):
                     pdic[key] = value
                 else:
                     pdic[key] = float(value)
+        return pdic
+
+    def load_param(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
+        pdic = {}
+        if param_type == 0:
+            pdic = self.parse_param_dic(param_fn)
+        elif param_type == 1:
+            pdic = param_fn
 
         phis_str = pdic['proj_phis']
         if len(phis_str) > 0:
