@@ -75,7 +75,7 @@ https://pytorch.org/tutorials/advanced/cpp_extension.html
 
 ## Authors
 Hyojin Kim (hkim@llnl.gov)  
-Kyle Champley (champley1@llnl.gov)  
+Kyle Champley (champley@gmail.com)  
 
 
 ## Other Contributors
