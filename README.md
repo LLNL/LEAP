@@ -39,10 +39,23 @@ $ python test_recon_NN.py --proj-fn sample_data/FORBILD_head_64_sino.npy --param
 
 ## CPP-CUDA Library
 
-This is c++ with CUDA library that can be used in both C++ and python with the provided wrapper class. To compile the code using cmake, use cmake prefix such that  
+This is c++ with CUDA library that can be used in both C++ and python with the provided wrapper class. It can be compiled with cmake without the use of pytorch.
 
-$ cmake -DCMAKE_CXX_COMPILER=/usr/local/gcc63/bin/g++63   -DCMAKE_CUDA_HOST_COMPILER=/usr/local/gcc63/bin/g++63   -DCMAKE_CUDA_ARCHITECTURES=75 ..  
-$ cmake --build . --config Release  
+# Linux
+```
+> cd LEAP
+> ./etc/build.should
+> cd build
+> cmake ..
+> make clean
+> make -j24
+```
+
+# Windows
+The requires Visual Studio 2019.  Run the command below and then open the solution file LEAP\win_build\leap.sln
+```
+> .\etc\win_build.bat
+```
 
 Note that cuda compiler (nvcc) does not support gcc higher than 7.5.   
 
