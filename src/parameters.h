@@ -84,7 +84,7 @@ public:
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };
-    enum whichProjector_list {SIDDON=0,SEPARABLE_FOOTPRINT=1};
+    enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2};
 };
 
 #endif

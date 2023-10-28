@@ -12,8 +12,15 @@
 #include "projectors.h"
 #include "projectors_SF.h"
 #include "projectors_cpu.h"
+#include "rampFilter.cuh"
+#include "noise_filters.cuh"
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
+
+#ifndef PI
+#define PI 3.141592653589793
+#endif
 
 //#ifdef DEFINE_STATIC_UI
 parameters params;
@@ -122,6 +129,24 @@ bool backproject(float* g, float* f, bool cpu_to_gpu)
 	}
 }
 
+bool rampFilterProjections(float* g, bool cpu_to_gpu)
+{
+	return rampFilter1D(g, &params, cpu_to_gpu);
+}
+
+bool rampFilterVolume(float* f, bool cpu_to_gpu)
+{
+	return rampFilter2D(f, &params, cpu_to_gpu);
+}
+
+float get_FBPscalar()
+{
+	if (params.geometry == parameters::CONE)
+		return 1.0 / (2.0 * PI) * fabs(params.T_phi() * params.pixelWidth * (params.sod / params.sdd) * params.pixelHeight / (params.voxelWidth * params.voxelWidth * params.voxelHeight));
+	else
+		return 1.0 / (2.0 * PI) * fabs(params.T_phi() * params.pixelWidth / (params.voxelWidth * params.voxelWidth));
+}
+
 bool setConeBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
 {
 	params.geometry = parameters::CONE;
@@ -178,6 +203,38 @@ bool setVolumeParams(int numX, int numY, int numZ, float voxelWidth, float voxel
 	return params.volumeDefined();
 }
 
+bool setDefaultVolumeParameters()
+{
+	return params.setDefaultVolumeParameters();
+}
+
+bool setVolumeDimensionOrder(int which)
+{
+	if (parameters::XYZ <= which && which <= parameters::ZYX)
+	{
+		if (which == parameters::ZYX && params.isSymmetric())
+		{
+			printf("Error: Symmetric objects can only be specified in XYZ order\n");
+			return false;
+		}
+		else
+		{
+			params.volumeDimensionOrder = which;
+			return true;
+		}
+	}
+	else
+	{
+		printf("Error: volume dimension order must be 0 for XYZ or 1 for ZYX\n");
+		return false;
+	}
+}
+
+int getVolumeDimensionOrder()
+{
+	return params.volumeDimensionOrder;
+}
+
 bool setGPU(int whichGPU)
 {
 	params.whichGPU = whichGPU;
@@ -195,8 +252,16 @@ bool setProjector(int which)
 
 bool set_axisOfSymmetry(float axisOfSymmetry)
 {
-	params.axisOfSymmetry = axisOfSymmetry;
-	return true;
+	if (params.volumeDimensionOrder == parameters::ZYX)
+	{
+		printf("Error: Symmetric objects can only be specified in XYZ order\n");
+		return false;
+	}
+	else
+	{
+		params.axisOfSymmetry = axisOfSymmetry;
+		return true;
+	}
 }
 
 bool set_rFOV(float rFOV_in)
@@ -345,6 +410,45 @@ bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles,
     }
 }
 
+int get_numAngles()
+{
+	return params.numAngles;
+}
+
+int get_numRows()
+{
+	return params.numRows;
+}
+
+int get_numCols()
+{
+	return params.numCols;
+}
+
+int get_numX()
+{
+	return params.numX;
+}
+
+int get_numY()
+{
+	return params.numY;
+}
+
+int get_numZ()
+{
+	return params.numZ;
+}
+
+bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM)
+{
+	return blurFilter(f, N_1, N_2, N_3, FWHM, params.whichGPU);
+}
+
+bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold)
+{
+	return medianFilter(f, N_1, N_2, N_3, threshold, params.whichGPU);
+}
 
 /*
 // Scanner Parameters

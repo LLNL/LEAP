@@ -291,8 +291,21 @@ bool parameters::setDefaultVolumeParameters()
 	numX = numCols;
 	numY = numX;
 	numZ = numRows;
-	voxelWidth = sod / sdd * pixelWidth;
-	voxelHeight = sod / sdd * pixelHeight;
+	if (geometry == PARALLEL)
+	{
+		voxelWidth = pixelWidth;
+		voxelHeight = pixelHeight;
+	}
+	else if (geometry == FAN)
+	{
+		voxelWidth = sod / sdd * pixelWidth;
+		voxelHeight = pixelHeight;
+	}
+	else
+	{
+		voxelWidth = sod / sdd * pixelWidth;
+		voxelHeight = sod / sdd * pixelHeight;
+	}
 	offsetX = 0.0;
 	offsetY = 0.0;
 	offsetZ = 0.0;

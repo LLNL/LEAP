@@ -24,12 +24,12 @@ class Projector:
     '''
 
     def __init__(self, lib_dir=""):
-    	if len(lib_dir) > 0:
+        if len(lib_dir) > 0:
             current_dir = lib_dir
         else:
             current_dir = os.path.abspath(os.path.dirname(__file__))
 
-		'''currentDirectoryPath         = os.path.dirname(os.path.realpath(__file__))
+        '''currentDirectoryPath         = os.path.dirname(os.path.realpath(__file__))
 
         if os.path.isdir(currentDirectoryPath) == False:
             currentDirectoryPath, thePartIdontWant = os.path.split(currentDirectoryPath)
@@ -56,7 +56,10 @@ class Projector:
             self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "libLEAP.dylib"))
         elif _platform == "win32":
             from ctypes import windll
-            self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, "libLEAP.dll"))
+            #print(os.path.join(current_dir, r'..\Release\libLEAP.dll'))
+            #self.libprojectors = windll.LoadLibrary(r'C:\Users\champley\Documents\LEAP-main\Release\libLEAP.dll')
+            self.libprojectors = windll.LoadLibrary(r'C:\Users\champley\Documents\LEAP-main\win_build\bin\Release\libLEAP.dll')
+            #self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\Release\libLEAP.dll'))
 
     def reset(self):
         return self.libprojectors.reset()
@@ -87,7 +90,21 @@ class Projector:
         if offsetZ is None:
             offsetZ = 0.0
         return self.libprojectors.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
-	
+        
+    def setDefaultVolume(self):
+        return self.libprojectors.setDefaultVolumeParameters()
+        
+    def setVolumeDimensionOrder(self,which):
+        self.libprojectors.setVolumeDimensionOrder.argtypes = [ctypes.c_int]
+        self.libprojectors.setVolumeDimensionOrder.restype = ctypes.c_bool
+        return self.libprojectors.setVolumeDimensionOrder(which)
+        
+    def getVolumeDimensionOrder(self):
+        return self.libprojectors.getVolumeDimensionOrder()
+
+    def setAngleArray(self,numAngles,angularRange):
+        return np.array(range(numAngles)).astype(np.float32) * angularRange/float(numAngles)
+    
     def setConeBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
         self.libprojectors.setConeBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
         self.libprojectors.setConeBeamParams.restype = ctypes.c_bool
@@ -108,11 +125,98 @@ class Projector:
         self.libprojectors.project.restype = ctypes.c_bool
         self.libprojectors.project(g,f,True)
         return g
+        
+    def rampFilterProjections(self, g):
+        self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
+        self.libprojectors.rampFilterProjections(g,True)
+        return g
     
     def backproject(self,g,f):
         self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.backproject.restype = ctypes.c_bool
         self.libprojectors.backproject(g,f,True)
         return f
+        
+    def rampFilterVolume(self, f):
+        self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.rampFilterVolume.restype = ctypes.c_bool
+        self.libprojectors.rampFilterVolume(f,True)
+        return f
 
-	
+    def get_FBPscalar(self):
+        self.libprojectors.get_FBPscalar.argtypes = []
+        self.libprojectors.get_FBPscalar.restype = ctypes.c_float
+        return self.libprojectors.get_FBPscalar()
+
+    def FBP(self, g, f):
+        self.rampFilterProjections(g)
+        self.backproject(g,f)
+        f *= float(self.get_FBPscalar())
+        return f
+        
+    def BPF(self, g, f):
+        self.backproject(g,f)
+        self.rampFilterVolume(f)
+        f *= self.get_FBPscalar()
+        return f
+
+    def get_numAngles(self):
+        return self.libprojectors.get_numAngles()
+        
+    def get_numRows(self):
+        return self.libprojectors.get_numRows()
+        
+    def get_numCols(self):
+        return self.libprojectors.get_numCols()
+        
+    def get_numX(self):
+        return self.libprojectors.get_numX()
+    
+    def get_numY(self):
+        return self.libprojectors.get_numY()
+    
+    def get_numZ(self):
+        return self.libprojectors.get_numZ()
+        
+    def BlurFilter(self, f, FWHM=2.0):
+        #bool BlurFilter(float* f, int, int, int, float FWHM);
+        self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+        self.libprojectors.BlurFilter.restype = ctypes.c_bool
+        return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM)
+    
+    def MedianFilter(self, f, threshold=0.0):
+        #bool MedianFilter(float* f, int, int, int, float threshold);
+        self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+        self.libprojectors.MedianFilter.restype = ctypes.c_bool
+        return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold)
+
+    def allocateProjections(self):
+        N_phis = self.get_numAngles()
+        N_rows = self.get_numRows()
+        N_cols = self.get_numCols()
+        if N_phis > 0 and N_rows > 0 and N_cols > 0:
+            return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
+        else:
+            return None
+        
+    def allocateVolume(self):
+        N_x = self.get_numX()
+        N_y = self.get_numY()
+        N_z = self.get_numZ()
+        if N_x > 0 and N_y > 0 and N_z > 0:
+            if self.getVolumeDimensionOrder() == 0:
+                return np.ascontiguousarray(np.zeros((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
+            else:
+                return np.ascontiguousarray(np.zeros((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
+        else:
+            return None
+    
+    def displayVolume(self,vol):
+        try:
+            import napari
+            viewer = napari.view_image(vol, rgb=False)
+            napari.run()
+        except:
+            print('Cannot load napari, to install run this command:')
+            print('pip install napari[all]')

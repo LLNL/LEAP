@@ -15,8 +15,9 @@
 #include "device_launch_parameters.h"
 #include "projectors.h"
 #include "projectors_SF.h"
+#include "cuda_utils.h"
 
-__global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis)
+__global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -28,9 +29,15 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
     
+    int ind;
+    if (volumeDimensionOrder == 0)
+        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+    else
+        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+
     if (x*x + y*y > rFOVsq)
     {
-        f[i*N_f.y*N_f.z + j * N_f.z + k] = 0.0;
+        f[ind] = 0.0;
         return;
     }
     
@@ -127,10 +134,10 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
         }
     }
 
-    f[i*N_f.y*N_f.z + j * N_f.z + k] = val * maxWeight;
+    f[ind] = val * maxWeight;
 }
 
-__global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis)
+__global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -172,9 +179,18 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
             if (((float)i*T_f.x+startVals_f.x )*((float)i*T_f.x+startVals_f.x) + ((float)j_min_A*T_f.y+startVals_f.y )*((float)j_min_A*T_f.y+startVals_f.y) > rFOVsq)
                 continue;
 
-            g_output += max(0.0f, min(n_plus_half, s_ind_A+C) - max(n_minus_half, s_ind_A-C)) * tex3D<float>(f, m, j_min_A, i)
-                     +  max(0.0f, min(n_plus_half, s_ind_A+ds_ind_dj+C) - max(n_minus_half, s_ind_A+ds_ind_dj-C)) * tex3D<float>(f, m, j_min_A+1, i)
-                     +  max(0.0f, min(n_plus_half, s_ind_A+2.0f*ds_ind_dj+C) - max(n_minus_half, s_ind_A+2.0f*ds_ind_dj-C)) * tex3D<float>(f, m, j_min_A+2, i);
+            if (volumeDimensionOrder == 0)
+            {
+                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, m, j_min_A, i)
+                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C)) * tex3D<float>(f, m, j_min_A + 1, i)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, m, j_min_A + 2, i);
+            }
+            else
+            {
+                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, i, j_min_A, m)
+                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C)) * tex3D<float>(f, i, j_min_A + 1, m)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, i, j_min_A + 2, m);
+            }
         }
     }
     else
@@ -194,29 +210,44 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
             if (((float)i_min_A*T_f.x+startVals_f.x )*((float)i_min_A*T_f.x+startVals_f.x) + ((float)j*T_f.y+startVals_f.y )*((float)j*T_f.y+startVals_f.y) > rFOVsq)
                 continue;
 
-            g_output += max(0.0f, min(n_plus_half, s_ind_A+C) - max(n_minus_half, s_ind_A-C)) * tex3D<float>(f, m, j, i_min_A)
-                     +  max(0.0f, min(n_plus_half, s_ind_A+ds_ind_di+C) - max(n_minus_half, s_ind_A+ds_ind_di-C)) * tex3D<float>(f, m, j, i_min_A+1)
-                     +  max(0.0f, min(n_plus_half, s_ind_A+2.0f*ds_ind_di+C) - max(n_minus_half, s_ind_A+2.0f*ds_ind_di-C)) * tex3D<float>(f, m, j, i_min_A+2);
+            if (volumeDimensionOrder == 0)
+            {
+                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, m, j, i_min_A)
+                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C)) * tex3D<float>(f, m, j, i_min_A + 1)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, m, j, i_min_A + 2);
+            }
+            else
+            {
+                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, i_min_A, j, m)
+                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C)) * tex3D<float>(f, i_min_A + 1, j, m)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, i_min_A + 2, j, m);
+            }
         }
     }
     //g[l * N_g.z * N_g.y + m * N_g.y + n] = l_phi * g_output;
     g[l * N_g.z * N_g.y + m * N_g.z + n] = l_phi * g_output;
 }
 
-__global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis)
+__global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
+
+    int ind;
+    if (volumeDimensionOrder == 0)
+        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+    else
+        ind = k * N_f.y * N_f.x + j * N_f.x + i;
         
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
     if (x*x + y*y > rFOVsq)
     {
-        f[i*N_f.y*N_f.z + j * N_f.z + k] = 0.0f;
+        f[ind] = 0.0f;
         return;
     }
     
@@ -545,10 +576,10 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
         }
     }
     
-    f[i*N_f.y*N_f.z + j * N_f.z + k] = val;
+    f[ind] = val;
 }
 
-__global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis)
+__global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -635,15 +666,30 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
              const float v_phi_x_step = T_f.z / (T_g.y*R_minus_x_dot_theta);
              const float xi_high = ((float)k - z_ind_offset) * v_phi_x_step - v0_over_Tv;
 
-             g_output += (tex3D<float>(f, k, j, i) * hWeight_0
-                      +   tex3D<float>(f, k, j, i+1) * hWeight_1
-                      +   tex3D<float>(f, k, j, i+2) * hWeight_2) * (min(xi_high-m_minus_half, 1.0f))*((k>=0) ? 1.0f : 0.0f)
-                      +  (tex3D<float>(f, k+1, j, i) * hWeight_0
-                      +   tex3D<float>(f, k+1, j, i+1) * hWeight_1
-                      +   tex3D<float>(f, k+1, j, i+2) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half-xi_high))*((k>=-1 && k+1<N_f.z) ? 1.0f : 0.0f)
-                      +  (tex3D<float>(f, k+2, j, i) * hWeight_0
-                      +   tex3D<float>(f, k+2, j, i+1) * hWeight_1
-                      +   tex3D<float>(f, k+2, j, i+2) * hWeight_2) * max(0.0f, min(m_plus_half-xi_high-v_phi_x_step, 1.0f))*((k+2<N_f.z) ? 1.0f : 0.0f);
+             if (volumeDimensionOrder == 0)
+             {
+                 g_output += (tex3D<float>(f, k, j, i) * hWeight_0
+                     + tex3D<float>(f, k, j, i + 1) * hWeight_1
+                     + tex3D<float>(f, k, j, i + 2) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, k + 1, j, i) * hWeight_0
+                         + tex3D<float>(f, k + 1, j, i + 1) * hWeight_1
+                         + tex3D<float>(f, k + 1, j, i + 2) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, k + 2, j, i) * hWeight_0
+                         + tex3D<float>(f, k + 2, j, i + 1) * hWeight_1
+                         + tex3D<float>(f, k + 2, j, i + 2) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
+             }
+             else
+             {
+                 g_output += (tex3D<float>(f, i, j, k) * hWeight_0
+                     + tex3D<float>(f, i+1, j, k) * hWeight_1
+                     + tex3D<float>(f, i+2, j, k) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, i, j, k + 1) * hWeight_0
+                         + tex3D<float>(f, i + 1, j, k+1) * hWeight_1
+                         + tex3D<float>(f, i + 2, j, k+1) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, i, j, k+2) * hWeight_0
+                         + tex3D<float>(f, i + 1, j, k + 2) * hWeight_1
+                         + tex3D<float>(f, i + 2, j, k + 2) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
+             }
          }
          g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f+u*u) / fabs(u*cos_phi-sin_phi) * g_output;
      }
@@ -705,15 +751,30 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
              const float v_phi_x_step = T_f.z / (T_g.y*R_minus_x_dot_theta);
              const float xi_high = ((float)k - z_ind_offset) * v_phi_x_step - v0_over_Tv;
 
-             g_output += (tex3D<float>(f, k, j, i) * hWeight_0
-                      +   tex3D<float>(f, k, j+1, i) * hWeight_1
-                      +   tex3D<float>(f, k, j+2, i) * hWeight_2) * (min(xi_high-m_minus_half, 1.0f))*((k>=0) ? 1.0f : 0.0f)
-                      +  (tex3D<float>(f, k+1, j, i) * hWeight_0
-                      +   tex3D<float>(f, k+1, j+1, i) * hWeight_1
-                      +   tex3D<float>(f, k+1, j+2, i) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half-xi_high))*((k>=-1 && k+1<N_f.z) ? 1.0f : 0.0f)
-                      +  (tex3D<float>(f, k+2, j, i) * hWeight_0
-                      +   tex3D<float>(f, k+2, j+1, i) * hWeight_1
-                      +   tex3D<float>(f, k+2, j+2, i) * hWeight_2) * max(0.0f, min(m_plus_half-xi_high-v_phi_x_step, 1.0f))*((k+2<N_f.z) ? 1.0f : 0.0f);
+             if (volumeDimensionOrder == 0)
+             {
+                 g_output += (tex3D<float>(f, k, j, i) * hWeight_0
+                     + tex3D<float>(f, k, j + 1, i) * hWeight_1
+                     + tex3D<float>(f, k, j + 2, i) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, k + 1, j, i) * hWeight_0
+                         + tex3D<float>(f, k + 1, j + 1, i) * hWeight_1
+                         + tex3D<float>(f, k + 1, j + 2, i) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, k + 2, j, i) * hWeight_0
+                         + tex3D<float>(f, k + 2, j + 1, i) * hWeight_1
+                         + tex3D<float>(f, k + 2, j + 2, i) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
+             }
+             else
+             {
+                 g_output += (tex3D<float>(f, i, j, k) * hWeight_0
+                     + tex3D<float>(f, i, j + 1, k) * hWeight_1
+                     + tex3D<float>(f, i, j + 2, k) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, i, j, k+1) * hWeight_0
+                         + tex3D<float>(f, i, j + 1, k+1) * hWeight_1
+                         + tex3D<float>(f, i, j + 2, k+1) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
+                     + (tex3D<float>(f, i, j, k+2) * hWeight_0
+                         + tex3D<float>(f, i, j + 1, k+2) * hWeight_1
+                         + tex3D<float>(f, i, j + 2, k+2) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
+             }
          }
          g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f+u*u) / fabs(u*sin_phi+cos_phi) * g_output;
      }
@@ -771,50 +832,13 @@ bool project_SF_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
         dev_f = f;
     }
 
-    //  =======================================================
-    //* ==================   CUDA TEXTURES   ==================
-    //  =======================================================
-    cudaArray *d_data_array = NULL;
     cudaTextureObject_t d_data_txt = NULL;
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Allocate 3D array memory
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-    cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_f.z, N_f.y, N_f.x));
-
-    // Bind 3D array to texture object
-    cudaResourceDesc resDesc;
-    memset(&resDesc, 0, sizeof(resDesc));
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-    cudaTextureDesc texDesc;
-    memset(&texDesc, 0, sizeof(texDesc));
-    texDesc.readMode = cudaReadModeElementType;
-    texDesc.normalizedCoords = false;                        // Texture coordinates normalization
-    texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-    cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-    // Update the texture memory
-    //util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-    cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-    cudaMemcpy3DParms cudaparams = { 0 };
-    cudaparams.extent = make_cudaExtent(N_f.z, N_f.y, N_f.x);
-    cudaparams.kind = cudaMemcpyDeviceToDevice;
-    cudaparams.srcPos = make_cudaPos(0, 0, 0);
-    cudaparams.srcPtr = make_cudaPitchedPtr(dev_f, N_f.z * sizeof(float), N_f.z, N_f.y);
-    cudaparams.dstPos = make_cudaPos(0, 0, 0);
-    cudaparams.dstArray = (cudaArray_t)d_data_array;
-    cudaMemcpy3DAsync(&cudaparams);
-    //*/
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
 
     //* call kernel: FIXME!
     dim3 dimBlock(8, 8, 8); // best so far
     dim3 dimGrid(int(ceil(double(N_g.x) / double(dimBlock.x))), int(ceil(double(N_g.y) / double(dimBlock.y))), int(ceil(double(N_g.z) / double(dimBlock.z))));
-    coneBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis);
+    coneBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
     //*/
 
     // pull result off GPU
@@ -912,50 +936,13 @@ bool backproject_SF_cone(float *g, float *&f, parameters* params, bool cpu_to_gp
         dev_g = g;
     }
 
-    //  =======================================================
-    //* ==================   CUDA TEXTURES   ==================
-    //  =======================================================
-    cudaArray *d_data_array = NULL;
     cudaTextureObject_t d_data_txt = NULL;
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Allocate 3D array memory
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-    cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_g.z, N_g.y, N_g.x));
-
-    // Bind 3D array to texture object
-    cudaResourceDesc resDesc;
-    memset(&resDesc, 0, sizeof(resDesc));
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-    cudaTextureDesc texDesc;
-    memset(&texDesc, 0, sizeof(texDesc));
-    texDesc.readMode = cudaReadModeElementType;
-    texDesc.normalizedCoords = false;                        // Texture coordinates normalization
-    texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
-    cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-    // Update the texture memory
-    //util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-    cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-    cudaMemcpy3DParms cudaparams = { 0 };
-    cudaparams.extent = make_cudaExtent(N_g.z, N_g.y, N_g.x);
-    cudaparams.kind = cudaMemcpyDeviceToDevice;
-    cudaparams.srcPos = make_cudaPos(0, 0, 0);
-    cudaparams.srcPtr = make_cudaPitchedPtr(dev_g, N_g.z * sizeof(float), N_g.z, N_g.y);
-    cudaparams.dstPos = make_cudaPos(0, 0, 0);
-    cudaparams.dstArray = (cudaArray_t)d_data_array;
-    cudaMemcpy3DAsync(&cudaparams);
-    //*/
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
 
     //* call kernel: FIXME!
     dim3 dimBlock(8, 8, 8); // best so far
     dim3 dimGrid(int(ceil(double(N_f.x) / double(dimBlock.x))), int(ceil(double(N_f.y) / double(dimBlock.y))), int(ceil(double(N_f.z) / double(dimBlock.z))));
-    coneBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis);
+    coneBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
     //*/
 
     // pull result off GPU
@@ -1035,50 +1022,13 @@ bool project_SF_parallel(float *&g, float* f, parameters* params, bool cpu_to_gp
         dev_f = f;
     }
 
-    //  =======================================================
-    //* ==================   CUDA TEXTURES   ==================
-    //  =======================================================
-    cudaArray *d_data_array = NULL;
     cudaTextureObject_t d_data_txt = NULL;
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Allocate 3D array memory
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-    cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_f.z, N_f.y, N_f.x));
-
-    // Bind 3D array to texture object
-    cudaResourceDesc resDesc;
-    memset(&resDesc, 0, sizeof(resDesc));
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-    cudaTextureDesc texDesc;
-    memset(&texDesc, 0, sizeof(texDesc));
-    texDesc.readMode = cudaReadModeElementType;
-    texDesc.normalizedCoords = false;                        // Texture coordinates normalization
-    texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-    cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-    // Update the texture memory
-    //util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-    cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-    cudaMemcpy3DParms cudaparams = { 0 };
-    cudaparams.extent = make_cudaExtent(N_f.z, N_f.y, N_f.x);
-    cudaparams.kind = cudaMemcpyDeviceToDevice;
-    cudaparams.srcPos = make_cudaPos(0, 0, 0);
-    cudaparams.srcPtr = make_cudaPitchedPtr(dev_f, N_f.z * sizeof(float), N_f.z, N_f.y);
-    cudaparams.dstPos = make_cudaPos(0, 0, 0);
-    cudaparams.dstArray = (cudaArray_t)d_data_array;
-    cudaMemcpy3DAsync(&cudaparams);
-    //*/
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
 
     //* call kernel: FIXME!
     dim3 dimBlock(8, 8, 8); // best so far
     dim3 dimGrid(int(ceil(double(N_g.x) / double(dimBlock.x))), int(ceil(double(N_g.y) / double(dimBlock.y))), int(ceil(double(N_g.z) / double(dimBlock.z))));
-    parallelBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis);
+    parallelBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
     //*/
 
     // pull result off GPU
@@ -1159,50 +1109,13 @@ bool backproject_SF_parallel(float* g, float *&f, parameters* params, bool cpu_t
         dev_g = g;
     }
 
-    //  =======================================================
-    //* ==================   CUDA TEXTURES   ==================
-    //  =======================================================
-    cudaArray *d_data_array = NULL;
     cudaTextureObject_t d_data_txt = NULL;
-
-    ////////////////////////////////////////////////////////////////////////////
-    // Allocate 3D array memory
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-    cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_g.z, N_g.y, N_g.x));
-
-    // Bind 3D array to texture object
-    cudaResourceDesc resDesc;
-    memset(&resDesc, 0, sizeof(resDesc));
-    resDesc.resType = cudaResourceTypeArray;
-    resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-    cudaTextureDesc texDesc;
-    memset(&texDesc, 0, sizeof(texDesc));
-    texDesc.readMode = cudaReadModeElementType;
-    texDesc.normalizedCoords = false;                        // Texture coordinates normalization
-    texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
-    cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-    // Update the texture memory
-    //util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-    cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-    cudaMemcpy3DParms cudaparams = { 0 };
-    cudaparams.extent = make_cudaExtent(N_g.z, N_g.y, N_g.x);
-    cudaparams.kind = cudaMemcpyDeviceToDevice;
-    cudaparams.srcPos = make_cudaPos(0, 0, 0);
-    cudaparams.srcPtr = make_cudaPitchedPtr(dev_g, N_g.z * sizeof(float), N_g.z, N_g.y);
-    cudaparams.dstPos = make_cudaPos(0, 0, 0);
-    cudaparams.dstArray = (cudaArray_t)d_data_array;
-    cudaMemcpy3DAsync(&cudaparams);
-    //*/
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
 
     //* call kernel: FIXME!
     dim3 dimBlock(8, 8, 8); // best so far
     dim3 dimGrid(int(ceil(double(N_f.x) / double(dimBlock.x))), int(ceil(double(N_f.y) / double(dimBlock.y))), int(ceil(double(N_f.z) / double(dimBlock.z))));
-    parallelBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis);
+    parallelBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
     //*/
 
     // pull result off GPU

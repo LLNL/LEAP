@@ -14,6 +14,7 @@
 #include "cuda_runtime.h"
 //#include "device_launch_parameters.h"
 #include "projectors.h"
+#include "cuda_utils.h"
 //using namespace std;
 
 __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float4 pos, float4 traj)
@@ -491,7 +492,482 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 	return val;
 }
 
-__global__ void coneBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float rFOVsq, float* phis)
+__device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float4 pos, float4 traj)
+{
+	float val = 0.0;
+	if (fabs(traj.x) >= fabs(traj.y) && fabs(traj.x) >= fabs(traj.z))
+	{
+		float x_bottom = startVals_f.x - 0.5f * T_f.x;
+		float t_bottom = (x_bottom - pos.x) / traj.x;
+
+		float y_low = (pos.y + t_bottom * traj.y - startVals_f.y) / T_f.y;
+		float z_low = (pos.z + t_bottom * traj.z - startVals_f.z) / T_f.z;
+
+		float y_inc = (traj.y / traj.x) * (T_f.y / T_f.x);
+		float z_inc = (traj.z / traj.x) * (T_f.z / T_f.x);
+
+		if (y_inc > 0.0f)
+		{
+			if (z_inc > 0.0f)
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					// when ray starts to enter the (iy)th sample, find the voxel that the ray lies within
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz)
+						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz + 1);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+			else if (z_inc < 0.0f)
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz)
+						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz - 1);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+			else //if (z_inc == 0.0f)
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy + 1, iz);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+		}
+		else if (y_inc < 0.0f)
+		{
+			if (z_inc > 0.0f)
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz)
+						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz + 1);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+			else if (z_inc < 0.0f)
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz)
+						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz - 1);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+			else
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy - 1, iz);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+		}
+		else // y_inc == 0.0f
+		{
+			if (z_inc > 0.0f)
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz + 1);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+			else if (z_inc < 0.0f)
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz - 1);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+			else
+			{
+				for (int ix = 0; ix < N_f.x; ix++)
+				{
+					int iy = int(y_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += tex3D<float>(f, ix, iy, iz);
+
+					y_low += y_inc;
+					z_low += z_inc;
+				}
+			}
+		}
+		val = val * sqrt(1.0 + y_inc * y_inc + z_inc * z_inc) * T_f.x;
+	}
+	else if (fabs(traj.y) >= fabs(traj.x) && fabs(traj.y) >= fabs(traj.z))
+	{
+		float y_bottom = startVals_f.y - 0.5f * T_f.y;
+		float t_bottom = (y_bottom - pos.y) / traj.y;
+
+		float x_low = (pos.x + t_bottom * traj.x - startVals_f.x) / T_f.x;
+		float z_low = (pos.z + t_bottom * traj.z - startVals_f.z) / T_f.z;
+
+		float x_inc = (traj.x / traj.y) * (T_f.x / T_f.y);
+		float z_inc = (traj.z / traj.y) * (T_f.z / T_f.y);
+
+		if (x_inc > 0.0f)
+		{
+			if (z_inc > 0.0f)
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					// when ray starts to enter the (iy)th sample, find the voxel that the ray lies within
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz + 1);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+			else if (z_inc < 0.0f)
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz - 1);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+			else //if (z_inc == 0.0f)
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix + 1, iy, iz);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+		}
+		else if (x_inc < 0.0f)
+		{
+			if (z_inc > 0.0f)
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz + 1);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+			else if (z_inc < 0.0f)
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz - 1);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+			else
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix - 1, iy, iz);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+		}
+		else // x_inc == 0.0f
+		{
+			if (z_inc > 0.0f)
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz + 1);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+			else if (z_inc < 0.0f)
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz - 1);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+			else
+			{
+				for (int iy = 0; iy < N_f.y; iy++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iz = int(z_low + 0.5f);
+
+					val += tex3D<float>(f, ix, iy, iz);
+
+					x_low += x_inc;
+					z_low += z_inc;
+				}
+			}
+		}
+		val = val * sqrt(1.0 + x_inc * x_inc + z_inc * z_inc) * T_f.y;
+	}
+	else
+	{
+		float z_bottom = startVals_f.z - 0.5f * T_f.z;
+		float t_bottom = (z_bottom - pos.z) / traj.z;
+
+		float x_low = (pos.x + t_bottom * traj.x - startVals_f.x) / T_f.x;
+		float y_low = (pos.y + t_bottom * traj.y - startVals_f.y) / T_f.y;
+
+		float x_inc = (traj.x / traj.z) * (T_f.x / T_f.z);
+		float y_inc = (traj.y / traj.z) * (T_f.y / T_f.z);
+
+		if (x_inc > 0.0f)
+		{
+			if (y_inc > 0.0f)
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					// when ray starts to enter the (iy)th sample, find the voxel that the ray lies within
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy + 1, iz)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy + 1, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+			else if (y_inc < 0.0f)
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy - 1, iz)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy - 1, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+			else //if (y_inc == 0.0f)
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix + 1, iy, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+		}
+		else if (x_inc < 0.0f)
+		{
+			if (y_inc > 0.0f)
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy + 1, iz)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy + 1, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+			else if (y_inc < 0.0f)
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy, iz)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy - 1, iz)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy - 1, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+			else
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f); // ?
+
+					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix - 1, iy, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+		}
+		else // x_inc == 0.0f
+		{
+			if (y_inc > 0.0f)
+			{
+				for (int iz = 0; iz < N_f.y; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy + 1, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+			else if (y_inc < 0.0f)
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f);
+
+					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
+						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy - 1, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+			else
+			{
+				for (int iz = 0; iz < N_f.z; iz++)
+				{
+					int ix = int(x_low + 0.5f);
+					int iy = int(y_low + 0.5f);
+
+					val += tex3D<float>(f, ix, iy, iz);
+
+					x_low += x_inc;
+					y_low += y_inc;
+				}
+			}
+		}
+		val = val * sqrt(1.0 + x_inc * x_inc + y_inc * y_inc) * T_f.z;
+	}
+
+	return val;
+}
+
+__global__ void coneBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -503,9 +979,15 @@ __global__ void coneBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, flo
 	const float y = j * T_f.y + startVals_f.y;
 	const float z = k * T_f.z + startVals_f.z;
 
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+	else
+		ind = k * N_f.y * N_f.x + j * N_f.x + i;
+
 	if (x * x + y * y > rFOVsq)
 	{
-		f[i*N_f.y*N_f.z + j * N_f.z + k] = 0.0;
+		f[ind] = 0.0;
 		return;
 	}
 
@@ -576,10 +1058,10 @@ __global__ void coneBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, flo
 			}
 		}
 	}
-	f[i*N_f.y*N_f.z + j * N_f.z + k] = val;
+	f[ind] = val;
 }
 
-__global__ void coneBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float* phis)
+__global__ void coneBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float* phis, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -602,10 +1084,13 @@ __global__ void coneBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 s
 	traj.y = -D * sin_phi + u * cos_phi;
 	traj.z = v;
 
-	g[i*N_g.y*N_g.z + j * N_g.z + k] = projectLine(f, N_f, T_f, startVals_f, sourcePos, traj);
+	if (volumeDimensionOrder == 0)
+		g[i*N_g.y*N_g.z + j * N_g.z + k] = projectLine(f, N_f, T_f, startVals_f, sourcePos, traj);
+	else
+		g[i * N_g.y * N_g.z + j * N_g.z + k] = projectLine_ZYX(f, N_f, T_f, startVals_f, sourcePos, traj);
 }
 
-__global__ void parallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis)
+__global__ void parallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -617,9 +1102,15 @@ __global__ void parallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g,
 	const float y = j * T_f.y + startVals_f.y;
 	const float z = k * T_f.z + startVals_f.z;
 
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+	else
+		ind = k * N_f.y * N_f.x + j * N_f.x + i;
+
 	if (x * x + y * y > rFOVsq)
 	{
-		f[i*N_f.y*N_f.z + j * N_f.z + k] = 0.0;
+		f[ind] = 0.0;
 		return;
 	}
 
@@ -678,10 +1169,10 @@ __global__ void parallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g,
 			val += max(0.0f, t_max - t_min)*tex3D<float>(g, iu, iv, iphi);
 		}
 	}
-	f[i*N_f.y*N_f.z + j * N_f.z + k] = val;
+	f[ind] = val;
 }
 
-__global__ void parallelBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* phis)
+__global__ void parallelBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* phis, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -704,16 +1195,25 @@ __global__ void parallelBeamProjectorKernel(float* g, int4 N_g, float4 T_g, floa
 	traj.y = -sin_phi;
 	traj.z = 0.0;
 
-	g[i*N_g.y*N_g.z + j * N_g.z + k] = projectLine(f, N_f, T_f, startVals_f, sourcePos, traj);
+	if (volumeDimensionOrder == 0)
+		g[i*N_g.y*N_g.z + j * N_g.z + k] = projectLine(f, N_f, T_f, startVals_f, sourcePos, traj);
+	else
+		g[i * N_g.y * N_g.z + j * N_g.z + k] = projectLine_ZYX(f, N_f, T_f, startVals_f, sourcePos, traj);
 }
 
-__global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors)
+__global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
 	const int k = threadIdx.z + blockIdx.z * blockDim.z;
 	if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
 		return;
+
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+	else
+		ind = k * N_f.y * N_f.x + j * N_f.x + i;
 
 	const float x = i * T_f.x + startVals_f.x;
 	const float y = j * T_f.y + startVals_f.y;
@@ -808,10 +1308,10 @@ __global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, 
 			}
 		}
 	}
-	f[i*N_f.y*N_f.z + j * N_f.z + k] = val;
+	f[ind] = val;
 }
 
-__global__ void modularBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors)
+__global__ void modularBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -832,7 +1332,10 @@ __global__ void modularBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float
 	traj.y = moduleCenters[3 * i + 1] + v * rowVectors[3 * i + 1] + u * colVectors[3 * i + 1] - sourcePos.y;
 	traj.z = moduleCenters[3 * i + 2] + v * rowVectors[3 * i + 2] + u * colVectors[3 * i + 2] - sourcePos.z;
 
-	g[i*N_g.y*N_g.z + j * N_g.z + k] = projectLine(f, N_f, T_f, startVals_f, sourcePos, traj);
+	if (volumeDimensionOrder == 0)
+		g[i*N_g.y*N_g.z + j * N_g.z + k] = projectLine(f, N_f, T_f, startVals_f, sourcePos, traj);
+	else
+		g[i * N_g.y * N_g.z + j * N_g.z + k] = projectLine_ZYX(f, N_f, T_f, startVals_f, sourcePos, traj);
 }
 
 __global__ void AbelConeBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau)
@@ -1287,90 +1790,6 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 	f[j * N_f.z + k] = curVal * sqrt(1.0f + tan_beta * tan_beta);
 }
 
-//#########################################################################################
-//#########################################################################################
-float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
-{
-	cudaSetDevice(whichGPU);
-
-	int N = params->numAngles * params->numRows * params->numCols;
-
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Copy volume data to GPU
-	float* dev_g = 0;
-	if (cudaMalloc((void**)&dev_g, N * sizeof(float)) != cudaSuccess)
-	{
-		fprintf(stderr, "cudaMalloc(projection) failed!\n");
-		return NULL;
-	}
-	if (cudaMemcpy(dev_g, g, N * sizeof(float), cudaMemcpyHostToDevice))
-	{
-		fprintf(stderr, "cudaMemcpy(projection) failed!\n");
-		return NULL;
-	}
-
-	return dev_g;
-}
-
-bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int whichGPU)
-{
-	cudaSetDevice(whichGPU);
-	cudaError_t cudaStatus;
-
-	int N = params->numAngles * params->numRows * params->numCols;
-
-	cudaStatus = cudaMemcpy(g, dev_g, N * sizeof(float), cudaMemcpyDeviceToHost);
-	if (cudaSuccess != cudaStatus)
-	{
-		fprintf(stderr, "failed to copy projection data back to host!\n");
-		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-		return false;
-	}
-	else
-		return true;
-}
-
-float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU)
-{
-	cudaSetDevice(whichGPU);
-
-	int N = params->numX * params->numY * params->numZ;
-
-	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-	// Copy volume data to GPU
-	float* dev_f = 0;
-	if (cudaMalloc((void**)&dev_f, N * sizeof(float)) != cudaSuccess)
-	{
-		fprintf(stderr, "cudaMalloc(volume) failed!\n");
-		return NULL;
-	}
-	if (cudaMemcpy(dev_f, f, N * sizeof(float), cudaMemcpyHostToDevice))
-	{
-		fprintf(stderr, "cudaMemcpy(volume) failed!\n");
-		return NULL;
-	}
-
-	return dev_f;
-}
-
-bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU)
-{
-	cudaSetDevice(whichGPU);
-	cudaError_t cudaStatus;
-	int N = params->numX * params->numY * params->numZ;
-	cudaStatus = cudaMemcpy(f, dev_f, N * sizeof(float), cudaMemcpyDeviceToHost);
-	if (cudaSuccess != cudaStatus)
-	{
-		fprintf(stderr, "failed to copy volume data back to host!\n");
-		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-		return false;
-	}
-	else
-		return true;
-}
-
 
 //#########################################################################################
 //#########################################################################################
@@ -1427,48 +1846,11 @@ bool project_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
 		dev_f = f;
 	}
 
-	//  =======================================================
-	//* ==================   CUDA TEXTURES   ==================
-	//  =======================================================
-	cudaArray *d_data_array = NULL;
-	cudaTextureObject_t d_data_txt = NULL;
-
-	////////////////////////////////////////////////////////////////////////////
-	// Allocate 3D array memory
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-	cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_f.z, N_f.y, N_f.x));
-
-	// Bind 3D array to texture object
-	cudaResourceDesc resDesc;
-	memset(&resDesc, 0, sizeof(resDesc));
-	resDesc.resType = cudaResourceTypeArray;
-	resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-	cudaTextureDesc texDesc;
-	memset(&texDesc, 0, sizeof(texDesc));
-	texDesc.readMode = cudaReadModeElementType;
-	texDesc.normalizedCoords = false;						// Texture coordinates normalization
-	texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
+	bool useLinearInterpolation = false;
 	if (params->isSymmetric())
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
-	else
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-	cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-	// Update the texture memory
-	//util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-	cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-	cudaMemcpy3DParms cudaparams = { 0 };
-	cudaparams.extent = make_cudaExtent(N_f.z, N_f.y, N_f.x);
-	cudaparams.kind = cudaMemcpyDeviceToDevice;
-	cudaparams.srcPos = make_cudaPos(0, 0, 0);
-	cudaparams.srcPtr = make_cudaPitchedPtr(dev_f, N_f.z * sizeof(float), N_f.z, N_f.y);
-	cudaparams.dstPos = make_cudaPos(0, 0, 0);
-	cudaparams.dstArray = (cudaArray_t)d_data_array;
-	cudaMemcpy3DAsync(&cudaparams);
-	//*/
+		useLinearInterpolation = true;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
 
 	//* call kernel: FIXME!
 	dim3 dimBlock(8, 8, 8); // best so far
@@ -1480,7 +1862,7 @@ bool project_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
 	}
 	else
 	{
-		coneBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, dev_phis);
+		coneBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, dev_phis, params->volumeDimensionOrder);
 	}
 	//*/
 
@@ -1582,48 +1964,11 @@ bool backproject_cone(float* g, float *&f, parameters* params, bool cpu_to_gpu)
 		dev_g = g;
 	}
 
-	//  =======================================================
-	//* ==================   CUDA TEXTURES   ==================
-	//  =======================================================
-	cudaArray *d_data_array = NULL;
-	cudaTextureObject_t d_data_txt = NULL;
-
-	////////////////////////////////////////////////////////////////////////////
-	// Allocate 3D array memory
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-	cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_g.z, N_g.y, N_g.x));
-
-	// Bind 3D array to texture object
-	cudaResourceDesc resDesc;
-	memset(&resDesc, 0, sizeof(resDesc));
-	resDesc.resType = cudaResourceTypeArray;
-	resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-	cudaTextureDesc texDesc;
-	memset(&texDesc, 0, sizeof(texDesc));
-	texDesc.readMode = cudaReadModeElementType;
-	texDesc.normalizedCoords = false;						// Texture coordinates normalization
-	texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
+	bool useLinearInterpolation = false;
 	if (params->isSymmetric())
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
-	else
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-	cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-	// Update the texture memory
-	//util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-	cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-	cudaMemcpy3DParms cudaparams = { 0 };
-	cudaparams.extent = make_cudaExtent(N_g.z, N_g.y, N_g.x);
-	cudaparams.kind = cudaMemcpyDeviceToDevice;
-	cudaparams.srcPos = make_cudaPos(0, 0, 0);
-	cudaparams.srcPtr = make_cudaPitchedPtr(dev_g, N_g.z * sizeof(float), N_g.z, N_g.y);
-	cudaparams.dstPos = make_cudaPos(0, 0, 0);
-	cudaparams.dstArray = (cudaArray_t)d_data_array;
-	cudaMemcpy3DAsync(&cudaparams);
-	//*/
+		useLinearInterpolation = true;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, useLinearInterpolation);
 
 	//* call kernel: FIXME!
 	dim3 dimBlock(8, 8, 8); // best so far
@@ -1634,7 +1979,7 @@ bool backproject_cone(float* g, float *&f, parameters* params, bool cpu_to_gpu)
 	}
 	else
 	{
-		coneBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, rFOVsq, dev_phis);
+		coneBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, rFOVsq, dev_phis, params->volumeDimensionOrder);
 	}
 	//*/
 
@@ -1713,48 +2058,11 @@ bool project_parallel(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 		dev_f = f;
 	}
 
-	//  =======================================================
-	//* ==================   CUDA TEXTURES   ==================
-	//  =======================================================
-	cudaArray *d_data_array = NULL;
-	cudaTextureObject_t d_data_txt = NULL;
-
-	////////////////////////////////////////////////////////////////////////////
-	// Allocate 3D array memory
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-	cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_f.z, N_f.y, N_f.x));
-
-	// Bind 3D array to texture object
-	cudaResourceDesc resDesc;
-	memset(&resDesc, 0, sizeof(resDesc));
-	resDesc.resType = cudaResourceTypeArray;
-	resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-	cudaTextureDesc texDesc;
-	memset(&texDesc, 0, sizeof(texDesc));
-	texDesc.readMode = cudaReadModeElementType;
-	texDesc.normalizedCoords = false;						// Texture coordinates normalization
-	texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
+	bool useLinearInterpolation = false;
 	if (params->isSymmetric())
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
-	else
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-	cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-	// Update the texture memory
-	//util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-	cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-	cudaMemcpy3DParms cudaparams = { 0 };
-	cudaparams.extent = make_cudaExtent(N_f.z, N_f.y, N_f.x);
-	cudaparams.kind = cudaMemcpyDeviceToDevice;
-	cudaparams.srcPos = make_cudaPos(0, 0, 0);
-	cudaparams.srcPtr = make_cudaPitchedPtr(dev_f, N_f.z * sizeof(float), N_f.z, N_f.y);
-	cudaparams.dstPos = make_cudaPos(0, 0, 0);
-	cudaparams.dstArray = (cudaArray_t)d_data_array;
-	cudaMemcpy3DAsync(&cudaparams);
-	//*/
+		useLinearInterpolation = true;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
 
 	//* call kernel: FIXME!
 	dim3 dimBlock(8, 8, 8); // best so far
@@ -1765,7 +2073,7 @@ bool project_parallel(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 	}
 	else
 	{
-		parallelBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_phis);
+		parallelBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_phis, params->volumeDimensionOrder);
 	}
 	//*/
 
@@ -1847,48 +2155,11 @@ bool backproject_parallel(float* g, float *&f, parameters* params, bool cpu_to_g
 		dev_g = g;
 	}
 
-	//  =======================================================
-	//* ==================   CUDA TEXTURES   ==================
-	//  =======================================================
-	cudaArray *d_data_array = NULL;
-	cudaTextureObject_t d_data_txt = NULL;
-
-	////////////////////////////////////////////////////////////////////////////
-	// Allocate 3D array memory
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-	cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_g.z, N_g.y, N_g.x));
-
-	// Bind 3D array to texture object
-	cudaResourceDesc resDesc;
-	memset(&resDesc, 0, sizeof(resDesc));
-	resDesc.resType = cudaResourceTypeArray;
-	resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-	cudaTextureDesc texDesc;
-	memset(&texDesc, 0, sizeof(texDesc));
-	texDesc.readMode = cudaReadModeElementType;
-	texDesc.normalizedCoords = false;						// Texture coordinates normalization
-	texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
+	bool useLinearInterpolation = false;
 	if (params->isSymmetric())
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
-	else
-		texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-	cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-	// Update the texture memory
-	//util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-	cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-	cudaMemcpy3DParms cudaparams = { 0 };
-	cudaparams.extent = make_cudaExtent(N_g.z, N_g.y, N_g.x);
-	cudaparams.kind = cudaMemcpyDeviceToDevice;
-	cudaparams.srcPos = make_cudaPos(0, 0, 0);
-	cudaparams.srcPtr = make_cudaPitchedPtr(dev_g, N_g.z * sizeof(float), N_g.z, N_g.y);
-	cudaparams.dstPos = make_cudaPos(0, 0, 0);
-	cudaparams.dstArray = (cudaArray_t)d_data_array;
-	cudaMemcpy3DAsync(&cudaparams);
-	//*/
+		useLinearInterpolation = true;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, useLinearInterpolation);
 
 	//* call kernel: FIXME!
 	dim3 dimBlock(8, 8, 8); // best so far
@@ -1899,7 +2170,7 @@ bool backproject_parallel(float* g, float *&f, parameters* params, bool cpu_to_g
 	}
 	else
 	{
-		parallelBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis);
+		parallelBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
 	}
 	//*/
 
@@ -1997,50 +2268,13 @@ bool project_modular(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 		dev_f = f;
 	}
 
-	//  =======================================================
-	//* ==================   CUDA TEXTURES   ==================
-	//  =======================================================
-	cudaArray *d_data_array = NULL;
 	cudaTextureObject_t d_data_txt = NULL;
-
-	////////////////////////////////////////////////////////////////////////////
-	// Allocate 3D array memory
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-	cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_f.z, N_f.y, N_f.x));
-
-	// Bind 3D array to texture object
-	cudaResourceDesc resDesc;
-	memset(&resDesc, 0, sizeof(resDesc));
-	resDesc.resType = cudaResourceTypeArray;
-	resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-	cudaTextureDesc texDesc;
-	memset(&texDesc, 0, sizeof(texDesc));
-	texDesc.readMode = cudaReadModeElementType;
-	texDesc.normalizedCoords = false;						// Texture coordinates normalization
-	texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-	cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-	// Update the texture memory
-	//util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-	cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-	cudaMemcpy3DParms cudaparams = { 0 };
-	cudaparams.extent = make_cudaExtent(N_f.z, N_f.y, N_f.x);
-	cudaparams.kind = cudaMemcpyDeviceToDevice;
-	cudaparams.srcPos = make_cudaPos(0, 0, 0);
-	cudaparams.srcPtr = make_cudaPitchedPtr(dev_f, N_f.z * sizeof(float), N_f.z, N_f.y);
-	cudaparams.dstPos = make_cudaPos(0, 0, 0);
-	cudaparams.dstArray = (cudaArray_t)d_data_array;
-	cudaMemcpy3DAsync(&cudaparams);
-	//*/
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
 
 	//* call kernel: FIXME!
 	dim3 dimBlock(8, 8, 8); // best so far
 	dim3 dimGrid(int(ceil(double(N_g.x) / double(dimBlock.x))), int(ceil(double(N_g.y) / double(dimBlock.y))), int(ceil(double(N_g.z) / double(dimBlock.z))));
-	modularBeamProjectorKernel << < dimGrid, dimBlock >> > (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors);
+	modularBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
 	//*/
 
 	// pull result off GPU
@@ -2140,50 +2374,13 @@ bool backproject_modular(float* g, float *&f, parameters* params, bool cpu_to_gp
 		dev_g = g;
 	}
 
-	//  =======================================================
-	//* ==================   CUDA TEXTURES   ==================
-	//  =======================================================
-	cudaArray *d_data_array = NULL;
 	cudaTextureObject_t d_data_txt = NULL;
-
-	////////////////////////////////////////////////////////////////////////////
-	// Allocate 3D array memory
-	cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-	cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_g.z, N_g.y, N_g.x));
-
-	// Bind 3D array to texture object
-	cudaResourceDesc resDesc;
-	memset(&resDesc, 0, sizeof(resDesc));
-	resDesc.resType = cudaResourceTypeArray;
-	resDesc.res.array.array = (cudaArray_t)d_data_array;
-
-	cudaTextureDesc texDesc;
-	memset(&texDesc, 0, sizeof(texDesc));
-	texDesc.readMode = cudaReadModeElementType;
-	texDesc.normalizedCoords = false;						// Texture coordinates normalization
-	texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
-	texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-	cudaCreateTextureObject(&d_data_txt, &resDesc, &texDesc, NULL);
-
-	// Update the texture memory
-	//util_cudamemcpyMemToArray3d(d_data_array, dev_data, N, cudaMemcpyDeviceToDevice);
-	cudaChannelFormatDesc channelDesc_2 = cudaCreateChannelDesc<float>();
-	cudaMemcpy3DParms cudaparams = { 0 };
-	cudaparams.extent = make_cudaExtent(N_g.z, N_g.y, N_g.x);
-	cudaparams.kind = cudaMemcpyDeviceToDevice;
-	cudaparams.srcPos = make_cudaPos(0, 0, 0);
-	cudaparams.srcPtr = make_cudaPitchedPtr(dev_g, N_g.z * sizeof(float), N_g.z, N_g.y);
-	cudaparams.dstPos = make_cudaPos(0, 0, 0);
-	cudaparams.dstArray = (cudaArray_t)d_data_array;
-	cudaMemcpy3DAsync(&cudaparams);
-	//*/
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, false);
 
 	//* call kernel: FIXME!
 	dim3 dimBlock(8, 8, 8); // best so far
 	dim3 dimGrid(int(ceil(double(N_f.x) / double(dimBlock.x))), int(ceil(double(N_f.y) / double(dimBlock.y))), int(ceil(double(N_f.z) / double(dimBlock.z))));
-	modularBeamBackprojectorKernel << < dimGrid, dimBlock >> > (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors);
+	modularBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
 	//*/
 
 	// pull result off GPU

@@ -25,12 +25,6 @@ bool backproject_parallel(float*, float*&, parameters*, bool cpu_to_gpu);
 bool project_modular(float*&, float*, parameters*, bool cpu_to_gpu);
 bool backproject_modular(float*, float*&, parameters*, bool cpu_to_gpu);
 
-// Utility Functions for pushing/pulling data to/from CPU/GPU
-float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU);
-bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int whichGPU);
-float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU);
-bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU);
-
 /* Utility Functions for anti-symmetric projections
 float* splitVolume(float*, parameters* params, bool rightHalf = true);
 float* splitProjection(float*, parameters* params, bool rightHalf = true);
