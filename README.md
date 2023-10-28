@@ -1,6 +1,11 @@
 # LivermorE AI Projector for Computed Tomography (LEAP)
-Differentiable forward and backward projectors for AI/ML-driven computed tomography applications  
+Differentiable forward and backward projectors for AI/ML-driven computed tomography applications.
 
+This software contains C++/CUDA source code for Computed Tomography forward and back projectors (and some other related algorithms) and compiles into a dynamic library which can be bound to Python with the included Python bindings.  One binding (leaptorch.py) allows this library to be used within PyTorch and the other is just a basic Python binding (leapctype.py).
+
+It assumes that all data (a copy of the projections and a copy of the volume) fit into the memory of a single GPU.
+
+See LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948) for a more general-purpose and full functioning CT software package that does not have any memory limitations (it does not, however, work with PyTorch).
 
 ## Installation
 To install LEAP package, use pip command: 
@@ -45,15 +50,12 @@ This is c++ with CUDA library that can be used in both C++ and python with the p
 ```
 > cd LEAP
 > ./etc/build.sh
-> cd build
-> cmake ..
-> make clean
-> make -j24
 ```
 
 ### Windows
 The requires Visual Studio 2019.  Run the command below and then open the solution file LEAP\win_build\leap.sln
 ```
+> cd LEAP
 > .\etc\win_build.bat
 ```
 
