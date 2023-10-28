@@ -44,7 +44,7 @@ This is c++ with CUDA library that can be used in both C++ and python with the p
 # Linux
 ```
 > cd LEAP
-> ./etc/build.should
+> ./etc/build.sh
 > cd build
 > cmake ..
 > make clean
