@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
-project(leap LANGUAGES CXX CUDA)
-enable_language(CUDA)
 
-#find_package(CUDA QUIET REQUIRED)
+project(leap CXX CUDA)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+ find_package(CUDA 11.7 REQUIRED)
 #set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -O3)
 
 if (WIN32)
@@ -49,7 +52,6 @@ include_directories(
 #add_library(leap SHARED main_projector_ctype.cpp parameters.cpp projectors_cpu.cpp projectors.cu projectors_SF.cu)
 #target_link_libraries(leap "${TORCH_LIBRARIES}")
 add_library(leap SHARED
-  ${PUB_HEADER}
   ${HEADER}
   ${SRC_CPP}
   ${SRC_CU}
@@ -60,7 +62,6 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 file(GLOB_RECURSE _source_list
   LIST_DIRECTORIES false
-  ${PUB_HEADER}
   ${HEADER}
   ${SRC_CPP}
   ${SRC_CU}
@@ -80,5 +81,10 @@ target_link_libraries(${PROJECT_NAME}
   ${CUDA_cufft_LIBRARY}
 )
 
-set_property(TARGET leap PROPERTY CXX_STANDARD 14)
+target_compile_options(leap PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+  --use_fast_math
+>)
+
+#set_property(TARGET leap PROPERTY CXX_STANDARD 14)
+set_property(TARGET leap PROPERTY CUDA_ARCHITECTURES native)
 #set_property(TARGET leap PROPERTY CUDA_ARCHITECTURES OFF)

@@ -1,4 +1,5 @@
 #include "cuda_utils.h"
+#include <string.h>
 
 dim3 setBlockSize(int3 N)
 {

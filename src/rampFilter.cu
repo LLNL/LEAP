@@ -6,7 +6,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-//#define INCLUDE_CUFFT
+#define INCLUDE_CUFFT
 #ifndef PI
 #define PI 3.141592653589793
 #endif
