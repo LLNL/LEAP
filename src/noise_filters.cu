@@ -6,8 +6,6 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-#define BLOCKSIZE 8
-
 __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -249,52 +247,4 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int whic
     }
 
     return true;
-}
-
-dim3 setBlockSize(int4 N)
-{
-    dim3 dimBlock(8, 8, 8);  // needs to be optimized
-    if (N.z < 8)
-    {
-        dimBlock.x = 16;
-        dimBlock.y = 16;
-        dimBlock.z = 1;
-    }
-    else if (N.y < 8)
-    {
-        dimBlock.x = 16;
-        dimBlock.y = 1;
-        dimBlock.z = 16;
-    }
-    else if (N.x < 8)
-    {
-        dimBlock.x = 1;
-        dimBlock.y = 16;
-        dimBlock.z = 16;
-    }
-    return dimBlock;
-}
-
-dim3 setBlockSize(int3 N)
-{
-    dim3 dimBlock(8, 8, 8);  // needs to be optimized
-    if (N.z < 8)
-    {
-        dimBlock.x = 16;
-        dimBlock.y = 16;
-        dimBlock.z = 1;
-    }
-    else if (N.y < 8)
-    {
-        dimBlock.x = 16;
-        dimBlock.y = 1;
-        dimBlock.z = 16;
-    }
-    else if (N.x < 8)
-    {
-        dimBlock.x = 1;
-        dimBlock.y = 16;
-        dimBlock.z = 16;
-    }
-    return dimBlock;
 }

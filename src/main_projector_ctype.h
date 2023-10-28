@@ -58,3 +58,7 @@ extern "C" PROJECTOR_API int get_numZ();
 
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM);
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold);
+
+extern "C" PROJECTOR_API float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta);
+extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
+extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta);

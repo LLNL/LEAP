@@ -56,10 +56,7 @@ class Projector:
             self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "libLEAP.dylib"))
         elif _platform == "win32":
             from ctypes import windll
-            #print(os.path.join(current_dir, r'..\Release\libLEAP.dll'))
-            #self.libprojectors = windll.LoadLibrary(r'C:\Users\champley\Documents\LEAP-main\Release\libLEAP.dll')
-            self.libprojectors = windll.LoadLibrary(r'C:\Users\champley\Documents\LEAP-main\win_build\bin\Release\libLEAP.dll')
-            #self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\Release\libLEAP.dll'))
+            self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libLEAP.dll'))
 
     def reset(self):
         return self.libprojectors.reset()
@@ -190,6 +187,40 @@ class Projector:
         self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
         self.libprojectors.MedianFilter.restype = ctypes.c_bool
         return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold)
+    
+    def TVcost(self, f, delta, beta=0.0):
+        #float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta);
+        self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.TVcost.restype = ctypes.c_float
+        
+        return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta)
+        
+    def TVgradient(self, f, delta, beta=0.0):
+        #bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
+        self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.TVgradient.restype = ctypes.c_bool
+        
+        Df = np.ascontiguousarray(np.zeros(f.shape).astype(np.float32), dtype=np.float32)
+        self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta)
+        return Df
+    
+    def TVquadForm(self, f, d, delta, beta=0.0):
+        #float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta);
+        self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.TVquadForm.restype = ctypes.c_float
+        
+        return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta)
+        
+    def diffuse(self, f, delta, N):
+        for n in range(N):
+            d = self.TVgradient(f, delta)
+            num = np.sum(d**2)
+            denom = self.TVquadForm(f, d, delta)
+            if denom <= 1.0e-16:
+                break
+            stepSize = num / denom
+            f -= stepSize * d
+        return f
 
     def allocateProjections(self):
         N_phis = self.get_numAngles()

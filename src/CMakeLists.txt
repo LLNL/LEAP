@@ -23,6 +23,7 @@ set(HEADER
   cuda_utils.h
   rampFilter.cuh
   noise_filters.cuh
+  total_variation.cuh
 )
 
 set(SRC_CPP
@@ -37,6 +38,7 @@ set(SRC_CU
   projectors_SF.cu
   rampFilter.cu
   noise_filters.cu
+  total_variation.cu
 )
 
 include_directories(

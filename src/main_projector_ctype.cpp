@@ -14,6 +14,7 @@
 #include "projectors_cpu.h"
 #include "rampFilter.cuh"
 #include "noise_filters.cuh"
+#include "total_variation.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -448,6 +449,21 @@ bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM)
 bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold)
 {
 	return medianFilter(f, N_1, N_2, N_3, threshold, params.whichGPU);
+}
+
+float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta)
+{
+	return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, params.whichGPU);
+}
+
+bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta)
+{
+	return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, params.whichGPU);
+}
+
+float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta)
+{
+	return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, params.whichGPU);
 }
 
 /*

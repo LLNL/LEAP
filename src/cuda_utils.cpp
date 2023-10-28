@@ -1,5 +1,29 @@
 #include "cuda_utils.h"
 
+dim3 setBlockSize(int3 N)
+{
+	dim3 dimBlock(8, 8, 8);  // needs to be optimized
+	if (N.z < 8)
+	{
+		dimBlock.x = 16;
+		dimBlock.y = 16;
+		dimBlock.z = 1;
+	}
+	else if (N.y < 8)
+	{
+		dimBlock.x = 16;
+		dimBlock.y = 1;
+		dimBlock.z = 16;
+	}
+	else if (N.x < 8)
+	{
+		dimBlock.x = 1;
+		dimBlock.y = 16;
+		dimBlock.z = 16;
+	}
+	return dimBlock;
+}
+
 cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
 {
     int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);

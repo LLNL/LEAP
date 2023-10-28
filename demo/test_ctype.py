@@ -36,7 +36,8 @@ g[:] = np.random.poisson(g)
 leapct.FBP(g,f)
 #leapct.BPF(g,f)
 f[f<0.0] = 0.0
-leapct.MedianFilter(f, 0.0)
+#leapct.MedianFilter(f, 0.0)
+leapct.diffuse(f, 0.1, 10)
 
 # Visual data (requires napari)
 leapct.displayVolume(f)
