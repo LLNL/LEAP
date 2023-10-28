@@ -178,40 +178,45 @@ class Projector:
         
     def BlurFilter(self, f, FWHM=2.0):
         #bool BlurFilter(float* f, int, int, int, float FWHM);
-        self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+        self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.BlurFilter.restype = ctypes.c_bool
-        return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM)
+        return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
     
     def MedianFilter(self, f, threshold=0.0):
         #bool MedianFilter(float* f, int, int, int, float threshold);
-        self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+        self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.MedianFilter.restype = ctypes.c_bool
-        return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold)
+        return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, True)
     
     def TVcost(self, f, delta, beta=0.0):
         #float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta);
-        self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVcost.restype = ctypes.c_float
         
-        return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta)
+        return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         
     def TVgradient(self, f, delta, beta=0.0):
         #bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
-        self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVgradient.restype = ctypes.c_bool
         
         Df = np.ascontiguousarray(np.zeros(f.shape).astype(np.float32), dtype=np.float32)
-        self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta)
+        self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         return Df
     
     def TVquadForm(self, f, d, delta, beta=0.0):
         #float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta);
-        self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVquadForm.restype = ctypes.c_float
         
-        return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta)
+        return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         
-    def diffuse(self, f, delta, N):
+    def diffuse(self, f, delta, numIter):
+        self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+        self.libprojectors.Diffuse.restype = ctypes.c_bool
+        self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, True)
+        return f
+        '''
         for n in range(N):
             d = self.TVgradient(f, delta)
             num = np.sum(d**2)
@@ -221,6 +226,7 @@ class Projector:
             stepSize = num / denom
             f -= stepSize * d
         return f
+        '''
 
     def allocateProjections(self):
         N_phis = self.get_numAngles()

@@ -73,8 +73,6 @@ __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM
             {
                 const int k_shift = max(0, min(k + dk, N.z - 1));
 
-                //const float arg = min(sqrtf(float(di*di + dj*dj + dk*dk)) * denom, FWHM);
-                //const float theWeight = 0.5f + 0.5f * cospif(arg);
                 const float theWeight = 0.5f +
                     0.5f * cosf(3.141592653589793f* min(sqrtf(float(di * di + dj * dj + dk * dk)) * denom, 1.0f));
 
@@ -97,10 +95,12 @@ __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FW
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
 
-    const float sigma = FWHM / (2.0f * sqrt(2.0f * log(2.0f)));
+    //const float sigma = FWHM / (2.0f * sqrt(2.0f * log(2.0f)));
     // FWHM = 2*sqrt(2*log(2))*sigma
-    const int pixelRadius = int(ceil(sqrt(2.0f * log(10.0f)) * sigma));
-    const float denom = 1.0f / (2.0f * sigma * sigma);
+    //const int pixelRadius = int(ceil(sqrt(2.0f * log(10.0f)) * sigma));
+    //const float denom = 1.0f / (2.0f * sigma * sigma);
+    const int pixelRadius = int(floor(FWHM));
+    const float denom = 1.0f / FWHM;
 
     float val = 0.0f;
     float sum = 0.0f;
@@ -108,16 +108,22 @@ __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FW
     for (int dj = -pixelRadius; dj <= pixelRadius; dj++)
     {
         const int j_shift = max(0, min(j + dj, N.y - 1));
-        const float j_dist_sq = float((j - j_shift) * (j - j_shift));
+        //const float j_dist_sq = float((j - j_shift) * (j - j_shift));
         for (int dk = -pixelRadius; dk <= pixelRadius; dk++)
         {
             const int k_shift = max(0, min(k + dk, N.z - 1));
-            const float k_dist_sq = float((k - k_shift) * (k - k_shift));
+            //const float k_dist_sq = float((k - k_shift) * (k - k_shift));
 
-            const float theWeight = exp(-denom * (j_dist_sq + k_dist_sq));
+            //const float theWeight = exp(-denom * (j_dist_sq + k_dist_sq));
 
-            val += theWeight * f[i * N.y * N.z + j_shift * N.z + k_shift];
-            sum += theWeight;
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(sqrtf(float(dj * dj + dk * dk)) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                val += theWeight * f[i * N.y * N.z + j_shift * N.z + k_shift];
+                sum += theWeight;
+            }
         }
     }
 
@@ -131,10 +137,12 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
 
-    const float sigma = FWHM / (2.0f * sqrt(2.0f * log(2.0f)));
+    //const float sigma = FWHM / (2.0f * sqrt(2.0f * log(2.0f)));
     // FWHM = 2*sqrt(2*log(2))*sigma
-    const int pixelRadius = int(ceil(sqrt(2.0f * log(10.0f)) * sigma));
-    const float denom = 1.0f / (2.0f * sigma * sigma);
+    //const int pixelRadius = int(ceil(sqrt(2.0f * log(10.0f)) * sigma));
+    //const float denom = 1.0f / (2.0f * sigma * sigma);
+    const int pixelRadius = int(floor(FWHM));
+    const float denom = 1.0f / FWHM;
 
     float val = 0.0;
     float sum = 0.0;
@@ -142,26 +150,34 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
     {
         const int i_shift = max(0, min(i + di, N.x - 1));
 
-        const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+        //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+        const float theWeight = 0.5f +
+            0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
 
-        val += theWeight * f[i_shift * N.y * N.z + j * N.z + k];
-        sum += theWeight;
+        if (theWeight > 0.0001f)
+        {
+            val += theWeight * f[i_shift * N.y * N.z + j * N.z + k];
+            sum += theWeight;
+        }
     }
 
     f_filtered[i * N.y * N.z + j * N.z + k] = val / sum;
 }
 
-bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int whichGPU)
+bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool cpu_to_gpu, int whichGPU)
 {
     if (f == NULL) return false;
 
     cudaSetDevice(whichGPU);
-
-    int3 N = make_int3(N_1, N_2, N_3);
+    cudaError_t cudaStatus;
 
     // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    dev_f = copy3DdataToGPU(f, N, whichGPU);
+    if (cpu_to_gpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
@@ -185,16 +201,19 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, in
     // wait for GPU to finish
     cudaDeviceSynchronize();
 
-    // pull result off GPU
-    // if (f_filtered == NULL)
-    //    f_filtered = f;
-    // pullVolumeDataFromGPU(f_filtered, N, dev_Df, whichGPU);
-    pull3DdataFromGPU(f, N, dev_Df, whichGPU);
-
     // Clean up
-    if (dev_f != 0)
+    if (cpu_to_gpu)
     {
-        cudaFree(dev_f);
+        // pull result off GPU
+        pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+    else
+    {
+        // copy dev_Df to dev_f
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1 * N_2 * N_3, cudaMemcpyDeviceToDevice);
     }
     if (dev_Df != 0)
     {
@@ -204,16 +223,20 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, in
     return true;
 }
 
-bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int whichGPU)
+bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu, int whichGPU)
 {
     if (f == NULL) return false;
 
     cudaSetDevice(whichGPU);
-
-    int3 N = make_int3(N_1, N_2, N_3);
+    cudaError_t cudaStatus;
 
     // Copy volume to GPU
-    float* dev_f = copy3DdataToGPU(f, N, whichGPU);
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    if (cpu_to_gpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
@@ -233,13 +256,19 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int whic
     // wait for GPU to finish
     cudaDeviceSynchronize();
 
-    // pull result off GPU
-    pull3DdataFromGPU(f, N, dev_Df, whichGPU);
-
     // Clean up
-    if (dev_f != 0)
+    if (cpu_to_gpu)
     {
-        cudaFree(dev_f);
+        // pull result off GPU
+        pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+    else
+    {
+        // copy dev_Df to dev_f
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1*N_2*N_3, cudaMemcpyDeviceToDevice);
     }
     if (dev_Df != 0)
     {

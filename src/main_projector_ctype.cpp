@@ -441,29 +441,34 @@ int get_numZ()
 	return params.numZ;
 }
 
-bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM)
+bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)
 {
-	return blurFilter(f, N_1, N_2, N_3, FWHM, params.whichGPU);
+	return blurFilter(f, N_1, N_2, N_3, FWHM, 3, cpu_to_gpu, params.whichGPU);
 }
 
-bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold)
+bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu)
 {
-	return medianFilter(f, N_1, N_2, N_3, threshold, params.whichGPU);
+	return medianFilter(f, N_1, N_2, N_3, threshold, cpu_to_gpu, params.whichGPU);
 }
 
-float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta)
+float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
-	return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, params.whichGPU);
+	return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
 }
 
-bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta)
+bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
-	return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, params.whichGPU);
+	return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
 }
 
-float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta)
+float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
-	return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, params.whichGPU);
+	return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
+}
+
+bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu)
+{
+	return diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu, params.whichGPU);
 }
 
 /*

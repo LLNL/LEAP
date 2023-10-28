@@ -56,9 +56,10 @@ extern "C" PROJECTOR_API int get_numX();
 extern "C" PROJECTOR_API int get_numY();
 extern "C" PROJECTOR_API int get_numZ();
 
-extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM);
-extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold);
+extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, bool cpu_to_gpu);
 
-extern "C" PROJECTOR_API float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta);
-extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
-extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta);
+extern "C" PROJECTOR_API float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
+extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu);

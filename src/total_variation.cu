@@ -250,7 +250,7 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
         dist_3;
 }
 
-bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, int whichGPU)
+bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU)
 {
     if (f == NULL) return false;
     if (beta <= 0.0)
@@ -259,19 +259,26 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
         delta = 1.0e-8;
 
     cudaSetDevice(whichGPU);
-
-    int3 N = make_int3(N_1, N_2, N_3);
+    cudaError_t cudaStatus;
 
     // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    dev_f = copy3DdataToGPU(f, N, whichGPU);
-
-    // Allocate space on GPU for the gradient
     float* dev_Df = 0;
-    if (cudaMalloc((void**)&dev_Df, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    if (cpu_to_gpu)
     {
-        fprintf(stderr, "cudaMalloc(volume) failed!\n");
-        return false;
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+        
+        if (cudaMalloc((void**)&dev_Df, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(volume) failed!\n");
+            return false;
+        }
+    }
+    else
+    {
+        dev_f = f;
+        dev_Df = Df;
     }
 
     // Call kernel
@@ -282,22 +289,22 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     cudaDeviceSynchronize();
 
     // pull result off GPU
-    if (Df == NULL) Df = f;
-    pull3DdataFromGPU(Df, N, dev_Df, whichGPU);
+    if (cpu_to_gpu)
+        pull3DdataFromGPU(Df, N, dev_Df, whichGPU);
 
     // Clean up
-    if (dev_f != 0)
+    if (cpu_to_gpu && dev_f != 0)
     {
         cudaFree(dev_f);
     }
-    if (dev_Df != 0)
+    if (cpu_to_gpu && dev_Df != 0)
     {
         cudaFree(dev_Df);
     }
     return true;
 }
 
-float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, int whichGPU)
+float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU)
 {
     if (f == NULL || d == NULL) return -1.0;
     if (beta <= 0.0)
@@ -306,16 +313,22 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
         delta = 1.0e-8;
 
     cudaSetDevice(whichGPU);
-
-    int3 N = make_int3(N_1, N_2, N_3);
+    cudaError_t cudaStatus;
 
     // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    dev_f = copy3DdataToGPU(f, N, whichGPU);
-
-    // Copy step direction to GPU
     float* dev_d = 0;
-    dev_d = copy3DdataToGPU(d, N, whichGPU);
+    if (cpu_to_gpu)
+    {
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+        dev_d = copy3DdataToGPU(d, N, whichGPU);
+    }
+    else
+    {
+        dev_f = f;
+        dev_d = d;
+    }
 
     // Allocate space on GPU for the un-collapsed quadratic form
     float* dev_quad = 0;
@@ -346,11 +359,11 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     free(quadTerms);
 
     // Clean up
-    if (dev_f != 0)
+    if (cpu_to_gpu && dev_f != 0)
     {
         cudaFree(dev_f);
     }
-    if (dev_d != 0)
+    if (cpu_to_gpu && dev_d != 0)
     {
         cudaFree(dev_d);
     }
@@ -362,7 +375,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     return retVal;
 }
 
-float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, int whichGPU)
+float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU)
 {
     if (f == NULL) return -1.0;
     if (beta <= 0.0)
@@ -371,12 +384,15 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
         delta = 1.0e-8;
 
     cudaSetDevice(whichGPU);
-
-    int3 N = make_int3(N_1, N_2, N_3);
+    cudaError_t cudaStatus;
 
     // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    dev_f = copy3DdataToGPU(f, N, whichGPU);
+    if (cpu_to_gpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
 
     // Allocate space on GPU for the un-collapsed quadratic form
     float* dev_d = 0;
@@ -407,7 +423,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     free(costTerms);
 
     // Clean up
-    if (dev_f != 0)
+    if (cpu_to_gpu && dev_f != 0)
     {
         cudaFree(dev_f);
     }
@@ -417,4 +433,57 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     }
 
     return retVal;
+}
+
+bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu, int whichGPU)
+{
+    if (f == NULL) return -1.0;
+    float beta = 1.0;
+    if (delta < 1.0e-8)
+        delta = 1.0e-8;
+
+    cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    if (cpu_to_gpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
+
+    float* dev_d = 0;
+    if (cudaMalloc((void**)&dev_d, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc failed!\n");
+        return false;
+    }
+
+    for (int n = 0; n < numIter; n++)
+    {
+        anisotropicTotalVariation_gradient(dev_f, dev_d, N_1, N_2, N_3, delta, beta, false, whichGPU);
+        float num = innerProduct(dev_d, dev_d, N, whichGPU);
+        float denom = anisotropicTotalVariation_quadraticForm(dev_f, dev_d, N_1, N_2, N_3, delta, beta, false, whichGPU);
+        if (denom <= 1.0e-16)
+            break;
+        float stepSize = num / denom;
+        scalarAdd(dev_f, -stepSize, dev_d, N, whichGPU);
+    }
+
+    // pull result off GPU
+    if (cpu_to_gpu)
+        pull3DdataFromGPU(f, N, dev_f, whichGPU);
+
+    // Clean up
+    if (cpu_to_gpu && dev_f != 0)
+    {
+        cudaFree(dev_f);
+    }
+
+    if (dev_d != 0)
+    {
+        cudaFree(dev_d);
+    }
+    return true;
 }

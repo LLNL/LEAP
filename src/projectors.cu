@@ -1819,12 +1819,15 @@ bool project_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
 	}
 
 	int N = N_g.x * N_g.y * N_g.z;
-	if (cpu_to_gpu) {
-		if ((cudaStatus = cudaMalloc((void**)&dev_g, N * sizeof(float))) != cudaSuccess) {
+	if (cpu_to_gpu)
+	{
+		if ((cudaStatus = cudaMalloc((void**)&dev_g, N * sizeof(float))) != cudaSuccess)
+		{
 			fprintf(stderr, "cudaMalloc(projections) failed!\n");
 		}
 	}
-	else {
+	else
+	{
 		dev_g = g;
 	}
 

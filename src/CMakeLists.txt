@@ -42,6 +42,7 @@ set(SRC_CU
   rampFilter.cu
   noise_filters.cu
   total_variation.cu
+  cuda_utils.cu
 )
 
 include_directories(
