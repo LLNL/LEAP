@@ -12,7 +12,7 @@
 #include "projectors.h"
 #include "projectors_SF.h"
 #include "projectors_cpu.h"
-#include "rampFilter.cuh"
+#include "ramp_filter.cuh"
 #include "ray_weighting.cuh"
 #include "noise_filters.cuh"
 #include "total_variation.cuh"

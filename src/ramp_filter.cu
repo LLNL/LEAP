@@ -1,5 +1,5 @@
 
-#include "rampFilter.cuh"
+#include "ramp_filter.cuh"
 
 #include <iostream>
 
