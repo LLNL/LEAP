@@ -5,7 +5,8 @@ project(leap CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
- find_package(CUDA 11.7 REQUIRED)
+find_package(CUDA 11.7 REQUIRED)
+find_package(OpenMP REQUIRED)
 #set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -O3)
 
 if (WIN32)
@@ -81,6 +82,7 @@ endforeach()
 # --->>>
 
 target_link_libraries(${PROJECT_NAME}
+  OpenMP::OpenMP_CXX
   ${CUDA_LIBRARIES}
   ${CUDA_cublas_LIBRARY}
   ${CUDA_cufft_LIBRARY}

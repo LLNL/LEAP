@@ -64,6 +64,11 @@ class Projector:
     def printParameters(self):
         self.libprojectors.printParameters.restype = ctypes.c_bool
         return self.libprojectors.printParameters()
+        
+    def setGPU(self, which):
+        self.libprojectors.setGPU.argtypes = [ctypes.c_int]
+        self.libprojectors.setGPU.restype = ctypes.c_bool
+        return self.libprojectors.setGPU(which)
     
     def set_axisOfSymmetry(self,val):
         self.libprojectors.set_axisOfSymmetry.argtypes = [ctypes.c_float]
@@ -166,6 +171,53 @@ class Projector:
         self.rampFilterVolume(f)
         f *= self.get_FBPscalar()
         return f
+        
+    def MLEM(self, g, f, numIter):
+        if not np.any(f):
+            f[:] = 1.0
+        ones = self.allocateProjections()
+        ones[:] = 1.0
+        Pstar1 = self.allocateVolume()
+        self.backproject(ones, Pstar1)
+        Pstar1[Pstar1==0.0] = 1.0
+        d = self.allocateVolume()
+        Pd = ones
+        for n in range(numIter):
+            self.project(Pd,f)
+            ind = Pd != 0.0
+            Pd[ind] = g[ind]/Pd[ind]
+            self.backproject(Pd,d)
+            f *= d/Pstar1
+        return f
+        
+    def SART(self, g, f, numIter):
+        ones = self.allocateVolume()
+        ones[:] = 1.0
+        P1 = self.allocateProjections()
+        self.project(P1,ones)
+        P1[P1==0.0] = 1.0
+        
+        Pstar1 = ones
+        ones = self.allocateProjections()
+        ones[:] = 1.0
+        self.backproject(ones, Pstar1)
+        Pstar1[Pstar1==0.0] = 1.0
+        
+        Pd = ones
+        d = self.allocateVolume()
+
+        for n in range(numIter):
+            self.project(Pd,f)
+            Pd = (g-Pd) / P1
+            self.backproject(Pd,d)
+            f += 0.9*d / Pstar1
+        return f
+        
+    def RLS(self, g, f, numIter):
+        pass
+        
+    def RWLS(self, g, f, numIter):
+        pass
 
     def get_numAngles(self):
         return self.libprojectors.get_numAngles()

@@ -1,6 +1,18 @@
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
 
+__global__ void setToConstantKernel(float* lhs, const float c, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = c;
+}
+
 __global__ void multiplyKernel(float* lhs, const float* rhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
@@ -120,6 +132,16 @@ __global__ void weightedInnerProductKernel(const float* x, const float* w, const
             for (int k = 0; k < N.z; k++) *sum_x += x[i * N.y * N.z + j * N.z + k] * y[i * N.y * N.z + j * N.z + k] * w[i * N.y * N.z + j * N.z + k];
         }
     }
+}
+
+cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    setToConstantKernel <<< dimGrid, dimBlock >>> (dev_lhs, c, N);
+    return cudaPeekAtLastError();
 }
 
 cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU)

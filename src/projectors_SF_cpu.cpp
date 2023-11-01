@@ -940,7 +940,7 @@ bool CPUbackproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* para
 bool applyPolarWeight(float* g, parameters* params)
 {
 	omp_set_num_threads(omp_get_num_procs());
-	#pragma omp parallel for private (i)
+	#pragma omp parallel for
 	for (int i = 0; i < params->numAngles; i++)
 	{
 		float* aProj = &g[i*params->numRows*params->numCols];
@@ -959,7 +959,7 @@ bool applyPolarWeight(float* g, parameters* params)
 bool applyInversePolarWeight(float* g, parameters* params)
 {
 	omp_set_num_threads(omp_get_num_procs());
-#pragma omp parallel for private (i)
+    #pragma omp parallel for
 	for (int i = 0; i < params->numAngles; i++)
 	{
 		float* aProj = &g[i*params->numRows*params->numCols];

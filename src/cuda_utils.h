@@ -23,6 +23,7 @@ bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int which
 float* copy3DdataToGPU(float* g, int3 N, int whichGPU);
 bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU);
 
+cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 cudaError_t divide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 cudaError_t add(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
