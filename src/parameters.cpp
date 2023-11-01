@@ -121,7 +121,9 @@ void parameters::setDefaults(int N)
 	tau = 0.0;
 	rFOVspecified = 0.0;
 
-	axisOfSymmetry = 90.0;
+	normalizeConeAndFanCoordinateFunctions = false;
+
+	axisOfSymmetry = 90.0; // must be less than 30 to be activated
 
     setAngles(); // added by Hyojin
 	setDefaultVolumeParameters();
@@ -131,8 +133,8 @@ float parameters::T_phi()
 {
     if (numAngles <= 1 || phis == NULL)
         return 2.0*PI;
-    else
-        return phis[1]-phis[0];
+	else
+		return (phis[numAngles-1] - phis[0]) / float(numAngles-1);
 }
 
 float parameters::rFOV()
@@ -364,7 +366,8 @@ void parameters::printAll()
 	printf("number of angles: %d\n", numAngles);
 	printf("number of detector elements: %d x %d\n", numRows, numCols);
 	if (phis != NULL && numAngles >= 2)
-		printf("angular range: %f degrees\n", 180.0 / PI * (phis[numAngles - 1] - phis[0] + (phis[numAngles - 1] - phis[numAngles - 2])));
+		printf("angular range: %f degrees\n", angularRange);
+		//printf("angular range: %f degrees\n", 180.0 / PI * ((phis[numAngles - 1] - phis[0]) + 0.5 * (phis[numAngles - 1] - phis[numAngles - 2]) + 0.5 * (phis[1] - phis[0])));
 	printf("detector pixel size: %f mm x %f mm\n", pixelHeight, pixelWidth);
 	printf("center detector pixel: %f, %f\n", centerRow, centerCol);
 	if (geometry == CONE || geometry == FAN)
@@ -452,6 +455,12 @@ bool parameters::setAngles(float* phis_new, int numAngles_new)
 		phis = new float[numAngles];
 		for (int i = 0; i < numAngles; i++)
 			phis[i] = phis_new[i] * PI / 180.0 - 0.5*PI;
+
+		if (numAngles >= 2)
+			angularRange = (fabs(phis_new[numAngles - 1] - phis_new[0]) + 0.5 * fabs(phis_new[numAngles - 1] - phis_new[numAngles - 2]) + 0.5 * fabs(phis_new[1] - phis_new[0]));
+		else
+			angularRange = 0.0;
+
 		return true;
 	}
 }
@@ -490,6 +499,30 @@ float parameters::v_0()
 	return -centerRow * pixelHeight;
 }
 
+float parameters::u(int i)
+{
+	if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+		return (i * pixelWidth + u_0()) / sdd;
+	else
+		return i * pixelWidth + u_0();
+}
+
+float parameters::v(int i)
+{
+	if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+		return (i * pixelHeight + v_0()) / sdd;
+	else
+		return i * pixelHeight + v_0();
+}
+
+float parameters::pixelWidth_normalized()
+{
+	if (geometry == PARALLEL)
+		return pixelWidth;
+	else
+		return pixelWidth / sdd;
+}
+
 float parameters::x_0()
 {
 	return offsetX - 0.5*float(numX - 1)*voxelWidth;
@@ -509,4 +542,21 @@ float parameters::z_0()
 		return offsetZ - 0.5*float(numZ-1) * voxelHeight;
 	else
 		return offsetZ - centerRow * ((sod / sdd * pixelHeight) / voxelHeight) * voxelHeight;
+}
+
+bool parameters::anglesAreEquispaced()
+{
+	if (phis == NULL || numAngles < 2)
+		return true;
+	else
+	{
+		float firstSpacing = phis[1] - phis[0];
+		for (int i = 1; i < numAngles-1; i++)
+		{
+			float curSpacing = phis[i + 1] - phis[i];
+			if (fabs(curSpacing - firstSpacing) > 1.0e-8)
+				return false;
+		}
+		return true;
+	}
 }

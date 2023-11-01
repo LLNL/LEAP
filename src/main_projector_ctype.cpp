@@ -13,8 +13,10 @@
 #include "projectors_SF.h"
 #include "projectors_cpu.h"
 #include "rampFilter.cuh"
+#include "ray_weighting.cuh"
 #include "noise_filters.cuh"
 #include "total_variation.cuh"
+#include "cuda_utils.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -130,22 +132,88 @@ bool backproject(float* g, float* f, bool cpu_to_gpu)
 	}
 }
 
-bool rampFilterProjections(float* g, bool cpu_to_gpu)
+bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
 {
-	return rampFilter1D(g, &params, cpu_to_gpu);
+	if (params.whichGPU < 0)
+	{
+		printf("Error: ramp filter only implemented for GPU\n");
+		return false;
+	}
+	return rampFilter1D(g, &params, cpu_to_gpu, scalar);
 }
 
 bool rampFilterVolume(float* f, bool cpu_to_gpu)
 {
+	if (params.whichGPU < 0)
+	{
+		printf("Error: ramp filter only implemented for GPU\n");
+		return false;
+	}
 	return rampFilter2D(f, &params, cpu_to_gpu);
+}
+
+bool FBP(float* g, float* f, bool cpu_to_gpu)
+{
+	/*
+	if (params.whichGPU < 0)
+	{
+		printf("Error: ramp filter only implemented for GPU\n");
+		return false;
+	}
+	//*/
+	if (params.geometry == parameters::MODULAR)
+	{
+		printf("Error: FBP not implemented for modular geometries\n");
+		return false;
+	}
+
+	if (params.whichGPU < 0 || cpu_to_gpu == false)
+	{
+		// no transfers to/from GPU are necessary; just run the code
+		applyPreRampFilterWeights(g, &params, cpu_to_gpu);
+		rampFilterProjections(g, cpu_to_gpu, get_FBPscalar());
+		applyPostRampFilterWeights(g, &params, cpu_to_gpu);
+		return backproject(g, f, cpu_to_gpu);
+	}
+	else
+	{
+		bool retVal = true;
+		cudaSetDevice(params.whichGPU);
+		cudaError_t cudaStatus;
+
+		float* dev_g = copyProjectionDataToGPU(g, &params, params.whichGPU);
+		if (dev_g == 0)
+			return false;
+		//printf("applyPreRampFilterWeights...\n");
+		applyPreRampFilterWeights(dev_g, &params, false);
+		//printf("rampFilterProjections...\n");
+		rampFilterProjections(dev_g, false, get_FBPscalar());
+		//printf("applyPostRampFilterWeights...\n");
+		applyPostRampFilterWeights(dev_g, &params, false);
+
+		float* dev_f = 0;
+		if ((cudaStatus = cudaMalloc((void**)&dev_f, params.numX * params.numY * params.numZ * sizeof(float))) != cudaSuccess)
+		{
+			fprintf(stderr, "cudaMalloc(volume) failed!\n");
+			retVal = false;
+		}
+		else
+		{
+			//printf("backproject...\n");
+			retVal = backproject(dev_g, dev_f, false);
+			pullVolumeDataFromGPU(f, &params, dev_f, params.whichGPU);
+			cudaFree(dev_f);
+		}
+
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		return retVal;
+	}
 }
 
 float get_FBPscalar()
 {
-	if (params.geometry == parameters::CONE)
-		return 1.0 / (2.0 * PI) * fabs(params.T_phi() * params.pixelWidth * (params.sod / params.sdd) * params.pixelHeight / (params.voxelWidth * params.voxelWidth * params.voxelHeight));
-	else
-		return 1.0 / (2.0 * PI) * fabs(params.T_phi() * params.pixelWidth / (params.voxelWidth * params.voxelWidth));
+	return FBPscalar(&params);
 }
 
 bool setConeBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
@@ -263,6 +331,12 @@ bool set_axisOfSymmetry(float axisOfSymmetry)
 		params.axisOfSymmetry = axisOfSymmetry;
 		return true;
 	}
+}
+
+bool clear_axisOfSymmetry()
+{
+	params.axisOfSymmetry = 90.0;
+	return true;
 }
 
 bool set_rFOV(float rFOV_in)

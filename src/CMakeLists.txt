@@ -27,6 +27,7 @@ set(HEADER
   rampFilter.cuh
   noise_filters.cuh
   total_variation.cuh
+  ray_weighting.cuh
 )
 
 set(SRC_CPP
@@ -43,6 +44,7 @@ set(SRC_CU
   noise_filters.cu
   total_variation.cu
   cuda_utils.cu
+  ray_weighting.cu
 )
 
 include_directories(

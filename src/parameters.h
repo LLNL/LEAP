@@ -38,11 +38,18 @@ public:
 	bool setAngles(float*, int);
 	bool setAngles();
 
+	bool anglesAreEquispaced();
+
 	float u_0();
 	float v_0();
 	float x_0();
 	float y_0();
 	float z_0();
+
+	float pixelWidth_normalized();
+	float u(int);
+	float v(int);
+	bool normalizeConeAndFanCoordinateFunctions;
 
 	int whichGPU;
     int whichProjector;

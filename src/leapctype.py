@@ -70,6 +70,11 @@ class Projector:
         self.libprojectors.set_axisOfSymmetry.restype = ctypes.c_bool
         return self.libprojectors.set_axisOfSymmetry(val)
         
+    def clear_axisOfSymmetry(self):
+        self.libprojectors.clear_axisOfSymmetry.argtypes = []
+        self.libprojectors.clear_axisOfSymmetry.restype = ctypes.c_bool
+        return self.libprojectors.clear_axisOfSymmetry()
+        
     def setProjector(self,which):
         self.libprojectors.setProjector.argtypes = [ctypes.c_int]
         self.libprojectors.setProjector.restype = ctypes.c_bool
@@ -124,9 +129,9 @@ class Projector:
         return g
         
     def rampFilterProjections(self, g):
-        self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
-        self.libprojectors.rampFilterProjections(g,True)
+        self.libprojectors.rampFilterProjections(g,True,1.0)
         return g
     
     def backproject(self,g,f):
@@ -147,9 +152,13 @@ class Projector:
         return self.libprojectors.get_FBPscalar()
 
     def FBP(self, g, f):
+        '''
         self.rampFilterProjections(g)
         self.backproject(g,f)
-        f *= float(self.get_FBPscalar())
+        '''
+        self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.FBP.restype = ctypes.c_bool
+        self.libprojectors.FBP(g,f,True)
         return f
         
     def BPF(self, g, f):

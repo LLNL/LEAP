@@ -5,6 +5,7 @@
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+#include "cuda_utils.h"
 
 #define INCLUDE_CUFFT
 #ifndef PI
@@ -82,13 +83,33 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
         data_block[k] = data_padded_block[k];
 }
 
-float* rampFilterFrequencyResponseMagnitude(int N, double T, int rampID)
+float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
 {
+    float T = params->pixelWidth;
+    bool isCurved = false;
+    if (params->geometry == parameters::FAN || params->geometry == parameters::CONE)
+    {
+        T *= params->sod / params->sdd;
+        if (params->detectorType == parameters::CURVED)
+            isCurved = true;
+    }
+
+    int rampID = 2;
+
     cudaError_t cudaStatus;
     double* h_d = rampImpulseResponse(N, T, rampID);
     float* h = new float[N];
     for (int i = 0; i < N; i++)
+    {
         h[i] = h_d[i];
+
+        if (i != 0 && isCurved == true)
+        {
+            double s = timeSamples(i, N) * T / params->sod;
+            double temp = s / sin(s);
+            h[i] *= temp * temp;
+        }
+    }
     delete[] h_d;
 
     // Make cuFFT Plans
@@ -141,7 +162,7 @@ float* rampFilterFrequencyResponseMagnitude(int N, double T, int rampID)
     return H_real;
 }
 
-bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu)
+bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
 {
     bool retVal = true;
     cudaSetDevice(params->whichGPU);
@@ -150,16 +171,7 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu)
     float* dev_g = 0;
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, params->numAngles * params->numRows * params->numCols * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(projections) failed!\n");
-            return false;
-        }
-        if ((cudaStatus = cudaMemcpy(dev_g, g, params->numAngles * params->numRows * params->numCols * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMemcpy(projection) failed!\n");
-            return false;
-        }
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
     }
     else
     {
@@ -168,11 +180,15 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu)
 
     // PUT CODE HERE
     int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
-    float* H_real = rampFilterFrequencyResponseMagnitude(N_H, params->pixelWidth);
+    int N_H_over2 = N_H / 2 + 1;
+    float* H_real = rampFilterFrequencyResponseMagnitude(N_H, params);
+    if (scalar != 1.0)
+    {
+        for (int i = 0; i < N_H_over2; i++)
+            H_real[i] *= scalar;
+    }
 
-    //digitalFilters filterLib;
-    //float* H_real = filterLib.rampFilterFrequencyResponseMagnitude(N_H, g->getParallelRayWidth(), g->cfg->rampID.value);
-
+    //int N_viewChunk = params->numAngles;
     int N_viewChunk = params->numAngles / 40; // number of views in a chunk (needs to be optimized)
     int numChunks = int(ceil(double(params->numAngles) / double(N_viewChunk)));
 
@@ -200,7 +216,6 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu)
     }
 
     // Make data for the result of the FFT
-    int N_H_over2 = N_H / 2 + 1;
     cufftComplex* dev_G = 0;
     if (cudaStatus = cudaMalloc((void**)&dev_G, N_viewChunk * params->numRows * N_H_over2 * sizeof(cufftComplex)))
     {
