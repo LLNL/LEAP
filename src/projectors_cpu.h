@@ -35,14 +35,16 @@ inline float tex3D(float* f, int, int, int, parameters* params);
 bool CPUproject_AbelParallel(float*, float*, parameters*);
 bool CPUbackproject_AbelParallel(float*, float*, parameters*);
 
-bool CPUproject_SF_parallel(float*, float*, parameters*);
-bool CPUbackproject_SF_parallel(float*, float*, parameters*);
+bool CPUproject_SF_parallel(float*, float*, parameters*, bool setToZero = true);
+bool CPUbackproject_SF_parallel(float*, float*, parameters*, bool setToZero = true);
 
 bool CPUproject_AbelCone(float*, float*, parameters*);
 bool CPUbackproject_AbelCone(float*, float*, parameters*);
 
-bool CPUproject_SF_cone(float*, float*, parameters*);
-bool CPUbackproject_SF_cone(float*, float*, parameters*);
+bool CPUproject_SF_cone(float*, float*, parameters*, bool setToZero = true);
+bool CPUbackproject_SF_cone(float*, float*, parameters*, bool setToZero = true);
+
+bool transpose_ZYX_to_XYZ(float* f, parameters* params);
 
 bool CPUproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi);
 bool CPUbackproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi);

@@ -85,9 +85,11 @@ class Projector:
         self.libprojectors.setProjector.restype = ctypes.c_bool
         return self.libprojectors.setProjector(which)
     
-    def setVolumeParams(self, numX, numY, numZ, voxelWidth, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
+    def setVolumeParams(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
         self.libprojectors.setVolumeParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.setVolumeParams.restype = ctypes.c_bool
+        if voxelWidth is None:
+            voxelWidth = 0.0
         if voxelHeight is None:
             voxelHeight = voxelWidth
         if offsetX is None:

@@ -17,7 +17,6 @@ phis = leapct.setAngleArray(N_phis, arange)
 # Set scanner geometry and volume
 #leapct.setParallelBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
 leapct.setConeBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, 1100, 1400)
-#leapct.setVolumeParams(N, N, M, pixelSize)
 leapct.setDefaultVolume()
 
 # Optional settings
@@ -35,13 +34,13 @@ f[:] = 0.0
 
 # Add Noise
 g[g<0.0] = 0.0
-#g[:] = np.random.poisson(g)
+g[:] = np.random.poisson(g)
 
 # Reconstruct and Smooth
 startTime = time.time()
 #leapct.FBP(g,f)
-leapct.SART(g,f,1)
-#leapct.MLEM(g,f,10)
+#leapct.SART(g,f,1)
+leapct.MLEM(g,f,1)
 print('reconstruction elapsed time: ' + str(time.time()-startTime))
 f[f<0.0] = 0.0
 print('max value = ' + str(np.max(f)))

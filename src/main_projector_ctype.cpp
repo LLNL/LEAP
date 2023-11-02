@@ -261,6 +261,21 @@ bool setModularBeamParams(int numAngles, int numRows, int numCols, float pixelHe
 
 bool setVolumeParams(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
+	if (voxelWidth <= 0.0)
+	{
+		if (params.geometry == parameters::PARALLEL)
+			voxelWidth = params.pixelWidth;
+		else
+			voxelWidth = params.pixelWidth * params.sod / params.sdd;
+	}
+	if (voxelHeight <= 0.0)
+	{
+		if (params.geometry == parameters::PARALLEL || params.geometry == parameters::FAN)
+			voxelHeight = params.pixelWidth;
+		else
+			voxelHeight = params.pixelWidth * params.sod / params.sdd;
+	}
+
 	params.numX = numX;
 	params.numY = numY;
 	params.numZ = numZ;

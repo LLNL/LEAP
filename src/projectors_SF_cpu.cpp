@@ -21,13 +21,130 @@ using namespace std;
 //### Separable Footprint (SF) Projectors
 //########################################################################################################################################################################
 //########################################################################################################################################################################
-bool CPUproject_SF_parallel(float* g, float* f, parameters* params)
+
+float* reorder_ZYX_to_XYZ(float* f, parameters* params, int sliceStart, int sliceEnd)
+{
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = params->numZ - 1;
+    int numZ_new = (sliceEnd - sliceStart + 1);
+    float* f_XYZ = (float*)malloc(sizeof(float) * params->numX * params->numY * numZ_new);
+    int num_threads = omp_get_num_procs();
+    omp_set_num_threads(num_threads);
+    #pragma omp parallel for
+    for (int ix = 0; ix < params->numX; ix++)
+    {
+        float* xSlice_out = &f_XYZ[ix * numZ_new * params->numY];
+        for (int iy = 0; iy < params->numY; iy++)
+        {
+            float* zLine_out = &xSlice_out[iy * numZ_new];
+            for (int iz = sliceStart; iz <= sliceEnd; iz++)
+            {
+                zLine_out[iz-sliceStart] = f[iz * params->numX * params->numY + iy * params->numX + ix];
+            }
+        }
+    }
+    return f_XYZ;
+}
+
+bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
+{
+    params->setToZero(g, params->numAngles * params->numRows * params->numCols);
+    int numZ_save = params->numZ;
+    float offsetZ_save = params->offsetZ;
+
+    params->volumeDimensionOrder = parameters::XYZ;
+
+    int chunkSize = 16;
+    int numChunks = int(ceil(double(params->numZ) / double(chunkSize)));
+    for (int ichunk = 0; ichunk < numChunks; ichunk++)
+    {
+        params->numZ = numZ_save;
+        params->offsetZ = offsetZ_save;
+
+        int sliceStart = ichunk * chunkSize;
+        int sliceEnd = min(params->numZ - 1, sliceStart + chunkSize - 1);
+        if (sliceStart >= params->numZ)
+            break;
+
+        float* f_XYZ = reorder_ZYX_to_XYZ(f, params, sliceStart, sliceEnd);
+        params->numZ = sliceEnd - sliceStart + 1;
+        params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
+        if (params->geometry == parameters::CONE)
+            CPUproject_SF_cone(g, f_XYZ, params, false);
+        else
+            CPUproject_SF_parallel(g, f_XYZ, params, false);
+        free(f_XYZ);
+    }
+    params->numZ = numZ_save;
+    params->offsetZ = offsetZ_save;
+    params->volumeDimensionOrder = parameters::ZYX;
+    return true;
+}
+
+bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
+{
+    int numZ_save = params->numZ;
+    float offsetZ_save = params->offsetZ;
+
+    params->volumeDimensionOrder = parameters::XYZ;
+
+    int chunkSize = 16;
+    int numChunks = int(ceil(double(params->numZ) / double(chunkSize)));
+    for (int ichunk = 0; ichunk < numChunks; ichunk++)
+    {
+        params->numZ = numZ_save;
+        params->offsetZ = offsetZ_save;
+
+        int sliceStart = ichunk * chunkSize;
+        int sliceEnd = min(params->numZ - 1, sliceStart + chunkSize - 1);
+        if (sliceStart >= params->numZ)
+            break;
+
+        int numZ_new = (sliceEnd - sliceStart + 1);
+        float* f_XYZ = (float*)malloc(sizeof(float) * params->numX * params->numY * numZ_new);
+        params->numZ = numZ_new;
+        params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
+        if (params->geometry == parameters::CONE)
+            CPUbackproject_SF_cone(g, f_XYZ, params);
+        else
+            CPUbackproject_SF_parallel(g, f_XYZ, params);
+
+        params->numZ = numZ_save;
+        params->offsetZ = offsetZ_save;
+        for (int iz = sliceStart; iz <= sliceEnd; iz++)
+        {
+            //float* xSlice_out = &f_XYZ[ix * params->numZ * params->numY];
+            float* zSlice_out = &f[iz * params->numX * params->numY]; // ZYX
+            for (int iy = 0; iy < params->numY; iy++)
+            {
+                float* xLine_out = &zSlice_out[iy * params->numX];
+                for (int ix = 0; ix < params->numX; ix++)
+                {
+                    xLine_out[ix] = f_XYZ[ix * numZ_new * params->numY + iy * numZ_new + iz-sliceStart];
+                }
+            }
+        }
+        free(f_XYZ);
+    }
+    params->numZ = numZ_save;
+    params->offsetZ = offsetZ_save;
+    params->volumeDimensionOrder = parameters::ZYX;
+    return true;
+}
+
+bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZero)
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
+    
     if (params->isSymmetric())
         return CPUproject_AbelParallel(g, f, params);
-	params->setToZero(g, params->numAngles*params->numRows*params->numCols);
+    if (setToZero)
+	    params->setToZero(g, params->numAngles*params->numRows*params->numCols);
+    if (params->volumeDimensionOrder == parameters::ZYX)
+        return CPUproject_SF_ZYX(g, f, params);
     double u_0 = params->u_0();
     
     float rFOVsq = params->rFOV()*params->rFOV();
@@ -112,13 +229,16 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params)
     return true;
 }
 
-bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params)
+bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool setToZero)
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
     if (params->isSymmetric())
         return CPUbackproject_AbelParallel(g, f, params);
-	params->setToZero(f, params->numX*params->numY*params->numZ);
+    if (setToZero)
+    	params->setToZero(f, params->numX*params->numY*params->numZ);
+    if (params->volumeDimensionOrder == parameters::ZYX)
+        return CPUbackproject_SF_ZYX(g, f, params);
     float u_0 = params->u_0();
     
     float rFOVsq = params->rFOV()*params->rFOV();
@@ -200,13 +320,16 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params)
     return true;
 }
 
-bool CPUproject_SF_cone(float* g, float* f, parameters* params)
+bool CPUproject_SF_cone(float* g, float* f, parameters* params, bool setToZero)
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
     if (params->isSymmetric())
         return CPUproject_AbelCone(g, f, params);
-	params->setToZero(g, params->numAngles*params->numRows*params->numCols);
+    if (setToZero)
+    	params->setToZero(g, params->numAngles*params->numRows*params->numCols);
+    if (params->volumeDimensionOrder == parameters::ZYX)
+        return CPUproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
     #pragma omp parallel for
@@ -224,14 +347,17 @@ bool CPUproject_SF_cone(float* g, float* f, parameters* params)
     return true;
 }
 
-bool CPUbackproject_SF_cone(float* g, float* f, parameters* params)
+bool CPUbackproject_SF_cone(float* g, float* f, parameters* params, bool setToZero)
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
     if (params->isSymmetric())
         return CPUbackproject_AbelCone(g, f, params);
 	applyInversePolarWeight(g, params);
-	params->setToZero(f, params->numX*params->numY*params->numZ);
+    if (setToZero)
+    	params->setToZero(f, params->numX*params->numY*params->numZ);
+    if (params->volumeDimensionOrder == parameters::ZYX)
+        return CPUbackproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
     #pragma omp parallel for
