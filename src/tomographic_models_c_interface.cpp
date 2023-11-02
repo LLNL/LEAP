@@ -7,7 +7,7 @@
 // main c++ module for ctype binding
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "main_projector_ctype.h"
+#include "tomographic_models_c_interface.h"
 #include "parameters.h"
 #include "projectors.h"
 #include "projectors_SF.h"
