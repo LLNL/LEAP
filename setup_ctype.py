@@ -29,9 +29,9 @@ setup(name = 'leapct',
     package_dir={'leap': 'leap'},
     package_data={
         'leap': [
-            'leap/main_projector.so',
-            'leap/main_projector_ctype.cpp',
-            'leap/main_projector_ctype.h',
+            'leap/tomographic_models_c_interface.so',
+            'leap/tomographic_models_c_interface.cpp',
+            'leap/tomographic_models_c_interface.h',
         ]
     },
     include_package_data=True
