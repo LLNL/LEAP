@@ -9,6 +9,12 @@ public:
 	tomographicModels();
 	~tomographicModels();
 
+	bool project_gpu(float* g, float* f);
+	bool backproject_gpu(float* g, float* f);
+
+	bool project_cpu(float* g, float* f);
+	bool backproject_cpu(float* g, float* f);
+
 	bool project(float* g, float* f, bool cpu_to_gpu);
 	bool backproject(float* g, float* f, bool cpu_to_gpu);
 

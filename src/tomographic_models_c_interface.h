@@ -19,6 +19,12 @@
     #define PROJECTOR_API
 #endif
 
+extern "C" PROJECTOR_API bool project_gpu(float* g, float* f);
+extern "C" PROJECTOR_API bool backproject_gpu(float* g, float* f);
+
+extern "C" PROJECTOR_API bool project_cpu(float* g, float* f);
+extern "C" PROJECTOR_API bool backproject_cpu(float* g, float* f);
+
 extern "C" PROJECTOR_API bool project(float* g, float* f, bool cpu_to_gpu);
 extern "C" PROJECTOR_API bool backproject(float* g, float* f, bool cpu_to_gpu);
 

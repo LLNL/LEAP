@@ -48,6 +48,44 @@ bool tomographicModels::reset()
 	return true;
 }
 
+bool tomographicModels::project_gpu(float* g, float* f)
+{
+	int whichGPU_save = params.whichGPU;
+	if (params.whichGPU < 0)
+		params.whichGPU = 0;
+	bool retVal = project(g, f, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
+bool tomographicModels::backproject_gpu(float* g, float* f)
+{
+	int whichGPU_save = params.whichGPU;
+	if (params.whichGPU < 0)
+		params.whichGPU = 0;
+	bool retVal = backproject(g, f, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
+bool tomographicModels::project_cpu(float* g, float* f)
+{
+	int whichGPU_save = params.whichGPU;
+	params.whichGPU = -1;
+	bool retVal = project(g, f, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
+bool tomographicModels::backproject_cpu(float* g, float* f)
+{
+	int whichGPU_save = params.whichGPU;
+	params.whichGPU = -1;
+	bool retVal = backproject(g, f, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
 bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
 {
 	if (params.allDefined() == false || g == NULL || f == NULL)

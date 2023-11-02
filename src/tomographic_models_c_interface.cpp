@@ -30,6 +30,26 @@ bool reset()
 	return tomo.reset();
 }
 
+bool project_gpu(float* g, float* f)
+{
+	return tomo.project_gpu(g, f);
+}
+
+bool backproject_gpu(float* g, float* f)
+{
+	return tomo.backproject_gpu(g, f);
+}
+
+bool project_cpu(float* g, float* f)
+{
+	return tomo.project_cpu(g, f);
+}
+
+bool backproject_cpu(float* g, float* f)
+{
+	return tomo.backproject_cpu(g, f);
+}
+
 bool project(float* g, float* f, bool cpu_to_gpu)
 {
 	return tomo.project(g, f, cpu_to_gpu);
