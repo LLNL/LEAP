@@ -15,12 +15,13 @@
 #include <vector>
 #include <stdio.h>
 #include <stdlib.h>
+#include "tomography_models.h"
 #include "parameters.h"
-#include "projectors_cpu.h"
+//#include "projectors_cpu.h"
 
 #ifdef __USE_GPU
-#include "projectors.h"
-#include "projectors_SF.h"
+//#include "projectors.h"
+//#include "projectors_SF.h"
 
 #define CHECK_CUDA(x) AT_ASSERTM(x.type().is_cuda(), #x " must be a CUDA tensor")
 #define CHECK_CONTIGUOUS(x) AT_ASSERTM(x.is_contiguous(), #x " must be contiguous")
@@ -29,62 +30,37 @@
 
 
 // this params instance should not be used for pytorch class
-parameters g_params;
-std::vector<parameters> g_params_list;
+//parameters g_params;
+//std::vector<parameters> g_params_list;
+tomographicModels model;
+std::vector<tomographicModels> list_of_models;
 
 
 bool project_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-
+    
     //CHECK_CONTIGUOUS(g_tensor);
     //CHECK_CONTIGUOUS(f_tensor);
     float* g = g_tensor.data_ptr<float>();
     float* f = f_tensor.data_ptr<float>();
     
-    if (params->geometry == parameters::CONE) {
-    	if (params->useSF())
-    		return CPUproject_SF_cone(g, f, params);
-    	else
-        	return CPUproject_cone(g, f, params);
-	}
-    else if (params->geometry == parameters::PARALLEL) {
-		if (params->useSF())
-			return CPUproject_SF_parallel(g, f, params);
-		else
-        	return CPUproject_parallel(g, f, params);
-	}
-    else if (params->geometry == parameters::FAN) {
-        if (params->useSF()) {
-        	//return CPUproject_SF_fan(g, f, params);
-            return CPUproject_fan(g, f, params);
-        }
-		else
-        	return CPUproject_fan(g, f, params);
-    }
-    else if (params->geometry == parameters::MODULAR) {
-        return CPUproject_modular(g, f, params);
-	}
-    else {
-        return false;
-    }
-	
-    return true;
+    return p_model->project_cpu(g, f);
 }
 
 bool backproject_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
         
@@ -92,40 +68,18 @@ bool backproject_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_ten
     //CHECK_CONTIGUOUS(f_tensor);
     float* g = g_tensor.data_ptr<float>();
     float* f = f_tensor.data_ptr<float>();
-	
-    if (params->geometry == parameters::CONE) {
-    	if (params->useSF())
-    		return CPUbackproject_SF_cone(g, f, params);
-    	else
-        	return CPUbackproject_cone(g, f, params);
-	}
-    else if (params->geometry == parameters::PARALLEL) {
-    	if (params->useSF())
-    		return CPUbackproject_SF_parallel(g, f, params);
-    	else
-	        return CPUbackproject_parallel(g, f, params);
-	}
-    else if (params->geometry == parameters::FAN) {
-        return false;
-    }
-    else if (params->geometry == parameters::MODULAR) {
-        return CPUbackproject_modular(g, f, params);
-	}
-    else {
-        return false;
-    }
-
-    return true;
+    
+    return p_model->backproject_cpu(g, f);
 }
 
 #ifdef __USE_GPU
 bool project_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
         
@@ -133,40 +87,17 @@ bool project_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
     CHECK_INPUT(f_tensor);
     float* g = g_tensor.data_ptr<float>();
     float* f = f_tensor.data_ptr<float>();
-	
-    if (params->geometry == parameters::CONE)
-    {
-        if (params->useSF())
-            return project_SF_cone(g, f, params, false);
-        else
-            return project_cone(g, f, params, false);
-    }
-    else if (params->geometry == parameters::PARALLEL)
-    {
-        if (params->useSF())
-            return project_SF_parallel(g, f, params, false);
-        else
-            return project_parallel(g, f, params, false);
-    }
-    else if (params->geometry == parameters::FAN) {
-        return false;
-    }
-    else if (params->geometry == parameters::MODULAR) {
-        return project_modular(g, f, params, false);
-    }
-    else {
-        return false;
-    }
-
+    
+    return p_model->project_gpu(g, f);
 }
 
 bool backproject_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
         
@@ -174,63 +105,36 @@ bool backproject_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_ten
     CHECK_INPUT(f_tensor);
     float* g = g_tensor.data_ptr<float>();
     float* f = f_tensor.data_ptr<float>();
-
-    if (params->geometry == parameters::CONE)
-    {
-        if (params->useSF())
-            return backproject_SF_cone(g, f, params, false);
-        else
-            return backproject_cone(g, f, params, false);
-    }
-    else if (params->geometry == parameters::PARALLEL)
-    {
-        if (params->useSF())
-            return backproject_SF_parallel(g, f, params, false);
-        else
-            return backproject_parallel(g, f, params, false);
-    }
-    else if (params->geometry == parameters::FAN) {
-        return false;
-    }
-    else if (params->geometry == parameters::MODULAR) {
-        return backproject_modular(g, f, params, false);
-    }
-    else {
-        return false;
-    }
+    
+    return p_model->backproject_gpu(g, f);
 }
 
 #endif
 
 bool setGPU(int param_id, int whichGPU)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-    params->whichGPU = whichGPU;
-    return true;
+    
+    return p_model->setGPU(whichGPU);
 }
 
 bool setProjector(int param_id, int which)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-    if (which == parameters::SEPARABLE_FOOTPRINT)
-        params->whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        params->whichProjector = 0;
-    return true;
+    
+    return p_model->setProjector(which);
 }
 
 bool setVolumeDimensionOrder(int param_id, int which)
@@ -252,41 +156,41 @@ bool setVolumeDimensionOrder(int param_id, int which)
 
 bool set_axisOfSymmetry(int param_id, float axisOfSymmetry)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-    params->axisOfSymmetry = axisOfSymmetry;
-    return true;
+    
+    return p_model->set_axisOfSymmetry(axisOfSymmetry);
 }
 
 bool printParameters(int param_id)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-    params->printAll();
-    return true;
+    
+    return p_model->printParameters();
 }
 
 bool saveParamsToFile(int param_id, std::string param_fn)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
+    
+    parameters* params = &(p_model->params);
 
     std::string phis_strs;
     for (int i = 0; i < params->numAngles; i++) {
@@ -335,29 +239,29 @@ bool saveParamsToFile(int param_id, std::string param_fn)
 
 bool reset(int param_id)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-	params->clearAll();
-	params->setDefaults(1);
-	return true;
+    
+    return p_model->reset();
 }
 
 bool getVolumeDim(int param_id, torch::Tensor& dim_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-
+    
+    parameters* params = &(p_model->params);
+    
     int* dim = dim_tensor.data_ptr<int>();
     dim[0] = params->numX;
     dim[1] = params->numY;
@@ -367,13 +271,15 @@ bool getVolumeDim(int param_id, torch::Tensor& dim_tensor)
 
 bool getProjectionDim(int param_id, torch::Tensor& dim_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
+    
+    parameters* params = &(p_model->params);
 
     int* dim = dim_tensor.data_ptr<int>();
     dim[0] = params->numAngles;
@@ -400,147 +306,100 @@ bool setConeBeamParams(int param_id, int numAngles, int numRows, int numCols,
                        float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
                        float angularRange, torch::Tensor& phis_tensor, float sod, float sdd)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-
-	float* phis = phis_tensor.data_ptr<float>();
-
-    params->geometry = parameters::CONE;
-    params->detectorType = parameters::FLAT;
-    params->numAngles = numAngles;
-    params->numRows = numRows;
-    params->numCols = numCols;
-    params->pixelHeight = pixelHeight;
-    params->pixelWidth = pixelWidth;
-    params->centerRow = centerRow;
-    params->centerCol = centerCol;
-    params->angularRange = angularRange;
-    params->setAngles(phis, numAngles);
-    params->sod = sod;
-    params->sdd = sdd;
-    return params->geometryDefined();
+    
+    float* phis = phis_tensor.data_ptr<float>();
+    return p_model->setConeBeamParams(numAngles, numRows, numCols, 
+                       pixelHeight, pixelWidth, centerRow, centerCol, 
+                       angularRange, phis, sod, sdd);
 }
 
 bool setParallelBeamParams(int param_id, int numAngles, int numRows, int numCols, 
                            float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
                            float angularRange, torch::Tensor& phis_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-	float* phis = phis_tensor.data_ptr<float>();
-
-    params->geometry = parameters::PARALLEL;
-    params->numAngles = numAngles;
-    params->numRows = numRows;
-    params->numCols = numCols;
-    params->pixelHeight = pixelHeight;
-    params->pixelWidth = pixelWidth;
-    params->centerRow = centerRow;
-    params->centerCol = centerCol;
-    params->angularRange = angularRange;
-    params->setAngles(phis, numAngles);
-    return params->geometryDefined();
+    
+    float* phis = phis_tensor.data_ptr<float>();
+    return p_model->setParallelBeamParams(numAngles, numRows, numCols, 
+                           pixelHeight, pixelWidth, centerRow, centerCol, 
+                           angularRange, phis);
 }
 
 bool setFanBeamParams(int param_id, int numAngles, int numRows, int numCols, 
                       float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
                       float angularRange, torch::Tensor& phis_tensor, float sod, float sdd)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-	float* phis = phis_tensor.data_ptr<float>();
-
-    params->geometry = parameters::FAN;
-    params->detectorType = parameters::FLAT;
-    params->numAngles = numAngles;
-    params->numRows = numRows;
-    params->numCols = numCols;
-    params->pixelHeight = pixelHeight;
-    params->pixelWidth = pixelWidth;
-    params->centerRow = centerRow;
-    params->centerCol = centerCol;
-    params->angularRange = angularRange;
-    params->setAngles(phis, numAngles);
-    params->sod = sod;
-    params->sdd = sdd;
-    return params->geometryDefined();
+    
+    float* phis = phis_tensor.data_ptr<float>();
+    return p_model->setFanBeamParams(numAngles, numRows, numCols, 
+                      pixelHeight, pixelWidth, centerRow, centerCol, 
+                      angularRange, phis, sod, sdd);
 }
 
 bool setModularBeamParams(int param_id, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, 
                           torch::Tensor& sourcePositions_in_tensor, torch::Tensor& moduleCenters_in_tensor, 
                           torch::Tensor& rowVectors_in_tensor, torch::Tensor& colVectors_in_tensor)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-	float* sourcePositions_in = sourcePositions_in_tensor.data_ptr<float>();
+    
+    float* sourcePositions_in = sourcePositions_in_tensor.data_ptr<float>();
 	float* moduleCenters_in = moduleCenters_in_tensor.data_ptr<float>();
 	float* rowVectors_in = rowVectors_in_tensor.data_ptr<float>();
 	float* colVectors_in = colVectors_in_tensor.data_ptr<float>();
-
-    params->geometry = parameters::MODULAR;
-    params->numAngles = numAngles;
-    params->numRows = numRows;
-    params->numCols = numCols;
-    params->pixelHeight = pixelHeight;
-    params->pixelWidth = pixelWidth;
-    params->setSourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
-    return params->geometryDefined();
+    return p_model->setModularBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, 
+                          sourcePositions_in, moduleCenters_in, 
+                          rowVectors_in, colVectors_in);
 }
 
 bool setVolumeParams(int param_id, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &model;
+    else if (param_id >= 0 && param_id < (int)list_of_models.size())
+        p_model = &list_of_models[param_id];
     else
         return false;
-        
-    params->numX = numX;
-    params->numY = numY;
-    params->numZ = numZ;
-    params->voxelWidth = voxelWidth;
-    params->voxelHeight = voxelHeight;
-    params->offsetX = offsetX;
-    params->offsetY = offsetY;
-    params->offsetZ = offsetZ;
-    return params->volumeDefined();
+    
+    return p_model->setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
 int createParams()
 {
-    parameters params;
-    g_params_list.push_back(params);
-    return (int)g_params_list.size()-1;
+    tomographicModels new_model;
+    list_of_models.push_back(new_model);
+    return (int)list_of_models.size()-1;
 }
 
 bool clearParamsList()
 {
-    g_params_list.clear();
+    list_of_models.clear();
     return true;
 }
 
@@ -550,41 +409,12 @@ bool project_cpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int 
     float* g = g_tensor.data_ptr<float>();
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
-
-    parameters tempParams;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::CONE;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.sod = sod;
-    tempParams.sdd = sdd;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
     
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-    
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-    
-    if (tempParams.useSF())
-        return CPUproject_SF_cone(g, f, &tempParams);
-    else
-        return CPUproject_cone(g, f, &tempParams);
+    tomographicModels tempModel;
+    tempModel.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.project_cpu(g, f);
 }
 
 bool project_cpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -593,38 +423,11 @@ bool project_cpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, 
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
     
-    parameters tempParams;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::PARALLEL;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
-
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-
-    if (tempParams.useSF())
-        return CPUproject_SF_parallel(g, f, &tempParams);
-    else
-        return CPUproject_parallel(g, f, &tempParams);
+    tomographicModels tempModel;
+    tempModel.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.project_cpu(g, f);
 }
 
 bool backproject_cpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -633,40 +436,11 @@ bool backproject_cpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, 
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
     
-    parameters tempParams;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::CONE;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.sod = sod;
-    tempParams.sdd = sdd;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
-    
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-    
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-        
-    if (tempParams.useSF())
-        return CPUbackproject_SF_cone(g, f, &tempParams);
-    else
-        return CPUbackproject_cone(g, f, &tempParams);
+    tomographicModels tempModel;
+    tempModel.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.backproject_cpu(g, f);
 }
 
 
@@ -676,38 +450,11 @@ bool backproject_cpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tens
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
     
-    parameters tempParams;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::PARALLEL;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
-
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-
-    if (tempParams.useSF())
-        return CPUbackproject_SF_parallel(g, f, &tempParams);
-    else
-        return CPUbackproject_parallel(g, f, &tempParams);
+    tomographicModels tempModel;
+    tempModel.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.backproject_cpu(g, f);
 }
 
 #ifdef __USE_GPU
@@ -717,41 +464,12 @@ bool project_gpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int 
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
     
-    parameters tempParams;
-    tempParams.whichGPU = whichGPU;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::CONE;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.sod = sod;
-    tempParams.sdd = sdd;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
-    
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-    
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-        
-    if (tempParams.useSF())
-        return project_SF_cone(g, f, &tempParams, false);
-    else
-        return project_cone(g, f, &tempParams, false);
+    tomographicModels tempModel;
+    tempModel.setGPU(whichGPU);
+    tempModel.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.project_gpu(g, f);
 }
 
 bool project_gpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichGPU, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -760,39 +478,12 @@ bool project_gpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, 
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
     
-    parameters tempParams;
-    tempParams.whichGPU = whichGPU;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::PARALLEL;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
-
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-    
-    if (tempParams.useSF())
-        return project_SF_parallel(g, f, &tempParams, false);
-    else
-        return project_parallel(g, f, &tempParams, false);
+    tomographicModels tempModel;
+    tempModel.setGPU(whichGPU);
+    tempModel.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.project_gpu(g, f);
 }
 
 bool backproject_gpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichGPU, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -801,41 +492,12 @@ bool backproject_gpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, 
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
     
-    parameters tempParams;
-    tempParams.whichGPU = whichGPU;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::CONE;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.sod = sod;
-    tempParams.sdd = sdd;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
-    
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-    
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-    
-    if (tempParams.useSF())
-        return backproject_SF_cone(g, f, &tempParams, false);
-    else
-        return backproject_cone(g, f, &tempParams, false);
+    tomographicModels tempModel;
+    tempModel.setGPU(whichGPU);
+    tempModel.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.backproject_gpu(g, f);
 }
 
 
@@ -845,39 +507,12 @@ bool backproject_gpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tens
     float* f = f_tensor.data_ptr<float>();
     float* phis = phis_tensor.data_ptr<float>();
     
-    parameters tempParams;
-    tempParams.whichGPU = whichGPU;
-    if (whichProjector == parameters::SEPARABLE_FOOTPRINT)
-        tempParams.whichProjector = parameters::SEPARABLE_FOOTPRINT;
-    else
-        tempParams.whichProjector = 0;
-    tempParams.geometry = parameters::PARALLEL;
-    tempParams.detectorType = parameters::FLAT;
-    tempParams.pixelWidth = pixelWidth;
-    tempParams.pixelHeight = pixelHeight;
-    tempParams.numCols = numCols;
-    tempParams.numRows = numRows;
-    tempParams.numAngles = numAngles;
-    tempParams.centerCol = centerCol;
-    tempParams.centerRow = centerRow;
-    tempParams.setAngles(phis, numAngles);
-
-    tempParams.numX = numX;
-    tempParams.numY = numY;
-    tempParams.numZ = numZ;
-    tempParams.voxelWidth = voxelWidth;
-    tempParams.voxelHeight = voxelHeight;
-    tempParams.offsetX = offsetX;
-    tempParams.offsetY = offsetY;
-    tempParams.offsetZ = offsetZ;
-
-    if (tempParams.allDefined() == false || g == NULL || f == NULL)
-        return false;
-    
-    if (tempParams.useSF())
-        return backproject_SF_parallel(g, f, &tempParams, false);
-    else
-        return backproject_parallel(g, f, &tempParams, false);
+    tomographicModels tempModel;
+    tempModel.setGPU(whichGPU);
+    tempModel.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.backproject_gpu(g, f);
 }
 #endif
 

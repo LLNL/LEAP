@@ -19,7 +19,8 @@ endif()
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/..)
 
 set(HEADER
-  main_projector_ctype.h
+  tomographic_models.h
+  tomographic_models_c_interface.h
   parameters.h
   projectors_cpu.h
   projectors.h
@@ -32,7 +33,8 @@ set(HEADER
 )
 
 set(SRC_CPP
-  main_projector_ctype.cpp
+  tomographic_models.cpp
+  tomographic_models_c_interface.cpp
   parameters.cpp
   projectors_cpu.cpp
   cuda_utils.cpp
