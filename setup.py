@@ -21,9 +21,10 @@ if cuda:
     ext_mod = CUDAExtension(
         name='leapct',
         sources=['src/main_projector.cpp', 
+                 'src/tomographic_models.cpp', 'src/tomographic_models_c_interface.cpp', 
                  'src/projectors_cpu.cpp', 'src/projectors_SF_cpu.cpp',
                  'src/projectors_symmetric_cpu.cpp', 'src/parameters.cpp', 
-                 'src/cuda_utils.cpp', 'src/cuda_utils.cu', 
+                 'src/cuda_utils.cu', 
                  'src/noise_filters.cu', 'src/ramp_filter.cu', 
                  'src/ray_weighting.cu', 'src/total_variation.cu', 
                  'src/projectors.cu', 'src/projectors_SF.cu', ],
@@ -34,6 +35,7 @@ else:
     ext_mod = CppExtension(
         name='leapct',
         sources=['src/main_projector.cpp', 
+                 'src/tomographic_models.cpp', 'src/tomographic_models_c_interface.cpp', 
                  'src/projectors_cpu.cpp', 'src/projectors_SF_cpu.cpp',
                  'src/projectors_symmetric_cpu.cpp', 'src/parameters.cpp'],
         extra_compile_args={'cxx': ['-g', '-D__USE_CPU', '-I%s' % pybind11.get_include()]}

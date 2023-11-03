@@ -28,7 +28,6 @@ class ProjectorFunctionCPU(torch.autograd.Function):
         return proj
 
     @staticmethod
-    @once_differentiable
     def backward(ctx, grad_output): # grad_output: projection (sinogram) grad_input: image
         input, vol, param_id = ctx.saved_tensors
         for batch in range(input.shape[0]):
@@ -49,7 +48,6 @@ class ProjectorFunctionGPU(torch.autograd.Function):
         return proj
 
     @staticmethod
-    @once_differentiable
     def backward(ctx, grad_output): # grad_output: projection (sinogram) grad_input: image
         input, vol, param_id = ctx.saved_tensors
         for batch in range(input.shape[0]):
@@ -131,15 +129,15 @@ class Projector(torch.nn.Module):
         if self.use_gpu:
             self.vol_data = self.vol_data.float().to(self.gpu_device)
 
-    def set_parallel_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis):
-        leapct.set_parallel_beam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis)
+    def set_parallel_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis):
+        leapct.set_parallel_beam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
 
-    def set_cone_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis, sod, sdd):
-        leapct.set_cone_beam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis, sod, sdd)
+    def set_cone_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd):
+        leapct.set_cone_beam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:

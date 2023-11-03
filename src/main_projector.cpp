@@ -15,7 +15,7 @@
 #include <vector>
 #include <stdio.h>
 #include <stdlib.h>
-#include "tomography_models.h"
+#include "tomographic_models.h"
 #include "parameters.h"
 //#include "projectors_cpu.h"
 
@@ -32,17 +32,17 @@
 // this params instance should not be used for pytorch class
 //parameters g_params;
 //std::vector<parameters> g_params_list;
-tomographicModels model;
-std::vector<tomographicModels> list_of_models;
+tomographicModels default_model;
+std::vector<tomographicModels> list_models;
 
 
 bool project_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -58,9 +58,9 @@ bool backproject_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_ten
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
         
@@ -77,9 +77,9 @@ bool project_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
         
@@ -95,9 +95,9 @@ bool backproject_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_ten
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
         
@@ -115,9 +115,9 @@ bool setGPU(int param_id, int whichGPU)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -128,9 +128,9 @@ bool setProjector(int param_id, int which)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -139,18 +139,18 @@ bool setProjector(int param_id, int which)
 
 bool setVolumeDimensionOrder(int param_id, int which)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
-    
+
     if (which == parameters::ZYX)
-        params->volumeDimensionOrder = parameters::ZYX;
+        p_model->setVolumeDimensionOrder(parameters::ZYX);
     else
-        params->volumeDimensionOrder = parameters::XYZ;
+        p_model->setVolumeDimensionOrder(parameters::XYZ);
     return true;
 }
 
@@ -158,9 +158,9 @@ bool set_axisOfSymmetry(int param_id, float axisOfSymmetry)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -171,9 +171,9 @@ bool printParameters(int param_id)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -184,9 +184,9 @@ bool saveParamsToFile(int param_id, std::string param_fn)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -241,9 +241,9 @@ bool reset(int param_id)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -254,9 +254,9 @@ bool getVolumeDim(int param_id, torch::Tensor& dim_tensor)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -273,9 +273,9 @@ bool getProjectionDim(int param_id, torch::Tensor& dim_tensor)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -290,34 +290,34 @@ bool getProjectionDim(int param_id, torch::Tensor& dim_tensor)
 
 bool getVolumeDimensionOrder(int param_id, int& which)
 {
-    parameters* params;
+    tomographicModels* p_model;
     if (param_id == -1)
-        params = &g_params;
-    else if (param_id >= 0 && param_id < (int)g_params_list.size())
-        params = &g_params_list[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
 
-    which = params->volumeDimensionOrder;
+    which = p_model->getVolumeDimensionOrder();
     return true;
 }
 
 bool setConeBeamParams(int param_id, int numAngles, int numRows, int numCols, 
                        float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
-                       float angularRange, torch::Tensor& phis_tensor, float sod, float sdd)
+                       torch::Tensor& phis_tensor, float sod, float sdd)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
     float* phis = phis_tensor.data_ptr<float>();
     return p_model->setConeBeamParams(numAngles, numRows, numCols, 
                        pixelHeight, pixelWidth, centerRow, centerCol, 
-                       angularRange, phis, sod, sdd);
+                       phis, sod, sdd);
 }
 
 bool setParallelBeamParams(int param_id, int numAngles, int numRows, int numCols, 
@@ -326,34 +326,34 @@ bool setParallelBeamParams(int param_id, int numAngles, int numRows, int numCols
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
     float* phis = phis_tensor.data_ptr<float>();
     return p_model->setParallelBeamParams(numAngles, numRows, numCols, 
-                           pixelHeight, pixelWidth, centerRow, centerCol, 
-                           angularRange, phis);
+                           pixelHeight, pixelWidth, centerRow, centerCol, phis);
 }
 
 bool setFanBeamParams(int param_id, int numAngles, int numRows, int numCols, 
                       float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
-                      float angularRange, torch::Tensor& phis_tensor, float sod, float sdd)
+                      torch::Tensor& phis_tensor, float sod, float sdd)
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
-    float* phis = phis_tensor.data_ptr<float>();
-    return p_model->setFanBeamParams(numAngles, numRows, numCols, 
-                      pixelHeight, pixelWidth, centerRow, centerCol, 
-                      angularRange, phis, sod, sdd);
+    //float* phis = phis_tensor.data_ptr<float>();
+    //return p_model->setFanBeamParams(numAngles, numRows, numCols, 
+    //                  pixelHeight, pixelWidth, centerRow, centerCol, 
+    //                  phis, sod, sdd);
+    return false;
 }
 
 bool setModularBeamParams(int param_id, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, 
@@ -362,9 +362,9 @@ bool setModularBeamParams(int param_id, int numAngles, int numRows, int numCols,
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -381,9 +381,9 @@ bool setVolumeParams(int param_id, int numX, int numY, int numZ, float voxelWidt
 {
     tomographicModels* p_model;
     if (param_id == -1)
-        p_model = &model;
-    else if (param_id >= 0 && param_id < (int)list_of_models.size())
-        p_model = &list_of_models[param_id];
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
     else
         return false;
     
@@ -393,13 +393,13 @@ bool setVolumeParams(int param_id, int numX, int numY, int numZ, float voxelWidt
 int createParams()
 {
     tomographicModels new_model;
-    list_of_models.push_back(new_model);
-    return (int)list_of_models.size()-1;
+    list_models.push_back(new_model);
+    return (int)list_models.size()-1;
 }
 
 bool clearParamsList()
 {
-    list_of_models.clear();
+    list_models.clear();
     return true;
 }
 
