@@ -233,6 +233,23 @@ bool setProjector(int param_id, int which)
     return true;
 }
 
+bool setVolumeDimensionOrder(int param_id, int which)
+{
+    parameters* params;
+    if (param_id == -1)
+        params = &g_params;
+    else if (param_id >= 0 && param_id < (int)g_params_list.size())
+        params = &g_params_list[param_id];
+    else
+        return false;
+    
+    if (which == parameters::ZYX)
+        params->volumeDimensionOrder = parameters::ZYX;
+    else
+        params->volumeDimensionOrder = parameters::XYZ;
+    return true;
+}
+
 bool set_axisOfSymmetry(int param_id, float axisOfSymmetry)
 {
     parameters* params;
@@ -362,6 +379,20 @@ bool getProjectionDim(int param_id, torch::Tensor& dim_tensor)
     dim[0] = params->numAngles;
     dim[1] = params->numRows;
     dim[2] = params->numCols;
+    return true;
+}
+
+bool getVolumeDimensionOrder(int param_id, int& which)
+{
+    parameters* params;
+    if (param_id == -1)
+        params = &g_params;
+    else if (param_id >= 0 && param_id < (int)g_params_list.size())
+        params = &g_params_list[param_id];
+    else
+        return false;
+
+    which = params->volumeDimensionOrder;
     return true;
 }
 
@@ -863,6 +894,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("save_param", &saveParamsToFile, "save current parameters to file");
     m.def("set_gpu", &setGPU, "set GPU device (0, 1, ...) ");
     m.def("set_projector", &setProjector, "");
+    m.def("set_dim_order", &setVolumeDimensionOrder, "");
 	m.def("set_symmetry_axis", &set_axisOfSymmetry, "");
     m.def("set_cone_beam", &setConeBeamParams, "");
 	m.def("set_parallel_beam", &setParallelBeamParams, "");
@@ -871,6 +903,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 	m.def("set_volume", &setVolumeParams, "");
     m.def("get_volume_dim", &getVolumeDim, "");
     m.def("get_projection_dim", &getProjectionDim, "");
+    m.def("get_dim_order", &getVolumeDimensionOrder, "");
     m.def("create_param", &createParams, "");
     m.def("clear_param_all", &clearParamsList, "");
     m.def("project_cone_cpu", &project_cpu_ConeBeam, "");

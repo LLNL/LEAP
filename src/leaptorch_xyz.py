@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
+# Copyright 2022-2022 Lawrence Livermore National Security, LLC and other 
 # LEAP project developers. See the LICENSE file for details.
 # SPDX-License-Identifier: MIT
 #
@@ -22,19 +22,23 @@ class ProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             #print(input.shape, proj.shape)
             f = input[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = proj[batch]
-            leapct.project_cpu(param_id, g, f) # compute proj (g) from input (f)
-        ctx.save_for_backward(input, vol, param_id)
+            leapct.project_cpu(param_id, g, f_xyz) # compute proj (g) from input (f)
+            proj[batch] = g
+        ctx.save_for_backward(input, proj, vol, param_id)
         return proj
 
     @staticmethod
-    @once_differentiable
     def backward(ctx, grad_output): # grad_output: projection (sinogram) grad_input: image
-        input, vol, param_id = ctx.saved_tensors
+        input, proj, vol, param_id = ctx.saved_tensors
         for batch in range(input.shape[0]):
             f = vol[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = grad_output[batch]
-            leapct.backproject_cpu(param_id, g, f) # compute input (f) from proj (g)
+            leapct.backproject_cpu(param_id, g, f_xyz) # compute input (f) from proj (g)
+            f_zyx = torch.Tensor.contiguous(torch.permute(f_xyz, (2, 1, 0)))
+            vol[batch] = f_zyx
         return vol, None, None, None
 
 # GPU Projector for forward and backward propagation
@@ -43,19 +47,23 @@ class ProjectorFunctionGPU(torch.autograd.Function):
     def forward(ctx, input, proj, vol, param_id): # input: image, output: projection (sinogram)
         for batch in range(input.shape[0]):
             f = input[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = proj[batch]
-            leapct.project_gpu(param_id, g, f) # compute proj (g) from input (f)
-        ctx.save_for_backward(input, vol, param_id)
+            leapct.project_gpu(param_id, g, f_xyz) # compute proj (g) from input (f)
+            proj[batch] = g
+        ctx.save_for_backward(input, proj, vol, param_id)
         return proj
 
     @staticmethod
-    @once_differentiable
     def backward(ctx, grad_output): # grad_output: projection (sinogram) grad_input: image
-        input, vol, param_id = ctx.saved_tensors
+        input, proj, vol, param_id = ctx.saved_tensors
         for batch in range(input.shape[0]):
             f = vol[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = grad_output[batch]
-            leapct.backproject_gpu(param_id, g, f) # compute input (f) from proj (g)
+            leapct.backproject_gpu(param_id, g, f_xyz) # compute input (f) from proj (g)
+            f_zyx = torch.Tensor.contiguous(torch.permute(f_xyz, (2, 1, 0)))
+            vol[batch] = f_zyx
         return vol, None, None, None
 
 
@@ -65,9 +73,11 @@ class BackProjectorFunctionCPU(torch.autograd.Function):
     def forward(ctx, input, proj, vol, param_id): # input: projection (sinogram), output: image
         for batch in range(input.shape[0]):
             f = vol[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = input[batch]
-            leapct.backproject_cpu(param_id, g, f) # compute input (f) from proj (g)
-            vol[batch] = f
+            leapct.backproject_cpu(param_id, g, f_xyz) # compute input (f) from proj (g)
+            f_zyx = torch.Tensor.contiguous(torch.permute(f_xyz, (2, 1, 0)))
+            vol[batch] = f_zyx
         ctx.save_for_backward(input, proj, vol, param_id)
         return vol
 
@@ -77,8 +87,9 @@ class BackProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             #print(input.shape, proj.shape)
             f = grad_output[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = proj[batch]
-            leapct.project_cpu(param_id, g, f) # compute proj (g) from input (f)
+            leapct.project_cpu(param_id, g, f_xyz) # compute proj (g) from input (f)
             proj[batch] = g
         return proj, None, None, None
 
@@ -88,9 +99,11 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
     def forward(ctx, input, proj, vol, param_id): # input: projection (sinogram), output: image
         for batch in range(input.shape[0]):
             f = vol[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = input[batch]
-            leapct.backproject_gpu(param_id, g, f) # compute input (f) from proj (g)
-            vol[batch] = f
+            leapct.backproject_gpu(param_id, g, f_xyz) # compute input (f) from proj (g)
+            f_zyx = torch.Tensor.contiguous(torch.permute(f_xyz, (2, 1, 0)))
+            vol[batch] = f_zyx
         ctx.save_for_backward(input, proj, vol, param_id)
         return vol
 
@@ -99,8 +112,9 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
         input, proj, vol, param_id = ctx.saved_tensors
         for batch in range(input.shape[0]):
             f = grad_output[batch]
+            f_xyz = torch.Tensor.contiguous(torch.permute(f, (2, 1, 0)))
             g = proj[batch]
-            leapct.project_gpu(param_id, g, f) # compute proj (g) from input (f)
+            leapct.project_gpu(param_id, g, f_xyz) # compute proj (g) from input (f)
             proj[batch] = g
         return proj, None, None, None
 
@@ -121,8 +135,6 @@ class Projector(torch.nn.Module):
         self.proj_data = None
         self.vol_param = None
         self.proj_param = None
-        leapct.set_projector(self.param_id, 1)
-        leapct.set_dim_order(self.param_id, 1)
         
     def set_volume(self, dimx, dimy, dimz, width, height, offsetx, offsety, offsetz):
         leapct.set_volume(self.param_id, dimx, dimy, dimz, width, height, offsetx, offsety, offsetz)
@@ -221,9 +233,6 @@ class Projector(torch.nn.Module):
         
     def set_projector(self, which):
         return leapct.set_projector(self.param_id, which)
-
-    def set_dim_order(self, which):
-        return leapct.set_dim_order(self.param_id, which)
 
     def set_gpu(self, which):
         self.gpu_device = which

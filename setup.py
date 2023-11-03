@@ -20,14 +20,22 @@ cuda = torch.cuda.is_available()
 if cuda:
     ext_mod = CUDAExtension(
         name='leapct',
-        sources=['src/main_projector.cpp', 'src/projectors_cpu.cpp', 'src/projectors.cu', 'src/projectors_SF.cu', 'src/parameters.cpp'],
+        sources=['src/main_projector.cpp', 
+                 'src/projectors_cpu.cpp', 'src/projectors_SF_cpu.cpp',
+                 'src/projectors_symmetric_cpu.cpp', 'src/parameters.cpp', 
+                 'src/cuda_utils.cpp', 'src/cuda_utils.cu', 
+                 'src/noise_filters.cu', 'src/ramp_filter.cu', 
+                 'src/ray_weighting.cu', 'src/total_variation.cu', 
+                 'src/projectors.cu', 'src/projectors_SF.cu', ],
         extra_compile_args={'cxx': ['-g', '-D__USE_GPU', '-I%s' % pybind11.get_include()], 
                             'nvcc': ['-g', '-D__USE_GPU']}
     )
 else:
     ext_mod = CppExtension(
         name='leapct',
-        sources=['src/main_projector.cpp', 'src/projectors_cpu.cpp', 'src/parameters.cpp'],
+        sources=['src/main_projector.cpp', 
+                 'src/projectors_cpu.cpp', 'src/projectors_SF_cpu.cpp',
+                 'src/projectors_symmetric_cpu.cpp', 'src/parameters.cpp'],
         extra_compile_args={'cxx': ['-g', '-D__USE_CPU', '-I%s' % pybind11.get_include()]}
         #extra_compile_args=['-g', '-D__USE_CPU'],
     )
