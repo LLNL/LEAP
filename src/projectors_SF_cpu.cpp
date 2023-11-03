@@ -77,6 +77,7 @@ bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
             CPUproject_SF_parallel(g, f_XYZ, params, false);
         free(f_XYZ);
     }
+    applyInversePolarWeight(g, params);
     params->numZ = numZ_save;
     params->offsetZ = offsetZ_save;
     params->volumeDimensionOrder = parameters::ZYX;
@@ -343,7 +344,8 @@ bool CPUproject_SF_cone(float* g, float* f, parameters* params, bool setToZero)
             CPUproject_SF_cone_kernel(aProj, xSlice, params, ix, iphi);
         }
     }
-	applyInversePolarWeight(g, params);
+    if (setToZero)
+	    applyInversePolarWeight(g, params);
     return true;
 }
 
