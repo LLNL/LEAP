@@ -175,10 +175,10 @@ else:
 
     # set up CT projector
     if params["proj_geometry"] == "parallel":
-        leapct.set_parallel_beam(-1, N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), arange, phis)
+        leapct.set_parallel_beam(-1, N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
         leapct.set_volume(-1, N, N, M, pixelSize, pixelSize, 0.0, 0.0, 0.0)
     elif params["proj_geometry"] == "cone":
-        leapct.set_cone_beam(-1, N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), arange, phis, sod, sdd)
+        leapct.set_cone_beam(-1, N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, sod, sdd)
         leapct.set_volume(-1, N, N, M, pixelSize*sod/sdd, pixelSize*sod/sdd, 0.0, 0.0, 0.0)
 
     leapct.print_param(-1)

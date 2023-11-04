@@ -218,7 +218,7 @@ if len(init_fn) > 0:
     f_init = f_init.reshape((1,1,f_init.shape[0],f_init.shape[1]))
 else:
     # initialize f to be solved, given g above
-    f_init = np.zeros((1, M, N, N)).astype(np.float32) ## modified by jiaming to simulate batch_size=4
+    f_init = np.ascontiguousarray(np.zeros((1, M, N, N)).astype(np.float32)) ## modified by jiaming to simulate batch_size=4
 f_init = torch.from_numpy(f_init).to(device)
 
 # set mask for field of view
