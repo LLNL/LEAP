@@ -322,7 +322,7 @@ bool setConeBeamParams(int param_id, int numAngles, int numRows, int numCols,
 
 bool setParallelBeamParams(int param_id, int numAngles, int numRows, int numCols, 
                            float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
-                           float angularRange, torch::Tensor& phis_tensor)
+                           torch::Tensor& phis_tensor)
 {
     tomographicModels* p_model;
     if (param_id == -1)

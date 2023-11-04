@@ -198,14 +198,12 @@ class Projector(torch.nn.Module):
         if pdic['proj_geometry'] == 'parallel':
             self.set_parallel_beam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
                                    pdic['proj_pheight'], pdic['proj_pwidth'], 
-                                   pdic['proj_crow'], pdic['proj_ccol'], 
-                                   pdic['proj_arange'], phis)
+                                   pdic['proj_crow'], pdic['proj_ccol'], phis)
         elif pdic['proj_geometry'] == 'cone':
             self.set_cone_beam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
                                pdic['proj_pheight'], pdic['proj_pwidth'], 
                                pdic['proj_crow'], pdic['proj_ccol'], 
-                               pdic['proj_arange'], phis, 
-                               pdic['proj_sod'], pdic['proj_sdd'])
+                               phis, pdic['proj_sod'], pdic['proj_sdd'])
         #elif pdic['proj_geometry'] == 'modular':
         #    self.set_modular_beam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
         #                          pdic['proj_pheight'], pdic['proj_pwidth'], 
