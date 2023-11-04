@@ -199,6 +199,22 @@ bool parameters::useSF()
 				return false;
 			}
         }
+		else if (geometry == FAN)
+		{
+			float largestDetectorWidth = sdd / (sod - rFOV()) * pixelWidth;
+			float smallestDetectorWidth = sdd / (sod + rFOV()) * pixelWidth;
+
+			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
+			{
+				//printf("using SF projector\n");
+				return true;
+			}
+			else
+			{
+				//printf("using Siddon projector\n");
+				return false;
+			}
+		}
         else //if (geometry == PARALLEL)
         {
             if (0.5*pixelWidth <= voxelWidth && voxelWidth <= 2.0*pixelWidth && 0.5*pixelHeight <= voxelHeight && voxelHeight <= 2.0*pixelHeight)
@@ -250,12 +266,15 @@ bool parameters::volumeDefined()
 		return false;
 	else
 	{
-		if (geometry == PARALLEL)
+		if (geometry == PARALLEL || geometry == FAN)
 		{
 			if (voxelHeight != pixelHeight)
 			{
-				voxelHeight = pixelHeight;
-				printf("Warning: for parallel-beam data volume voxel height must equal detector pixel height, so forcing voxel height to match pixel height!\n");
+				//voxelHeight = pixelHeight;
+				//printf("Warning: for parallel and fan-beam data volume voxel height must equal detector pixel height, so forcing voxel height to match pixel height!\n");
+				printf("Error: for parallel and fan-beam data volume voxel height must equal detector pixel height!\n");
+				printf("Please modify either the detector pixel height or the voxel height so they match!\n");
+				return false;
 			}
 			offsetZ = floor(0.5 + offsetZ / voxelHeight) * voxelHeight;
 		}

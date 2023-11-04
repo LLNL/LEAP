@@ -118,6 +118,11 @@ class Projector:
         self.libprojectors.setConeBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
         self.libprojectors.setConeBeamParams.restype = ctypes.c_bool
         return self.libprojectors.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+        
+    def setFanBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
+        self.libprojectors.setFanBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
+        self.libprojectors.setFanBeamParams.restype = ctypes.c_bool
+        return self.libprojectors.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
 
     def setParallelBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
         self.libprojectors.setParallelBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
@@ -158,14 +163,18 @@ class Projector:
         self.libprojectors.get_FBPscalar.restype = ctypes.c_float
         return self.libprojectors.get_FBPscalar()
 
-    def FBP(self, g, f):
+    def FBP(self, g, f, inplace=False):
         '''
         self.rampFilterProjections(g)
         self.backproject(g,f)
         '''
         self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.FBP.restype = ctypes.c_bool
-        self.libprojectors.FBP(g,f,True)
+        if inplace:
+            self.libprojectors.FBP(g,f,True)
+        else:
+            q  = g.copy()
+            self.libprojectors.FBP(q,f,True)
         return f
         
     def BPF(self, g, f):
@@ -215,11 +224,102 @@ class Projector:
             f += 0.9*d / Pstar1
         return f
         
-    def RLS(self, g, f, numIter):
-        pass
+    def RLS(self, g, f, numIter, delta=0.0, beta=0.0):
+        return self.RWLS(g, f, numIter, delta, beta, 1.0)
         
-    def RWLS(self, g, f, numIter):
-        pass
+    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None):
+        conjGradRestart = 50
+        if W is None:
+            W = g.copy()
+            W = np.exp(-W)
+        if f is None:
+            f = self.allocateVolume()
+        Pf = g.copy()
+        if np.any(f):
+            # fix scaling
+            f[f<0.0] = 0.0
+            self.project(Pf,f)
+            Pf_dot_Pf = np.sum(Pf**2)
+            g_dot_Pf = np.sum(g*Pf)
+            if Pf_dot_Pf > 0.0 and g_dot_Pf > 0.0:
+                f *= g_dot_Pf / Pf_dot_Pf
+                Pf *= g_dot_Pf / Pf_dot_Pf
+        else:
+            Pf[:] = 0.0
+        Pf_minus_g = Pf
+        Pf_minus_g -= g
+        
+        grad = self.allocateVolume()
+        u = self.allocateVolume()
+        Pu = self.allocateProjections()
+        
+        d = self.allocateVolume()
+        Pd = self.allocateProjections()
+        
+        grad_old_dot_grad_old = 0.0
+        grad_old = self.allocateVolume()
+        
+        for n in range(numIter):
+            print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
+            WPf_minus_g = Pf_minus_g.copy()
+            if W is not None:
+                WPf_minus_g *= W
+            self.backproject(WPf_minus_g, grad)
+            if beta > 0.0:
+                Sf1 = self.TVgradient(f, delta, beta)
+                grad += Sf1
+
+                #f[:] = grad[:] # FIXME
+                #return f # FIXME
+                
+            u[:] = grad[:]
+            self.project(Pu, u)
+            
+            if n == 0 or (n % conjGradRestart) == 0:
+                d[:] = u[:]
+                Pd[:] = Pu[:]
+            else:
+                gamma = (np.sum(u*grad) - np.sum(u*grad_old)) / grad_old_dot_grad_old
+
+                d = u + gamma*d
+                Pd = Pu + gamma*Pd
+
+                if np.sum(d*grad) <= 0.0:
+                    print('\tRLWS-CG: CG descent condition violated, must use GD descent direction')
+                    d[:] = u[:]
+                    Pd[:] = Pu[:]
+            
+            grad_old_dot_grad_old = np.sum(u*grad)
+            grad_old[:] = grad[:]
+            
+            stepSize = self.RWLSstepSize(f, grad, d, Pd, W, delta, beta)
+            if stepSize <= 0.0:
+                print('invalid step size; quitting!')
+                break
+            
+            f -= stepSize*d
+            f[f<0.0] = 0.0
+            self.project(Pf,f)
+            Pf_minus_g = Pf-g
+        return f
+
+    def RWLSstepSize(self, f, grad, d, Pd, W, delta, beta):
+        num = np.sum(d*grad)
+        if W is not None:
+            denomA = np.sum(Pd*Pd*W)
+        else:
+            denomA = np.sum(Pd**2)
+        denomB = 0.0;
+        if beta > 0.0:
+            denomB = self.TVquadForm(f, d, delta, beta)
+            #print('denomB = ' + str(denomA))
+        denom = denomA + denomB
+
+        stepSize = 0.0
+        if np.abs(denom) > 1.0e-16:
+            stepSize = num / denom
+        print('\tlambda = ' + str(stepSize))
+        return stepSize
 
     def get_numAngles(self):
         return self.libprojectors.get_numAngles()

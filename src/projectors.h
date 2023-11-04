@@ -19,6 +19,9 @@
 bool project_cone(float*&, float*, parameters*, bool cpu_to_gpu);
 bool backproject_cone(float*, float*&, parameters*, bool cpu_to_gpu);
 
+bool project_fan(float*&, float*, parameters*, bool cpu_to_gpu);
+bool backproject_fan(float*, float*&, parameters*, bool cpu_to_gpu);
+
 bool project_parallel(float*&, float*, parameters*, bool cpu_to_gpu);
 bool backproject_parallel(float*, float*&, parameters*, bool cpu_to_gpu);
 

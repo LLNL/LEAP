@@ -102,6 +102,13 @@ bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
 			else
 				return project_cone(g, f, &params, cpu_to_gpu);
 		}
+		else if (params.geometry == parameters::FAN)
+		{
+			if (params.useSF())
+				return project_SF_fan(g, f, &params, cpu_to_gpu);
+			else
+				return project_fan(g, f, &params, cpu_to_gpu);
+		}
 		else if (params.geometry == parameters::PARALLEL)
 		{
 			if (params.useSF())
@@ -120,6 +127,11 @@ bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
 				return CPUproject_SF_cone(g, f, &params);
 			else
 				return CPUproject_cone(g, f, &params);
+		}
+		else if (params.geometry == parameters::FAN)
+		{
+			printf("Error: CPU-based projectors of fan-beam data not yet implemented!\n");
+			return false;
 		}
 		else if (params.geometry == parameters::PARALLEL)
 		{
@@ -146,6 +158,13 @@ bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
 			else
 				return backproject_cone(g, f, &params, cpu_to_gpu);
 		}
+		else if (params.geometry == parameters::FAN)
+		{
+			if (params.useSF())
+				return backproject_SF_fan(g, f, &params, cpu_to_gpu);
+			else
+				return backproject_fan(g, f, &params, cpu_to_gpu);
+		}
 		else if (params.geometry == parameters::PARALLEL)
 		{
 			if (params.useSF())
@@ -164,6 +183,11 @@ bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
 				return CPUbackproject_SF_cone(g, f, &params);
 			else
 				return CPUbackproject_cone(g, f, &params);
+		}
+		else if (params.geometry == parameters::FAN)
+		{
+			printf("Error: CPU-based projectors of fan-beam data not yet implemented!\n");
+			return false;
 		}
 		else if (params.geometry == parameters::PARALLEL)
 		{
@@ -264,6 +288,23 @@ float tomographicModels::get_FBPscalar()
 bool tomographicModels::setConeBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
 {
 	params.geometry = parameters::CONE;
+	params.detectorType = parameters::FLAT;
+	params.sod = sod;
+	params.sdd = sdd;
+	params.pixelWidth = pixelWidth;
+	params.pixelHeight = pixelHeight;
+	params.numCols = numCols;
+	params.numRows = numRows;
+	params.numAngles = numAngles;
+	params.centerCol = centerCol;
+	params.centerRow = centerRow;
+	params.setAngles(phis, numAngles);
+	return params.geometryDefined();
+}
+
+bool tomographicModels::setFanBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+{
+	params.geometry = parameters::FAN;
 	params.detectorType = parameters::FLAT;
 	params.sod = sod;
 	params.sdd = sdd;
@@ -403,6 +444,78 @@ bool tomographicModels::set_rFOV(float rFOV_in)
 {
 	params.rFOVspecified = rFOV_in;
 	return true;
+}
+
+bool tomographicModels::projectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+{
+	parameters tempParams;
+	tempParams.geometry = parameters::FAN;
+	tempParams.detectorType = parameters::FLAT;
+	tempParams.sod = sod;
+	tempParams.sdd = sdd;
+	tempParams.pixelWidth = pixelWidth;
+	tempParams.pixelHeight = pixelHeight;
+	tempParams.numCols = numCols;
+	tempParams.numRows = numRows;
+	tempParams.numAngles = numAngles;
+	tempParams.centerCol = centerCol;
+	tempParams.centerRow = centerRow;
+	tempParams.setAngles(phis, numAngles);
+
+	tempParams.numX = numX;
+	tempParams.numY = numY;
+	tempParams.numZ = numZ;
+	tempParams.voxelWidth = voxelWidth;
+	tempParams.voxelHeight = voxelHeight;
+	tempParams.offsetX = offsetX;
+	tempParams.offsetY = offsetY;
+	tempParams.offsetZ = offsetZ;
+
+	if (tempParams.allDefined() == false || g == NULL || f == NULL)
+		return false;
+	else
+	{
+		if (params.useSF())
+			return project_SF_fan(g, f, &tempParams, cpu_to_gpu);
+		else
+			return project_fan(g, f, &tempParams, cpu_to_gpu);
+	}
+}
+
+bool tomographicModels::backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+{
+	parameters tempParams;
+	tempParams.geometry = parameters::FAN;
+	tempParams.detectorType = parameters::FLAT;
+	tempParams.sod = sod;
+	tempParams.sdd = sdd;
+	tempParams.pixelWidth = pixelWidth;
+	tempParams.pixelHeight = pixelHeight;
+	tempParams.numCols = numCols;
+	tempParams.numRows = numRows;
+	tempParams.numAngles = numAngles;
+	tempParams.centerCol = centerCol;
+	tempParams.centerRow = centerRow;
+	tempParams.setAngles(phis, numAngles);
+
+	tempParams.numX = numX;
+	tempParams.numY = numY;
+	tempParams.numZ = numZ;
+	tempParams.voxelWidth = voxelWidth;
+	tempParams.voxelHeight = voxelHeight;
+	tempParams.offsetX = offsetX;
+	tempParams.offsetY = offsetY;
+	tempParams.offsetZ = offsetZ;
+
+	if (tempParams.allDefined() == false || g == NULL || f == NULL)
+		return false;
+	else
+	{
+		if (params.useSF())
+			return backproject_SF_fan(g, f, &tempParams, cpu_to_gpu);
+		else
+			return backproject_fan(g, f, &tempParams, cpu_to_gpu);
+	}
 }
 
 bool tomographicModels::projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)

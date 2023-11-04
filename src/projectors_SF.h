@@ -16,6 +16,9 @@
 
 #include "parameters.h"
 
+bool project_SF_fan(float*&, float*, parameters*, bool cpu_to_gpu);
+bool backproject_SF_fan(float*, float*&, parameters*, bool cpu_to_gpu);
+
 bool project_SF_cone(float*&, float*, parameters*, bool cpu_to_gpu);
 bool backproject_SF_cone(float*, float*&, parameters*, bool cpu_to_gpu);
 
