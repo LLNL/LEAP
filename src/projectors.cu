@@ -967,6 +967,126 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 	return val;
 }
 
+__global__ void fanBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float rFOVsq, float* phis, int volumeDimensionOrder)
+{
+	const int i = threadIdx.x + blockIdx.x * blockDim.x;
+	const int j = threadIdx.y + blockIdx.y * blockDim.y;
+	const int k = threadIdx.z + blockIdx.z * blockDim.z;
+	if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+		return;
+
+	const float x = i * T_f.x + startVals_f.x;
+	const float y = j * T_f.y + startVals_f.y;
+	const float z = k * T_f.z + startVals_f.z;
+
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+	else
+		ind = k * N_f.y * N_f.x + j * N_f.x + i;
+
+	if (x * x + y * y > rFOVsq)
+	{
+		f[ind] = 0.0;
+		return;
+	}
+
+	const float x_width = 0.5f * T_f.x;
+	const float y_width = 0.5f * T_f.y;
+	const float z_width = 0.5f * T_f.z;
+
+	const float voxelToMagnifiedDetectorPixelRatio_u = T_f.x / (R / D * T_g.z);
+	//const float voxelToMagnifiedDetectorPixelRatio_v = T_f.z / T_g.y;
+
+	//int searchWidth_u = max(1, int(voxelToMagnifiedDetectorPixelRatio_u));
+	//int searchWidth_v = max(1, int(voxelToMagnifiedDetectorPixelRatio_v));
+	const int searchWidth_u = 1 + int(0.5f * voxelToMagnifiedDetectorPixelRatio_u);
+	//const int searchWidth_v = 1 + int(0.5f * voxelToMagnifiedDetectorPixelRatio_v);
+
+	float val = 0.0f;
+	for (int iphi = 0; iphi < N_g.x; iphi++)
+	{
+		const float cos_phi = cos(phis[iphi]);
+		const float sin_phi = sin(phis[iphi]);
+		float4 pos;
+		pos.x = x - R * cos_phi;
+		pos.y = y - R * sin_phi;
+		pos.z = z - 0.0f;
+
+		const float v_denom = R - x * cos_phi - y * sin_phi;
+		const int u_arg_mid = int(0.5 + (D * (y * cos_phi - x * sin_phi) / v_denom - startVals_g.z) / T_g.z);
+		const int iv = int(0.5 + (z - startVals_g.y) / T_g.y);
+
+		const float v = iv * T_g.y + startVals_g.y;
+		for (int iu = u_arg_mid - searchWidth_u; iu <= u_arg_mid + searchWidth_u; iu++)
+		{
+			const float u = iu * T_g.z + startVals_g.z;
+
+			float4 traj;
+			const float trajLength_inv = rsqrt(D * D + u * u);
+			traj.x = (-D * cos_phi - u * sin_phi) * trajLength_inv;
+			traj.y = (-D * sin_phi + u * cos_phi) * trajLength_inv;
+			traj.z = 0.0f;
+
+			float t_max = 1.0e16;
+			float t_min = -1.0e16;
+			if (traj.x != 0.0f)
+			{
+				const float t_a = (pos.x + x_width) / traj.x;
+				const float t_b = (pos.x - x_width) / traj.x;
+				t_max = min(t_max, max(t_b, t_a));
+				t_min = max(t_min, min(t_b, t_a));
+			}
+			if (traj.y != 0.0f)
+			{
+				const float t_a = (pos.y + y_width) / traj.y;
+				const float t_b = (pos.y - y_width) / traj.y;
+				t_max = min(t_max, max(t_b, t_a));
+				t_min = max(t_min, min(t_b, t_a));
+			}
+			if (traj.z != 0.0f)
+			{
+				const float t_a = (pos.z + z_width) / traj.z;
+				const float t_b = (pos.z - z_width) / traj.z;
+				t_max = min(t_max, max(t_b, t_a));
+				t_min = max(t_min, min(t_b, t_a));
+			}
+
+			val += max(0.0f, t_max - t_min) * tex3D<float>(g, iu, iv, iphi);
+		}
+	}
+	f[ind] = val;
+}
+
+__global__ void fanBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float* phis, int volumeDimensionOrder)
+{
+	const int i = threadIdx.x + blockIdx.x * blockDim.x;
+	const int j = threadIdx.y + blockIdx.y * blockDim.y;
+	const int k = threadIdx.z + blockIdx.z * blockDim.z;
+	if (i >= N_g.x || j >= N_g.y || k >= N_g.z)
+		return;
+
+	float v = j * T_g.y + startVals_g.y;
+	float u = k * T_g.z + startVals_g.z;
+
+	float cos_phi = cos(phis[i]);
+	float sin_phi = sin(phis[i]);
+	float4 sourcePos;
+	sourcePos.x = R * cos_phi;
+	sourcePos.y = R * sin_phi;
+	sourcePos.z = v;
+
+	float4 traj;
+	traj.x = -D * cos_phi - u * sin_phi;
+	traj.y = -D * sin_phi + u * cos_phi;
+	traj.z = 0.0;
+
+	if (volumeDimensionOrder == 0)
+		g[i * N_g.y * N_g.z + j * N_g.z + k] = projectLine(f, N_f, T_f, startVals_f, sourcePos, traj);
+	else
+		g[i * N_g.y * N_g.z + j * N_g.z + k] = projectLine_ZYX(f, N_f, T_f, startVals_f, sourcePos, traj);
+}
+
 __global__ void coneBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -1793,6 +1913,204 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 
 //#########################################################################################
 //#########################################################################################
+bool project_fan(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+{
+	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
+		return false;
+
+	cudaSetDevice(params->whichGPU);
+	cudaError_t cudaStatus;
+
+	float* dev_g = 0;
+	float* dev_f = 0;
+
+	/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Allocate planogram data on GPU
+	int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
+	float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
+	float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
+
+	int N = N_g.x * N_g.y * N_g.z;
+	if (cpu_to_gpu)
+	{
+		if ((cudaStatus = cudaMalloc((void**)&dev_g, N * sizeof(float))) != cudaSuccess)
+		{
+			fprintf(stderr, "cudaMalloc(projections) failed!\n");
+		}
+	}
+	else
+	{
+		dev_g = g;
+	}
+
+	float* dev_phis = 0;
+	if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
+		fprintf(stderr, "cudaMalloc failed!\n");
+	if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+		fprintf(stderr, "cudaMemcpy(phis) failed!\n");
+
+	int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
+	float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
+	float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
+
+	if (cpu_to_gpu)
+	{
+		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
+	}
+	else
+	{
+		dev_f = f;
+	}
+
+	bool useLinearInterpolation = false;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+
+	//* call kernel: FIXME!
+	dim3 dimBlock(8, 8, 8); // best so far
+	dim3 dimGrid(int(ceil(double(N_g.x) / double(dimBlock.x))), int(ceil(double(N_g.y) / double(dimBlock.y))), int(ceil(double(N_g.z) / double(dimBlock.z))));
+	fanBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, dev_phis, params->volumeDimensionOrder);
+	//*/
+
+	// pull result off GPU
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "kernel failed!\n");
+		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+	}
+
+	if (cpu_to_gpu)
+	{
+		//printf("pulling projections off GPU...\n");
+		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+	}
+	else
+	{
+		g = dev_g;
+	}
+
+	/*
+	float maxVal_g = g[0];
+	for (int i = 0; i < N; i++)
+		maxVal_g = std::max(maxVal_g, g[i]);
+	printf("max g: %f\n", maxVal_g);
+	float maxVal_f = f[0];
+	for (int i = 0; i < N_f.x*N_f.y*N_f.z; i++)
+		maxVal_f = std::max(maxVal_f, f[i]);
+	printf("max f: %f\n", maxVal_f);
+	//*/
+
+	// Clean up
+	cudaFreeArray(d_data_array);
+	cudaDestroyTextureObject(d_data_txt);
+	cudaFree(dev_phis);
+
+	if (cpu_to_gpu) {
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		if (dev_f != 0)
+			cudaFree(dev_f);
+	}
+
+	return true;
+}
+
+bool backproject_fan(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+{
+	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
+		return false;
+
+	cudaSetDevice(params->whichGPU);
+	cudaError_t cudaStatus;
+
+	float* dev_g = 0;
+	float* dev_f = 0;
+
+	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+	// Allocate volume data on GPU
+	int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
+	float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
+	float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
+
+	int N = N_f.x * N_f.y * N_f.z;
+	if (cpu_to_gpu)
+	{
+		if ((cudaStatus = cudaMalloc((void**)&dev_f, N * sizeof(float))) != cudaSuccess)
+		{
+			fprintf(stderr, "cudaMalloc(volume) failed!\n");
+		}
+	}
+	else
+	{
+		dev_f = f;
+	}
+
+	float* dev_phis = 0;
+	if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
+		fprintf(stderr, "cudaMalloc failed!\n");
+	if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+		fprintf(stderr, "cudaMemcpy(phis) failed!\n");
+
+	int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
+	float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
+	float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
+
+	float rFOVsq = params->rFOV() * params->rFOV();
+
+	if (cpu_to_gpu)
+	{
+		dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+	}
+	else
+	{
+		dev_g = g;
+	}
+
+	bool useLinearInterpolation = false;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, useLinearInterpolation);
+
+	//* call kernel: FIXME!
+	dim3 dimBlock(8, 8, 8); // best so far
+	dim3 dimGrid(int(ceil(double(N_f.x) / double(dimBlock.x))), int(ceil(double(N_f.y) / double(dimBlock.y))), int(ceil(double(N_f.z) / double(dimBlock.z))));
+	fanBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, rFOVsq, dev_phis, params->volumeDimensionOrder);
+	//*/
+
+	// pull result off GPU
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "kernel failed!\n");
+		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+	}
+	if (cpu_to_gpu)
+	{
+		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
+	}
+	else
+	{
+		f = dev_f;
+	}
+
+	// Clean up
+	cudaFreeArray(d_data_array);
+	cudaDestroyTextureObject(d_data_txt);
+	cudaFree(dev_phis);
+
+	if (cpu_to_gpu)
+	{
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		if (dev_f != 0)
+			cudaFree(dev_f);
+	}
+
+	return true;
+}
+
 bool project_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
 {
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
