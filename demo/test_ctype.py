@@ -9,15 +9,16 @@ leapct = Projector()
 L = 16.0
 arange = 360.0
 N_phis = int(arange)
-M = int(2048/L)
+#M = int(2048/L)
+M = 100
 N = int(2048/L)
 pixelSize = 0.2*L
 phis = leapct.setAngleArray(N_phis, arange)
 
 # Set scanner geometry and volume
-#leapct.setParallelBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
+leapct.setParallelBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
 #leapct.setFanBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, 1100, 1400)
-leapct.setConeBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, 1100, 1400)
+#leapct.setConeBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, 1100, 1400)
 leapct.setDefaultVolume()
 
 # Optional settings
@@ -57,9 +58,9 @@ g[g<0.0] = 0.0
 # Reconstruct and Smooth
 f[:] = 0.0
 startTime = time.time()
-leapct.FBP(g,f)
+#leapct.FBP(g,f)
 #leapct.SART(g,f,1)
-#leapct.MLEM(g,f,10)
+leapct.MLEM(g,f,10)
 #leapct.RLS(g,f,50,0.01,1e4)
 print('reconstruction elapsed time: ' + str(time.time()-startTime))
 f[f<0.0] = 0.0

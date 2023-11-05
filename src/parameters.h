@@ -46,6 +46,8 @@ public:
 	float y_0();
 	float z_0();
 
+	float furthestFromCenter();
+
 	float pixelWidth_normalized();
 	float u(int);
 	float v(int);

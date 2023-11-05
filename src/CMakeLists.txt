@@ -37,7 +37,6 @@ set(SRC_CPP
   tomographic_models_c_interface.cpp
   parameters.cpp
   projectors_cpu.cpp
-  cuda_utils.cpp
   projectors_symmetric_cpu.cpp
   projectors_SF_cpu.cpp
 )

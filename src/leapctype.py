@@ -69,6 +69,11 @@ class Projector:
         self.libprojectors.setGPU.argtypes = [ctypes.c_int]
         self.libprojectors.setGPU.restype = ctypes.c_bool
         return self.libprojectors.setGPU(which)
+        
+    def setDiameterFOV(self, d):
+        self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
+        self.libprojectors.set_rFOV.restype = ctypes.c_bool
+        return self.libprojectors.set_rFOV(0.5*d)
     
     def set_axisOfSymmetry(self,val):
         self.libprojectors.set_axisOfSymmetry.argtypes = [ctypes.c_float]

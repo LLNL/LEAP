@@ -175,19 +175,49 @@ float parameters::rFOV()
     }
 }
 
+float parameters::furthestFromCenter()
+{
+	if (numX <= 0 || numY <= 0 || voxelWidth <= 0.0)
+		return rFOV();
+	float x_max = (numX - 1) * voxelWidth + x_0();
+	float y_max = (numY - 1) * voxelWidth + y_0();
+
+	//*
+	float temp;
+	float retVal = x_0() * x_0() + y_0() * y_0();
+	temp = x_max * x_max + y_0() * y_0();
+	if (temp > retVal)
+		retVal = temp;
+	temp = y_max * y_max + x_0() * x_0();
+	if (temp > retVal)
+		retVal = temp;
+	temp = x_max * x_max + y_max * y_max;
+	if (temp > retVal)
+		retVal = temp;
+
+	return sqrt(retVal);
+	//*/
+}
+
 bool parameters::useSF()
 {
     if (whichProjector == SIDDON || geometry == MODULAR || isSymmetric() == true)
         return false;
     else
     {
+		//printf("rFOV = %f\n", rFOV());
+		float r = min(furthestFromCenter(), rFOV());
         if (geometry == CONE) // || geometry == FAN)
         {
-            float largestDetectorWidth = sdd/(sod-rFOV())*pixelWidth;
-            float smallestDetectorWidth = sdd/(sod+rFOV())*pixelWidth;
-            
-            float largestDetectorHeight = sdd/(sod-rFOV())*pixelHeight;
-            float smallestDetectorHeight = sdd/(sod+rFOV())*pixelHeight;
+			//f->T_x / (g->R - (rFOV - 0.25 * f->T_x)) < detectorPixelMultiplier * g->T_lateral
+			//voxelWidth < 2.0 * pixelWidth * (sod - rFOV) / sdd
+
+			float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
+			float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
+
+			float largestDetectorHeight = (sod + r) / sdd * pixelHeight;
+			float smallestDetectorHeight = (sod - r) / sdd * pixelHeight;
+			//printf("%f to %f\n", 0.5*largestDetectorWidth, 2.0*smallestDetectorWidth);
 			if (0.5*largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0*smallestDetectorWidth && 0.5*largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0*smallestDetectorHeight)
 			{
 				//printf("using SF projector\n");
@@ -201,8 +231,8 @@ bool parameters::useSF()
         }
 		else if (geometry == FAN)
 		{
-			float largestDetectorWidth = sdd / (sod - rFOV()) * pixelWidth;
-			float smallestDetectorWidth = sdd / (sod + rFOV()) * pixelWidth;
+			float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
+			float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
 
 			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
 			{
@@ -555,7 +585,7 @@ float parameters::y_0()
 float parameters::z_0()
 {
 	//return offsetZ - 0.5*float(numZ - 1)*voxelHeight;
-	if (geometry == PARALLEL)
+	if (geometry == PARALLEL || geometry == FAN)
 		return offsetZ - centerRow * (pixelHeight / voxelHeight) * voxelHeight;
 	else if (geometry == MODULAR)
 		return offsetZ - 0.5*float(numZ-1) * voxelHeight;
