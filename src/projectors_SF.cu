@@ -17,6 +17,8 @@
 #include "projectors_SF.h"
 #include "cuda_utils.h"
 
+#include "projectors_extendedSF.h"
+
 __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -1407,215 +1409,46 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
      }
 }
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Main Routines
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool project_SF_fan(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 {
-    if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
-        return false;
-
-    cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
-
-    float* dev_g = 0;
-    float* dev_f = 0;
-
-    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Allocate planogram data on GPU
-    int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
-    float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
-    float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
-
-    //T_g.y = T_g.y / params->sdd;
-    T_g.z = T_g.z / params->sdd;
-    //startVal_g.y = startVal_g.y / params->sdd;
-    startVal_g.z = startVal_g.z / params->sdd;
-
-    float rFOVsq = params->rFOV() * params->rFOV();
-
-    int N = N_g.x * N_g.y * N_g.z;
-    if (cpu_to_gpu) {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, N * sizeof(float))) != cudaSuccess) {
-            fprintf(stderr, "cudaMalloc(projections) failed!\n");
-        }
-    }
-    else {
-        dev_g = g;
-    }
-
-    float* dev_phis = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
-        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
-
-    int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
-    float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
-    float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
-
-    if (cpu_to_gpu)
-    {
-        //printf("copying volume to GPU...\n");
-        dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
-    }
-    else
-    {
-        dev_f = f;
-    }
-
-    cudaTextureObject_t d_data_txt = NULL;
-    bool useLinearInterpolation = false;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
-
-    //* call kernel: FIXME!
-    dim3 dimBlock(8, 8, 8); // best so far
-    dim3 dimGrid(int(ceil(double(N_g.x) / double(dimBlock.x))), int(ceil(double(N_g.y) / double(dimBlock.y))), int(ceil(double(N_g.z) / double(dimBlock.z))));
-    fanBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
-    //*/
-
-    // pull result off GPU
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess)
-    {
-        fprintf(stderr, "kernel failed!\n");
-        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-    }
-
-    if (cpu_to_gpu)
-    {
-        //printf("pulling projections off GPU...\n");
-        pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
-    }
-    else
-    {
-        g = dev_g;
-    }
-
-    /*
-    float maxVal_g = g[0];
-    for (int i = 0; i < N; i++)
-        maxVal_g = std::max(maxVal_g, g[i]);
-    printf("max g: %f\n", maxVal_g);
-    float maxVal_f = f[0];
-    for (int i = 0; i < N_f.x*N_f.y*N_f.z; i++)
-        maxVal_f = std::max(maxVal_f, f[i]);
-    printf("max f: %f\n", maxVal_f);
-    //*/
-
-    // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
-    cudaFree(dev_phis);
-
-    if (cpu_to_gpu)
-    {
-        if (dev_g != 0)
-            cudaFree(dev_g);
-        if (dev_f != 0)
-            cudaFree(dev_f);
-    }
-
-    return true;
+    return project_SF(g, f, params, cpu_to_gpu);
 }
 
 bool backproject_SF_fan(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 {
-    if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
-        return false;
-
-    cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
-
-    float* dev_g = 0;
-    float* dev_f = 0;
-
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Allocate volume data on GPU
-    int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
-    float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
-    float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
-
-    int N = N_f.x * N_f.y * N_f.z;
-    if (cpu_to_gpu)
-    {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, N * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(volume) failed!\n");
-        }
-    }
-    else
-    {
-        dev_f = f;
-    }
-
-    float* dev_phis = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
-        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
-
-    int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
-    float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
-    float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
-
-    //T_g.y = T_g.y / params->sdd;
-    T_g.z = T_g.z / params->sdd;
-    //startVal_g.y = startVal_g.y / params->sdd;
-    startVal_g.z = startVal_g.z / params->sdd;
-
-    float rFOVsq = params->rFOV() * params->rFOV();
-
-    if (cpu_to_gpu)
-    {
-        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
-    }
-    else
-    {
-        dev_g = g;
-    }
-
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
-
-    //* call kernel: FIXME!
-    dim3 dimBlock(8, 8, 8); // best so far
-    dim3 dimGrid(int(ceil(double(N_f.x) / double(dimBlock.x))), int(ceil(double(N_f.y) / double(dimBlock.y))), int(ceil(double(N_f.z) / double(dimBlock.z))));
-    fanBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
-    //*/
-
-    // pull result off GPU
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess)
-    {
-        fprintf(stderr, "kernel failed!\n");
-        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-    }
-    if (cpu_to_gpu)
-    {
-        pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
-    }
-    else
-    {
-        f = dev_f;
-    }
-
-    // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
-    cudaFree(dev_phis);
-
-    if (cpu_to_gpu) {
-        if (dev_g != 0)
-            cudaFree(dev_g);
-        if (dev_f != 0)
-            cudaFree(dev_f);
-    }
-
-    return true;
+    return backproject_SF(g, f, params, cpu_to_gpu);
 }
 
-bool project_SF_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
+bool project_SF_parallel(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 {
+    return project_SF(g, f, params, cpu_to_gpu);
+}
+
+bool backproject_SF_parallel(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+{
+    return backproject_SF(g, f, params, cpu_to_gpu);
+}
+
+bool project_SF_cone(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+{
+    return project_SF(g, f, params, cpu_to_gpu);
+}
+
+bool backproject_SF_cone(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+{
+    return backproject_SF(g, f, params, cpu_to_gpu);
+}
+
+bool project_SF(float *&g, float *f, parameters* params, bool cpu_to_gpu)
+{
+    if (params->voxelSizeWorksForFastSF() == false)
+    {
+        //printf("using extended\n");
+        return project_eSF(g, f, params, cpu_to_gpu);
+    }
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
 
@@ -1626,55 +1459,51 @@ bool project_SF_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
     float* dev_f = 0;
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Allocate planogram data on GPU
-    int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
-    float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
-    float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
-
-    T_g.y = T_g.y / params->sdd;
-    T_g.z = T_g.z / params->sdd;
-    startVal_g.y = startVal_g.y / params->sdd;
-    startVal_g.z = startVal_g.z / params->sdd;
+    // Allocate projection data on GPU
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
     
     float rFOVsq = params->rFOV()*params->rFOV();
     
-    int N = N_g.x * N_g.y * N_g.z;
-    if (cpu_to_gpu) {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, N * sizeof(float))) != cudaSuccess) {
+    if (cpu_to_gpu)
+    {
+        if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+        {
             fprintf(stderr, "cudaMalloc(projections) failed!\n");
         }
     }
-    else {
+    else
         dev_g = g;
-    }
 
-    float *dev_phis = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
-        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
+    float* dev_phis = copyAngleArrayToGPU(params);
 
-    int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
-    float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
-    float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
+    int4 N_f; float4 T_f; float4 startVal_f;
+    setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu) {
-        //printf("copying volume to GPU...\n");
+    if (cpu_to_gpu)
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
-    }
-    else {
+    else
         dev_f = f;
-    }
 
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
 
-    //* call kernel: FIXME!
-    dim3 dimBlock(8, 8, 8); // best so far
-    dim3 dimGrid(int(ceil(double(N_g.x) / double(dimBlock.x))), int(ceil(double(N_g.y) / double(dimBlock.y))), int(ceil(double(N_g.z) / double(dimBlock.z))));
-    coneBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
-    applyInversePolarWeight <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g);
-    //*/
+    // Call Kernel
+    dim3 dimBlock = setBlockSize(N_g);
+    dim3 dimGrid = setGridSize(N_g, dimBlock);
+    if (params->geometry == parameters::CONE)
+    {
+        coneBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        applyInversePolarWeight <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g);
+    }
+    else if (params->geometry == parameters::FAN)
+    {
+        fanBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+    }
+    else if (params->geometry == parameters::PARALLEL)
+    {
+        parallelBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
+    }
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();
@@ -1686,25 +1515,9 @@ bool project_SF_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
     }
 
     if (cpu_to_gpu)
-    {
-        //printf("pulling projections off GPU...\n");
         pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
-    }
     else
-    {
         g = dev_g;
-    }
-
-    /*
-    float maxVal_g = g[0];
-    for (int i = 0; i < N; i++)
-        maxVal_g = std::max(maxVal_g, g[i]);
-    printf("max g: %f\n", maxVal_g);
-    float maxVal_f = f[0];
-    for (int i = 0; i < N_f.x*N_f.y*N_f.z; i++)
-        maxVal_f = std::max(maxVal_f, f[i]);
-    printf("max f: %f\n", maxVal_f);
-    //*/
 
     // Clean up
     cudaFreeArray(d_data_array);
@@ -1722,10 +1535,15 @@ bool project_SF_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
     return true;
 }
 
-bool backproject_SF_cone(float *g, float *&f, parameters* params, bool cpu_to_gpu)
+bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
+    if (params->voxelSizeWorksForFastSF() == false)
+    {
+        //printf("using extended\n");
+        return backproject_eSF_cone(g, f, params, cpu_to_gpu);
+    }
 
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1735,57 +1553,56 @@ bool backproject_SF_cone(float *g, float *&f, parameters* params, bool cpu_to_gp
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Allocate volume data on GPU
-    int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
-    float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
-    float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
+    int4 N_f; float4 T_f; float4 startVal_f;
+    setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    int N = N_f.x * N_f.y * N_f.z;
-    if (cpu_to_gpu) {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, N * sizeof(float))) != cudaSuccess)
+    if (cpu_to_gpu)
+    {
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
         }
     }
-    else {
+    else
         dev_f = f;
-    }
 
-    float *dev_phis = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
-        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
+    float* dev_phis = copyAngleArrayToGPU(params);
 
-    int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
-    float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
-    float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
-
-    T_g.y = T_g.y / params->sdd;
-    T_g.z = T_g.z / params->sdd;
-    startVal_g.y = startVal_g.y / params->sdd;
-    startVal_g.z = startVal_g.z / params->sdd;
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
     
     float rFOVsq = params->rFOV()*params->rFOV();
     
-    if (cpu_to_gpu) {
+    if (cpu_to_gpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
-    }
-    else {
+    else
         dev_g = g;
-    }
 
-    dim3 dimBlock_g(8, 8, 8); // best so far
-    dim3 dimGrid_g(int(ceil(double(N_g.x) / double(dimBlock_g.x))), int(ceil(double(N_g.y) / double(dimBlock_g.y))), int(ceil(double(N_g.z) / double(dimBlock_g.z))));
-    applyInversePolarWeight <<< dimGrid_g, dimBlock_g >>> (dev_g, N_g, T_g, startVal_g);
+    dim3 dimBlock_g = setBlockSize(N_g);
+    dim3 dimGrid_g = setGridSize(N_g, dimBlock_g);
+    if (params->geometry == parameters::CONE)
+    {
+        applyInversePolarWeight <<< dimGrid_g, dimBlock_g >>> (dev_g, N_g, T_g, startVal_g);
+    }
 
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
 
-    //* call kernel: FIXME!
-    dim3 dimBlock(8, 8, 8); // best so far
-    dim3 dimGrid(int(ceil(double(N_f.x) / double(dimBlock.x))), int(ceil(double(N_f.y) / double(dimBlock.y))), int(ceil(double(N_f.z) / double(dimBlock.z))));
-    coneBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
-    //*/
+    // Call Kernel
+    dim3 dimBlock = setBlockSize(N_f);
+    dim3 dimGrid = setGridSize(N_f, dimBlock);
+    if (params->geometry == parameters::PARALLEL)
+    {
+        parallelBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
+    }
+    else if (params->geometry == parameters::FAN)
+    {
+        fanBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+    }
+    else if (params->geometry == parameters::CONE)
+    {
+        coneBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+    }
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();
@@ -1795,12 +1612,10 @@ bool backproject_SF_cone(float *g, float *&f, parameters* params, bool cpu_to_gp
         fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
-    if (cpu_to_gpu) {
+    if (cpu_to_gpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
-    }
-    else {
+    else
         f = dev_f;
-    }
 
     // Clean up
     cudaFreeArray(d_data_array);
@@ -1814,184 +1629,10 @@ bool backproject_SF_cone(float *g, float *&f, parameters* params, bool cpu_to_gp
         if (dev_f != 0)
             cudaFree(dev_f);
     }
-    else
+    else if (params->geometry == parameters::CONE)
     {
         applyPolarWeight <<< dimGrid_g, dimBlock_g >>> (dev_g, N_g, T_g, startVal_g);
         cudaStatus = cudaDeviceSynchronize();
-    }
-
-    return true;
-}
-
-bool project_SF_parallel(float *&g, float* f, parameters* params, bool cpu_to_gpu)
-{
-    if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
-        return false;
-
-    cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
-
-    float* dev_g = 0;
-    float* dev_f = 0;
-
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Allocate planogram data on GPU
-    int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
-    float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
-    float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
-
-    float rFOVsq = params->rFOV()*params->rFOV();
-    
-    int N = N_g.x * N_g.y * N_g.z;
-    if (cpu_to_gpu) {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, N * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(projections) failed!\n");
-        }
-    }
-    else {
-        dev_g = g;
-    }
-
-    float *dev_phis = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
-        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
-
-    int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
-    float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
-    float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
-
-    if (cpu_to_gpu) {
-        dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
-    }
-    else {
-        dev_f = f;
-    }
-
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
-
-    //* call kernel: FIXME!
-    dim3 dimBlock(8, 8, 8); // best so far
-    dim3 dimGrid(int(ceil(double(N_g.x) / double(dimBlock.x))), int(ceil(double(N_g.y) / double(dimBlock.y))), int(ceil(double(N_g.z) / double(dimBlock.z))));
-    parallelBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
-    //*/
-
-    // pull result off GPU
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess)
-    {
-        fprintf(stderr, "kernel failed!\n");
-        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-    }
-
-    if (cpu_to_gpu) {
-        pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
-    }
-    else {
-        g = dev_g;
-    }
-
-    // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
-    cudaFree(dev_phis);
-
-    if (cpu_to_gpu) {
-        if (dev_g != 0)
-            cudaFree(dev_g);
-        if (dev_f != 0)
-            cudaFree(dev_f);
-    }
-
-    return true;
-}
-
-bool backproject_SF_parallel(float* g, float *&f, parameters* params, bool cpu_to_gpu)
-{
-    if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
-        return false;
-
-    cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
-
-    float* dev_g = 0;
-    float* dev_f = 0;
-
-    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // Allocate volume data on GPU
-    int4 N_f; N_f.x = params->numX; N_f.y = params->numY; N_f.z = params->numZ;
-    float4 T_f; T_f.x = params->voxelWidth; T_f.y = params->voxelWidth; T_f.z = params->voxelHeight;
-    float4 startVal_f; startVal_f.x = params->x_0(); startVal_f.y = params->y_0(); startVal_f.z = params->z_0();
-
-    int N = N_f.x * N_f.y * N_f.z;
-    if (cpu_to_gpu) {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, N * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(volume) failed!\n");
-        }
-    }
-    else {
-        dev_f = f;
-    }
-
-    float *dev_phis = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
-        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
-
-    int4 N_g; N_g.x = params->numAngles; N_g.y = params->numRows; N_g.z = params->numCols;
-    float4 T_g; T_g.x = params->T_phi(); T_g.y = params->pixelHeight; T_g.z = params->pixelWidth;
-    float4 startVal_g; startVal_g.x = params->phis[0]; startVal_g.y = params->v_0(); startVal_g.z = params->u_0();
-
-    float rFOVsq = params->rFOV()*params->rFOV();
-    
-    if (cpu_to_gpu) {
-        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
-    }
-    else {
-        dev_g = g;
-    }
-
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
-
-    //* call kernel: FIXME!
-    dim3 dimBlock(8, 8, 8); // best so far
-    dim3 dimGrid(int(ceil(double(N_f.x) / double(dimBlock.x))), int(ceil(double(N_f.y) / double(dimBlock.y))), int(ceil(double(N_f.z) / double(dimBlock.z))));
-    parallelBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
-    //*/
-
-    // pull result off GPU
-    cudaStatus = cudaDeviceSynchronize();
-    if (cudaStatus != cudaSuccess)
-    {
-        fprintf(stderr, "kernel failed!\n");
-        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-    }
-
-    if (cpu_to_gpu) {
-        pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
-    }
-    else {
-        f = dev_f;
-    }
-
-    // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
-    cudaFree(dev_phis);
-
-    if (cpu_to_gpu) {
-        if (dev_g != 0)
-            cudaFree(dev_g);
-        if (dev_f != 0)
-            cudaFree(dev_f);
     }
 
     return true;

@@ -105,8 +105,10 @@ class Projector:
             offsetZ = 0.0
         return self.libprojectors.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
         
-    def setDefaultVolume(self):
-        return self.libprojectors.setDefaultVolumeParameters()
+    def setDefaultVolume(self,scale=1.0):
+        self.libprojectors.setDefaultVolumeParameters.argtypes = [ctypes.c_float]
+        self.libprojectors.setDefaultVolumeParameters.restype = ctypes.c_bool
+        return self.libprojectors.setDefaultVolumeParameters(scale)
         
     def setVolumeDimensionOrder(self,which):
         self.libprojectors.setVolumeDimensionOrder.argtypes = [ctypes.c_int]

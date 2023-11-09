@@ -42,7 +42,7 @@ extern "C" PROJECTOR_API bool setModularBeamParams(int numAngles, int numRows, i
 extern "C" PROJECTOR_API bool setVolumeParams(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool setVolumeDimensionOrder(int which);
 extern "C" PROJECTOR_API int getVolumeDimensionOrder();
-extern "C" PROJECTOR_API bool setDefaultVolumeParameters();
+extern "C" PROJECTOR_API bool setDefaultVolumeParameters(float scale);
 
 extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

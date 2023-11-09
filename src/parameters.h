@@ -34,7 +34,7 @@ public:
 	bool allDefined();
 	bool geometryDefined();
 	bool volumeDefined();
-	bool setDefaultVolumeParameters();
+	bool setDefaultVolumeParameters(float scale = 1.0);
 	bool setAngles(float*, int);
 	bool setAngles();
 
@@ -75,6 +75,10 @@ public:
     bool useSF();
 	bool setToZero(float*, int);
 	bool windowFOV(float*);
+
+	//float smallestVoxelForFastSF();
+	//float largestVoxelForFastSF();
+	bool voxelSizeWorksForFastSF();
 
 	// Volume Parameters
 	int volumeDimensionOrder;

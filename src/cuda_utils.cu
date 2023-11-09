@@ -136,6 +136,16 @@ __global__ void weightedInnerProductKernel(const float* x, const float* w, const
     }
 }
 
+int numberOfGPUs()
+{
+    int num_gpus = 0;
+    cudaError_t err = cudaGetDeviceCount(&num_gpus);
+    if (err == cudaSuccess)
+        return num_gpus;
+    else
+        return 0;
+}
+
 cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU)
 {
     cudaSetDevice(whichGPU);
@@ -272,8 +282,6 @@ float weightedInnerProduct(const float* dev_lhs, const float* dev_w, const float
     return retVal;
 }
 
-
-
 dim3 setBlockSize(int3 N)
 {
 	dim3 dimBlock(8, 8, 8);  // needs to be optimized
@@ -296,6 +304,22 @@ dim3 setBlockSize(int3 N)
 		dimBlock.z = 16;
 	}
 	return dimBlock;
+}
+
+dim3 setGridSize(int3 N, dim3 dimBlock)
+{
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))), int(ceil(double(N.z) / double(dimBlock.z))));
+    return dimGrid;
+}
+
+dim3 setBlockSize(int4 N)
+{
+    return setBlockSize(make_int3(N.x, N.y, N.z));
+}
+
+dim3 setGridSize(int4 N, dim3 dimBlock)
+{
+    return setGridSize(make_int3(N.x, N.y, N.z), dimBlock);
 }
 
 cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
@@ -504,3 +528,57 @@ bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 		return true;
 }
 
+float* copyAngleArrayToGPU(parameters* params)
+{
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+    float* dev_phis = 0;
+    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
+        fprintf(stderr, "cudaMalloc failed!\n");
+    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
+    return dev_phis;
+}
+
+bool setProjectionGPUparams(parameters* params, int4& N, float4& T, float4& startVals, bool doNormalize)
+{
+    if (params == NULL)
+        return false;
+    else
+    {
+        N.x = params->numAngles; N.y = params->numRows; N.z = params->numCols;
+        T.x = params->T_phi(); T.y = params->pixelHeight; T.z = params->pixelWidth;
+        startVals.x = params->phis[0]; startVals.y = params->v_0(); startVals.z = params->u_0();
+
+        if (doNormalize)
+        {
+            if (params->geometry == parameters::CONE)
+            {
+                T.y = T.y / params->sdd;
+                T.z = T.z / params->sdd;
+                startVals.y = startVals.y / params->sdd;
+                startVals.z = startVals.z / params->sdd;
+            }
+            else if (params->geometry == parameters::FAN)
+            {
+                T.z = T.z / params->sdd;
+                startVals.z = startVals.z / params->sdd;
+            }
+        }
+
+        return true;
+    }
+}
+
+bool setVolumeGPUparams(parameters* params, int4& N, float4& T, float4& startVals)
+{
+    if (params == NULL)
+        return false;
+    else
+    {
+        N.x = params->numX; N.y = params->numY; N.z = params->numZ;
+        T.x = params->voxelWidth; T.y = params->voxelWidth; T.z = params->voxelHeight;
+        startVals.x = params->x_0(); startVals.y = params->y_0(); startVals.z = params->z_0();
+        return true;
+    }
+}

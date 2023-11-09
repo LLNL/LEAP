@@ -25,11 +25,13 @@ set(HEADER
   projectors_cpu.h
   projectors.h
   projectors_SF.h
+  projectors_extendedSF.h
   cuda_utils.h
   ramp_filter.cuh
   noise_filters.cuh
   total_variation.cuh
   ray_weighting.cuh
+  projectors_symmetric.cuh
 )
 
 set(SRC_CPP
@@ -44,11 +46,13 @@ set(SRC_CPP
 set(SRC_CU
   projectors.cu
   projectors_SF.cu
+  projectors_extendedSF.cu
   ramp_filter.cu
   noise_filters.cu
   total_variation.cu
   cuda_utils.cu
   ray_weighting.cu
+  projectors_symmetric.cu
 )
 
 include_directories(

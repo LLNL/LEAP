@@ -12,6 +12,7 @@
 #include <math.h>
 #include <algorithm>
 #include "parameters.h"
+#include "cuda_utils.h"
 
 using namespace std;
 
@@ -53,9 +54,8 @@ parameters::~parameters()
 
 parameters& parameters::operator = (const parameters& other)
 {
-    if (this != &other) {
+    if (this != &other)
         this->assign(other);
-    }
     return *this;
 }
 
@@ -103,7 +103,10 @@ void parameters::assign(const parameters& other)
 
 void parameters::setDefaults(int N)
 {
-	whichGPU = 0;
+	if (numberOfGPUs() > 0)
+		whichGPU = 0;
+	else
+		whichGPU = -1;
     whichProjector = SEPARABLE_FOOTPRINT;
 
 	geometry = CONE;
@@ -139,16 +142,14 @@ float parameters::T_phi()
 
 float parameters::rFOV()
 {
-	if (rFOVspecified > 0.0) {
+	if (rFOVspecified > 0.0)
 		return rFOVspecified;
-	}
-    else if (geometry == MODULAR) {
+    else if (geometry == MODULAR)
         return 1.0e16;
-	}
-    else if (geometry == PARALLEL) {
+    else if (geometry == PARALLEL)
         return min(fabs(u_0()), fabs(pixelWidth*float(numCols-1) + u_0()));
-    }
-    else if (geometry == FAN || geometry == CONE) {
+    else if (geometry == FAN || geometry == CONE)
+	{
         /*
         double alpha_right = lateral(0);
         double alpha_left = lateral(N_lateral-1);
@@ -199,59 +200,64 @@ float parameters::furthestFromCenter()
 	//*/
 }
 
+bool parameters::voxelSizeWorksForFastSF()
+{
+	float r = min(furthestFromCenter(), rFOV());
+	if (geometry == CONE) // || geometry == FAN)
+	{
+		//f->T_x / (g->R - (rFOV - 0.25 * f->T_x)) < detectorPixelMultiplier * g->T_lateral
+		//voxelWidth < 2.0 * pixelWidth * (sod - rFOV) / sdd
+
+		float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
+		float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
+
+		float largestDetectorHeight = (sod + r) / sdd * pixelHeight;
+		float smallestDetectorHeight = (sod - r) / sdd * pixelHeight;
+		//printf("%f to %f\n", 0.5*largestDetectorWidth, 2.0*smallestDetectorWidth);
+		if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
+		{
+			//printf("using SF projector\n");
+			return true;
+		}
+		else
+		{
+			//printf("using Siddon projector\n");
+			return false;
+		}
+	}
+	else if (geometry == FAN)
+	{
+		float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
+		float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
+
+		if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
+		{
+			//printf("using SF projector\n");
+			return true;
+		}
+		else
+		{
+			//printf("using Siddon projector\n");
+			return false;
+		}
+	}
+	else //if (geometry == PARALLEL)
+	{
+		if (0.5 * pixelWidth <= voxelWidth && voxelWidth <= 2.0 * pixelWidth)
+			return true;
+		else
+			return false;
+	}
+}
+
 bool parameters::useSF()
 {
     if (whichProjector == SIDDON || geometry == MODULAR || isSymmetric() == true)
         return false;
     else
     {
-		//printf("rFOV = %f\n", rFOV());
-		float r = min(furthestFromCenter(), rFOV());
-        if (geometry == CONE) // || geometry == FAN)
-        {
-			//f->T_x / (g->R - (rFOV - 0.25 * f->T_x)) < detectorPixelMultiplier * g->T_lateral
-			//voxelWidth < 2.0 * pixelWidth * (sod - rFOV) / sdd
-
-			float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
-			float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
-
-			float largestDetectorHeight = (sod + r) / sdd * pixelHeight;
-			float smallestDetectorHeight = (sod - r) / sdd * pixelHeight;
-			//printf("%f to %f\n", 0.5*largestDetectorWidth, 2.0*smallestDetectorWidth);
-			if (0.5*largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0*smallestDetectorWidth && 0.5*largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0*smallestDetectorHeight)
-			{
-				//printf("using SF projector\n");
-				return true;
-			}
-			else
-			{
-				//printf("using Siddon projector\n");
-				return false;
-			}
-        }
-		else if (geometry == FAN)
-		{
-			float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
-			float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
-
-			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
-			{
-				//printf("using SF projector\n");
-				return true;
-			}
-			else
-			{
-				//printf("using Siddon projector\n");
-				return false;
-			}
-		}
-        else //if (geometry == PARALLEL)
-        {
-            if (0.5*pixelWidth <= voxelWidth && voxelWidth <= 2.0*pixelWidth && 0.5*pixelHeight <= voxelHeight && voxelHeight <= 2.0*pixelHeight)
-                return true;
-            else
-                return false;
-        }
+		//return true;
+		return voxelSizeWorksForFastSF();
     }
 }
 
@@ -332,30 +338,32 @@ bool parameters::volumeDefined()
 	}
 }
 
-bool parameters::setDefaultVolumeParameters()
+bool parameters::setDefaultVolumeParameters(float scale)
 {
 	if (geometryDefined() == false)
 		return false;
 
 	// Volume Parameters
 	volumeDimensionOrder = XYZ;
-	numX = numCols;
+	numX = int(ceil(float(numCols) / scale));
 	numY = numX;
 	numZ = numRows;
 	if (geometry == PARALLEL)
 	{
-		voxelWidth = pixelWidth;
+		voxelWidth = pixelWidth * scale;
 		voxelHeight = pixelHeight;
 	}
 	else if (geometry == FAN)
 	{
-		voxelWidth = sod / sdd * pixelWidth;
+		voxelWidth = sod / sdd * pixelWidth * scale;
 		voxelHeight = pixelHeight;
 	}
 	else
 	{
-		voxelWidth = sod / sdd * pixelWidth;
-		voxelHeight = sod / sdd * pixelHeight;
+		voxelWidth = sod / sdd * pixelWidth * scale;
+		voxelHeight = sod / sdd * pixelHeight * scale;
+
+		numZ = int(ceil(float(numRows) / scale));
 	}
 	offsetX = 0.0;
 	offsetY = 0.0;

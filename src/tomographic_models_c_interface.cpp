@@ -105,9 +105,9 @@ bool setVolumeParams(int numX, int numY, int numZ, float voxelWidth, float voxel
 	return tomo.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool setDefaultVolumeParameters()
+bool setDefaultVolumeParameters(float scale)
 {
-	return tomo.setDefaultVolumeParameters();
+	return tomo.setDefaultVolumeParameters(scale);
 }
 
 bool setVolumeDimensionOrder(int which)

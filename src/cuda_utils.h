@@ -11,7 +11,12 @@
 //#include "cufft.h"
 #include "parameters.h"
 
+extern int numberOfGPUs();
+
 extern dim3 setBlockSize(int3 N);
+extern dim3 setGridSize(int3 N, dim3 dimBlock);
+extern dim3 setBlockSize(int4 N);
+extern dim3 setGridSize(int4 N, dim3 dimBlock);
 
 extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
 extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
@@ -25,6 +30,10 @@ extern float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU);
 extern bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU);
 extern float* copy3DdataToGPU(float* g, int3 N, int whichGPU);
 extern bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU);
+
+extern float* copyAngleArrayToGPU(parameters* params);
+bool setProjectionGPUparams(parameters*, int4&, float4&, float4&, bool doNormalize = false);
+bool setVolumeGPUparams(parameters*, int4&, float4&, float4&);
 
 extern cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);

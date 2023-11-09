@@ -16,6 +16,9 @@
 
 #include "parameters.h"
 
+bool project_Siddon(float*&, float*, parameters*, bool cpu_to_gpu);
+bool backproject_Siddon(float*, float*&, parameters*, bool cpu_to_gpu);
+
 bool project_cone(float*&, float*, parameters*, bool cpu_to_gpu);
 bool backproject_cone(float*, float*&, parameters*, bool cpu_to_gpu);
 
@@ -27,12 +30,5 @@ bool backproject_parallel(float*, float*&, parameters*, bool cpu_to_gpu);
 
 bool project_modular(float*&, float*, parameters*, bool cpu_to_gpu);
 bool backproject_modular(float*, float*&, parameters*, bool cpu_to_gpu);
-
-/* Utility Functions for anti-symmetric projections
-float* splitVolume(float*, parameters* params, bool rightHalf = true);
-float* splitProjection(float*, parameters* params, bool rightHalf = true);
-bool mergeSplitVolume(float*, float*, parameters* params, bool rightHalf = true);
-bool mergeSplitProjection(float*, float*, parameters* params, bool rightHalf = true);
-//*/
 
 #endif

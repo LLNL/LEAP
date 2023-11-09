@@ -17,6 +17,7 @@
 #include "noise_filters.cuh"
 #include "total_variation.cuh"
 #include "cuda_utils.h"
+#include "projectors_symmetric.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -86,119 +87,93 @@ bool tomographicModels::backproject_cpu(float* g, float* f)
 	return retVal;
 }
 
-bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
+bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu)
 {
-	if (params.allDefined() == false || g == NULL || f == NULL)
+	if (ctParams == NULL)
+		return false;
+	if (ctParams->allDefined() == false || g == NULL || f == NULL)
 	{
 		printf("ERROR: project: invalid parameters or invalid input arrays!\n");
 		return false;
 	}
-	else if (params.whichGPU >= 0)
+	else if (ctParams->whichGPU >= 0)
 	{
-		if (params.geometry == parameters::CONE)
-		{
-			if (params.useSF())
-				return project_SF_cone(g, f, &params, cpu_to_gpu);
-			else
-				return project_cone(g, f, &params, cpu_to_gpu);
-		}
-		else if (params.geometry == parameters::FAN)
-		{
-			if (params.useSF())
-				return project_SF_fan(g, f, &params, cpu_to_gpu);
-			else
-				return project_fan(g, f, &params, cpu_to_gpu);
-		}
-		else if (params.geometry == parameters::PARALLEL)
-		{
-			if (params.useSF())
-				return project_SF_parallel(g, f, &params, cpu_to_gpu);
-			else
-				return project_parallel(g, f, &params, cpu_to_gpu);
-		}
+		if (ctParams->isSymmetric())
+			return project_symmetric(g, f, ctParams, cpu_to_gpu);
 		else
-			return project_modular(g, f, &params, cpu_to_gpu);
+			return project_SF(g, f, ctParams, cpu_to_gpu);
 	}
 	else
 	{
-		if (params.geometry == parameters::CONE)
+		if (ctParams->geometry == parameters::CONE)
 		{
-			if (params.useSF())
-				return CPUproject_SF_cone(g, f, &params);
+			if (ctParams->useSF())
+				return CPUproject_SF_cone(g, f, ctParams);
 			else
-				return CPUproject_cone(g, f, &params);
+				return CPUproject_cone(g, f, ctParams);
 		}
-		else if (params.geometry == parameters::FAN)
+		else if (ctParams->geometry == parameters::FAN)
 		{
 			printf("Error: CPU-based projectors of fan-beam data not yet implemented!\n");
 			return false;
 		}
-		else if (params.geometry == parameters::PARALLEL)
+		else if (ctParams->geometry == parameters::PARALLEL)
 		{
-			if (params.useSF())
-				return CPUproject_SF_parallel(g, f, &params);
+			if (ctParams->useSF())
+				return CPUproject_SF_parallel(g, f, ctParams);
 			else
-				return CPUproject_parallel(g, f, &params);
+				return CPUproject_parallel(g, f, ctParams);
 		}
 		else
-			return CPUproject_modular(g, f, &params);
+			return CPUproject_modular(g, f, ctParams);
 	}
+}
+
+bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bool cpu_to_gpu)
+{
+	if (ctParams->allDefined() == false || g == NULL || f == NULL)
+		return false;
+	else if (ctParams->whichGPU >= 0)
+	{
+		if (ctParams->isSymmetric())
+			return backproject_symmetric(g, f, ctParams, cpu_to_gpu);
+		else
+			return backproject_SF(g, f, ctParams, cpu_to_gpu);
+	}
+	else
+	{
+		if (ctParams->geometry == parameters::CONE)
+		{
+			if (ctParams->useSF())
+				return CPUbackproject_SF_cone(g, f, ctParams);
+			else
+				return CPUbackproject_cone(g, f, ctParams);
+		}
+		else if (ctParams->geometry == parameters::FAN)
+		{
+			printf("Error: CPU-based projectors of fan-beam data not yet implemented!\n");
+			return false;
+		}
+		else if (ctParams->geometry == parameters::PARALLEL)
+		{
+			if (ctParams->useSF())
+				return CPUbackproject_SF_parallel(g, f, ctParams);
+			else
+				return CPUbackproject_parallel(g, f, ctParams);
+		}
+		else
+			return CPUbackproject_modular(g, f, ctParams);
+	}
+}
+
+bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
+{
+	return project(g, f, &params, cpu_to_gpu);
 }
 
 bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
 {
-	if (params.allDefined() == false || g == NULL || f == NULL)
-		return false;
-	else if (params.whichGPU >= 0)
-	{
-		if (params.geometry == parameters::CONE)
-		{
-			if (params.useSF())
-				return backproject_SF_cone(g, f, &params, cpu_to_gpu);
-			else
-				return backproject_cone(g, f, &params, cpu_to_gpu);
-		}
-		else if (params.geometry == parameters::FAN)
-		{
-			if (params.useSF())
-				return backproject_SF_fan(g, f, &params, cpu_to_gpu);
-			else
-				return backproject_fan(g, f, &params, cpu_to_gpu);
-		}
-		else if (params.geometry == parameters::PARALLEL)
-		{
-			if (params.useSF())
-				return backproject_SF_parallel(g, f, &params, cpu_to_gpu);
-			else
-				return backproject_parallel(g, f, &params, cpu_to_gpu);
-		}
-		else
-			return backproject_modular(g, f, &params, cpu_to_gpu);
-	}
-	else
-	{
-		if (params.geometry == parameters::CONE)
-		{
-			if (params.useSF())
-				return CPUbackproject_SF_cone(g, f, &params);
-			else
-				return CPUbackproject_cone(g, f, &params);
-		}
-		else if (params.geometry == parameters::FAN)
-		{
-			printf("Error: CPU-based projectors of fan-beam data not yet implemented!\n");
-			return false;
-		}
-		else if (params.geometry == parameters::PARALLEL)
-		{
-			if (params.useSF())
-				return CPUbackproject_SF_parallel(g, f, &params);
-			else
-				return CPUbackproject_parallel(g, f, &params);
-		}
-		else
-			return CPUbackproject_modular(g, f, &params);
-	}
+	return backproject(g, f, &params, cpu_to_gpu);
 }
 
 bool tomographicModels::rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
@@ -357,9 +332,9 @@ bool tomographicModels::setVolumeParams(int numX, int numY, int numZ, float voxe
 	if (voxelHeight <= 0.0)
 	{
 		if (params.geometry == parameters::PARALLEL || params.geometry == parameters::FAN)
-			voxelHeight = params.pixelWidth;
+			voxelHeight = params.pixelHeight;
 		else
-			voxelHeight = params.pixelWidth * params.sod / params.sdd;
+			voxelHeight = params.pixelHeight * params.sod / params.sdd;
 	}
 
 	params.numX = numX;
@@ -373,9 +348,9 @@ bool tomographicModels::setVolumeParams(int numX, int numY, int numZ, float voxe
 	return params.volumeDefined();
 }
 
-bool tomographicModels::setDefaultVolumeParameters()
+bool tomographicModels::setDefaultVolumeParameters(float scale)
 {
-	return params.setDefaultVolumeParameters();
+	return params.setDefaultVolumeParameters(scale);
 }
 
 bool tomographicModels::setVolumeDimensionOrder(int which)
@@ -407,7 +382,10 @@ int tomographicModels::getVolumeDimensionOrder()
 
 bool tomographicModels::setGPU(int whichGPU)
 {
-	params.whichGPU = whichGPU;
+	if (numberOfGPUs() <= 0)
+		params.whichGPU = -1;
+	else
+		params.whichGPU = whichGPU;
 	return true;
 }
 
@@ -416,7 +394,11 @@ bool tomographicModels::setProjector(int which)
 	if (which == parameters::SEPARABLE_FOOTPRINT)
 		params.whichProjector = parameters::SEPARABLE_FOOTPRINT;
 	else
-		params.whichProjector = 0;
+	{
+		printf("Error: currently only SF projectors are implemented!\n");
+		return false;
+		//params.whichProjector = 0;
+	}
 	return true;
 }
 
@@ -471,15 +453,7 @@ bool tomographicModels::projectFanBeam(float* g, float* f, bool cpu_to_gpu, int 
 	tempParams.offsetY = offsetY;
 	tempParams.offsetZ = offsetZ;
 
-	if (tempParams.allDefined() == false || g == NULL || f == NULL)
-		return false;
-	else
-	{
-		if (params.useSF())
-			return project_SF_fan(g, f, &tempParams, cpu_to_gpu);
-		else
-			return project_fan(g, f, &tempParams, cpu_to_gpu);
-	}
+	return project(g, f, &tempParams, cpu_to_gpu);
 }
 
 bool tomographicModels::backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -507,15 +481,7 @@ bool tomographicModels::backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, 
 	tempParams.offsetY = offsetY;
 	tempParams.offsetZ = offsetZ;
 
-	if (tempParams.allDefined() == false || g == NULL || f == NULL)
-		return false;
-	else
-	{
-		if (params.useSF())
-			return backproject_SF_fan(g, f, &tempParams, cpu_to_gpu);
-		else
-			return backproject_fan(g, f, &tempParams, cpu_to_gpu);
-	}
+	return backproject(g, f, &tempParams, cpu_to_gpu);
 }
 
 bool tomographicModels::projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -543,15 +509,7 @@ bool tomographicModels::projectConeBeam(float* g, float* f, bool cpu_to_gpu, int
 	tempParams.offsetY = offsetY;
 	tempParams.offsetZ = offsetZ;
 
-	if (tempParams.allDefined() == false || g == NULL || f == NULL)
-		return false;
-	else
-	{
-		if (params.useSF())
-			return project_SF_cone(g, f, &tempParams, cpu_to_gpu);
-		else
-			return project_cone(g, f, &tempParams, cpu_to_gpu);
-	}
+	return project(g, f, &tempParams, cpu_to_gpu);
 }
 
 bool tomographicModels::backprojectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -579,15 +537,7 @@ bool tomographicModels::backprojectConeBeam(float* g, float* f, bool cpu_to_gpu,
 	tempParams.offsetY = offsetY;
 	tempParams.offsetZ = offsetZ;
 
-	if (tempParams.allDefined() == false || g == NULL || f == NULL)
-		return false;
-	else
-	{
-		if (params.useSF())
-			return backproject_SF_cone(g, f, &tempParams, cpu_to_gpu);
-		else
-			return backproject_cone(g, f, &tempParams, cpu_to_gpu);
-	}
+	return backproject(g, f, &tempParams, cpu_to_gpu);
 }
 
 bool tomographicModels::projectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -613,15 +563,7 @@ bool tomographicModels::projectParallelBeam(float* g, float* f, bool cpu_to_gpu,
 	tempParams.offsetY = offsetY;
 	tempParams.offsetZ = offsetZ;
 
-	if (tempParams.allDefined() == false || g == NULL || f == NULL)
-		return false;
-	else
-	{
-		if (params.useSF())
-			return project_SF_parallel(g, f, &tempParams, cpu_to_gpu);
-		else
-			return project_parallel(g, f, &tempParams, cpu_to_gpu);
-	}
+	return project(g, f, &tempParams, cpu_to_gpu);
 }
 
 bool tomographicModels::backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -647,15 +589,7 @@ bool tomographicModels::backprojectParallelBeam(float* g, float* f, bool cpu_to_
 	tempParams.offsetY = offsetY;
 	tempParams.offsetZ = offsetZ;
 
-	if (tempParams.allDefined() == false || g == NULL || f == NULL)
-		return false;
-	else
-	{
-		if (params.useSF())
-			return backproject_SF_parallel(g, f, &tempParams, cpu_to_gpu);
-		else
-			return backproject_parallel(g, f, &tempParams, cpu_to_gpu);
-	}
+	return backproject(g, f, &tempParams, cpu_to_gpu);
 }
 
 int tomographicModels::get_numAngles()

@@ -18,6 +18,9 @@ public:
 	bool project(float* g, float* f, bool cpu_to_gpu);
 	bool backproject(float* g, float* f, bool cpu_to_gpu);
 
+	bool project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
+	bool backproject(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
+
 	bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar);
 	bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
@@ -32,7 +35,7 @@ public:
 	bool setVolumeParams(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool setVolumeDimensionOrder(int which);
 	int getVolumeDimensionOrder();
-	bool setDefaultVolumeParameters();
+	bool setDefaultVolumeParameters(float scale = 1.0);
 
 	bool projectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
