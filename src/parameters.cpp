@@ -317,7 +317,15 @@ bool parameters::volumeDefined()
 				printf("Please modify either the detector pixel height or the voxel height so they match!\n");
 				return false;
 			}
-			offsetZ = floor(0.5 + offsetZ / voxelHeight) * voxelHeight;
+			if (numRows != numZ)
+			{
+				//voxelHeight = pixelHeight;
+				//printf("Warning: for parallel and fan-beam data volume voxel height must equal detector pixel height, so forcing voxel height to match pixel height!\n");
+				printf("Error: for parallel and fan-beam data numZ == numRows!\n");
+				return false;
+			}
+			offsetZ = 0.0;
+			//offsetZ = floor(0.5 + offsetZ / voxelHeight) * voxelHeight;
 		}
 		if (geometry == MODULAR && voxelWidth != voxelHeight)
 		{

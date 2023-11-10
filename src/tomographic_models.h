@@ -27,6 +27,9 @@ public:
 
 	bool FBP(float* g, float* f, bool cpu_to_gpu);
 	bool FBP(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
+
+	bool project_multiGPU(float* g, float* f);
+	bool backproject_multiGPU(float* g, float* f);
 	bool FBP_multiGPU(float* g, float* f);
 
 	bool printParameters();
@@ -80,5 +83,7 @@ public:
 	
 	parameters params;
 private:
+	bool backproject_FBP_multiGPU(float* g, float* f, bool doFBP);
 	float* copyRows(float*, int, int);
+	bool combineRows(float*, float*, int, int);
 };

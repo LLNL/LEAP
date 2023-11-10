@@ -25,7 +25,7 @@ leapct.setDefaultVolume()
 
 # Optional settings
 #leapct.setProjector(0)
-leapct.setVolumeDimensionOrder(1)
+#leapct.setVolumeDimensionOrder(1)
 leapct.printParameters()
 #leapct.setGPU(-1)
 
@@ -40,8 +40,8 @@ g = leapct.allocateProjections()
 startTime = time.time()
 leapct.project(g,f)
 print('projection elapsed time: ' + str(time.time()-startTime))
-leapct.displayVolume(g)
-quit()
+#leapct.displayVolume(g)
+#quit()
 
 '''
 leapct.setGPU(-1)

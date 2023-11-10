@@ -51,7 +51,7 @@ def setLEAPfromLTT():
     
     leapct.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
     
-for n in range(1,3):
+for n in range(3):
     LTT.cmd('clearAll')
     LTT.cmd('diskIO=off')
     LTT.cmd('archdir=pwd')
@@ -176,7 +176,8 @@ for n in range(1,3):
     LTT.cmd('simulate #{overSampling=3}')
     g_true = LTT.getAllProjections()
     
-    LTT.cmd('FBP')
+    LTT.cmd('allocateVolume')
+    #LTT.cmd('FBP')
     f_LTT = LTT.getAllReconSlicesZ()
     if leapct.getVolumeDimensionOrder() == 1: # leap is ZYX
         f_LTT = np.ascontiguousarray(np.flip(f_LTT, 1), dtype=np.float32) # LTT is ZYX, but Y is flipped
@@ -184,8 +185,11 @@ for n in range(1,3):
         f_LTT = np.ascontiguousarray(np.flip(np.swapaxes(f_LTT, 0, 2),axis=1), dtype=np.float32)
     
     leapct.setGPU(0)
+    leapct.setGPUs([0,1])
     f_leap_GPU = leapct.allocateVolume()
-    leapct.SART(g_true, f_leap_GPU, 100)
+    startTime = time.time()
+    leapct.SART(g_true, f_leap_GPU, 10)
+    print('SART elapsed time: ' + str(time.time()-startTime))
     
     #leapct.displayVolume(f_LTT)
     #leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))

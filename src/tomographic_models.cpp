@@ -230,12 +230,18 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 
 bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
 {
-	return project(g, f, &params, cpu_to_gpu);
+	if (cpu_to_gpu == true && project_multiGPU(g, f) == true)
+		return true;
+	else
+		return project(g, f, &params, cpu_to_gpu);
 }
 
 bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
 {
-	return backproject(g, f, &params, cpu_to_gpu);
+	if (cpu_to_gpu == true && backproject_multiGPU(g, f) == true)
+		return true;
+	else
+		return backproject(g, f, &params, cpu_to_gpu);
 }
 
 bool tomographicModels::rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
@@ -265,6 +271,9 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 {
 	int numSlices = lastSlice - firstSlice + 1;
 	float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numSlices);
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
 	{
 		float* g_proj = &g[iphi * params.numRows * params.numCols];
@@ -280,7 +289,38 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 	return g_chunk;
 }
 
+bool tomographicModels::combineRows(float* g, float* g_chunk, int firstSlice, int lastSlice)
+{
+	int numSlices = lastSlice - firstSlice + 1;
+	
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int iphi = 0; iphi < params.numAngles; iphi++)
+	{
+		float* g_proj = &g[iphi * params.numRows * params.numCols];
+		float* g_chunk_proj = &g_chunk[iphi * numSlices * params.numCols];
+		for (int iRow = firstSlice; iRow <= lastSlice; iRow++)
+		{
+			float* g_line = &g_proj[iRow * params.numCols];
+			float* g_chunk_line = &g_chunk_proj[(iRow - firstSlice) * params.numCols];
+			for (int iCol = 0; iCol < params.numCols; iCol++)
+				g_line[iCol] = g_chunk_line[iCol];
+		}
+	}
+	return true;
+}
+
+bool tomographicModels::backproject_multiGPU(float* g, float* f)
+{
+	return backproject_FBP_multiGPU(g, f, false);
+}
+
 bool tomographicModels::FBP_multiGPU(float* g, float* f)
+{
+	return backproject_FBP_multiGPU(g, f, true);
+}
+
+bool tomographicModels::project_multiGPU(float* g, float* f)
 {
 	if (params.volumeDimensionOrder != parameters::ZYX)
 		return false;
@@ -294,7 +334,52 @@ bool tomographicModels::FBP_multiGPU(float* g, float* f)
 
 	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL)
 		return false;
-	if (params.numZ != params.numRows)
+
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	#pragma omp parallel for
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstSlice = ichunk * numSlicesPerChunk;
+		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ - 1);
+		int numSlices = lastSlice - firstSlice + 1;
+
+		float* f_chunk = &f[firstSlice * params.numX * params.numY];
+
+		// make a copy of the relavent rows
+		float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numSlices);
+
+		// make a copy of the params
+		parameters chunk_params;
+		chunk_params = params;
+		chunk_params.numRows = numSlices;
+		chunk_params.numZ = numSlices;
+		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+		chunk_params.whichGPUs.clear();
+
+		// Do Computation
+		project(g_chunk, f_chunk, &chunk_params, true);
+		combineRows(g, g_chunk, firstSlice, lastSlice);
+
+		// clean up
+		free(g_chunk);
+
+	}
+	return true;
+}
+
+bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
+{
+	if (params.volumeDimensionOrder != parameters::ZYX)
+		return false;
+	if (int(params.whichGPUs.size()) <= 1)
+		return false;
+
+	int numSlicesPerChunk = std::min(64, params.numZ);
+	int numChunks = int(ceil(float(params.numZ) / float(numSlicesPerChunk)));
+	if (numChunks <= 1)
+		return false;
+
+	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL)
 		return false;
 
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
@@ -318,8 +403,11 @@ bool tomographicModels::FBP_multiGPU(float* g, float* f)
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
 
-		// FBP
-		FBP(g_chunk, f_chunk, &chunk_params, true);
+		// Do Computation
+		if (doFBP)
+			FBP(g_chunk, f_chunk, &chunk_params, true);
+		else
+			backproject(g_chunk, f_chunk, &chunk_params, true);
 
 		// clean up
 		free(g_chunk);
