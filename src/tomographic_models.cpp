@@ -18,6 +18,7 @@
 #include "total_variation.cuh"
 #include "cuda_utils.h"
 #include "projectors_symmetric.cuh"
+#include "projectors_symmetric_cpu.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -98,6 +99,15 @@ bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool c
 	}
 	else if (ctParams->whichGPU >= 0)
 	{
+		if (cpu_to_gpu)
+		{
+			if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+			{
+				printf("Error: insufficient GPU memory\n");
+				return false;
+			}
+		}
+
 		if (ctParams->isSymmetric())
 			return project_symmetric(g, f, ctParams, cpu_to_gpu);
 		else
@@ -105,12 +115,20 @@ bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool c
 	}
 	else
 	{
+		if (ctParams->isSymmetric())
+			return CPUproject_symmetric(g, f, ctParams);
+
 		if (ctParams->geometry == parameters::CONE)
 		{
 			if (ctParams->useSF())
 				return CPUproject_SF_cone(g, f, ctParams);
 			else
-				return CPUproject_cone(g, f, ctParams);
+			{
+				printf("Error: The voxel size for CPU-based cone-beam projectors must be closer to the nominal size.\n");
+				printf("Please either change the voxel size or use the GPU-based projectors.");
+				return false;
+				//return CPUproject_cone(g, f, ctParams);
+			}
 		}
 		else if (ctParams->geometry == parameters::FAN)
 		{
@@ -122,7 +140,12 @@ bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool c
 			if (ctParams->useSF())
 				return CPUproject_SF_parallel(g, f, ctParams);
 			else
-				return CPUproject_parallel(g, f, ctParams);
+			{
+				printf("Error: The voxel size for CPU-based parallel-beam projectors must be closer to the nominal size.\n");
+				printf("Please either change the voxel size or use the GPU-based projectors.");
+				return false;
+				//return CPUproject_parallel(g, f, ctParams);
+			}
 		}
 		else
 			return CPUproject_modular(g, f, ctParams);
@@ -135,6 +158,15 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 		return false;
 	else if (ctParams->whichGPU >= 0)
 	{
+		if (cpu_to_gpu)
+		{
+			if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+			{
+				printf("Error: insufficient GPU memory\n");
+				return false;
+			}
+		}
+
 		if (ctParams->isSymmetric())
 			return backproject_symmetric(g, f, ctParams, cpu_to_gpu);
 		else
@@ -142,12 +174,20 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 	}
 	else
 	{
+		if (ctParams->isSymmetric())
+			return CPUbackproject_symmetric(g, f, ctParams);
+
 		if (ctParams->geometry == parameters::CONE)
 		{
 			if (ctParams->useSF())
 				return CPUbackproject_SF_cone(g, f, ctParams);
 			else
-				return CPUbackproject_cone(g, f, ctParams);
+			{
+				printf("Error: The voxel size for CPU-based cone-beam projectors must be closer to the nominal size.\n");
+				printf("Please either change the voxel size or use the GPU-based projectors.");
+				return false;
+				//return CPUbackproject_cone(g, f, ctParams);
+			}
 		}
 		else if (ctParams->geometry == parameters::FAN)
 		{
@@ -159,7 +199,12 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 			if (ctParams->useSF())
 				return CPUbackproject_SF_parallel(g, f, ctParams);
 			else
-				return CPUbackproject_parallel(g, f, ctParams);
+			{
+				printf("Error: The voxel size for CPU-based parallel-beam projectors must be closer to the nominal size.\n");
+				printf("Please either change the voxel size or use the GPU-based projectors.");
+				return false;
+				//return CPUbackproject_parallel(g, f, ctParams);
+			}
 		}
 		else
 			return CPUbackproject_modular(g, f, ctParams);

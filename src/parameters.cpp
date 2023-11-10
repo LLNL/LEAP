@@ -617,3 +617,13 @@ bool parameters::anglesAreEquispaced()
 		return true;
 	}
 }
+
+float parameters::projectionDataSize()
+{
+	return float(4.0 * double(numAngles) * double(numRows) * double(numCols) / pow(2.0, 30.0));
+}
+
+float parameters::volumeDataSize()
+{
+	return float(4.0 * double(numX) * double(numY) * double(numZ) / pow(2.0, 30.0));
+}

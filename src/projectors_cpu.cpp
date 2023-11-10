@@ -21,8 +21,6 @@ bool CPUproject_cone(float* g, float* f, parameters* params)
 {
 	if (g == NULL || f == NULL || params == NULL)
 		return false;
-	if (params->isSymmetric())
-		return CPUproject_AbelCone(g, f, params);
 	//params->setToZero(g, params->numAngles*params->numRows*params->numCols);
 	params->windowFOV(f);
 	int num_threads = omp_get_num_procs();
@@ -71,8 +69,6 @@ bool CPUbackproject_cone(float* g, float* f, parameters* params)
 {
 	if (g == NULL || f == NULL || params == NULL)
 		return false;
-	if (params->isSymmetric())
-		return CPUbackproject_AbelCone(g, f, params);
 	params->setToZero(f, params->numX*params->numY*params->numZ);
 	const float x_width = 0.5f*params->voxelWidth;
 	const float y_width = 0.5f*params->voxelWidth;
@@ -277,8 +273,6 @@ bool CPUproject_parallel(float* g, float* f, parameters* params)
 {
 	if (g == NULL || f == NULL || params == NULL)
 		return false;
-	if (params->isSymmetric())
-		return CPUproject_AbelParallel(g, f, params);
 	params->windowFOV(f);
 	//params->setToZero(g, params->numAngles*params->numRows*params->numCols);
 	int num_threads = omp_get_num_procs();
@@ -328,8 +322,6 @@ bool CPUbackproject_parallel(float* g, float* f, parameters* params)
 {
 	if (g == NULL || f == NULL || params == NULL)
 		return false;
-	if (params->isSymmetric())
-		return CPUbackproject_AbelParallel(g, f, params);
 	params->setToZero(f, params->numX*params->numY*params->numZ);
 	const float x_width = 0.5f*params->voxelWidth;
 	const float y_width = 0.5f*params->voxelWidth;

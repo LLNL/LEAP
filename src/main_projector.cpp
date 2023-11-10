@@ -109,6 +109,24 @@ bool backproject_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_ten
     return p_model->backproject_gpu(g, f);
 }
 
+bool fbp_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
+{
+    tomographicModels* p_model;
+    if (param_id == -1)
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
+    else
+        return false;
+        
+    CHECK_INPUT(g_tensor);
+    CHECK_INPUT(f_tensor);
+    float* g = g_tensor.data_ptr<float>();
+    float* f = f_tensor.data_ptr<float>();
+    
+    return p_model->FBP(g, f, false);
+}
+
 #endif
 
 bool setGPU(int param_id, int whichGPU)
@@ -390,6 +408,19 @@ bool setVolumeParams(int param_id, int numX, int numY, int numZ, float voxelWidt
     return p_model->setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
+bool setDefaultVolumeParams(float scale)
+{
+    tomographicModels* p_model;
+    if (param_id == -1)
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
+    else
+        return false;
+    
+    return p_model->setDefaultVolumeParameters(scale);
+}
+
 int createParams()
 {
     tomographicModels new_model;
@@ -514,6 +545,7 @@ bool backproject_gpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tens
     tempModel.setProjector(whichProjector);
     return tempModel.backproject_gpu(g, f);
 }
+
 #endif
 
 
@@ -524,6 +556,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 #ifdef __USE_GPU
     m.def("project_gpu", &project_gpu, "forward project on GPU");
     m.def("backproject_gpu", &backproject_gpu, "back project on GPU");
+    m.def("fbp_gpu", &fbp_gpu, "FBP on GPU");
 #endif
     m.def("print_param", &printParameters, "print current parameters");
     m.def("save_param", &saveParamsToFile, "save current parameters to file");
@@ -536,6 +569,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 	m.def("set_fan_beam", &setFanBeamParams, "");
     m.def("set_modular_beam", &setModularBeamParams, "");
 	m.def("set_volume", &setVolumeParams, "");
+    m.def("set_default_volume", &setDefaultVolumeParams, "");
     m.def("get_volume_dim", &getVolumeDim, "");
     m.def("get_projection_dim", &getProjectionDim, "");
     m.def("get_dim_order", &getVolumeDimensionOrder, "");

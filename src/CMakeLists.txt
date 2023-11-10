@@ -23,6 +23,7 @@ set(HEADER
   tomographic_models_c_interface.h
   parameters.h
   projectors_cpu.h
+  projectors_symmetric_cpu.h
   projectors.h
   projectors_SF.h
   projectors_extendedSF.h

@@ -146,6 +146,20 @@ int numberOfGPUs()
         return 0;
 }
 
+float getAvailableGPUmemory(int whichGPU)
+{
+    if (whichGPU >= 0)
+    {
+        cudaSetDevice(whichGPU);
+        std::size_t free_byte;
+        std::size_t total_byte;
+        cudaMemGetInfo(&free_byte, &total_byte);
+        return float(double(free_byte) / pow(2.0, 30.0));
+    }
+    else
+        return 0.0;
+}
+
 cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU)
 {
     cudaSetDevice(whichGPU);

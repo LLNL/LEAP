@@ -18,26 +18,37 @@ import torch
 
 cuda = torch.cuda.is_available()
 if cuda:
+
+    source_files = ['main_projector.cpp', 
+                 'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
+                 'projectors_cpu.cpp', 'projectors_SF_cpu.cpp',
+                 'projectors_symmetric_cpu.cpp', 'parameters.cpp', 
+                 'cuda_utils.cu', 
+                 'noise_filters.cu', 'ramp_filter.cu', 
+                 'ray_weighting.cu', 'total_variation.cu', 
+                 'projectors.cu', 'projectors_extendedSF.cu',
+                 'projectors_symmetric.cu','projectors_SF.cu']
+    for i in range(len(sources)):
+        source_files[i] = os.path.join('src',source_files[i])
+
     ext_mod = CUDAExtension(
         name='leapct',
-        sources=['src/main_projector.cpp', 
-                 'src/tomographic_models.cpp', 'src/tomographic_models_c_interface.cpp', 
-                 'src/projectors_cpu.cpp', 'src/projectors_SF_cpu.cpp',
-                 'src/projectors_symmetric_cpu.cpp', 'src/parameters.cpp', 
-                 'src/cuda_utils.cu', 
-                 'src/noise_filters.cu', 'src/ramp_filter.cu', 
-                 'src/ray_weighting.cu', 'src/total_variation.cu', 
-                 'src/projectors.cu', 'src/projectors_SF.cu', ],
+        sources=source_files,
         extra_compile_args={'cxx': ['-g', '-D__USE_GPU', '-I%s' % pybind11.get_include()], 
                             'nvcc': ['-g', '-D__USE_GPU']}
     )
 else:
+
+    source_files=['main_projector.cpp', 
+                 'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
+                 'projectors_cpu.cpp', 'projectors_SF_cpu.cpp',
+                 'projectors_symmetric_cpu.cpp', 'parameters.cpp']
+    for i in range(len(sources)):
+        source_files[i] = os.path.join('src',source_files[i])
+
     ext_mod = CppExtension(
         name='leapct',
-        sources=['src/main_projector.cpp', 
-                 'src/tomographic_models.cpp', 'src/tomographic_models_c_interface.cpp', 
-                 'src/projectors_cpu.cpp', 'src/projectors_SF_cpu.cpp',
-                 'src/projectors_symmetric_cpu.cpp', 'src/parameters.cpp'],
+        sources=source_files,
         extra_compile_args={'cxx': ['-g', '-D__USE_CPU', '-I%s' % pybind11.get_include()]}
         #extra_compile_args=['-g', '-D__USE_CPU'],
     )

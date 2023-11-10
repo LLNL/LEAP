@@ -12,7 +12,7 @@
 #include <math.h>
 #include <algorithm>
 #include <omp.h>
-#include "projectors_cpu.h"
+#include "projectors_symmetric_cpu.h"
 
 using namespace std;
 
@@ -21,6 +21,30 @@ using namespace std;
 //### Projectors for Symmetric Objects
 //########################################################################################################################################################################
 //########################################################################################################################################################################
+bool CPUproject_symmetric(float* g, float* f, parameters* params)
+{
+	if (params == NULL)
+		return false;
+	else if (params->geometry == parameters::CONE)
+		return CPUproject_AbelCone(g, f, params);
+	else if (params->geometry == parameters::PARALLEL)
+		return CPUproject_AbelParallel(g, f, params);
+	else
+		return false;
+}
+
+bool CPUbackproject_symmetric(float* g, float* f, parameters* params)
+{
+	if (params == NULL)
+		return false;
+	else if (params->geometry == parameters::CONE)
+		return CPUbackproject_AbelCone(g, f, params);
+	else if (params->geometry == parameters::PARALLEL)
+		return CPUbackproject_AbelParallel(g, f, params);
+	else
+		return false;
+}
+
 bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 {
 	if (g == NULL || f == NULL || params == NULL)

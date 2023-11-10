@@ -867,9 +867,9 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
 
     int ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = i * N_f.y * N_f.z + j * N_f.z + k; // XYZ
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = k * N_f.y * N_f.x + j * N_f.x + i; // ZYX
         
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;

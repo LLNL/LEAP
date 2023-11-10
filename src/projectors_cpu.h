@@ -32,14 +32,8 @@ float projectLine(float* f, parameters* params, float* pos, float* traj);
 
 inline float tex3D(float* f, int, int, int, parameters* params);
 
-bool CPUproject_AbelParallel(float*, float*, parameters*);
-bool CPUbackproject_AbelParallel(float*, float*, parameters*);
-
 bool CPUproject_SF_parallel(float*, float*, parameters*, bool setToZero = true);
 bool CPUbackproject_SF_parallel(float*, float*, parameters*, bool setToZero = true);
-
-bool CPUproject_AbelCone(float*, float*, parameters*);
-bool CPUbackproject_AbelCone(float*, float*, parameters*);
 
 bool CPUproject_SF_cone(float*, float*, parameters*, bool setToZero = true);
 bool CPUbackproject_SF_cone(float*, float*, parameters*, bool setToZero = true);

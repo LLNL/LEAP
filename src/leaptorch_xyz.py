@@ -142,6 +142,14 @@ class Projector(torch.nn.Module):
         self.vol_data = torch.from_numpy(vol_np)
         if self.use_gpu:
             self.vol_data = self.vol_data.float().to(self.gpu_device)
+            
+    def set_default_volume(self, scale=1.0):
+        leapct.set_volume(self.param_id, scale)
+        dim1, dim2, dim3 = self.get_volume_dim()
+        vol_np = np.ascontiguousarray(np.zeros((self.batch_size, dim1, dim2, dim3)).astype(np.float32), dtype=np.float32)
+        self.vol_data = torch.from_numpy(vol_np)
+        if self.use_gpu:
+            self.vol_data = self.vol_data.float().to(self.gpu_device)
 
     def set_parallel_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis):
         leapct.set_parallel_beam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis)

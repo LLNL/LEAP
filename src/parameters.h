@@ -80,6 +80,9 @@ public:
 	//float largestVoxelForFastSF();
 	bool voxelSizeWorksForFastSF();
 
+	float projectionDataSize();
+	float volumeDataSize();
+
 	// Volume Parameters
 	int volumeDimensionOrder;
 	int numX, numY, numZ;

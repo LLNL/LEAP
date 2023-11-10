@@ -12,6 +12,7 @@
 #include "parameters.h"
 
 extern int numberOfGPUs();
+extern float getAvailableGPUmemory(int whichGPU);
 
 extern dim3 setBlockSize(int3 N);
 extern dim3 setGridSize(int3 N, dim3 dimBlock);

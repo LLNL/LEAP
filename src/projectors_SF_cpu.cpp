@@ -141,8 +141,6 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
     if (g == NULL || f == NULL || params == NULL)
         return false;
     
-    if (params->isSymmetric())
-        return CPUproject_AbelParallel(g, f, params);
     if (setToZero)
 	    params->setToZero(g, params->numAngles*params->numRows*params->numCols);
     if (params->volumeDimensionOrder == parameters::ZYX)
@@ -237,8 +235,6 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
-    if (params->isSymmetric())
-        return CPUbackproject_AbelParallel(g, f, params);
     if (setToZero)
     	params->setToZero(f, params->numX*params->numY*params->numZ);
     if (params->volumeDimensionOrder == parameters::ZYX)
@@ -330,8 +326,6 @@ bool CPUproject_SF_cone(float* g, float* f, parameters* params, bool setToZero)
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
-    if (params->isSymmetric())
-        return CPUproject_AbelCone(g, f, params);
     if (setToZero)
     	params->setToZero(g, params->numAngles*params->numRows*params->numCols);
     if (params->volumeDimensionOrder == parameters::ZYX)
@@ -358,8 +352,6 @@ bool CPUbackproject_SF_cone(float* g, float* f, parameters* params, bool setToZe
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
-    if (params->isSymmetric())
-        return CPUbackproject_AbelCone(g, f, params);
 	applyInversePolarWeight(g, params);
     if (setToZero)
     	params->setToZero(f, params->numX*params->numY*params->numZ);

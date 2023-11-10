@@ -471,7 +471,7 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 
 bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 {
-	if (params->isSymmetric())
+	if (params->isSymmetric() == false)
 		return false;
 	if (params->geometry != parameters::CONE && params->geometry != parameters::PARALLEL)
 		return false;
@@ -549,7 +549,7 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 
 bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 {
-	if (params->isSymmetric())
+	if (params->isSymmetric() == false)
 		return false;
 	if (params->geometry != parameters::CONE && params->geometry != parameters::PARALLEL)
 		return false;
