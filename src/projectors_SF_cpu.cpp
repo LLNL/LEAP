@@ -77,7 +77,8 @@ bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
             CPUproject_SF_parallel(g, f_XYZ, params, false);
         free(f_XYZ);
     }
-    applyInversePolarWeight(g, params);
+    if (params->geometry == parameters::CONE)
+        applyInversePolarWeight(g, params);
     params->numZ = numZ_save;
     params->offsetZ = offsetZ_save;
     params->volumeDimensionOrder = parameters::ZYX;
@@ -150,6 +151,8 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
     
     float rFOVsq = params->rFOV()*params->rFOV();
 
+    int iv_shift = int(floor(0.5 + (params->z_0() - params->v_0()) / params->pixelHeight));
+
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
     #pragma omp parallel for
@@ -193,7 +196,7 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
                     {
                         ds_conj = maxWeight;
                         for (int k = 0; k < params->numZ; k++)
-                            aProj[k*params->numCols+s_low] += ds_conj*zLine[k];
+                            aProj[(k+ iv_shift)*params->numCols+s_low] += ds_conj*zLine[k];
                     }
                     else
                     {
@@ -203,13 +206,13 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
                         {
                             ds_conj = maxWeight;
                             for (int k = 0; k < params->numZ; k++)
-                                aProj[k*params->numCols+s_low] += ds_conj*zLine[k];
+                                aProj[(k + iv_shift)*params->numCols+s_low] += ds_conj*zLine[k];
                         }
                         else if (ds > one_minus_A)
                         {
                             ds = maxWeight;
                             for (int k = 0; k < params->numZ; k++)
-                                aProj[k*params->numCols+s_high] += ds*zLine[k];
+                                aProj[(k + iv_shift)*params->numCols+s_high] += ds*zLine[k];
                         }
                         else
                         {
@@ -217,8 +220,8 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
                             ds = maxWeight - ds_conj;
                             for (int k = 0; k < params->numZ; k++)
                             {
-                                aProj[k*params->numCols+s_low] += ds_conj*zLine[k];
-                                aProj[k*params->numCols+s_high] += ds*zLine[k];
+                                aProj[(k + iv_shift)*params->numCols+s_low] += ds_conj*zLine[k];
+                                aProj[(k + iv_shift)*params->numCols+s_high] += ds*zLine[k];
                             }
                         }
                     }
@@ -243,6 +246,8 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
     float u_0 = params->u_0();
     
     float rFOVsq = params->rFOV()*params->rFOV();
+
+    int iv_shift = int(floor(0.5 + (params->z_0() - params->v_0()) / params->pixelHeight));
 
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
@@ -287,7 +292,7 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
                     {
                         ds_conj = maxWeight;
                         for (int k = 0; k < params->numZ; k++)
-                            zLine[k] += ds_conj*aProj[k*params->numCols+s_low];
+                            zLine[k] += ds_conj*aProj[(k+iv_shift)*params->numCols+s_low];
                     }
                     else
                     {
@@ -297,20 +302,20 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
                         {
                             ds_conj = maxWeight;
                             for (int k = 0; k < params->numZ; k++)
-                                zLine[k] += ds_conj*aProj[k*params->numCols+s_low];
+                                zLine[k] += ds_conj*aProj[(k + iv_shift)*params->numCols+s_low];
                         }
                         else if (ds > one_minus_A)
                         {
                             ds = maxWeight;
                             for (int k = 0; k < params->numZ; k++)
-                                zLine[k] += ds*aProj[k*params->numCols+s_high];
+                                zLine[k] += ds*aProj[(k + iv_shift)*params->numCols+s_high];
                         }
                         else
                         {
                             ds_conj = T_x_mult_l_phi*(one_minus_A - ds);
                             ds = maxWeight - ds_conj;
                             for (int k = 0; k < params->numZ; k++)
-                                zLine[k] += ds_conj*aProj[k*params->numCols+s_low] + ds*aProj[k*params->numCols+s_high];
+                                zLine[k] += ds_conj*aProj[(k + iv_shift)*params->numCols+s_low] + ds*aProj[(k + iv_shift)*params->numCols+s_high];
                         }
                     }
                 }

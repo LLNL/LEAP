@@ -288,7 +288,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
     {
         if (l + 3 < N_g.x)
         {
-            const float L = (float)l;
+            const float L = (float)l+0.5f;
             sin_phi = sin(phis[l]);
             cos_phi = cos(phis[l]);
             if (sin_phi < 0.0f)
@@ -537,7 +537,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
         }
         else
         {
-            const float L = (float)l;
+            const float L = (float)l+0.5f;
             sin_phi = sin(phis[l]);
             cos_phi = cos(phis[l]);
             if (sin_phi < 0.0f)
@@ -909,7 +909,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
     {
         if (l+3 < N_g.x)
         {
-            const float L = (float)l;
+            const float L = (float)l+0.5f;
             sin_phi = sin(phis[l]);
             cos_phi = cos(phis[l]);
             if (sin_phi < 0.0f)
@@ -1145,7 +1145,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
         }
         else
         {
-            const float L = (float)l;
+            const float L = (float)l+0.5f;
             sin_phi = sin(phis[l]);
             cos_phi = cos(phis[l]);
             if (sin_phi < 0.0f)

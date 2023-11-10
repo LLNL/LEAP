@@ -16,9 +16,9 @@ pixelSize = 0.2*L
 phis = leapct.setAngleArray(N_phis, arange)
 
 # Set scanner geometry and volume
-#leapct.setParallelBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
+leapct.setParallelBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
 #leapct.setFanBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, 1100, 1400)
-leapct.setConeBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, 1100, 1400)
+#leapct.setConeBeamParams(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, 1100, 1400)
 leapct.setDefaultVolume()
 #leapct.setDefaultVolume(4.0)
 #leapct.setDefaultVolume(0.25)
@@ -27,7 +27,7 @@ leapct.setDefaultVolume()
 #leapct.setProjector(0)
 leapct.setVolumeDimensionOrder(1)
 leapct.printParameters()
-#leapct.setGPU(-1)
+leapct.setGPU(-1)
 
 # Simulate data by forward projecting a cube
 f = leapct.allocateVolume()
@@ -40,8 +40,8 @@ g = leapct.allocateProjections()
 startTime = time.time()
 leapct.project(g,f)
 print('projection elapsed time: ' + str(time.time()-startTime))
-#leapct.displayVolume(g)
-#quit()
+leapct.displayVolume(g)
+quit()
 
 '''
 leapct.setGPU(-1)
