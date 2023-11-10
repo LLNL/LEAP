@@ -158,6 +158,13 @@ class Projector(torch.nn.Module):
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
 
+    def set_fan_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd):
+        leapct.set_fan_beam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32), dtype=np.float32)
+        self.proj_data = torch.from_numpy(proj_np)
+        if self.use_gpu:
+            self.proj_data = self.proj_data.float().to(self.gpu_device)
+
     def set_cone_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis, sod, sdd):
         leapct.set_cone_beam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, arange, phis, sod, sdd)
         proj_np = np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32)
@@ -222,6 +229,12 @@ class Projector(torch.nn.Module):
                                    pdic['proj_pheight'], pdic['proj_pwidth'], 
                                    pdic['proj_crow'], pdic['proj_ccol'], 
                                    pdic['proj_arange'], phis)
+        elif pdic['proj_geometry'] == 'fan':
+            self.set_fan_beam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+                               pdic['proj_pheight'], pdic['proj_pwidth'], 
+                               pdic['proj_crow'], pdic['proj_ccol'], 
+                               pdic['proj_arange'], phis, 
+                               pdic['proj_sod'], pdic['proj_sdd'])
         elif pdic['proj_geometry'] == 'cone':
             self.set_cone_beam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
                                pdic['proj_pheight'], pdic['proj_pwidth'], 

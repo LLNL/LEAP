@@ -361,6 +361,25 @@ bool setConeBeamParams(int param_id, int numAngles, int numRows, int numCols,
                        phis, sod, sdd);
 }
 
+bool setFanBeamParams(int param_id, int numAngles, int numRows, int numCols, 
+                      float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
+                      torch::Tensor& phis_tensor, float sod, float sdd)
+{
+    tomographicModels* p_model;
+    if (param_id == -1)
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
+    else
+        return false;
+    
+    float* phis = phis_tensor.data_ptr<float>();
+    return p_model->setFanBeamParams(numAngles, numRows, numCols, 
+                      pixelHeight, pixelWidth, centerRow, centerCol, 
+                      phis, sod, sdd);
+    return false;
+}
+
 bool setParallelBeamParams(int param_id, int numAngles, int numRows, int numCols, 
                            float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
                            torch::Tensor& phis_tensor)
@@ -376,25 +395,6 @@ bool setParallelBeamParams(int param_id, int numAngles, int numRows, int numCols
     float* phis = phis_tensor.data_ptr<float>();
     return p_model->setParallelBeamParams(numAngles, numRows, numCols, 
                            pixelHeight, pixelWidth, centerRow, centerCol, phis);
-}
-
-bool setFanBeamParams(int param_id, int numAngles, int numRows, int numCols, 
-                      float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
-                      torch::Tensor& phis_tensor, float sod, float sdd)
-{
-    tomographicModels* p_model;
-    if (param_id == -1)
-        p_model = &default_model;
-    else if (param_id >= 0 && param_id < (int)list_models.size())
-        p_model = &list_models[param_id];
-    else
-        return false;
-    
-    //float* phis = phis_tensor.data_ptr<float>();
-    //return p_model->setFanBeamParams(numAngles, numRows, numCols, 
-    //                  pixelHeight, pixelWidth, centerRow, centerCol, 
-    //                  phis, sod, sdd);
-    return false;
 }
 
 bool setModularBeamParams(int param_id, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, 
@@ -471,6 +471,19 @@ bool project_cpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int 
     return tempModel.project_cpu(g, f);
 }
 
+bool project_cpu_FanBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+{
+    float* g = g_tensor.data_ptr<float>();
+    float* f = f_tensor.data_ptr<float>();
+    float* phis = phis_tensor.data_ptr<float>();
+    
+    tomographicModels tempModel;
+    tempModel.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.project_cpu(g, f);
+}
+
 bool project_cpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
     float* g = g_tensor.data_ptr<float>();
@@ -497,6 +510,18 @@ bool backproject_cpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, 
     return tempModel.backproject_cpu(g, f);
 }
 
+bool backproject_cpu_FanBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+{
+    float* g = g_tensor.data_ptr<float>();
+    float* f = f_tensor.data_ptr<float>();
+    float* phis = phis_tensor.data_ptr<float>();
+    
+    tomographicModels tempModel;
+    tempModel.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.backproject_cpu(g, f);
+}
 
 bool backproject_cpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
@@ -521,6 +546,20 @@ bool project_gpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int 
     tomographicModels tempModel;
     tempModel.setGPU(whichGPU);
     tempModel.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.project_gpu(g, f);
+}
+
+bool project_gpu_FanBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichGPU, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+{
+    float* g = g_tensor.data_ptr<float>();
+    float* f = f_tensor.data_ptr<float>();
+    float* phis = phis_tensor.data_ptr<float>();
+    
+    tomographicModels tempModel;
+    tempModel.setGPU(whichGPU);
+    tempModel.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
     tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
     tempModel.setProjector(whichProjector);
     return tempModel.project_gpu(g, f);
@@ -554,6 +593,19 @@ bool backproject_gpu_ConeBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, 
     return tempModel.backproject_gpu(g, f);
 }
 
+bool backproject_gpu_FanBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichGPU, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+{
+    float* g = g_tensor.data_ptr<float>();
+    float* f = f_tensor.data_ptr<float>();
+    float* phis = phis_tensor.data_ptr<float>();
+    
+    tomographicModels tempModel;
+    tempModel.setGPU(whichGPU);
+    tempModel.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+    tempModel.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+    tempModel.setProjector(whichProjector);
+    return tempModel.backproject_gpu(g, f);
+}
 
 bool backproject_gpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tensor, int whichGPU, int whichProjector, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, torch::Tensor& phis_tensor, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
@@ -589,8 +641,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("set_dim_order", &setVolumeDimensionOrder, "");
 	m.def("set_symmetry_axis", &set_axisOfSymmetry, "");
     m.def("set_cone_beam", &setConeBeamParams, "");
+    m.def("set_fan_beam", &setFanBeamParams, "");
 	m.def("set_parallel_beam", &setParallelBeamParams, "");
-	m.def("set_fan_beam", &setFanBeamParams, "");
     m.def("set_modular_beam", &setModularBeamParams, "");
 	m.def("set_volume", &setVolumeParams, "");
     m.def("set_default_volume", &setDefaultVolumeParams, "");
@@ -600,13 +652,17 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("create_param", &createParams, "");
     m.def("clear_param_all", &clearParamsList, "");
     m.def("project_cone_cpu", &project_cpu_ConeBeam, "");
+    m.def("project_fan_cpu", &project_cpu_FanBeam, "");
     m.def("project_parallel_cpu", &project_cpu_ParallelBeam, "");
     m.def("backproject_cone_cpu", &backproject_cpu_ConeBeam, "");
+    m.def("backproject_fan_cpu", &backproject_cpu_FanBeam, "");
     m.def("backproject_parallel_cpu", &backproject_cpu_ParallelBeam, "");
 #ifdef __USE_GPU
     m.def("project_cone_gpu", &project_gpu_ConeBeam, "");
+    m.def("project_fan_gpu", &project_gpu_FanBeam, "");
     m.def("project_parallel_gpu", &project_gpu_ParallelBeam, "");
     m.def("backproject_cone_gpu", &backproject_gpu_ConeBeam, "");
+    m.def("backproject_fan_gpu", &backproject_gpu_FanBeam, "");
     m.def("backproject_parallel_gpu", &backproject_gpu_ParallelBeam, "");
 #endif
 }
