@@ -89,6 +89,11 @@ class Projector:
         self.libprojectors.setProjector.argtypes = [ctypes.c_int]
         self.libprojectors.setProjector.restype = ctypes.c_bool
         return self.libprojectors.setProjector(which)
+        
+    def setRampFilter(self,which):
+        self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
+        self.libprojectors.set_rampID.restype = ctypes.c_bool
+        return self.libprojectors.set_rampID(which)
     
     def setVolumeParams(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
         self.libprojectors.setVolumeParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]

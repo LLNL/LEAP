@@ -65,6 +65,7 @@ void parameters::assign(const parameters& other)
     
     this->whichGPU = other.whichGPU;
     this->whichProjector = other.whichProjector;
+	this->rampID = other.rampID;
     this->geometry = other.geometry;
     this->detectorType = other.detectorType;
     this->sod = other.sod;
@@ -108,6 +109,7 @@ void parameters::setDefaults(int N)
 	else
 		whichGPU = -1;
     whichProjector = SEPARABLE_FOOTPRINT;
+	rampID = 2;
 
 	geometry = CONE;
 	detectorType = FLAT;

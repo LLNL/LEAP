@@ -66,6 +66,7 @@ public:
 	float* phis;
 	float tau;
 	float rFOVspecified;
+	int rampID;
     
     float T_phi();
     float rFOV();

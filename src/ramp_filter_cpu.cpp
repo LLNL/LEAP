@@ -118,7 +118,7 @@ float* rampFilterFrequencyResponseMagnitude_cpu(int N, parameters* params)
             isCurved = true;
     }
 
-    int rampID = 2;
+    int rampID = params->rampID;
 
     double* h_d = rampImpulseResponse(N, T, rampID);
     float* h = new float[N];

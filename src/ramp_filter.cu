@@ -95,7 +95,7 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
             isCurved = true;
     }
 
-    int rampID = 2;
+    int rampID = params->rampID;
 
     cudaError_t cudaStatus;
     double* h_d = rampImpulseResponse(N, T, rampID);

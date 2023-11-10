@@ -52,6 +52,7 @@ public:
 	bool clear_axisOfSymmetry();
 	bool setProjector(int which);
 	bool set_rFOV(float rFOV_in);
+	bool set_rampID(int);
 	bool reset();
 
 	int get_numAngles();

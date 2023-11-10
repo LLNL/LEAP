@@ -491,6 +491,17 @@ bool tomographicModels::set_rFOV(float rFOV_in)
 	return true;
 }
 
+bool tomographicModels::set_rampID(int whichRampFilter)
+{
+	if (whichRampFilter < 0 || whichRampFilter > 10)
+		return false;
+	else
+	{
+		params.rampID = whichRampFilter;
+		return true;
+	}
+}
+
 bool tomographicModels::projectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	parameters tempParams;

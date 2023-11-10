@@ -145,6 +145,11 @@ bool set_rFOV(float rFOV_in)
 	return tomo.set_rFOV(rFOV_in);
 }
 
+bool set_rampID(int whichRampFilter)
+{
+	return tomo.set_rampID(whichRampFilter);
+}
+
 bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	return tomo.projectConeBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);

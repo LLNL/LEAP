@@ -58,6 +58,7 @@ extern "C" PROJECTOR_API bool set_axisOfSymmetry(float axisOfSymmetry);
 extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool setProjector(int which);
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);
+extern "C" PROJECTOR_API bool set_rampID(int whichRampFilter);
 extern "C" PROJECTOR_API bool reset();
 
 extern "C" PROJECTOR_API int get_numAngles();

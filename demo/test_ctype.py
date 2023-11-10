@@ -27,7 +27,7 @@ leapct.setDefaultVolume()
 #leapct.setProjector(0)
 leapct.setVolumeDimensionOrder(1)
 leapct.printParameters()
-leapct.setGPU(-1)
+#leapct.setGPU(-1)
 
 # Simulate data by forward projecting a cube
 f = leapct.allocateVolume()

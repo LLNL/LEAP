@@ -76,8 +76,8 @@ for n in range(3):
     LTT.cmd('dataType=atten')
 
     setLEAPfromLTT()
-    leapct.setVolumeDimensionOrder(0) # XYZ
-    #leapct.setVolumeDimensionOrder(1) # ZYX
+    #leapct.setVolumeDimensionOrder(0) # XYZ
+    leapct.setVolumeDimensionOrder(1) # ZYX
     if LTT.unknown('axisOfSymmetry') == False:
         leapct.setVolumeDimensionOrder(0) # XYZ
 
@@ -140,7 +140,7 @@ for n in range(3):
     #'''
     
     #'''
-    # Test FBP GPU
+    # Test FBP
     LTT.cmd('simulate #{overSampling=3}')
     g_true = LTT.getAllProjections()
     
@@ -153,13 +153,38 @@ for n in range(3):
     
     leapct.setGPU(0)
     f_leap_GPU = leapct.allocateVolume()
-    startTime = time.time()
     leapct.FBP(g_true, f_leap_GPU)
-    print('LEAP FBP elapsed time: ' + str(time.time()-startTime))
+    
+    leapct.setGPU(-1)
+    f_leap_CPU = leapct.allocateVolume()
+    leapct.FBP(g_true, f_leap_CPU)
         
     #leapct.displayVolume(f_LTT)
     leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))
-    #leapct.displayVolume(f_leap_GPU)
+    leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
+    #leapct.displayVolume(f_leap_GPU-f_leap_CPU)
+    #'''
+    
+    '''
+    # Test SART
+    LTT.cmd('simulate #{overSampling=3}')
+    g_true = LTT.getAllProjections()
+    
+    LTT.cmd('FBP')
+    f_LTT = LTT.getAllReconSlicesZ()
+    if leapct.getVolumeDimensionOrder() == 1: # leap is ZYX
+        f_LTT = np.ascontiguousarray(np.flip(f_LTT, 1), dtype=np.float32) # LTT is ZYX, but Y is flipped
+    else: # leap is XYZ
+        f_LTT = np.ascontiguousarray(np.flip(np.swapaxes(f_LTT, 0, 2),axis=1), dtype=np.float32)
+    
+    leapct.setGPU(0)
+    f_leap_GPU = leapct.allocateVolume()
+    leapct.SART(g_true, f_leap_GPU, 100)
+    
+    #leapct.displayVolume(f_LTT)
+    #leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))
+    #leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
+    leapct.displayVolume(f_leap_GPU)
     #'''
     
     #quit()
