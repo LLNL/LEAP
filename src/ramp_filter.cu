@@ -1,5 +1,6 @@
 
 #include "ramp_filter.cuh"
+#include "ramp_filter_cpu.h"
 
 #include <iostream>
 
@@ -482,10 +483,11 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
     return retVal;
 }
 #else
-bool rampFilter1D(float*& f, parameters* params, bool cpu_to_gpu)
+bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu)
 {
-    printf("CUFFT libraries not available!\n");
-    return false;
+    //printf("CUFFT libraries not available!\n");
+    //return false;
+    return rampFilter1D_cpu(g, params);
 }
 
 bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
@@ -494,117 +496,3 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
     return false;
 }
 #endif
-
-float* rampFrequencyResponse2D(int N, double T, double scalingFactor, int smoothingLevel)
-{
-    int N_over2 = N / 2 + 1;
-    float* H_2D = (float*)malloc(sizeof(float) * N * N_over2);
-    float* H = rampFrequencyResponse(N, T);
-
-    double freqResponseAtNyquist = 2.0 * sin(0.5 * PI);
-    double c = T / (freqResponseAtNyquist);
-    double T_X = 2.0 * PI / double(N);
-
-    for (int i = 0; i < N; i++)
-    {
-        double Hx_squared = H[i] * H[i];
-        double X = frequencySamples(i, N, T_X);
-        for (int j = 0; j < N_over2; j++)
-        {
-            double Y = frequencySamples(j, N, T_X);
-            double Hy_squared = H[j] * H[j];
-            double temp = Hx_squared + Hy_squared - c * c * Hx_squared * Hy_squared;
-            H_2D[i * N_over2 + j] = sqrt(std::max(0.0, temp)) * scalingFactor;
-            if (smoothingLevel > 0)  // 0.5 + 0.5*cos(X) = cos(0.5*X)^2
-                H_2D[i * N_over2 + j] *=
-                    pow(cos(0.5 * X), 2.0 * float(smoothingLevel)) * pow(cos(0.5 * Y), 2 * float(smoothingLevel));
-            // H_2D[i * N_over2 + j] *= (0.5 + 0.5 * cos(X)) * (0.5 + 0.5 * cos(Y));
-        }
-    }
-
-    free(H);
-    return H_2D;
-}
-
-float* rampFrequencyResponse(int N, double T)
-{
-    float* H = (float*)malloc(sizeof(float) * N);
-
-    double T_X = 2.0 * PI / double(N);
-    for (int i = 0; i < N; i++) H[i] = rampFrequencyResponse(frequencySamples(i, N, T_X), T);
-
-    return H;
-}
-
-double rampFrequencyResponse(double X, double T)
-{
-    return 2.0 * sin(0.5 * fabs(X)) / T;
-}
-
-double frequencySamples(int i, int N, double T)
-{
-    // samples lie in [-pi, pi)
-    if (i < N / 2)
-        return double(i) * T;
-    else
-        return double(i - N) * T;
-}
-
-double timeSamples(int i, int N)
-{
-    if (i < N / 2)
-        return double(i);
-    else
-        return double(i) - double(N);
-}
-
-double rampImpulseResponse(int N, double T, int n, int rampID)
-{
-    double retVal = 0.0;
-    double s = timeSamples(n, N);
-
-    double s_sq = s * s;
-    switch (rampID)
-    {
-    case 0:  // Blurred Shepp-Logan, FWHM 2.1325 samples
-        retVal = 1.0 / (PI * (0.25 - s_sq)) * (0.75 - s_sq) / (2.25 - s_sq);
-        break;
-    case 1: // Cosine Filter, not a very good impulse response, FWHM 1.8487 samples
-        retVal = (PI * pow(-1.0, s) / (0.25 - s_sq) - (2.0 * s_sq + 0.5) / ((s_sq - 0.25) * (s_sq - 0.25))) / (2.0 * PI);
-        break;
-    case 2: // Shepp-Logan, FWHM 1.0949(1.2907) samples
-        retVal = 1.0 / (PI * (0.25 - s_sq));
-        break;
-    case 3:
-    case 4: // Shepp-Logan with 4th order finite difference, FWHM 1.0518(1.2550) samples
-        retVal = 1.0 / (PI * (0.25 - s_sq)) * (2.5 - s_sq) / (2.25 - s_sq);
-        break;
-    case 5:
-    case 6: // Shepp-Logan with 6th order finite difference, FWHM 1.0353(1.2406) samples
-        retVal = 1.0 / (PI * (0.25 - s_sq)) * (s_sq * s_sq - 35.0 / 4.0 * s_sq + 259.0 / 16.0) / ((25.0 / 4.0 - s_sq) * (9.0 / 4.0 - s_sq));
-        break;
-    case 7:
-    case 8: // Shepp-Logan with 8th order finite difference, FWHM 1.0266(1.2328) samples
-        retVal = 1.0 / (PI * (0.25 - s_sq)) * (s_sq * s_sq * s_sq - 336.0 / 16.0 * s_sq * s_sq + 1974.0 / 16.0 * s_sq - 3229.0 / 16.0) / ((s_sq - 49.0 / 4.0) * (s_sq - 25.0 / 4.0) * (s_sq - 9.0 / 4.0));
-        break;
-    case 9:
-    case 10: // Shepp-Logan with 10th order finite difference, FWHM 1.0214(1.2280) samples
-        retVal = 1.0 / (PI * (0.25 - s_sq)) * (s_sq * s_sq * s_sq * s_sq - 165.0 / 4.0 * s_sq * s_sq * s_sq + 4389.0 / 8.0 * s_sq * s_sq - 86405.0 / 32.0 * s_sq + 1057221.0 / 256.0) / ((s_sq - 81.0 / 4.0) * (s_sq - 49.0 / 4.0) * (s_sq - 25.0 / 4.0) * (s_sq - 9.0 / 4.0));
-        break;
-    default: // Ram-Lak, the "exact" ramp filter, FWHM 1.0000(1.2067) samples
-        if (s == 0.0)
-            retVal = PI / 2.0;
-        else
-            retVal = (pow(-1.0, s) - 1.0) / (PI * s_sq);
-    }
-    retVal = retVal / T;
-    return retVal;
-}
-
-double* rampImpulseResponse(int N, double T, int rampID)
-{
-    double* h = (double*)malloc(sizeof(double) * N);
-    for (int i = 0; i < N; i++)
-        h[i] = rampImpulseResponse(N, T, i, rampID);
-    return h;
-}

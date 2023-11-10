@@ -29,6 +29,7 @@ set(HEADER
   projectors_extendedSF.h
   cuda_utils.h
   ramp_filter.cuh
+  ramp_filter_cpu.h
   noise_filters.cuh
   total_variation.cuh
   ray_weighting.cuh
@@ -42,6 +43,7 @@ set(SRC_CPP
   projectors_cpu.cpp
   projectors_symmetric_cpu.cpp
   projectors_SF_cpu.cpp
+  ramp_filter_cpu.cpp
 )
 
 set(SRC_CU

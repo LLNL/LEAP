@@ -19,9 +19,11 @@
 #include "cuda_utils.h"
 #include "projectors_symmetric.cuh"
 #include "projectors_symmetric_cpu.h"
+#include "ramp_filter_cpu.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <algorithm>
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -224,18 +226,16 @@ bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
 bool tomographicModels::rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
 {
 	if (params.whichGPU < 0)
-	{
-		printf("Error: ramp filter only implemented for GPU\n");
-		return false;
-	}
-	return rampFilter1D(g, &params, cpu_to_gpu, scalar);
+		return rampFilter1D_cpu(g, &params, scalar);
+	else
+		return rampFilter1D(g, &params, cpu_to_gpu, scalar);
 }
 
 bool tomographicModels::rampFilterVolume(float* f, bool cpu_to_gpu)
 {
 	if (params.whichGPU < 0)
 	{
-		printf("Error: ramp filter only implemented for GPU\n");
+		printf("Error: 2D ramp filter only implemented for GPU\n");
 		return false;
 	}
 	return rampFilter2D(f, &params, cpu_to_gpu);
@@ -243,13 +243,6 @@ bool tomographicModels::rampFilterVolume(float* f, bool cpu_to_gpu)
 
 bool tomographicModels::FBP(float* g, float* f, bool cpu_to_gpu)
 {
-	/*
-	if (params.whichGPU < 0)
-	{
-		printf("Error: ramp filter only implemented for GPU\n");
-		return false;
-	}
-	//*/
 	if (params.geometry == parameters::MODULAR)
 	{
 		printf("Error: FBP not implemented for modular geometries\n");
@@ -266,6 +259,12 @@ bool tomographicModels::FBP(float* g, float* f, bool cpu_to_gpu)
 	}
 	else
 	{
+		if (getAvailableGPUmemory(params.whichGPU) < params.projectionDataSize() + params.volumeDataSize())
+		{
+			printf("Error: insufficient GPU memory\n");
+			return false;
+		}
+
 		bool retVal = true;
 		cudaSetDevice(params.whichGPU);
 		cudaError_t cudaStatus;
