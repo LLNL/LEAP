@@ -47,6 +47,7 @@ public:
 	bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
 	bool setGPU(int whichGPU);
+	int getGPU();
 	bool set_axisOfSymmetry(float axisOfSymmetry);
 	bool clear_axisOfSymmetry();
 	bool setProjector(int which);

@@ -32,6 +32,11 @@ float projectLine(float* f, parameters* params, float* pos, float* traj);
 
 inline float tex3D(float* f, int, int, int, parameters* params);
 
+bool CPUproject_SF_fan(float*, float*, parameters*, bool setToZero = true);
+bool CPUbackproject_SF_fan(float*, float*, parameters*, bool setToZero = true);
+bool CPUproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi);
+bool CPUbackproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi);
+
 bool CPUproject_SF_parallel(float*, float*, parameters*, bool setToZero = true);
 bool CPUbackproject_SF_parallel(float*, float*, parameters*, bool setToZero = true);
 

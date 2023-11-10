@@ -72,6 +72,29 @@ bool backproject_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_ten
     return p_model->backproject_cpu(g, f);
 }
 
+bool fbp_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
+{
+    tomographicModels* p_model;
+    if (param_id == -1)
+        p_model = &default_model;
+    else if (param_id >= 0 && param_id < (int)list_models.size())
+        p_model = &list_models[param_id];
+    else
+        return false;
+        
+    CHECK_INPUT(g_tensor);
+    CHECK_INPUT(f_tensor);
+    float* g = g_tensor.data_ptr<float>();
+    float* f = f_tensor.data_ptr<float>();
+    
+    int whichGPU_save = p_model->getGPU();
+    p_model->setGPU(-1)
+    bool retVal = p_model->FBP(g, f, false);
+    p_model->setGPU(whichGPU_save);
+    
+    return retVal;
+}
+
 #ifdef __USE_GPU
 bool project_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 {
@@ -553,6 +576,7 @@ bool backproject_gpu_ParallelBeam(torch::Tensor& g_tensor, torch::Tensor& f_tens
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("project_cpu", &project_cpu, "forward project on CPU");
     m.def("backproject_cpu", &backproject_cpu, "back project on CPU");
+    m.def("fbp_cpu", &fbp_cpu, "FBP on CPU");
 #ifdef __USE_GPU
     m.def("project_gpu", &project_gpu, "forward project on GPU");
     m.def("backproject_gpu", &backproject_gpu, "back project on GPU");

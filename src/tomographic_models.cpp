@@ -134,8 +134,15 @@ bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool c
 		}
 		else if (ctParams->geometry == parameters::FAN)
 		{
-			printf("Error: CPU-based projectors of fan-beam data not yet implemented!\n");
-			return false;
+			if (ctParams->useSF())
+				return CPUproject_SF_fan(g, f, ctParams);
+			else
+			{
+				printf("Error: The voxel size for CPU-based fan-beam projectors must be closer to the nominal size.\n");
+				printf("Please either change the voxel size or use the GPU-based projectors.");
+				return false;
+				//return CPUproject_fan(g, f, ctParams);
+			}
 		}
 		else if (ctParams->geometry == parameters::PARALLEL)
 		{
@@ -193,8 +200,15 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 		}
 		else if (ctParams->geometry == parameters::FAN)
 		{
-			printf("Error: CPU-based projectors of fan-beam data not yet implemented!\n");
-			return false;
+			if (ctParams->useSF())
+				return CPUbackproject_SF_fan(g, f, ctParams);
+			else
+			{
+				printf("Error: The voxel size for CPU-based fan-beam projectors must be closer to the nominal size.\n");
+				printf("Please either change the voxel size or use the GPU-based projectors.");
+				return false;
+				//return CPUbackproject_fan(g, f, ctParams);
+			}
 		}
 		else if (ctParams->geometry == parameters::PARALLEL)
 		{
@@ -431,6 +445,11 @@ bool tomographicModels::setGPU(int whichGPU)
 	else
 		params.whichGPU = whichGPU;
 	return true;
+}
+
+int tomographicModels::getGPU()
+{
+	return params.whichGPU;
 }
 
 bool tomographicModels::setProjector(int which)

@@ -76,8 +76,8 @@ for n in range(3):
     LTT.cmd('dataType=atten')
 
     setLEAPfromLTT()
-    #leapct.setVolumeDimensionOrder(0) # XYZ
-    leapct.setVolumeDimensionOrder(1) # ZYX
+    leapct.setVolumeDimensionOrder(0) # XYZ
+    #leapct.setVolumeDimensionOrder(1) # ZYX
     if LTT.unknown('axisOfSymmetry') == False:
         leapct.setVolumeDimensionOrder(0) # XYZ
 
@@ -162,5 +162,5 @@ for n in range(3):
     #leapct.displayVolume(f_leap_GPU)
     #'''
     
-    quit()
+    #quit()
     

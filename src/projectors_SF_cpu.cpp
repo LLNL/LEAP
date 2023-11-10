@@ -73,6 +73,8 @@ bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
         params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
         if (params->geometry == parameters::CONE)
             CPUproject_SF_cone(g, f_XYZ, params, false);
+        else if (params->geometry == parameters::FAN)
+            CPUproject_SF_fan(g, f_XYZ, params, false);
         else
             CPUproject_SF_parallel(g, f_XYZ, params, false);
         free(f_XYZ);
@@ -110,6 +112,8 @@ bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
         params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
         if (params->geometry == parameters::CONE)
             CPUbackproject_SF_cone(g, f_XYZ, params);
+        else if (params->geometry == parameters::FAN)
+            CPUbackproject_SF_fan(g, f_XYZ, params);
         else
             CPUbackproject_SF_parallel(g, f_XYZ, params);
 
@@ -135,6 +139,591 @@ bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
     params->volumeDimensionOrder = parameters::ZYX;
     return true;
 }
+
+//#####################################################################################################################
+bool CPUproject_SF_fan(float* g, float* f, parameters* params, bool setToZero)
+{
+    if (g == NULL || f == NULL || params == NULL)
+        return false;
+    if (setToZero)
+        params->setToZero(g, params->numAngles * params->numRows * params->numCols);
+    if (params->volumeDimensionOrder == parameters::ZYX)
+        return CPUproject_SF_ZYX(g, f, params);
+    int num_threads = omp_get_num_procs();
+    omp_set_num_threads(num_threads);
+    #pragma omp parallel for
+    for (int iphi = 0; iphi < params->numAngles; iphi++)
+    {
+        float* aProj = &g[iphi * params->numCols * params->numRows];
+
+        for (int ix = 0; ix < params->numX; ix++)
+        {
+            float* xSlice = &f[ix * params->numY * params->numZ];
+            CPUproject_SF_fan_kernel(aProj, xSlice, params, ix, iphi);
+        }
+    }
+    return true;
+}
+
+bool CPUbackproject_SF_fan(float* g, float* f, parameters* params, bool setToZero)
+{
+    if (g == NULL || f == NULL || params == NULL)
+        return false;
+    if (setToZero)
+        params->setToZero(f, params->numX * params->numY * params->numZ);
+    if (params->volumeDimensionOrder == parameters::ZYX)
+        return CPUbackproject_SF_ZYX(g, f, params);
+    int num_threads = omp_get_num_procs();
+    omp_set_num_threads(num_threads);
+    #pragma omp parallel for
+    for (int ix = 0; ix < params->numX; ix++)
+    {
+        float* xSlice = &f[ix * params->numY * params->numZ];
+        for (int iphi = 0; iphi < params->numAngles; iphi++)
+        {
+            float* aProj = &g[iphi * params->numCols * params->numRows];
+            CPUbackproject_SF_fan_kernel(aProj, xSlice, params, ix, iphi);
+        }
+    }
+    return true;
+}
+
+bool CPUproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi)
+{
+    float u_0 = params->u_0() / params->sdd;
+    float v_0 = params->v_0();
+    float T_u = params->pixelWidth / params->sdd;
+    float T_v = params->pixelHeight;
+
+    float T_z = params->voxelHeight;
+    float z_0 = params->z_0();
+
+    //const float iv = (z - startVals_g.y) / T_g.y;
+
+    const float cos_phi = cos(params->phis[iphi]);
+    const float sin_phi = sin(params->phis[iphi]);
+    const float x = params->voxelWidth * ix + params->x_0();
+
+    float A_x, B_x, A_y, B_y;
+    float T_x_over_2 = params->voxelWidth / 2.0;
+    if (sin_phi < 0.0)
+    {
+        A_x = -sin_phi * T_x_over_2; // fabs(sin_phi)*T_x/2
+        B_x = -cos_phi * T_x_over_2;
+    }
+    else
+    {
+        A_x = sin_phi * T_x_over_2; // fabs(sin_phi)*T_x/2
+        B_x = cos_phi * T_x_over_2;
+    }
+    if (cos_phi < 0.0)
+    {
+        A_y = -cos_phi * T_x_over_2; // fabs(cos_phi)*T_x/2
+        B_y = sin_phi * T_x_over_2;
+    }
+    else
+    {
+        A_y = cos_phi * T_x_over_2; // fabs(cos_phi)*T_x/2
+        B_y = -sin_phi * T_x_over_2;
+    }
+
+    float tau[2];
+    int ind_first, ind_middle, ind_last, ind_diff;
+    float firstWeight, middleWeight, lastWeight;
+    float tauInd_low, tauInd_high;
+
+    float sampleConstant = params->voxelWidth;
+    float theWeight = sampleConstant;
+
+    float dist_from_source;
+    float dist_from_source_components[2];
+    float l_phi = 1.0;
+
+    float R_minus_x_dot_theta, u_arg;
+
+    float x_dot_theta, x_dot_theta_perp;
+
+    float v_denom;//, v_phi_x;
+    float pitch_mult_phi_plus_startZ = 0.0;
+
+    float t_neg, t_pos, t_1, t_2;
+    int t_ind_min, t_ind_max;
+    float A_ind;
+    float T_z_over_2 = params->voxelHeight / 2.0;
+
+    float T_z_over_2T_v_v_denom;
+
+    float rFOVsq = params->rFOV() * params->rFOV();
+
+    int vBounds[2];
+    vBounds[0] = 0;
+    vBounds[1] = params->numRows - 1;
+    dist_from_source_components[0] = fabs(params->sod * cos_phi + params->tau * sin_phi - x);
+    for (int iy = 0; iy < params->numY; iy++)
+    {
+        const float y = iy * params->voxelWidth + params->y_0();
+        if (x * x + y * y <= rFOVsq)
+        {
+            float* zLine = &xSlice[iy * params->numZ];
+            x_dot_theta = x * cos_phi + y * sin_phi;
+            x_dot_theta_perp = -sin_phi * x + cos_phi * y + params->tau; // note: shifted by tau
+            R_minus_x_dot_theta = params->sod - x_dot_theta;
+
+            dist_from_source_components[1] = fabs(params->sod * sin_phi - params->tau * cos_phi - y);
+            dist_from_source = sqrt(dist_from_source_components[0] * dist_from_source_components[0] + dist_from_source_components[1] * dist_from_source_components[1]);
+            l_phi = dist_from_source / max(dist_from_source_components[0], dist_from_source_components[1]);
+
+            u_arg = x_dot_theta_perp / R_minus_x_dot_theta;
+
+            if (fabs(u_arg * cos_phi - sin_phi) > fabs(u_arg * sin_phi + cos_phi))
+            {
+                tau[0] = (x_dot_theta_perp - A_x) / (R_minus_x_dot_theta - B_x);
+                tau[1] = (x_dot_theta_perp + A_x) / (R_minus_x_dot_theta + B_x);
+            }
+            else
+            {
+                tau[0] = (x_dot_theta_perp - A_y) / (R_minus_x_dot_theta - B_y);
+                tau[1] = (x_dot_theta_perp + A_y) / (R_minus_x_dot_theta + B_y);
+            }
+
+            //v_denom = R_minus_x_dot_theta;
+
+            theWeight = sampleConstant * l_phi;
+
+            tauInd_low = (tau[0] - u_0) / T_u;
+            tauInd_high = (tau[1] - u_0) / T_u;
+
+            ind_first = int(tauInd_low + 0.5); // first detector index
+            ind_last = int(tauInd_high + 0.5); // last detector index
+
+            if (tauInd_low >= double(params->numCols) - 0.5 || tauInd_high <= -0.5)
+                break;
+
+            ind_diff = ind_last - ind_first;
+
+            /*
+            T_z_over_2T_v_v_denom = T_z_over_2 / (T_v * v_denom);
+
+            double v_phi_x_step = 2.0 * T_z_over_2T_v_v_denom;
+            t_neg = ((params->z_0() - pitch_mult_phi_plus_startZ) / v_denom - v_0) / T_v - T_z_over_2T_v_v_denom;
+            t_pos = t_neg + v_phi_x_step;
+            //*/
+
+            if (ind_diff == 0)
+            {
+                // distributed over 1 bin
+                firstWeight = tauInd_high - tauInd_low;
+
+                for (int i = 0; i < params->numZ; i++)
+                {
+                    if (zLine[i] != 0.0)
+                    {
+                        int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                        aProj[L * params->numCols + ind_first] += zLine[i] * firstWeight * theWeight;
+                    }
+                } // z
+            }
+            else if (ind_diff == 1)
+            {
+                // distributed over 2 bins
+                firstWeight = double(ind_first) + 0.5 - tauInd_low; // double(ind_first) - tauInd_low + 0.5;
+                lastWeight = tauInd_high - (double(ind_last) - 0.5); // tauInd_high - double(ind_last) + 0.5;
+
+                if (ind_first >= 0)
+                {
+                    if (ind_last < params->numCols) // ind_last <= params->numCols-1
+                    {
+                        // do first and last
+                        for (int i = 0; i < params->numZ; i++)
+                        {
+                            if (zLine[i] != 0.0)
+                            {
+                                int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                                aProj[L * params->numCols + ind_first] += zLine[i] * firstWeight * theWeight;
+                                aProj[L * params->numCols + ind_last] += zLine[i] * lastWeight * theWeight;
+                            }
+                        } // z
+                    }
+                    else
+                    {
+                        // do first
+                        for (int i = 0; i < params->numZ; i++)
+                        {
+                            if (zLine[i] != 0.0)
+                            {
+                                int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                                aProj[L * params->numCols + ind_first] += zLine[i] * firstWeight * theWeight;
+                            }
+                        } // z
+                    }
+                }
+                else //if (ind_last < params->numCols)
+                {
+                    // do last
+                    for (int i = 0; i < params->numZ; i++)
+                    {
+                        if (zLine[i] != 0.0)
+                        {
+                            int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                            aProj[L * params->numCols + ind_last] += zLine[i] * lastWeight * theWeight;
+                        }
+                    } // z
+                }
+            }
+            else //if (ind_diff == 2)
+            {
+                // distributed over 3 bins
+                ind_middle = ind_first + 1;
+
+                firstWeight = double(ind_first) + 0.5 - tauInd_low; // double(ind_first) - tauInd_low + 0.5;
+                lastWeight = tauInd_high - (double(ind_last) - 0.5); // tauInd_high - double(ind_last) + 0.5;
+                middleWeight = 1.0;
+
+                if (ind_first >= 0)
+                {
+                    if (ind_last < params->numCols) // ind_last <= N_lateral-1
+                    {
+                        // do all 3
+                        for (int i = 0; i < params->numZ; i++)
+                        {
+                            if (zLine[i] != 0.0)
+                            {
+                                int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                                aProj[L * params->numCols + ind_first] += zLine[i] * firstWeight * theWeight;
+                                aProj[L * params->numCols + ind_middle] += zLine[i] * middleWeight * theWeight;
+                                aProj[L * params->numCols + ind_last] += zLine[i] * lastWeight * theWeight;
+                            } // support check
+                        } // z
+                    }
+                    else if (ind_last == params->numCols) // ind_middle == N_lateral-1
+                    {
+                        // do first and middle
+                        for (int i = 0; i < params->numZ; i++)
+                        {
+                            if (zLine[i] != 0.0)
+                            {
+                                int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                                aProj[L * params->numCols + ind_first] += zLine[i] * firstWeight * theWeight;
+                                aProj[L * params->numCols + ind_middle] += zLine[i] * middleWeight * theWeight;
+                            } // support check
+                        } // z
+                    }
+                    else
+                    {
+                        // do first only
+                        for (int i = 0; i < params->numZ; i++)
+                        {
+                            if (zLine[i] != 0.0)
+                            {
+                                int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                                aProj[L * params->numCols + ind_first] += zLine[i] * firstWeight * theWeight;
+                            } // support check
+                        } // z
+                    }
+                }
+                else if (ind_middle == 0)
+                {
+                    // do middle and last
+                    for (int i = 0; i < params->numZ; i++)
+                    {
+                        if (zLine[i] != 0.0)
+                        {
+                            int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                            aProj[L * params->numCols + ind_middle] += zLine[i] * middleWeight * theWeight;
+                            aProj[L * params->numCols + ind_last] += zLine[i] * lastWeight * theWeight;
+                        } // support check
+                    } // z
+                }
+                else
+                {
+                    // do last only
+                    for (int i = 0; i < params->numZ; i++)
+                    {
+                        if (zLine[i] != 0.0)
+                        {
+                            int L = int(0.5 + (i * T_z + z_0 - v_0) / T_v);
+                            aProj[L * params->numCols + ind_last] += zLine[i] * lastWeight * theWeight;
+                        } // support check
+                    } // z
+                }
+            } // number of contributions (1, 2, or 3)
+        }
+    }
+    return true;
+}
+
+bool CPUbackproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi)
+{
+    float u_0 = params->u_0() / params->sdd;
+    float v_0 = params->v_0();
+    float T_u = params->pixelWidth / params->sdd;
+    float T_v = params->pixelHeight;
+
+    float T_z = params->voxelHeight;
+    float z_0 = params->z_0();
+
+    float rFOVsq = params->rFOV() * params->rFOV();
+
+    float tau[2];
+    int ind_first, ind_middle, ind_last, ind_diff;
+    float firstWeight, middleWeight, lastWeight;
+    float tauInd_low, tauInd_high;
+
+    float sampleConstant = params->voxelWidth;
+    float theWeight = sampleConstant;
+
+    float dist_from_source;
+    float dist_from_source_components[2];
+    float l_phi = 1.0;
+
+    float R_minus_x_dot_theta, u_arg;
+
+    float x_dot_theta, x_dot_theta_perp;
+
+    float phi = params->phis[iphi];
+    float cos_phi = cos(phi);
+    float sin_phi = sin(phi);
+
+    float v_denom, v_phi_x;
+    float pitch_mult_phi_plus_startZ = 0.0;
+
+    float t_neg, t_pos; //, t_1, t_2;
+    //int t_ind_min, t_ind_max;
+    float T_z_over_2 = params->voxelHeight / 2.0;
+
+    float T_x_over_2 = params->voxelWidth / 2.0;
+    float A_x, B_x;
+    float A_y, B_y;
+
+    if (sin_phi < 0.0)
+    {
+        A_x = -sin_phi * T_x_over_2; // fabs(sin_phi)*T_x/2
+        B_x = -cos_phi * T_x_over_2;
+    }
+    else
+    {
+        A_x = sin_phi * T_x_over_2; // fabs(sin_phi)*T_x/2
+        B_x = cos_phi * T_x_over_2;
+    }
+    if (cos_phi < 0.0)
+    {
+        A_y = -cos_phi * T_x_over_2; // fabs(cos_phi)*T_x/2
+        B_y = sin_phi * T_x_over_2;
+    }
+    else
+    {
+        A_y = cos_phi * T_x_over_2; // fabs(cos_phi)*T_x/2
+        B_y = -sin_phi * T_x_over_2;
+    }
+
+    int i, L;
+
+    double T_z_over_2T_v_v_denom;
+
+    int v_arg_bounds[2];
+    v_arg_bounds[0] = 0;
+    v_arg_bounds[1] = params->numRows - 1;
+    float* interpolatedLineOut = (float*)calloc(size_t(params->numRows), sizeof(float));
+
+    const float x = ix * params->voxelWidth + params->x_0();
+    dist_from_source_components[0] = fabs(params->sod * cos_phi + params->tau * sin_phi - x);
+    for (int iy = 0; iy < params->numY; iy++)
+    {
+        const float y = iy * params->voxelWidth + params->y_0();
+        float* zLine = &xSlice[iy * params->numZ];
+        if (x * x + y * y <= rFOVsq)
+        {
+            x_dot_theta = x * cos_phi + y * sin_phi;
+            x_dot_theta_perp = -sin_phi * x + cos_phi * y + params->tau; // note: shifted by tau
+            R_minus_x_dot_theta = params->sod - x_dot_theta;
+
+            dist_from_source_components[1] = fabs(params->sod * sin_phi - params->tau * cos_phi - y);
+            dist_from_source = sqrt(dist_from_source_components[0] * dist_from_source_components[0] + dist_from_source_components[1] * dist_from_source_components[1]);
+            l_phi = dist_from_source / max(dist_from_source_components[0], dist_from_source_components[1]);
+
+            u_arg = x_dot_theta_perp / R_minus_x_dot_theta;
+
+            if (fabs(u_arg * cos_phi - sin_phi) > fabs(u_arg * sin_phi + cos_phi))
+            {
+                tau[0] = (x_dot_theta_perp - A_x) / (R_minus_x_dot_theta - B_x);
+                tau[1] = (x_dot_theta_perp + A_x) / (R_minus_x_dot_theta + B_x);
+            }
+            else
+            {
+                tau[0] = (x_dot_theta_perp - A_y) / (R_minus_x_dot_theta - B_y);
+                tau[1] = (x_dot_theta_perp + A_y) / (R_minus_x_dot_theta + B_y);
+            }
+
+            //v_denom = R_minus_x_dot_theta;
+
+            theWeight = sampleConstant * l_phi;
+
+            tauInd_low = (tau[0] - u_0) / T_u;
+            tauInd_high = (tau[1] - u_0) / T_u;
+
+            ind_first = int(tauInd_low + 0.5); // first detector index
+            ind_last = int(tauInd_high + 0.5); // last detector index
+
+            //if (ind_first > params->numCols-1 || ind_last < 0)
+            //    break;
+            if (tauInd_low >= double(params->numCols) - 0.5 || tauInd_high <= -0.5)
+                break;
+
+            ind_diff = ind_last - ind_first;
+
+            //T_z_over_2T_v_v_denom = T_z_over_2 / (T_v * v_denom);
+
+            //g->v_arg_bounds(f, pitch_mult_phi_plus_startZ, v_denom, &v_arg_bounds[0]);
+            //v_arg_bounds[0] = max(v_arg_bounds[0], vBounds[0]);
+            //v_arg_bounds[1] = min(v_arg_bounds[1], vBounds[1]);
+
+
+            if (ind_diff == 0)
+            {
+                // distributed over 1 bin
+                firstWeight = tauInd_high - tauInd_low;
+
+                for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                    interpolatedLineOut[i] = aProj[i * params->numCols + ind_first] * firstWeight * theWeight;
+            }
+            else if (ind_diff == 1)
+            {
+                // distributed over 2 bins
+                firstWeight = double(ind_first) + 0.5 - tauInd_low; // double(ind_first) - tauInd_low + 0.5;
+                lastWeight = tauInd_high - (double(ind_last) - 0.5); // tauInd_high - double(ind_last) + 0.5;
+
+                if (ind_first >= 0)
+                {
+                    if (ind_last < params->numCols) // ind_last <= params->numCols-1
+                    {
+                        // do first and last
+                        for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                            interpolatedLineOut[i] = (firstWeight * aProj[i * params->numCols + ind_first] + lastWeight * aProj[i * params->numCols + ind_last]) * theWeight;
+                    }
+                    else
+                    {
+                        // do first
+                        for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                            interpolatedLineOut[i] = firstWeight * aProj[i * params->numCols + ind_first] * theWeight;
+                    }
+                }
+                else //if (ind_last < params->numCols)
+                {
+                    // do last
+                    for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                        interpolatedLineOut[i] = lastWeight * aProj[i * params->numCols + ind_last] * theWeight;
+                }
+            }
+            else //if (ind_diff == 2)
+            {
+                // distributed over 3 bins
+                ind_middle = ind_first + 1;
+
+                firstWeight = double(ind_first) + 0.5 - tauInd_low; // double(ind_first) - tauInd_low + 0.5;
+                lastWeight = tauInd_high - (double(ind_last) - 0.5); // tauInd_high - double(ind_last) + 0.5;
+                middleWeight = 1.0;
+
+                if (ind_first >= 0)
+                {
+                    if (ind_last < params->numCols) // ind_last <= N_lateral-1
+                    {
+                        // do all 3
+                        for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                            interpolatedLineOut[i] = (firstWeight * aProj[i * params->numCols + ind_first] + middleWeight * aProj[i * params->numCols + ind_middle] + lastWeight * aProj[i * params->numCols + ind_last]) * theWeight;
+                    }
+                    else if (ind_last == params->numCols) // ind_middle == N_lateral-1
+                    {
+                        // do first and middle
+                        for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                            interpolatedLineOut[i] = (firstWeight * aProj[i * params->numCols + ind_first] + middleWeight * aProj[i * params->numCols + ind_middle]) * theWeight;
+                    }
+                    else
+                    {
+                        // do first only
+                        for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                            interpolatedLineOut[i] = firstWeight * aProj[i * params->numCols + ind_first] * theWeight;
+                    }
+                }
+                else if (ind_middle == 0)
+                {
+                    // do middle and last
+                    for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                        interpolatedLineOut[i] = (middleWeight * aProj[i * params->numCols + ind_middle] + lastWeight * aProj[i * params->numCols + ind_last]) * theWeight;
+                }
+                else
+                {
+                    // do last only
+                    for (i = v_arg_bounds[0]; i <= v_arg_bounds[1]; i++)
+                        interpolatedLineOut[i] = lastWeight * aProj[i * params->numCols + ind_last] * theWeight;
+                }
+            } // number of contributions (1, 2, or 3)
+
+            for (int iz = 0; iz < params->numZ; iz++)
+            {
+                int L = int(0.5 + (iz * T_z + z_0 - v_0) / T_v);
+                zLine[iz] += interpolatedLineOut[L];
+            }
+
+            /*
+            v_phi_x = ((params->z_0() - pitch_mult_phi_plus_startZ) / v_denom - v_0) / T_v;
+            double v_phi_x_step = 2.0 * T_z_over_2T_v_v_denom;
+            t_neg = v_phi_x - T_z_over_2T_v_v_denom;
+            t_pos = t_neg + v_phi_x_step;
+
+            i = 0;
+            L = int(ceil(t_neg - 0.5)); // enforce: t_neg <= L+0.5
+            if (L < v_arg_bounds[0])
+                L = v_arg_bounds[0];
+            double L_plus_half = double(L) + 0.5;
+            double previousBoundary = double(L) - 0.5;
+
+            // Extrapolation off bottom of detector
+            while (t_pos < previousBoundary && i < params->numZ)
+            {
+                //if ((supportMapArray == NULL || supportMapArray[i] == 1) && doExtrapolation == true)
+                //    zLine[i] += interpolatedLineOut[L]*v_phi_x_step;
+                t_neg = t_pos;
+                t_pos += v_phi_x_step;
+                i += 1;
+            }
+            if (t_neg < previousBoundary)
+            {
+                // known: t_neg < previousBoundary <= t_pos
+                //if (i < params->numZ && (supportMapArray == NULL || supportMapArray[i] == 1) && doExtrapolation == true)
+                //if (i < params->numZ)
+                //    zLine[i] += interpolatedLineOut[L]*(previousBoundary - t_neg);
+            }
+            else
+                previousBoundary = t_neg;
+
+            while (i < params->numZ && L < params->numRows)
+            {
+                if (t_pos <= L_plus_half)
+                {
+                    //if (supportMapArray == NULL || supportMapArray[i] == 1)
+                    zLine[i] += interpolatedLineOut[L] * (t_pos - previousBoundary);
+                    previousBoundary = t_pos;
+                    t_neg = t_pos;
+                    t_pos += v_phi_x_step;
+                    i += 1;
+                }
+                else // L_plus_half < t_pos
+                {
+                    //if (supportMapArray == NULL || supportMapArray[i] == 1)
+                    zLine[i] += interpolatedLineOut[L] * (L_plus_half - previousBoundary);
+                    previousBoundary = L_plus_half;
+                    L_plus_half += 1.0;
+                    L += 1;
+                }
+            }
+            //*/
+        } // ROI check
+    } // y
+    free(interpolatedLineOut);
+
+    return true;
+}
+//#####################################################################################################################
 
 bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZero)
 {
