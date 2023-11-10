@@ -70,6 +70,12 @@ class Projector:
         self.libprojectors.setGPU.restype = ctypes.c_bool
         return self.libprojectors.setGPU(which)
         
+    def setGPUs(self, listOfGPUs):
+        self.libprojectors.setGPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+        self.libprojectors.setGPUs.restype = ctypes.c_bool
+        listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
+        return self.libprojectors.setGPUs(listOfGPUs, int(listOfGPUs.size))
+        
     def setDiameterFOV(self, d):
         self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
         self.libprojectors.set_rFOV.restype = ctypes.c_bool

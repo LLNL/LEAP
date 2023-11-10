@@ -108,7 +108,10 @@ void parameters::setDefaults(int N)
 		whichGPU = 0;
 	else
 		whichGPU = -1;
+	whichGPUs.clear();
+	whichGPUs.push_back(whichGPU);
     whichProjector = SEPARABLE_FOOTPRINT;
+	volumeDimensionOrder = ZYX;
 	rampID = 2;
 
 	geometry = CONE;
@@ -386,6 +389,7 @@ bool parameters::setDefaultVolumeParameters(float scale)
 
 void parameters::clearAll()
 {
+	whichGPUs.clear();
 	if (phis != NULL)
 		delete[] phis;
 	phis = NULL;

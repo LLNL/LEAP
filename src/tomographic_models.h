@@ -21,10 +21,13 @@ public:
 	bool project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
 	bool backproject(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
 
+	bool rampFilterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
 	bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar);
 	bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
 	bool FBP(float* g, float* f, bool cpu_to_gpu);
+	bool FBP(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
+	bool FBP_multiGPU(float* g, float* f);
 
 	bool printParameters();
 
@@ -47,6 +50,7 @@ public:
 	bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
 	bool setGPU(int whichGPU);
+	bool setGPUs(int* whichGPUs, int N);
 	int getGPU();
 	bool set_axisOfSymmetry(float axisOfSymmetry);
 	bool clear_axisOfSymmetry();
@@ -75,4 +79,6 @@ public:
 	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu);
 	
 	parameters params;
+private:
+	float* copyRows(float*, int, int);
 };

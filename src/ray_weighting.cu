@@ -374,7 +374,7 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gpu
 		dim3 dimBlock = setBlockSize(N);
 		dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
 			int(ceil(double(N.z) / double(dimBlock.z))));
-		applyWeightsKernel << < dimGrid, dimBlock >> > (dev_g, dev_w_view, dev_w_ray, N);
+		applyWeightsKernel <<< dimGrid, dimBlock >>> (dev_g, dev_w_view, dev_w_ray, N);
 
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess)

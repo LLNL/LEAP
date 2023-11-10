@@ -51,26 +51,27 @@ def setLEAPfromLTT():
     
     leapct.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
     
-for n in range(3):
+for n in range(1,3):
     LTT.cmd('clearAll')
     LTT.cmd('diskIO=off')
     LTT.cmd('archdir=pwd')
     LTT.cmd('objfile = ' + str(objfile))
     #LTT.cmd('axisOfSymmetry = 0.0')
-    numAngles = 360
+    pixelSize = 1.0
+    numAngles = int(720.0/pixelSize)
     if LTT.unknown('axisOfSymmetry') == False:
         numAngles = 1
     if n == 0:
         print('********* CONE-BEAM *********')
-        LTT.cmd(['geometry=cone','detectorShape=flat','sdd=1400','sod=1100','numAngles = ' + str(numAngles),'arange=360','pixelSize=2.0','numRows=340/2','numCols=320/2','centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
+        LTT.cmd(['geometry=cone','detectorShape=flat','sdd=1400','sod=1100','numAngles = ' + str(numAngles),'arange=360','pixelSize='+str(pixelSize),'numRows=340/'+str((pixelSize)),'numCols=320/'+str((pixelSize)),'centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
     elif n == 1:
         if LTT.unknown('axisOfSymmetry') == False:
             continue
         print('********* FAN-BEAM *********')
-        LTT.cmd(['geometry=fan','detectorShape=flat','sdd=1400','sod=1100','numAngles = ' + str(numAngles),'arange=360','pixelWidth=2.0','pixelHeight=2.0*11/14','numRows=340/2','numCols=320/2','centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
+        LTT.cmd(['geometry=fan','detectorShape=flat','sdd=1400','sod=1100','numAngles = ' + str(numAngles),'arange=360','pixelWidth='+str(pixelSize),'pixelHeight=pixelWidth*11/14','numRows=340/'+str((pixelSize)),'numCols=320/'+str((pixelSize)),'centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
     elif n == 2:
         print('********* PARALLEL-BEAM *********')
-        LTT.cmd(['geometry=parallel','numAngles = ' + str(numAngles),'arange=360','pixelSize=2.0*11/14','numRows=340/2','numCols=320/2','centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
+        LTT.cmd(['geometry=parallel','numAngles = ' + str(numAngles),'arange=360','pixelSize='+str(pixelSize)+'*11/14','numRows=340/'+str((pixelSize)),'numCols=320/'+str((pixelSize)),'centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
     LTT.cmd('defaultVolume')
     LTT.cmd('spectraFile =63.817')
     LTT.cmd('dataType=atten')
@@ -153,16 +154,21 @@ for n in range(3):
     
     leapct.setGPU(0)
     f_leap_GPU = leapct.allocateVolume()
+    startTime = time.time()
     leapct.FBP(g_true, f_leap_GPU)
+    print('FBP elapsed time: ' + str(time.time()-startTime))
     
     leapct.setGPU(-1)
+    #leapct.setGPUs(np.array([0,1]))
     f_leap_CPU = leapct.allocateVolume()
+    startTime = time.time()
     leapct.FBP(g_true, f_leap_CPU)
+    print('FBP elapsed time: ' + str(time.time()-startTime))
         
     #leapct.displayVolume(f_LTT)
     leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))
     leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
-    #leapct.displayVolume(f_leap_GPU-f_leap_CPU)
+    #leapct.displayVolume(f_leap_CPU)
     #'''
     
     '''

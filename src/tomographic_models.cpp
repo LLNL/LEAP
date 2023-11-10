@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
+#include <omp.h>
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -239,10 +240,15 @@ bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
 
 bool tomographicModels::rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
 {
-	if (params.whichGPU < 0)
-		return rampFilter1D_cpu(g, &params, scalar);
+	return rampFilterProjections(g, &params, cpu_to_gpu, scalar);
+}
+
+bool tomographicModels::rampFilterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar)
+{
+	if (ctParams->whichGPU < 0)
+		return rampFilter1D_cpu(g, ctParams, scalar);
 	else
-		return rampFilter1D(g, &params, cpu_to_gpu, scalar);
+		return rampFilter1D(g, ctParams, cpu_to_gpu, scalar);
 }
 
 bool tomographicModels::rampFilterVolume(float* f, bool cpu_to_gpu)
@@ -255,46 +261,122 @@ bool tomographicModels::rampFilterVolume(float* f, bool cpu_to_gpu)
 	return rampFilter2D(f, &params, cpu_to_gpu);
 }
 
+float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
+{
+	int numSlices = lastSlice - firstSlice + 1;
+	float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numSlices);
+	for (int iphi = 0; iphi < params.numAngles; iphi++)
+	{
+		float* g_proj = &g[iphi * params.numRows * params.numCols];
+		float* g_chunk_proj = &g_chunk[iphi * numSlices * params.numCols];
+		for (int iRow = firstSlice; iRow <= lastSlice; iRow++)
+		{
+			float* g_line = &g_proj[iRow * params.numCols];
+			float* g_chunk_line = &g_chunk_proj[(iRow - firstSlice) * params.numCols];
+			for (int iCol = 0; iCol < params.numCols; iCol++)
+				g_chunk_line[iCol] = g_line[iCol];
+		}
+	}
+	return g_chunk;
+}
+
+bool tomographicModels::FBP_multiGPU(float* g, float* f)
+{
+	if (params.volumeDimensionOrder != parameters::ZYX)
+		return false;
+	if (int(params.whichGPUs.size()) <= 1)
+		return false;
+
+	int numSlicesPerChunk = std::min(64, params.numZ);
+	int numChunks = int(ceil(float(params.numZ) / float(numSlicesPerChunk)));
+	if (numChunks <= 1)
+		return false;
+
+	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL)
+		return false;
+	if (params.numZ != params.numRows)
+		return false;
+
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	#pragma omp parallel for
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstSlice = ichunk * numSlicesPerChunk;
+		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ-1);
+		int numSlices = lastSlice - firstSlice + 1;
+
+		float* f_chunk = &f[firstSlice * params.numX * params.numY];
+
+		// make a copy of the relavent rows
+		float* g_chunk = copyRows(g, firstSlice, lastSlice);
+
+		// make a copy of the params
+		parameters chunk_params;
+		chunk_params = params;
+		chunk_params.numRows = numSlices;
+		chunk_params.numZ = numSlices;
+		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+		chunk_params.whichGPUs.clear();
+
+		// FBP
+		FBP(g_chunk, f_chunk, &chunk_params, true);
+
+		// clean up
+		free(g_chunk);
+		
+	}
+	return true;
+}
+
 bool tomographicModels::FBP(float* g, float* f, bool cpu_to_gpu)
 {
-	if (params.geometry == parameters::MODULAR)
+	if (cpu_to_gpu == true && FBP_multiGPU(g, f) == true)
+		return true;
+	else
+		return FBP(g, f, &params, cpu_to_gpu);
+}
+
+bool tomographicModels::FBP(float* g, float* f, parameters* ctParams, bool cpu_to_gpu)
+{
+	if (ctParams->geometry == parameters::MODULAR)
 	{
 		printf("Error: FBP not implemented for modular geometries\n");
 		return false;
 	}
 
-	if (params.whichGPU < 0 || cpu_to_gpu == false)
+	if (ctParams->whichGPU < 0 || cpu_to_gpu == false)
 	{
 		// no transfers to/from GPU are necessary; just run the code
-		applyPreRampFilterWeights(g, &params, cpu_to_gpu);
-		rampFilterProjections(g, cpu_to_gpu, get_FBPscalar());
-		applyPostRampFilterWeights(g, &params, cpu_to_gpu);
-		return backproject(g, f, cpu_to_gpu);
+		applyPreRampFilterWeights(g, ctParams, cpu_to_gpu);
+		rampFilterProjections(g, ctParams, cpu_to_gpu, get_FBPscalar());
+		applyPostRampFilterWeights(g, ctParams, cpu_to_gpu);
+		return backproject(g, f, ctParams, cpu_to_gpu);
 	}
 	else
 	{
-		if (getAvailableGPUmemory(params.whichGPU) < params.projectionDataSize() + params.volumeDataSize())
+		if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
 		{
 			printf("Error: insufficient GPU memory\n");
 			return false;
 		}
 
 		bool retVal = true;
-		cudaSetDevice(params.whichGPU);
+
+		cudaSetDevice(ctParams->whichGPU);
 		cudaError_t cudaStatus;
 
-		float* dev_g = copyProjectionDataToGPU(g, &params, params.whichGPU);
+		float* dev_g = copyProjectionDataToGPU(g, ctParams, ctParams->whichGPU);
 		if (dev_g == 0)
 			return false;
 		//printf("applyPreRampFilterWeights...\n");
-		applyPreRampFilterWeights(dev_g, &params, false);
+		applyPreRampFilterWeights(dev_g, ctParams, false);
 		//printf("rampFilterProjections...\n");
-		rampFilterProjections(dev_g, false, get_FBPscalar());
+		rampFilterProjections(dev_g, ctParams, false, get_FBPscalar());
 		//printf("applyPostRampFilterWeights...\n");
-		applyPostRampFilterWeights(dev_g, &params, false);
+		applyPostRampFilterWeights(dev_g, ctParams, false);
 
 		float* dev_f = 0;
-		if ((cudaStatus = cudaMalloc((void**)&dev_f, params.numX * params.numY * params.numZ * sizeof(float))) != cudaSuccess)
+		if ((cudaStatus = cudaMalloc((void**)&dev_f, ctParams->numX * ctParams->numY * ctParams->numZ * sizeof(float))) != cudaSuccess)
 		{
 			fprintf(stderr, "cudaMalloc(volume) failed!\n");
 			retVal = false;
@@ -302,8 +384,8 @@ bool tomographicModels::FBP(float* g, float* f, bool cpu_to_gpu)
 		else
 		{
 			//printf("backproject...\n");
-			retVal = backproject(dev_g, dev_f, false);
-			pullVolumeDataFromGPU(f, &params, dev_f, params.whichGPU);
+			retVal = backproject(dev_g, dev_f, ctParams, false);
+			pullVolumeDataFromGPU(f, ctParams, dev_f, ctParams->whichGPU);
 			cudaFree(dev_f);
 		}
 
@@ -444,6 +526,19 @@ bool tomographicModels::setGPU(int whichGPU)
 		params.whichGPU = -1;
 	else
 		params.whichGPU = whichGPU;
+	params.whichGPUs.clear();
+	params.whichGPUs.push_back(whichGPU);
+	return true;
+}
+
+bool tomographicModels::setGPUs(int* whichGPUs, int N)
+{
+	if (whichGPUs == NULL || N <= 0)
+		return false;
+	params.whichGPUs.clear();
+	for (int i = 0; i < N; i++)
+		params.whichGPUs.push_back(whichGPUs[i]);
+	params.whichGPU = params.whichGPUs[0];
 	return true;
 }
 

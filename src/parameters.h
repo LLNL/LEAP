@@ -18,6 +18,8 @@
     #define PI 3.1415926535897932385
 #endif
 
+#include <vector>
+
 class parameters
 {
 public:
@@ -54,6 +56,7 @@ public:
 	bool normalizeConeAndFanCoordinateFunctions;
 
 	int whichGPU;
+	std::vector<int> whichGPUs;
     int whichProjector;
 
 	// Scanner Parameters
@@ -83,6 +86,8 @@ public:
 
 	float projectionDataSize();
 	float volumeDataSize();
+
+	//bool rowRangeNeededForReconstruction();
 
 	// Volume Parameters
 	int volumeDimensionOrder;

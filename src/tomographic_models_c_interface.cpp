@@ -125,6 +125,11 @@ bool setGPU(int whichGPU)
 	return tomo.setGPU(whichGPU);
 }
 
+bool setGPUs(int* whichGPUs, int N)
+{
+	return tomo.setGPUs(whichGPUs, N);
+}
+
 bool setProjector(int which)
 {
 	return tomo.setProjector(which);
