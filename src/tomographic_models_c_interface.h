@@ -29,6 +29,7 @@ extern "C" PROJECTOR_API bool project(float* g, float* f, bool cpu_to_gpu);
 extern "C" PROJECTOR_API bool backproject(float* g, float* f, bool cpu_to_gpu);
 
 extern "C" PROJECTOR_API bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar);
+extern "C" PROJECTOR_API bool filterProjections(float* g, bool cpu_to_gpu, float scalar);
 extern "C" PROJECTOR_API bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
 extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool cpu_to_gpu);

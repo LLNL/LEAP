@@ -257,6 +257,57 @@ bool tomographicModels::rampFilterProjections(float* g, parameters* ctParams, bo
 		return rampFilter1D(g, ctParams, cpu_to_gpu, scalar);
 }
 
+bool tomographicModels::filterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar)
+{
+	if (ctParams->geometry == parameters::MODULAR)
+	{
+		printf("Error: not implemented for modular geometries\n");
+		return false;
+	}
+
+	if (ctParams->whichGPU < 0 || cpu_to_gpu == false)
+	{
+		// no transfers to/from GPU are necessary; just run the code
+		applyPreRampFilterWeights(g, ctParams, cpu_to_gpu);
+		rampFilterProjections(g, ctParams, cpu_to_gpu, get_FBPscalar());
+		return applyPostRampFilterWeights(g, ctParams, cpu_to_gpu);
+	}
+	else
+	{
+		if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize())
+		{
+			printf("Error: insufficient GPU memory\n");
+			return false;
+		}
+
+		bool retVal = true;
+
+		cudaSetDevice(ctParams->whichGPU);
+		cudaError_t cudaStatus;
+
+		float* dev_g = copyProjectionDataToGPU(g, ctParams, ctParams->whichGPU);
+		if (dev_g == 0)
+			return false;
+		//printf("applyPreRampFilterWeights...\n");
+		applyPreRampFilterWeights(dev_g, ctParams, false);
+		//printf("rampFilterProjections...\n");
+		rampFilterProjections(dev_g, ctParams, false, get_FBPscalar());
+		//printf("applyPostRampFilterWeights...\n");
+		applyPostRampFilterWeights(dev_g, ctParams, false);
+
+		pullProjectionDataFromGPU(g, ctParams, dev_g, ctParams->whichGPU);
+
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		return retVal;
+	}
+}
+
+bool tomographicModels::filterProjections(float* g, bool cpu_to_gpu, float scalar)
+{
+	return filterProjections(g, &params, cpu_to_gpu, scalar);
+}
+
 bool tomographicModels::rampFilterVolume(float* f, bool cpu_to_gpu)
 {
 	if (params.whichGPU < 0)

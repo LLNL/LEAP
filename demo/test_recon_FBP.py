@@ -27,14 +27,17 @@ parser.add_argument("--use-fov", action='store_true', default=False, help="wheth
 args = parser.parse_args()
 
 
+# modified from https://github.com/drgHannah/Radon-Transformation/blob/main/radon_transformation/radon.py
+#class FBP_Parallel(nn.Module):
 
-class FBP_Parallel(nn.Module):
-    # modified from https://github.com/drgHannah/Radon-Transformation/blob/main/radon_transformation/radon.py
+class FBP(nn.Module):
     def __init__(self, param_fn, use_gpu, gpu_device, use_mask, batch_size):
         super().__init__()
         # initialize projector and load parameters
         self.projector = Projector(forward_project=False, use_static=False, use_gpu=use_gpu, gpu_device=gpu_device, batch_size=batch_size)
         self.projector.load_param(param_fn)
+        
+        '''
         #views, rows, cols = projector.get_projection_dim()
         _, _, dimx = self.projector.get_volume_dim()
         self.filter_size_total = max(64, int(2 ** (2 * torch.tensor(dimx)).float().log2().ceil()))
@@ -42,7 +45,9 @@ class FBP_Parallel(nn.Module):
         self.filter = self.ramp_filter(self.filter_size_total).to(gpu_device)
         self.use_mask = use_mask
         self.recon_mask = self.create_circular_mask(dimx, batch_size).to(gpu_device)
+        '''
 
+    '''
     def create_circular_mask(self, size, batch_size):
         c = int(size / 2) - 0.5
         r = min(c, size - c)
@@ -59,7 +64,7 @@ class FBP_Parallel(nn.Module):
         f[1::2] = -1 / (np.pi * n) ** 2
         return torch.tensor(2 * np.real(np.fft.fft(f)))
 
-    def filter_project(self, sino): 
+    def filter_project(self, sino):
         # input sinogram: projection_angles x detector_row x detector_column/size
         sino_padded = torch.nn.functional.pad(sino, [0,self.filter_size_pad], mode='constant', value=0)
         projection = torch.fft.fft(sino_padded, dim=1) * self.filter[None,:].double()
@@ -67,9 +72,7 @@ class FBP_Parallel(nn.Module):
         return sino_filtered[:,:sino.shape[1]]
 
     def forward(self, sino): 
-        '''
-        input sino: batch_size x projection_angles x detector_row(1) x detector_column
-        ''' 
+        #input sino: batch_size x projection_angles x detector_row(1) x detector_column
         batch, nviews, nrows, ncols = sino.shape
         sino_filtered = torch.zeros_like(sino)
         for n in range(batch):
@@ -80,7 +83,21 @@ class FBP_Parallel(nn.Module):
             img = self.recon_mask * img
         img[img < 0] = 0
         return img
+    '''
 
+    def filter_project(self, sino):
+        return self.projector.filter_projections(sino)
+        
+    def forward(self, sino): 
+        #input sino: batch_size x projection_angles x detector_row(1) x detector_column
+        batch, nviews, nrows, ncols = sino.shape
+        sino_filtered = torch.zeros_like(sino)
+        for n in range(batch):
+            sino_filtered[n,:,:,:] = self.filter_project(sino[n,:,:,:])
+        img = self.projector(sino_filtered.contiguous())
+        #img = img_.clone() ########### need to fix it
+        img[img < 0] = 0
+        return img
 
 
 # read arguments
@@ -109,7 +126,7 @@ g = g.reshape((1, g.shape[0], 1, g.shape[1]))
 g_th = torch.from_numpy(g).to(device)
 
 # perform FBP
-fbp = FBP_Parallel(param_fn, use_cuda, device, use_fov, 1)
+fbp = FBP(param_fn, use_cuda, device, use_fov, 1)
 f_th = fbp(g_th)
 f = f_th[0,0,:,:].cpu().detach().numpy()
 
@@ -122,7 +139,7 @@ imageio.imwrite(out_fn[:-4]+".png", f_img)
 
 
 '''
-fbp = FBP_Parallel(param_fn, use_cuda, device, use_fov, 1)
+fbp = FBP(param_fn, use_cuda, device, use_fov, 1)
 
 fn_list = ["/p/vast1/mlct/CT_COE_Imatron/parallel512/S_007/S_007_0200_sino.npy", \
            "/p/vast1/mlct/CT_COE_Imatron/parallel512/S_010/S_010_0200_sino.npy", \

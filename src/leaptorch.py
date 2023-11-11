@@ -248,6 +248,14 @@ class Projector(torch.nn.Module):
     def print_param(self):
         leapct.print_param(self.param_id)
         
+    def filter_projections(self, input):
+        output = input.clone()
+        if self.use_gpu:
+            leapct.filter_projections_gpu(self.param_id, output)
+        else:
+            leapct.filter_projections_cpu(self.param_id, output)
+        return output
+        
     def forward(self, input):
         if self.forward_project:
             if self.use_gpu:

@@ -158,6 +158,12 @@ class Projector:
         self.libprojectors.project(g,f,True)
         return g
         
+    def filterProjections(self, g):
+        self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
+        self.libprojectors.filterProjections.restype = ctypes.c_bool
+        self.libprojectors.filterProjections(g,True,1.0)
+        return g
+        
     def rampFilterProjections(self, g):
         self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.rampFilterProjections.restype = ctypes.c_bool

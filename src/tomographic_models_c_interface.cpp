@@ -60,6 +60,11 @@ bool backproject(float* g, float* f, bool cpu_to_gpu)
 	return tomo.backproject(g, f, cpu_to_gpu);
 }
 
+bool filterProjections(float* g, bool cpu_to_gpu, float scalar)
+{
+	return tomo.filterProjections(g, cpu_to_gpu, scalar);
+}
+
 bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
 {
 	return tomo.rampFilterProjections(g, cpu_to_gpu, scalar);

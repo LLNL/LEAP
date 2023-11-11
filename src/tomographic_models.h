@@ -25,6 +25,9 @@ public:
 	bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar);
 	bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
+	bool filterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
+	bool filterProjections(float* g, bool cpu_to_gpu, float scalar);
+
 	bool FBP(float* g, float* f, bool cpu_to_gpu);
 	bool FBP(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
 

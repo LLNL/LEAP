@@ -64,11 +64,12 @@ g[g<0.0] = 0.0
 f[:] = 0.0
 startTime = time.time()
 #g[:] = 1.0
-#leapct.backproject(g,f)
-leapct.FBP(g,f)
+#leapct.filterProjections(g)
+leapct.backproject(g,f)
+#leapct.FBP(g,f)
 #leapct.SART(g,f,100)
 #leapct.MLEM(g,f,10)
-leapct.RLS(g,f,10,0.01,0.0*1e4)
+#leapct.RLS(g,f,10,0.01,0.0*1e4)
 print('reconstruction elapsed time: ' + str(time.time()-startTime))
 f[f<0.0] = 0.0
 print('max value = ' + str(np.max(f)))
