@@ -1,28 +1,21 @@
 # LivermorE AI Projector for Computed Tomography (LEAP)
-Differentiable forward and backward projectors for AI/ML-driven computed tomography applications.
+This is a C/C++/CUDA library of tomographic projectors (forward and back projection) implemented for both multi-GPU and multi-core CPU.  We provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
-This software contains C++/CUDA source code for Computed Tomography forward and back projectors (and some other related algorithms) and compiles into a dynamic library which can be bound to Python with the included Python bindings.  One binding (leaptorch.py) allows this library to be used within PyTorch and the other is just a basic Python binding (leapctype.py).
+Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam.  These geometry types accomodate shifts of the detectors and non-uniform angular spacing.  For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair.  These projectors use the Separable Footprint [Long, Fessler, and Balter, TMI, 2010] method which provides a matched projector pair that models the finite size of the voxel and detector pixel.  These matched projectors ensure convergence and provide accurate, smooth results.  Unmatch projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations [DeMan and Basu, PMB, 2004].
 
-It assumes that all data (a copy of the projections and a copy of the volume) fit into the memory of a single GPU.
+We also provide projectors for cylindrically-symmetric/anitsymmetric objects (related to the Abel Transform) in parallel- and cone-beam geometries with user-specified symmetry axis [Champley and Maddox, Optica, 2021].
 
-See LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948) for a more general-purpose and full functioning CT software package that does not have any memory limitations (it does not, however, work with PyTorch).
+In addition to the projectors, we also provide a few other algorithms for tomographic imaging, including:
+1) Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
+2) A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction.
+3) Python implementations of some iterative reconstruction algorithms: ML-EM, SART, and RWLS.
+
+The CPU- and GPU-based projectors are nearly identical (32-bit floating point precision) and are quantitatively accurate and thus can be used in conjuction with physics-based corrections, such as, scatter and beam hardening correction.  If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948)
+
 
 ## Installation and Usage
 
-Installation and usage information is posted on the wiki page here: (https://github.com/LLNL/LEAP/wiki)
-
-
-## Source code list
-* src/CMakeLists.txt: CMake for GPU ctype projector  
-* src/main_projector_ctype.cpp, .h: main code for ctype binding   
-* src/main_projector.cpp: main code for pybind11  
-* src/parameters.h .cpp: projector parameters used in main_projector and projectors  
-* src/projectors_cpu.cpp: CPU projector (forward and backproject) for multiple scanner geometry types   
-* src/projectors.cu: GPU projector (forward and backproject) for multiple scanner geometry types  
-* src/leapctype.py: python wrapper class for standard ctype package  
-* src/leaptorch.py: python wrapper class for pytorch nn.module package  
-* setup.py: setup.py for torch projector  
-* setup_ctype.py: setup.py for ctype projector  
+Installation and usage information is posted on the wiki page here: https://github.com/LLNL/LEAP/wiki
 
 
 ## Authors
@@ -31,8 +24,9 @@ Kyle Champley (champley@gmail.com)
 
 
 ## License
-LEAP is distributed under the terms of the MIT license. All new contributions must be made under this license. See LICENSE in this directory for the terms of the license.  
+LEAP is distributed under the terms of the MIT license. All new contributions must be made under this license. See LICENSE in this directory for the terms of the license.
 See [LICENSE](LICENSE) for more details.  
 SPDX-License-Identifier: MIT  
 LLNL-CODE-848657  
 
+Please cite our work by referencing this github page and citing our article: Hyojin Kim and Kyle Champley, Differentiable Forward Projector for X-ray Computed Tomography”, ICML, 2023
