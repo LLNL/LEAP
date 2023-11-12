@@ -7,59 +7,9 @@ It assumes that all data (a copy of the projections and a copy of the volume) fi
 
 See LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948) for a more general-purpose and full functioning CT software package that does not have any memory limitations (it does not, however, work with PyTorch).
 
-## Installation
-To install LEAP package, use pip command: 
+## Installation and Usage
 
-$ pip install .    
-
-It is strongly recommended to run "pip uninstall leapct" if you have installed the previous version.  
-
-
-## Installation on Livermore Computing (Intel/Linux)
-
-To install LEAP on Livermore Computing, proper modules should be loaded first. To enable GPU features, the installation should be performed under the compute node where nvidia-smi is available. For example,  
-
-$ salloc --partition=pbatch --time=1:00:00  
-$ module load gcc/8.3.0  
-$ module load cuda/11.7.0   
-$ pip install .  
-
-
-## Installation on Livermore Computing (IBM PowerAI)
-
-$ bsub -G mlct -W 1:00 -Is bash  
-$ module load gcc/8.3.0  
-$ module load cuda/11.7.0   
-$ pip install .  
-
-
-## Usage
-Please see our example code in "demo" directory: test_library.py and test_recon.py   
-
-below is an example run (assuming that FORBILD_head_64.npy exists in "sample_data" directory)  
-
-$ python test_recon_NN.py --proj-fn sample_data/FORBILD_head_64_sino.npy --param-fn sample_data/FORBILD_head_64_param.cfg  
-
-
-
-## CPP-CUDA Library
-
-This is c++ with CUDA library that can be used in both C++ and python with the provided wrapper class. It can be compiled with cmake without the use of pytorch.
-
-### Linux
-```
-> cd LEAP
-> ./etc/build.sh
-```
-
-### Windows
-The requires Visual Studio 2019.  Run the command below and then open the solution file LEAP\win_build\leap.sln
-```
-> cd LEAP
-> .\etc\win_build.bat
-```
-
-Note that cuda compiler (nvcc) does not support gcc higher than 7.5.   
+Installation and usage information is posted on the wiki page here: (https://github.com/LLNL/LEAP/wiki)
 
 
 ## Python-binding
@@ -91,10 +41,6 @@ https://pytorch.org/tutorials/advanced/cpp_extension.html
 ## Authors
 Hyojin Kim (hkim@llnl.gov)  
 Kyle Champley (champley@gmail.com)  
-
-
-## Other Contributors
-Jiaming Liu (jiaming.liu@wustl.edu) for reconstruction sample code  
 
 
 ## License
