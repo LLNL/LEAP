@@ -12,14 +12,6 @@ See LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948
 Installation and usage information is posted on the wiki page here: (https://github.com/LLNL/LEAP/wiki)
 
 
-## Python-binding
-In addition to our provided python library using pybind11, you can make a separate ctype python library using setup_ctype.py. Rename it to setup.py, and then run:  
-
-$ python setup.py install  
-
-Note that this binding option provides cpu-to-gpu copy option only, i.e., numpy array data as input and output (f, g) and they will be moved to GPU memory internally  
-
-
 ## Source code list
 * src/CMakeLists.txt: CMake for GPU ctype projector  
 * src/main_projector_ctype.cpp, .h: main code for ctype binding   
@@ -31,11 +23,6 @@ Note that this binding option provides cpu-to-gpu copy option only, i.e., numpy 
 * src/leaptorch.py: python wrapper class for pytorch nn.module package  
 * setup.py: setup.py for torch projector  
 * setup_ctype.py: setup.py for ctype projector  
-
-
-## Resource
-Information about python-c++ binding: https://realpython.com/python-bindings-overview/  
-https://pytorch.org/tutorials/advanced/cpp_extension.html  
 
 
 ## Authors
