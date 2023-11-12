@@ -89,4 +89,7 @@ private:
 	bool backproject_FBP_multiGPU(float* g, float* f, bool doFBP);
 	float* copyRows(float*, int, int);
 	bool combineRows(float*, float*, int, int);
+
+	float requiredGPUmemory(parameters* ctParams = NULL);
+	bool hasSufficientGPUmemory(parameters* ctParams = NULL);
 };

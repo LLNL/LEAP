@@ -64,6 +64,8 @@ void parameters::assign(const parameters& other)
     this->clearAll();
     
     this->whichGPU = other.whichGPU;
+	for (int i = 0; i < int(other.whichGPUs.size()); i++)
+		this->whichGPUs.push_back(other.whichGPUs[i]);
     this->whichProjector = other.whichProjector;
 	this->rampID = other.rampID;
     this->geometry = other.geometry;
@@ -104,12 +106,16 @@ void parameters::assign(const parameters& other)
 
 void parameters::setDefaults(int N)
 {
-	if (numberOfGPUs() > 0)
+	whichGPUs.clear();
+	int numGPUs = numberOfGPUs();
+	if (numGPUs > 0)
+	{
 		whichGPU = 0;
+		for (int i = 0; i < numGPUs; i++)
+			whichGPUs.push_back(i);
+	}
 	else
 		whichGPU = -1;
-	whichGPUs.clear();
-	whichGPUs.push_back(whichGPU);
     whichProjector = SEPARABLE_FOOTPRINT;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;

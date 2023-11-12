@@ -91,6 +91,22 @@ bool tomographicModels::backproject_cpu(float* g, float* f)
 	return retVal;
 }
 
+bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
+{
+	if (cpu_to_gpu == true && project_multiGPU(g, f) == true)
+		return true;
+	else
+		return project(g, f, &params, cpu_to_gpu);
+}
+
+bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
+{
+	if (cpu_to_gpu == true && backproject_multiGPU(g, f) == true)
+		return true;
+	else
+		return backproject(g, f, &params, cpu_to_gpu);
+}
+
 bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu)
 {
 	if (ctParams == NULL)
@@ -104,7 +120,7 @@ bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool c
 	{
 		if (cpu_to_gpu)
 		{
-			if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+			if (hasSufficientGPUmemory(ctParams) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;
@@ -170,7 +186,7 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 	{
 		if (cpu_to_gpu)
 		{
-			if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+			if (hasSufficientGPUmemory(ctParams) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;
@@ -226,22 +242,6 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 		else
 			return CPUbackproject_modular(g, f, ctParams);
 	}
-}
-
-bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
-{
-	if (cpu_to_gpu == true && project_multiGPU(g, f) == true)
-		return true;
-	else
-		return project(g, f, &params, cpu_to_gpu);
-}
-
-bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
-{
-	if (cpu_to_gpu == true && backproject_multiGPU(g, f) == true)
-		return true;
-	else
-		return backproject(g, f, &params, cpu_to_gpu);
 }
 
 bool tomographicModels::rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
@@ -411,11 +411,24 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 {
 	if (params.volumeDimensionOrder != parameters::ZYX)
 		return false;
-	if (int(params.whichGPUs.size()) <= 1)
+
+	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
+	int numSlicesPerChunk = std::min(64, params.numZ);
+	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	if (hasSufficientGPUmemory() == false)
+	{
+		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memNeeded = requiredGPUmemory();
+
+		while (memAvailable < memNeeded * float(numSlicesPerChunk) / float(params.numZ))
+			numSlicesPerChunk = numSlicesPerChunk / 2;
+		if (numSlicesPerChunk < 1)
+			return false;
+		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	}
+	else if (int(params.whichGPUs.size()) <= 1 || requiredGPUmemory() <= 1.0)
 		return false;
 
-	int numSlicesPerChunk = std::min(64, params.numZ);
-	int numChunks = int(ceil(float(params.numZ) / float(numSlicesPerChunk)));
 	if (numChunks <= 1)
 		return false;
 
@@ -458,11 +471,24 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 {
 	if (params.volumeDimensionOrder != parameters::ZYX)
 		return false;
-	if (int(params.whichGPUs.size()) <= 1)
+	
+	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
+	int numSlicesPerChunk = std::min(64, params.numZ);
+	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	if (hasSufficientGPUmemory() == false)
+	{
+		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memNeeded = requiredGPUmemory();
+
+		while (memAvailable < memNeeded * float(numSlicesPerChunk) / float(params.numZ))
+			numSlicesPerChunk = numSlicesPerChunk / 2;
+		if (numSlicesPerChunk < 1)
+			return false;
+		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	}
+	else if (int(params.whichGPUs.size()) <= 1 || requiredGPUmemory() <= 1.0)
 		return false;
 
-	int numSlicesPerChunk = std::min(64, params.numZ);
-	int numChunks = int(ceil(float(params.numZ) / float(numSlicesPerChunk)));
 	if (numChunks <= 1)
 		return false;
 
@@ -537,7 +563,7 @@ bool tomographicModels::FBP(float* g, float* f, parameters* ctParams, bool cpu_t
 	}
 	else
 	{
-		if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+		if (hasSufficientGPUmemory(ctParams) == false)
 		{
 			printf("Error: insufficient GPU memory\n");
 			return false;
@@ -1015,19 +1041,28 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	return diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu, params.whichGPU);
 }
 
-/*
-// Scanner Parameters
-int geometry;
-int detectorType;
-float sod, sdd;
-float pixelWidth, pixelHeight, angularRange;
-int numCols, numRows, numAngles;
-float centerCol, centerRow;
-float* phis;
+float tomographicModels::requiredGPUmemory(parameters* ctParams)
+{
+	if (ctParams != NULL)
+		return ctParams->projectionDataSize() + ctParams->volumeDataSize();
+	else
+		return params.projectionDataSize() + params.volumeDataSize();
+}
 
-// Volume Parameters
-int volumeDimensionOrder;
-int numX, numY, numZ;
-float voxelWidth, voxelHeight;
-float offsetX, offsetY, offsetZ;
-//*/
+bool tomographicModels::hasSufficientGPUmemory(parameters* ctParams)
+{
+	if (ctParams != NULL)
+	{
+		if (getAvailableGPUmemory(ctParams->whichGPU) < requiredGPUmemory(ctParams))
+			return false;
+		else
+			return true;
+	}
+	else
+	{
+		if (getAvailableGPUmemory(params.whichGPU) < requiredGPUmemory())
+			return false;
+		else
+			return true;
+	}
+}
