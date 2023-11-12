@@ -16,6 +16,63 @@
 #ifdef INCLUDE_CUFFT
 #include <cufft.h>
 
+__global__ void splitLeftAndRight(const float* g, float* g_left, float* g_right, int4 N, float4 T, float4 startVal)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    int ind = j * N.z + k;
+
+    float val = g[ind];
+
+    float s = j * T.z + startVal.z;
+    float s_conj = -s;
+    float s_conj_ind = (s_conj - startVal.z) / T.z;
+    float val_conj = 0.0f;
+    if (0.0f <= s_conj_ind && s_conj_ind <= float(N.z - 1))
+    {
+        int s_lo = int(s_conj_ind);
+        int s_hi = min(s_lo + 1, N.z - 1);
+        float ds = s_conj_ind - float(s_lo);
+        val_conj = (1.0f - ds) * g[j * N.z+s_lo] + ds * g[j * N.z+s_hi];
+    }
+
+    if (s > 0.0f)
+    {
+        g_right[ind] = val;
+        g_left[ind] = val_conj;
+    }
+    else if (s < 0.0f)
+    {
+        g_right[ind] = val_conj;
+        g_left[ind] = val;
+    }
+    else
+    {
+        g_left[ind] = val;
+        g_right[ind] = val;
+    }
+}
+
+__global__ void mergeLeftAndRight(float* g, const float* g_left, const float* g_right, int4 N, float4 T, float4 startVal)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    int ind = j * N.z + k;
+
+    float s = j * T.z + startVal.z;
+    if (s >= 0.0f)
+        g[ind] = g_right[ind];
+    else
+        g[ind] = g_left[ind];
+}
 
 __global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3 N)
 {
@@ -163,6 +220,56 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
     return H_real;
 }
 
+bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar)
+{
+    //printf("rampFilter1D_symmetric...\n");
+    bool cpu_to_gpu = false;
+    bool retVal = true;
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
+
+    float* dev_g = g;
+
+    float* dev_g_left = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_g_left, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(projections) failed!\n");
+        return false;
+    }
+
+    float* dev_g_right = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_g_right, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(projections) failed!\n");
+        return false;
+    }
+
+    // Make thread block structure
+    dim3 dimBlock = setBlockSize(N_g);
+    dim3 dimGrid = setGridSize(N_g, dimBlock);
+
+    // Make copies to dev_g_lef and dev_g_right
+    splitLeftAndRight <<< dimGrid, dimBlock >>> (dev_g, dev_g_left, dev_g_right, N_g, T_g, startVal_g);
+    cudaStatus = cudaDeviceSynchronize();
+
+    // Do ramp filter
+    rampFilter1D(dev_g_left, params, cpu_to_gpu, scalar);
+    rampFilter1D(dev_g_right, params, cpu_to_gpu, scalar);
+
+    // Merge back to g
+    mergeLeftAndRight <<< dimGrid, dimBlock >>> (dev_g, dev_g_left, dev_g_right, N_g, T_g, startVal_g);
+    cudaStatus = cudaDeviceSynchronize();
+
+    // Clean up
+    cudaFree(dev_g_left);
+    cudaFree(dev_g_right);
+
+    return retVal;
+}
+
 bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
 {
     bool retVal = true;
@@ -190,7 +297,7 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
     }
 
     //int N_viewChunk = params->numAngles;
-    int N_viewChunk = params->numAngles / 40; // number of views in a chunk (needs to be optimized)
+    int N_viewChunk = max(1, params->numAngles / 40); // number of views in a chunk (needs to be optimized)
     int numChunks = int(ceil(double(params->numAngles) / double(N_viewChunk)));
 
     // Make cuFFT Plans

@@ -252,9 +252,45 @@ bool tomographicModels::rampFilterProjections(float* g, bool cpu_to_gpu, float s
 bool tomographicModels::rampFilterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar)
 {
 	if (ctParams->whichGPU < 0)
-		return rampFilter1D_cpu(g, ctParams, scalar);
+	{
+		//*
+		if (ctParams->isSymmetric())
+		{
+			float* g_left = (float*)malloc(sizeof(float) * ctParams->numRows * ctParams->numCols);
+			float* g_right = (float*)malloc(sizeof(float) * ctParams->numRows * ctParams->numCols);
+			splitLeftAndRight(g, g_left, g_right, ctParams);
+			bool retVal = rampFilter1D_cpu(g_left, ctParams, scalar);
+			rampFilter1D_cpu(g_right, ctParams, scalar);
+			mergeLeftAndRight(g, g_left, g_right, ctParams);
+			free(g_left);
+			free(g_right);
+			return retVal;
+		}
+		else //*/
+			return rampFilter1D_cpu(g, ctParams, scalar);
+	}
 	else
-		return rampFilter1D(g, ctParams, cpu_to_gpu, scalar);
+	{
+		if (ctParams->isSymmetric())
+		{
+			if (cpu_to_gpu)
+			{
+				float* g_left = (float*)malloc(sizeof(float) * ctParams->numRows * ctParams->numCols);
+				float* g_right = (float*)malloc(sizeof(float) * ctParams->numRows * ctParams->numCols);
+				splitLeftAndRight(g, g_left, g_right, ctParams);
+				bool retVal = rampFilter1D(g_left, ctParams, cpu_to_gpu, scalar);
+				rampFilter1D(g_right, ctParams, cpu_to_gpu, scalar);
+				mergeLeftAndRight(g, g_left, g_right, ctParams);
+				free(g_left);
+				free(g_right);
+				return retVal;
+			}
+			else
+				return rampFilter1D_symmetric(g, ctParams, scalar);
+		}
+		else
+			return rampFilter1D(g, ctParams, cpu_to_gpu, scalar);
+	}
 }
 
 bool tomographicModels::filterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar)
@@ -489,7 +525,15 @@ bool tomographicModels::FBP(float* g, float* f, parameters* ctParams, bool cpu_t
 		applyPreRampFilterWeights(g, ctParams, cpu_to_gpu);
 		rampFilterProjections(g, ctParams, cpu_to_gpu, get_FBPscalar());
 		applyPostRampFilterWeights(g, ctParams, cpu_to_gpu);
-		return backproject(g, f, ctParams, cpu_to_gpu);
+		if (ctParams->isSymmetric())
+		{
+			if (ctParams->whichGPU < 0)
+				return CPUinverse_symmetric(g, f, ctParams);
+			else
+				return inverse_symmetric(g, f, ctParams, cpu_to_gpu);
+		}
+		else
+			return backproject(g, f, ctParams, cpu_to_gpu);
 	}
 	else
 	{
@@ -523,7 +567,10 @@ bool tomographicModels::FBP(float* g, float* f, parameters* ctParams, bool cpu_t
 		else
 		{
 			//printf("backproject...\n");
-			retVal = backproject(dev_g, dev_f, ctParams, false);
+			if (ctParams->isSymmetric())
+				retVal = inverse_symmetric(dev_g, dev_f, ctParams, cpu_to_gpu);
+			else
+				retVal = backproject(dev_g, dev_f, ctParams, false);
 			pullVolumeDataFromGPU(f, ctParams, dev_f, ctParams->whichGPU);
 			cudaFree(dev_f);
 		}
@@ -636,6 +683,9 @@ bool tomographicModels::setVolumeDimensionOrder(int which)
 {
 	if (parameters::XYZ <= which && which <= parameters::ZYX)
 	{
+		params.volumeDimensionOrder = which;
+		return true;
+		/*
 		if (which == parameters::ZYX && params.isSymmetric())
 		{
 			printf("Error: Symmetric objects can only be specified in XYZ order\n");
@@ -646,6 +696,7 @@ bool tomographicModels::setVolumeDimensionOrder(int which)
 			params.volumeDimensionOrder = which;
 			return true;
 		}
+		//*/
 	}
 	else
 	{
@@ -701,6 +752,9 @@ bool tomographicModels::setProjector(int which)
 
 bool tomographicModels::set_axisOfSymmetry(float axisOfSymmetry)
 {
+	params.axisOfSymmetry = axisOfSymmetry;
+	return true;
+	/*
 	if (params.volumeDimensionOrder == parameters::ZYX)
 	{
 		printf("Error: Symmetric objects can only be specified in XYZ order\n");
@@ -711,6 +765,7 @@ bool tomographicModels::set_axisOfSymmetry(float axisOfSymmetry)
 		params.axisOfSymmetry = axisOfSymmetry;
 		return true;
 	}
+	//*/
 }
 
 bool tomographicModels::clear_axisOfSymmetry()

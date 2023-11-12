@@ -268,7 +268,7 @@ bool parameters::useSF()
 
 bool parameters::isSymmetric()
 {
-	if (numAngles == 1 && fabs(axisOfSymmetry) <= 30.0)
+	if (numAngles == 1 && fabs(axisOfSymmetry) <= 30.0 && (geometry == CONE || geometry == PARALLEL))
 		return true;
 	else
 		return false;
@@ -357,7 +357,7 @@ bool parameters::setDefaultVolumeParameters(float scale)
 		return false;
 
 	// Volume Parameters
-	volumeDimensionOrder = XYZ;
+	//volumeDimensionOrder = ZYX;
 	numX = int(ceil(float(numCols) / scale));
 	numY = numX;
 	numZ = numRows;

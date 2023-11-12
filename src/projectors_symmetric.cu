@@ -17,7 +17,117 @@
 #include "cuda_utils.h"
 //using namespace std;
 
-__global__ void AbelConeBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau)
+__global__ void AbelConeInverseKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int volumeDimensionOrder)
+{
+	const int i = threadIdx.x + blockIdx.x * blockDim.x;
+	const int j = threadIdx.y + blockIdx.y * blockDim.y;
+	const int k = threadIdx.z + blockIdx.z * blockDim.z;
+	if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+		return;
+
+	float cos_beta = cos(axisOfSymmetry);
+	float sin_beta = sin(axisOfSymmetry);
+	if (fabs(sin_beta) < 1.0e-4)
+	{
+		sin_beta = 0.0f;
+		cos_beta = 1.0f;
+	}
+	
+	const float T_u_inv = 1.0f / T_g.z;
+	const float T_v_inv = 1.0f / T_g.y;
+	const float u_0 = startVals_g.z;
+	const float v_0 = startVals_g.y;
+
+	const float z_val = T_f.z * float(k) + startVals_f.z;
+	const float r_val = T_f.y * float(j) + startVals_f.y;
+
+	const int N_phi = N_g.z + ((N_g.z + 1) % 2);
+	const float T_phi = 2.0f * 3.1415926535897932385f / float(N_phi);
+	const float R_sq = R * R;
+
+	float curVal = 0.0f;
+	for (int i = 0; i < N_phi; i++)
+	{
+		const float phi = float(i)*T_phi - 0.5f * 3.1415926535897932385f;
+		const float cos_phi = cos(phi);
+		const float sin_phi = sin(phi);
+
+		const float v_denom_inv = 1.0f / (R + r_val * sin_phi * cos_beta - z_val * sin_beta);
+		float s_val = (tau - r_val * cos_phi) * v_denom_inv;
+		if (r_val*s_val < 0.0f)
+			s_val *= -1.0f;
+		const float s_arg = (s_val - u_0) * T_u_inv;
+		const float v_arg = ((r_val * sin_phi * sin_beta + z_val * cos_beta) * v_denom_inv - v_0) * T_v_inv;
+		const float theWeight = R_sq * v_denom_inv * v_denom_inv;
+
+		//if (r_val*s_val >= 0.0f)
+			curVal += theWeight * tex3D<float>(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
+		//else
+		//	curVal += theWeight * tex3D<float>(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
+	}
+
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = j * N_f.z + k;
+	else
+		ind = k * N_f.y + j;
+	f[ind] = curVal * 0.25f * 3.1415926535897932385f / (2.0f * float(N_phi));
+}
+
+__global__ void AbelParallelInverseKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, float tau, int volumeDimensionOrder)
+{
+	const int i = threadIdx.x + blockIdx.x * blockDim.x;
+	const int j = threadIdx.y + blockIdx.y * blockDim.y;
+	const int k = threadIdx.z + blockIdx.z * blockDim.z;
+	if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+		return;
+
+	float cos_beta = cos(axisOfSymmetry);
+	float sin_beta = sin(axisOfSymmetry);
+	if (fabs(sin_beta) < 1.0e-4)
+	{
+		sin_beta = 0.0f;
+		cos_beta = 1.0f;
+	}
+
+	const float T_u_inv = 1.0f / T_g.z;
+	const float T_v_inv = 1.0f / T_g.y;
+	const float u_0 = startVals_g.z;
+	const float v_0 = startVals_g.y;
+
+	const float z_val = T_f.z * float(k) + startVals_f.z;
+	const float r_val = T_f.y * float(j) + startVals_f.y;
+
+	const int N_phi = N_g.z + ((N_g.z + 1) % 2);
+	const float T_phi = 2.0f * 3.1415926535897932385f / float(N_phi);
+
+	float curVal = 0.0f;
+	for (int i = 0; i < N_phi; i++)
+	{
+		const float phi = float(i) * T_phi - 0.5f * 3.1415926535897932385f;
+		const float cos_phi = cos(phi);
+		const float sin_phi = sin(phi);
+
+		float s_val = r_val * cos_phi;
+		if (r_val * s_val < 0.0f)
+			s_val *= -1.0f;
+
+		const float s_arg = (s_val - u_0) * T_u_inv;
+		const float v_arg = ((r_val * sin_phi * sin_beta + z_val * cos_beta) - v_0) * T_v_inv;
+
+		//if (r_val * s_val >= 0.0f)
+			curVal += tex3D<float>(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
+	}
+
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = j * N_f.z + k;
+	else
+		ind = k * N_f.y + j;
+	f[ind] = curVal * 0.25f * 3.1415926535897932385f / (2.0f * float(N_phi));
+}
+
+__global__ void AbelConeBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -96,10 +206,16 @@ __global__ void AbelConeBackprojectorKernel(cudaTextureObject_t g, int4 N_g, flo
 			}
 		}
 	}
-	f[j * N_f.z + k] = curVal;
+
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = j * N_f.z + k;
+	else
+		ind = k * N_f.y + j;
+	f[ind] = curVal;
 }
 
-__device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int j, int k)
+__device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int j, int k, int volumeDimensionOrder)
 {
 	float cos_beta = cos(axisOfSymmetry);
 	float sin_beta = sin(axisOfSymmetry);
@@ -148,8 +264,16 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
 		if (r_absoluteMinimum < r_max)
 		{
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+			if (volumeDimensionOrder == 0)
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+			}
+			else
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			}
 		}
 	}
 
@@ -159,8 +283,16 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 		const float r_next = (float)(ir + 1) * T_f.y;
 		const float disc_sqrt_next = sqrt(disc_ti_shift + r_next * r_next * sec_sq_plus_u_sq);
 
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+		if (volumeDimensionOrder == 0)
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+		}
+		else
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+		}
 
 		// update radius and sqrt for t calculation
 		//r_prev = r_next;
@@ -169,7 +301,7 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 	return curVal * sqrt(1.0f + u * u + v * v);
 }
 
-__device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int j, int k)
+__device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int j, int k, int volumeDimensionOrder)
 {
 	float cos_beta = cos(axisOfSymmetry);
 	float sin_beta = sin(axisOfSymmetry);
@@ -218,8 +350,16 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
 		if (r_absoluteMinimum < r_max)
 		{
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+			if (volumeDimensionOrder == 0)
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+			}
+			else
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			}
 		}
 	}
 
@@ -229,8 +369,16 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 		const float r_next = (float)(ir + 1) * T_f.y;
 		const float disc_sqrt_next = sqrt(disc_ti_shift + r_next * r_next * sec_sq_plus_u_sq);
 
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+		if (volumeDimensionOrder == 0)
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+		}
+		else
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+		}
 
 		// update radius and sqrt for t calculation
 		//r_prev = r_next;
@@ -240,7 +388,7 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 	//return 0.0f;
 }
 
-__global__ void AbelConeProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau)
+__global__ void AbelConeProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -248,12 +396,12 @@ __global__ void AbelConeProjectorKernel(float* g, int4 N_g, float4 T_g, float4 s
 	if (i >= N_g.x || j >= N_g.y || k >= N_g.z)
 		return;
 	else if (float(k) * T_g.z + startVals_g.z < 0.0)
-		g[j * N_g.z + k] = AbelConeProjectorKernel_left(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, R, D, axisOfSymmetry, tau, j, k);
+		g[j * N_g.z + k] = AbelConeProjectorKernel_left(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, R, D, axisOfSymmetry, tau, j, k, volumeDimensionOrder);
 	else
-		g[j * N_g.z + k] = AbelConeProjectorKernel_right(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, R, D, axisOfSymmetry, tau, j, k);
+		g[j * N_g.z + k] = AbelConeProjectorKernel_right(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, R, D, axisOfSymmetry, tau, j, k, volumeDimensionOrder);
 }
 
-__device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, int j, int k)
+__device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, int j, int k, int volumeDimensionOrder)
 {
 	float cos_beta = cos(axisOfSymmetry);
 	float sin_beta = sin(axisOfSymmetry);
@@ -297,8 +445,16 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
 		if (r_absoluteMinimum < r_max)
 		{
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+			if (volumeDimensionOrder == 0)
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+			}
+			else
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			}
 		}
 	}
 
@@ -309,13 +465,21 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 		const float r_next = (ir + 1) * T_f.y;
 		const float disc_sqrt_next = sqrt(disc_ti_shift + r_next * r_next);
 
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+		if (volumeDimensionOrder == 0)
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+		}
+		else
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+		}
 	}
 	return curVal;
 }
 
-__device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, int j, int k)
+__device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, int j, int k, int volumeDimensionOrder)
 {
 	float cos_beta = cos(axisOfSymmetry);
 	float sin_beta = sin(axisOfSymmetry);
@@ -359,8 +523,16 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
 		if (r_absoluteMinimum < r_max)
 		{
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
-			curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+			if (volumeDimensionOrder == 0)
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+			}
+			else
+			{
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			}
 		}
 	}
 
@@ -371,13 +543,21 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 		const float r_next = (ir + 1) * T_f.y;
 		const float disc_sqrt_next = sqrt(disc_ti_shift + r_next * r_next);
 
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
-		curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+		if (volumeDimensionOrder == 0)
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+		}
+		else
+		{
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+		}
 	}
 	return curVal;
 }
 
-__global__ void AbelParallelBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry)
+__global__ void AbelParallelBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -385,12 +565,12 @@ __global__ void AbelParallelBeamProjectorKernel(float* g, int4 N_g, float4 T_g, 
 	if (i >= N_g.x || j >= N_g.y || k >= N_g.z)
 		return;
 	else if (float(k) * T_g.z + startVals_g.z < 0.0)
-		g[j * N_g.z + k] = AbelParallelBeamProjectorKernel_left(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, axisOfSymmetry, j, k);
+		g[j * N_g.z + k] = AbelParallelBeamProjectorKernel_left(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, axisOfSymmetry, j, k, volumeDimensionOrder);
 	else
-		g[j * N_g.z + k] = AbelParallelBeamProjectorKernel_right(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, axisOfSymmetry, j, k);
+		g[j * N_g.z + k] = AbelParallelBeamProjectorKernel_right(N_g, T_g, startVals_g, f, N_f, T_f, startVals_f, axisOfSymmetry, j, k, volumeDimensionOrder);
 }
 
-__global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry)
+__global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
 	const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -466,7 +646,13 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 			}
 		}
 	}
-	f[j * N_f.z + k] = curVal * sqrt(1.0f + tan_beta * tan_beta);
+
+	int ind;
+	if (volumeDimensionOrder == 0)
+		ind = j * N_f.z + k;
+	else
+		ind = k * N_f.y + j;
+	f[ind] = curVal * sqrt(1.0f + tan_beta * tan_beta);
 }
 
 bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
@@ -514,9 +700,9 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	dim3 dimBlock = setBlockSize(N_g);
 	dim3 dimGrid = setGridSize(N_g, dimBlock);
 	if (params->geometry == parameters::CONE)
-		AbelConeProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->axisOfSymmetry * PI / 180.0, 0.0);
+		AbelConeProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->axisOfSymmetry * PI / 180.0, 0.0, params->volumeDimensionOrder);
 	else if (params->geometry == parameters::PARALLEL)
-		AbelParallelBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->axisOfSymmetry * PI / 180.0);
+		AbelParallelBeamProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->axisOfSymmetry * PI / 180.0, params->volumeDimensionOrder);
 
 	// pull result off GPU
 	cudaStatus = cudaDeviceSynchronize();
@@ -594,9 +780,88 @@ bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_
 	dim3 dimBlock = setBlockSize(N_f);
 	dim3 dimGrid = setGridSize(N_f, dimBlock);
 	if (params->geometry == parameters::CONE)
-		AbelConeBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->axisOfSymmetry * PI / 180.0, 0.0);
+		AbelConeBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->axisOfSymmetry * PI / 180.0, 0.0, params->volumeDimensionOrder);
 	else if (params->geometry == parameters::PARALLEL)
-		AbelParallelBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->axisOfSymmetry * PI / 180.0);
+		AbelParallelBeamBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->axisOfSymmetry * PI / 180.0, params->volumeDimensionOrder);
+
+	// pull result off GPU
+	cudaStatus = cudaDeviceSynchronize();
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "kernel failed!\n");
+		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+	}
+	if (cpu_to_gpu)
+		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
+	else
+		f = dev_f;
+
+	// Clean up
+	cudaFreeArray(d_data_array);
+	cudaDestroyTextureObject(d_data_txt);
+
+	if (cpu_to_gpu)
+	{
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		if (dev_f != 0)
+			cudaFree(dev_f);
+	}
+
+	return true;
+}
+
+bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+{
+	if (params->isSymmetric() == false)
+		return false;
+	if (params->geometry != parameters::CONE && params->geometry != parameters::PARALLEL)
+		return false;
+	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
+		return false;
+
+	cudaSetDevice(params->whichGPU);
+	cudaError_t cudaStatus;
+
+	float* dev_g = 0;
+	float* dev_f = 0;
+
+	// Allocate volume data on GPU
+	int4 N_f; float4 T_f; float4 startVal_f;
+	setVolumeGPUparams(params, N_f, T_f, startVal_f);
+
+	if (cpu_to_gpu)
+	{
+		if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
+		{
+			fprintf(stderr, "cudaMalloc(volume) failed!\n");
+		}
+	}
+	else
+		dev_f = f;
+
+	int4 N_g; float4 T_g; float4 startVal_g;
+	setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+
+	float rFOVsq = params->rFOV() * params->rFOV();
+
+	if (cpu_to_gpu)
+		dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+	else
+		dev_g = g;
+
+	bool useLinearInterpolation = true;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, useLinearInterpolation);
+
+	// Call Kernel
+	dim3 dimBlock = setBlockSize(N_f);
+	dim3 dimGrid = setGridSize(N_f, dimBlock);
+	if (params->geometry == parameters::CONE)
+		AbelConeInverseKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->axisOfSymmetry * PI / 180.0, params->tau, params->volumeDimensionOrder);
+	else if (params->geometry == parameters::PARALLEL)
+		AbelParallelInverseKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->axisOfSymmetry * PI / 180.0, params->tau, params->volumeDimensionOrder);
 
 	// pull result off GPU
 	cudaStatus = cudaDeviceSynchronize();

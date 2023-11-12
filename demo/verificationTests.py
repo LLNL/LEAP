@@ -4,12 +4,12 @@ import time
 import numpy as np
 sys.path.append(r'C:\Users\champley\Documents\git_leap\LEAP\src')
 from LTTserver import LTTserver
-from leapctype import Projector
+from leapctype import *
 
 objfile = r'C:\Users\champley\Documents\tools\LTT\sampleScripts\FORBILD_head_noEar.pd'
 
 LTT = LTTserver()
-leapct = Projector()
+leapct = tomographicModels()
 
 def setLEAPfromLTT():
     numAngles = int(LTT.getParam('nangles'))
@@ -56,7 +56,7 @@ for n in range(3):
     LTT.cmd('diskIO=off')
     LTT.cmd('archdir=pwd')
     LTT.cmd('objfile = ' + str(objfile))
-    #LTT.cmd('axisOfSymmetry = 0.0')
+    LTT.cmd('axisOfSymmetry = 0.0')
     pixelSize = 1.0
     numAngles = int(720.0/pixelSize)
     if LTT.unknown('axisOfSymmetry') == False:
@@ -75,14 +75,11 @@ for n in range(3):
     LTT.cmd('defaultVolume')
     LTT.cmd('spectraFile =63.817')
     LTT.cmd('dataType=atten')
+    LTT.cmd('projectorType=SF')
 
     setLEAPfromLTT()
     #leapct.setVolumeDimensionOrder(0) # XYZ
     leapct.setVolumeDimensionOrder(1) # ZYX
-    if LTT.unknown('axisOfSymmetry') == False:
-        leapct.setVolumeDimensionOrder(0) # XYZ
-
-    #LTT.cmd('parallelization=CPU')
 
     #'''
     # Test Forward Projection on CPU & GPU    
@@ -98,11 +95,15 @@ for n in range(3):
 
     leapct.setGPU(0)
     g_leap_GPU = leapct.allocateProjections()
+    startTime = time.time()
     leapct.project(g_leap_GPU,f_true)
+    print('project GPU elapsed time: ' + str(time.time()-startTime))
 
     leapct.setGPU(-1)
     g_leap_CPU = leapct.allocateProjections()
+    startTime = time.time()
     leapct.project(g_leap_CPU,f_true)
+    print('project CPU elapsed time: ' + str(time.time()-startTime))
 
     #leapct.displayVolume(g_LTT)
     leapct.displayVolume((g_LTT-g_leap_GPU)/np.max(g_LTT))
@@ -110,8 +111,6 @@ for n in range(3):
     #leapct.displayVolume(g_leap_GPU)
     #leapct.displayVolume(g_leap_CPU)
     #'''
-    
-    #quit()
     
     #'''
     # Test Backprojection on CPU & GPU
@@ -127,11 +126,15 @@ for n in range(3):
     
     leapct.setGPU(0)
     f_leap_GPU = leapct.allocateVolume()
+    startTime = time.time()
     leapct.backproject(g_true, f_leap_GPU)
+    print('backproject GPU elapsed time: ' + str(time.time()-startTime))
     
     leapct.setGPU(-1)
     f_leap_CPU = leapct.allocateVolume()
+    startTime = time.time()
     leapct.backproject(g_true, f_leap_CPU)
+    print('backproject CPU elapsed time: ' + str(time.time()-startTime))
     
     #leapct.displayVolume(f_LTT)
     leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))
@@ -156,23 +159,24 @@ for n in range(3):
     f_leap_GPU = leapct.allocateVolume()
     startTime = time.time()
     leapct.FBP(g_true, f_leap_GPU)
-    print('FBP elapsed time: ' + str(time.time()-startTime))
-    
+    print('FBP GPU elapsed time: ' + str(time.time()-startTime))
+
     leapct.setGPU(-1)
     #leapct.setGPUs(np.array([0,1]))
     f_leap_CPU = leapct.allocateVolume()
     startTime = time.time()
     leapct.FBP(g_true, f_leap_CPU)
-    print('FBP elapsed time: ' + str(time.time()-startTime))
-        
+    print('FBP CPU elapsed time: ' + str(time.time()-startTime))
+    
     #leapct.displayVolume(f_LTT)
     leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))
     leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
     #leapct.displayVolume(f_leap_CPU)
+    #leapct.displayVolume(f_leap_GPU)
     #'''
     
     '''
-    # Test SART
+    # Test SART/ RWLS
     LTT.cmd('simulate #{overSampling=3}')
     g_true = LTT.getAllProjections()
     
@@ -188,7 +192,8 @@ for n in range(3):
     leapct.setGPUs([0,1])
     f_leap_GPU = leapct.allocateVolume()
     startTime = time.time()
-    leapct.SART(g_true, f_leap_GPU, 10)
+    #leapct.SART(g_true, f_leap_GPU, 10)
+    leapct.RWLS(g_true, f_leap_GPU, 10, delta=0.0, beta=0.0, W=None, SQS=True)
     print('SART elapsed time: ' + str(time.time()-startTime))
     
     #leapct.displayVolume(f_LTT)

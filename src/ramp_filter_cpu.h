@@ -18,4 +18,7 @@ double timeSamples(int i, int N);
 double rampImpulseResponse(int N, double T, int n, int rampID);
 double* rampImpulseResponse(int N, double T, int rampID);
 
+bool splitLeftAndRight(float* g, float* g_left, float* g_right, parameters* params);
+bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* params);
+
 #endif

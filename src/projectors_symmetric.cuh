@@ -19,6 +19,8 @@
 bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu);
 bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu);
 
+bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu);
+
 /* Utility Functions for anti-symmetric projections
 float* splitVolume(float*, parameters* params, bool rightHalf = true);
 float* splitProjection(float*, parameters* params, bool rightHalf = true);

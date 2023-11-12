@@ -3,8 +3,8 @@ import os
 import time
 import numpy as np
 sys.path.append(r'C:\Users\champley\Documents\git_leap\LEAP\src')
-from leapctype import Projector
-leapct = Projector()
+from leapctype import *
+leapct = tomographicModels()
 
 L = 8.0
 arange = 360.0

@@ -21,28 +21,161 @@ using namespace std;
 //### Projectors for Symmetric Objects
 //########################################################################################################################################################################
 //########################################################################################################################################################################
+bool CPUinverse_symmetric(float* g, float* f, parameters* params)
+{
+	if (params == NULL || g == NULL || f == NULL)
+		return false;
+	float T_u = params->pixelWidth;
+	float T_v = params->pixelHeight;
+	float u_0 = params->u_0();
+	float v_0 = params->v_0();
+	if (params->geometry == parameters::CONE)
+	{
+		T_u = T_u / params->sdd;
+		T_v = T_v / params->sdd;
+		u_0 = u_0 / params->sdd;
+		v_0 = v_0 / params->sdd;
+	}
+
+	float cos_beta = cos(params->axisOfSymmetry * PI / 180.0);
+	float sin_beta = sin(params->axisOfSymmetry * PI / 180.0);
+	if (fabs(sin_beta) < 1.0e-4)
+	{
+		sin_beta = 0.0;
+		cos_beta = 1.0;
+	}
+
+	int N_phi = params->numCols + ((params->numCols + 1) % 2);
+	float T_phi = 2.0f * 3.1415926535897932385f / float(N_phi);
+	float R_sq = params->sod * params->sod;
+
+	float scaling = 0.25 * PI / (2.0 * float(N_phi));
+
+	params->setToZero(f, params->numZ * params->numY * params->numX);
+
+	// XYZ and numX=1
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int iy = 0; iy < params->numY; iy++)
+	{
+		float r_val = params->voxelWidth * float(iy) + params->y_0();
+		float* zLine = &f[iy * params->numZ];
+		for (int iphi = 0; iphi < N_phi; iphi++)
+		{
+			float phi = float(iphi) * T_phi - 0.5 * PI;
+			float cos_phi = cos(phi);
+			float sin_phi = sin(phi);
+
+			if (params->geometry == parameters::CONE)
+			{
+				for (int iz = 0; iz < params->numZ; iz++)
+				{
+					float z_val = params->voxelHeight * float(iz) + params->z_0();
+
+					float v_denom_inv = 1.0f / (params->sod + r_val * sin_phi * cos_beta - z_val * sin_beta);
+					float s_val = (params->tau - r_val * cos_phi) * v_denom_inv;
+					if (r_val * s_val < 0.0)
+						s_val *= -1.0;
+					float s_arg = (s_val - u_0) / T_u;
+					float v_arg = ((r_val * sin_phi * sin_beta + z_val * cos_beta) * v_denom_inv - v_0) / T_v;
+					float theWeight = R_sq * v_denom_inv * v_denom_inv * scaling;
+
+					if (s_arg < 0.0 || s_arg > float(params->numCols - 1))
+						continue;
+
+					s_arg = max(float(0.0), min(s_arg, float(params->numCols - 1)));
+					int s_low = int(s_arg);
+					int s_high = min(s_low + 1, params->numCols - 1);
+					float ds = s_arg - float(s_low);
+
+					v_arg = max(float(0.0), min(v_arg, float(params->numRows - 1)));
+					int v_low = int(v_arg);
+					int v_high = min(v_low + 1, params->numRows - 1);
+					float dv = v_arg - float(v_low);
+
+					zLine[iz] += ((1.0 - dv) * ((1.0 - ds) * g[v_low * params->numCols + s_low] + ds * g[v_low * params->numCols + s_high])
+						+ dv * ((1.0 - ds) * g[v_high * params->numCols + s_low] + ds * g[v_high * params->numCols + s_high])) * theWeight;
+				}
+			}
+			else
+			{
+				float s_val = r_val * cos_phi;
+
+				if (r_val * s_val < 0.0)
+					s_val *= -1.0;
+
+				float s_arg = (s_val - u_0) / T_u;
+
+				if (s_arg < 0.0 || s_arg > float(params->numCols - 1))
+					continue;
+
+				s_arg = max(float(0.0), min(s_arg, float(params->numCols-1)));
+				int s_low = int(s_arg);
+				int s_high = min(s_low + 1, params->numCols-1);
+				float ds = s_arg - float(s_low);
+
+				for (int iz = 0; iz < params->numZ; iz++)
+				{
+					float z_val = params->voxelHeight * float(iz) + params->z_0();
+					float v_arg = ((r_val * sin_phi * sin_beta + z_val * cos_beta) - v_0) / T_v;
+					float theWeight = scaling;
+
+					zLine[iz] += ((1.0 - ds) * g[iz*params->numCols + s_low] + ds* g[iz * params->numCols + s_high]) * theWeight;
+				}
+			}
+		}
+	}
+
+	if (params->volumeDimensionOrder == 1)
+		reorder_YZ_to_ZY(f, params);
+
+	return true;
+}
+
 bool CPUproject_symmetric(float* g, float* f, parameters* params)
 {
 	if (params == NULL)
 		return false;
-	else if (params->geometry == parameters::CONE)
-		return CPUproject_AbelCone(g, f, params);
-	else if (params->geometry == parameters::PARALLEL)
-		return CPUproject_AbelParallel(g, f, params);
 	else
-		return false;
+	{
+		bool retVal = true;
+		float* f_YZ = f;
+		if (params->volumeDimensionOrder == 1)
+			f_YZ = reorder_ZY_to_YZ_copy(f, params);
+
+		if (params->geometry == parameters::CONE)
+			retVal = CPUproject_AbelCone(g, f_YZ, params);
+		else if (params->geometry == parameters::PARALLEL)
+			retVal = CPUproject_AbelParallel(g, f_YZ, params);
+		else
+			retVal = false;
+
+		if (params->volumeDimensionOrder == 1)
+			free(f_YZ);
+
+		return retVal;
+	}
 }
 
 bool CPUbackproject_symmetric(float* g, float* f, parameters* params)
 {
 	if (params == NULL)
 		return false;
-	else if (params->geometry == parameters::CONE)
-		return CPUbackproject_AbelCone(g, f, params);
-	else if (params->geometry == parameters::PARALLEL)
-		return CPUbackproject_AbelParallel(g, f, params);
 	else
-		return false;
+	{
+		bool retVal = true;
+		if (params->geometry == parameters::CONE)
+			retVal = CPUbackproject_AbelCone(g, f, params);
+		else if (params->geometry == parameters::PARALLEL)
+			retVal = CPUbackproject_AbelParallel(g, f, params);
+		else
+			retVal = false;
+
+		if (params->volumeDimensionOrder == 1)
+			reorder_YZ_to_ZY(f, params);
+		return retVal;
+	}
 }
 
 bool CPUproject_AbelCone(float* g, float* f, parameters* params)
@@ -617,4 +750,59 @@ bool CPUbackproject_AbelParallel(float* g, float* f, parameters* params)
 		}
 	}
 	return true;
+}
+
+bool reorder_ZY_to_YZ(float* f, parameters* params)
+{
+	if (f == NULL || params == NULL)
+		return false;
+	else
+	{
+		float* f_copy = (float*)malloc(sizeof(float) * params->numZ * params->numY);
+		memcpy(f_copy, f, size_t(sizeof(float) * params->numZ * params->numY));
+		for (int iy = 0; iy < params->numY; iy++)
+		{
+			for (int iz = 0; iz < params->numZ; iz++)
+				f[iy*params->numZ + iz] = f_copy[iz*params->numY + iy];
+		}
+
+		free(f_copy);
+		return true;
+	}
+}
+
+bool reorder_YZ_to_ZY(float* f, parameters* params)
+{
+	if (f == NULL || params == NULL)
+		return false;
+	else
+	{
+		float* f_copy = (float*)malloc(sizeof(float) * params->numZ * params->numY);
+		memcpy(f_copy, f, size_t(sizeof(float) * params->numZ * params->numY));
+		for (int iz = 0; iz < params->numZ; iz++)
+		{
+			for (int iy = 0; iy < params->numY; iy++)
+				f[iz * params->numY + iy] = f_copy[iy * params->numZ + iz];
+		}
+
+		free(f_copy);
+		return true;
+	}
+}
+
+float* reorder_ZY_to_YZ_copy(float* f, parameters* params)
+{
+	if (f == NULL || params == NULL)
+		return NULL;
+	else
+	{
+		float* f_copy = (float*)malloc(sizeof(float) * params->numZ * params->numY);
+		for (int iy = 0; iy < params->numY; iy++)
+		{
+			for (int iz = 0; iz < params->numZ; iz++)
+				f_copy[iy * params->numZ + iz] = f[iz * params->numY + iy];
+		}
+
+		return f_copy;
+	}
 }

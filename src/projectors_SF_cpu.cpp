@@ -57,7 +57,7 @@ bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
     params->volumeDimensionOrder = parameters::XYZ;
 
     int chunkSize = 16;
-    int numChunks = int(ceil(double(params->numZ) / double(chunkSize)));
+    int numChunks = max(1,int(ceil(double(params->numZ) / double(chunkSize))));
     for (int ichunk = 0; ichunk < numChunks; ichunk++)
     {
         params->numZ = numZ_save;
@@ -94,8 +94,12 @@ bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
 
     params->volumeDimensionOrder = parameters::XYZ;
 
+    //if (params->geometry == parameters::CONE)
+    //    applyInversePolarWeight(g, params);
+
     int chunkSize = 16;
-    int numChunks = int(ceil(double(params->numZ) / double(chunkSize)));
+    //chunkSize = params->numZ;
+    int numChunks = max(1,int(ceil(double(params->numZ) / double(chunkSize))));
     for (int ichunk = 0; ichunk < numChunks; ichunk++)
     {
         params->numZ = numZ_save;
@@ -134,6 +138,8 @@ bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
         }
         free(f_XYZ);
     }
+    //if (params->geometry == parameters::CONE)
+    //    applyPolarWeight(g, params);
     params->numZ = numZ_save;
     params->offsetZ = offsetZ_save;
     params->volumeDimensionOrder = parameters::ZYX;

@@ -269,3 +269,69 @@ double* rampImpulseResponse(int N, double T, int rampID)
         h[i] = rampImpulseResponse(N, T, i, rampID);
     return h;
 }
+
+bool splitLeftAndRight(float* g, float* g_left, float* g_right, parameters* params)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < params->numRows; i++)
+    {
+        float* g_line = &g[i * params->numCols];
+        float* g_left_line = &g_left[i * params->numCols];
+        float* g_right_line = &g_right[i * params->numCols];
+        for (int j = 0; j < params->numCols; j++)
+        {
+            float val = g_line[j];
+
+            float s = j * params->pixelWidth + params->u_0();
+            float s_conj = - s;
+            float s_conj_ind = (s_conj - params->u_0()) / params->pixelWidth;
+            float val_conj = 0.0;
+            if (0.0 <= s_conj_ind && s_conj_ind <= float(params->numCols - 1))
+            {
+                int s_lo = int(s_conj_ind);
+                int s_hi = std::min(s_lo + 1, params->numCols - 1);
+                float ds = s_conj_ind - float(s_lo);
+                val_conj = (1.0 - ds) * g_line[s_lo] + ds * g_line[s_hi];
+            }
+
+            if (s > 0.0)
+            {
+                g_right_line[j] = val;
+                g_left_line[j] = val_conj;
+            }
+            else if (s < 0.0)
+            {
+                g_right_line[j] = val_conj;
+                g_left_line[j] = val;
+            }
+            else
+            {
+                g_left_line[j] = val;
+                g_right_line[j] = val;
+            }
+        }
+    }
+    return true;
+}
+
+bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* params)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < params->numRows; i++)
+    {
+        float* g_line = &g[i * params->numCols];
+        float* g_left_line = &g_left[i * params->numCols];
+        float* g_right_line = &g_right[i * params->numCols];
+        for (int j = 0; j < params->numCols; j++)
+        {
+            float s = j * params->pixelWidth + params->u_0();
+            if (s >= 0.0)
+                g_line[j] = g_right_line[j];
+            else
+                g_line[j] = g_left_line[j];
+        }
+    }
+    return true;
+}

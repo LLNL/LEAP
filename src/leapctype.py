@@ -15,12 +15,12 @@ from numpy.ctypeslib import ndpointer
 import numpy as np
 
 
-class Projector:
-    ''' Python class for Projectors bindings
+class tomographicModels:
+    ''' Python class for tomographicModels bindings
     Usage Example:
-    from LEAP import Projector
-    proj = Projector()
-    proj.project(g,f)
+    from leapctype import *
+    leapct = tomographicModels()
+    leapct.project(g,f)
     '''
 
     def __init__(self, lib_dir=""):
@@ -251,7 +251,7 @@ class Projector:
     def RLS(self, g, f, numIter, delta=0.0, beta=0.0):
         return self.RWLS(g, f, numIter, delta, beta, 1.0)
         
-    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None):
+    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, SQS=False):
         conjGradRestart = 50
         if W is None:
             W = g.copy()
@@ -283,6 +283,19 @@ class Projector:
         grad_old_dot_grad_old = 0.0
         grad_old = self.allocateVolume()
         
+        if SQS == True:
+            # Calculate the SQS preconditioner
+            # Reuse some of the memory allocated above
+            #Q = 1.0 / P*WP1
+            Q = self.allocateVolume()
+            Q[:] = 1.0
+            self.project(Pu,Q)
+            Pu *= W
+            self.backproject(Pu,Q)
+            Q = 1.0 / Q
+        else:
+            Q = 1.0
+        
         for n in range(numIter):
             print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
             WPf_minus_g = Pf_minus_g.copy()
@@ -297,6 +310,7 @@ class Projector:
                 #return f # FIXME
                 
             u[:] = grad[:]
+            u = Q*u
             self.project(Pu, u)
             
             if n == 0 or (n % conjGradRestart) == 0:
@@ -439,7 +453,10 @@ class Projector:
     def displayVolume(self,vol):
         try:
             import napari
-            viewer = napari.view_image(vol, rgb=False)
+            if len(vol.shape) == 3 and (vol.shape[0] == 1 or vol.shape[1] == 1 or vol.shape[2] == 1):
+                viewer = napari.view_image(np.squeeze(vol), rgb=False)
+            else:
+                viewer = napari.view_image(vol, rgb=False)
             napari.run()
         except:
             print('Cannot load napari, to install run this command:')

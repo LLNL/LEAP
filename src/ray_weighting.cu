@@ -42,7 +42,7 @@ float* setViewWeights(parameters* params)
 
 float* setParkerWeights(parameters* params)
 {
-	if (params->angularRange >= 359.9999)
+	if (params->angularRange >= 359.9999 || params->numAngles == 1)
 		return NULL;
 
 	if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
