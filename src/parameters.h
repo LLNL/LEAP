@@ -55,6 +55,8 @@ public:
 	float v(int);
 	bool normalizeConeAndFanCoordinateFunctions;
 
+	float z_samples(int);
+
 	int whichGPU;
 	std::vector<int> whichGPUs;
     int whichProjector;
@@ -87,7 +89,8 @@ public:
 	float projectionDataSize();
 	float volumeDataSize();
 
-	//bool rowRangeNeededForReconstruction();
+	bool rowRangeNeededForReconstruction(int, int, int*);
+	bool sliceRangeNeededForProjection(int, int, int*);
 
 	// Volume Parameters
 	int volumeDimensionOrder;
