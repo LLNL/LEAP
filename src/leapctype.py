@@ -302,8 +302,8 @@ class tomographicModels:
             f += 0.9*d / Pstar1
         return f
         
-    def RLS(self, g, f, numIter, delta=0.0, beta=0.0):
-        return self.RWLS(g, f, numIter, delta, beta, 1.0)
+    def RLS(self, g, f, numIter, delta=0.0, beta=0.0, SQS=False):
+        return self.RWLS(g, f, numIter, delta, beta, 1.0, SQS)
         
     def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, SQS=False):
         conjGradRestart = 50

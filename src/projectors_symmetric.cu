@@ -71,7 +71,7 @@ __global__ void AbelConeInverseKernel(cudaTextureObject_t g, int4 N_g, float4 T_
 		ind = j * N_f.z + k;
 	else
 		ind = k * N_f.y + j;
-	f[ind] = curVal * 0.25f * 3.1415926535897932385f / (2.0f * float(N_phi));
+	f[ind] = curVal * D * T_g.z / (2.0f * float(N_phi)) * 0.25f * 3.1415926535897932385f;
 }
 
 __global__ void AbelParallelInverseKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float axisOfSymmetry, float tau, int volumeDimensionOrder)
@@ -124,7 +124,7 @@ __global__ void AbelParallelInverseKernel(cudaTextureObject_t g, int4 N_g, float
 		ind = j * N_f.z + k;
 	else
 		ind = k * N_f.y + j;
-	f[ind] = curVal * 0.25f * 3.1415926535897932385f / (2.0f * float(N_phi));
+	f[ind] = curVal * T_g.z / (2.0f * float(N_phi));
 }
 
 __global__ void AbelConeBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int volumeDimensionOrder)

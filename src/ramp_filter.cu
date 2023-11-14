@@ -28,7 +28,9 @@ __global__ void splitLeftAndRight(const float* g, float* g_left, float* g_right,
 
     float val = g[ind];
 
-    float s = j * T.z + startVal.z;
+    //float s_ind_center = -startVal.z / T.z;
+
+    float s = k * T.z + startVal.z;
     float s_conj = -s;
     float s_conj_ind = (s_conj - startVal.z) / T.z;
     float val_conj = 0.0f;
@@ -37,6 +39,18 @@ __global__ void splitLeftAndRight(const float* g, float* g_left, float* g_right,
         int s_lo = int(s_conj_ind);
         int s_hi = min(s_lo + 1, N.z - 1);
         float ds = s_conj_ind - float(s_lo);
+        /*
+        if (s_conj > 0.0f)
+        {
+            s_lo = max(s_lo, int(ceil(s_ind_center)));
+            s_hi = max(s_hi, int(ceil(s_ind_center)));
+        }
+        else if (s_conj < 0.0f)
+        {
+            s_lo = min(s_lo, int(floor(s_ind_center)));
+            s_hi = min(s_hi, int(floor(s_ind_center)));
+        }
+        //*/
         val_conj = (1.0f - ds) * g[j * N.z+s_lo] + ds * g[j * N.z+s_hi];
     }
 
@@ -67,7 +81,7 @@ __global__ void mergeLeftAndRight(float* g, const float* g_left, const float* g_
 
     int ind = j * N.z + k;
 
-    float s = j * T.z + startVal.z;
+    float s = k * T.z + startVal.z;
     if (s >= 0.0f)
         g[ind] = g_right[ind];
     else
