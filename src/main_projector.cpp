@@ -86,7 +86,7 @@ bool filter_projections_cpu(int param_id, torch::Tensor& g_tensor)
     float* g = g_tensor.data_ptr<float>();
     
     int whichGPU_save = p_model->getGPU();
-    p_model->setGPU(-1)
+    p_model->setGPU(-1);
     bool retVal = p_model->filterProjections(g, false, 1.0);
     p_model->setGPU(whichGPU_save);
     
@@ -109,7 +109,7 @@ bool fbp_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
     float* f = f_tensor.data_ptr<float>();
     
     int whichGPU_save = p_model->getGPU();
-    p_model->setGPU(-1)
+    p_model->setGPU(-1);
     bool retVal = p_model->FBP(g, f, false);
     p_model->setGPU(whichGPU_save);
     

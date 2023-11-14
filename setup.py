@@ -12,6 +12,7 @@ from setuptools.command.install import install
 from torch.utils.cpp_extension import CUDAExtension
 from torch.utils.cpp_extension import CppExtension
 from torch.utils.cpp_extension import BuildExtension
+import os
 import pybind11
 import torch
 
@@ -28,8 +29,8 @@ if cuda:
                  'ray_weighting.cu', 'total_variation.cu', 
                  'projectors.cu', 'projectors_extendedSF.cu',
                  'projectors_symmetric.cu','projectors_SF.cu']
-    for i in range(len(sources)):
-        source_files[i] = os.path.join('src',source_files[i])
+    for i in range(len(source_files)):
+        source_files[i] = os.path.join('src', source_files[i])
 
     ext_mod = CUDAExtension(
         name='leapct',
@@ -38,13 +39,12 @@ if cuda:
                             'nvcc': ['-g', '-D__USE_GPU']}
     )
 else:
-
     source_files=['main_projector.cpp', 
                  'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
                  'projectors_cpu.cpp', 'projectors_SF_cpu.cpp',
                  'projectors_symmetric_cpu.cpp', 'parameters.cpp',
                  'ramp_filter_cpu.cpp']
-    for i in range(len(sources)):
+    for i in range(len(source_files)):
         source_files[i] = os.path.join('src',source_files[i])
 
     ext_mod = CppExtension(
