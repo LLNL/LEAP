@@ -6,6 +6,7 @@ from leapctype import *
 leapct = tomographicModels()
 # Make sure you add: .../LEAP/src to your python path
 
+
 # Specify the number of detector rows and columns which is used below
 # Scale the number of angles and the detector pixel size with N
 N = 300
@@ -36,6 +37,6 @@ leapct.project(g,f_true)
 leapct.FBP(g,f)
 
 # Reconstruct with SART
-#leapct.SART(g,f,10)
+#leapct.SART(g,f,50)
 
 leapct.displayVolume(f)

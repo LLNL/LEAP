@@ -141,7 +141,7 @@ class tomographicModels:
         self.libprojectors.setConeBeamParams.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
-            phis = setAngleArray(numAngles, angularRange)
+            phis = self.setAngleArray(numAngles, angularRange)
         return self.libprojectors.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
             
         
@@ -150,7 +150,7 @@ class tomographicModels:
         self.libprojectors.setFanBeamParams.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
-            phis = setAngleArray(numAngles, angularRange)
+            phis = self.setAngleArray(numAngles, angularRange)
         return self.libprojectors.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
 
     def setParallelBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
@@ -158,7 +158,7 @@ class tomographicModels:
         self.libprojectors.setParallelBeamParams.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
-            phis = setAngleArray(numAngles, angularRange)
+            phis = self.setAngleArray(numAngles, angularRange)
         return self.libprojectors.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def setModularBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
