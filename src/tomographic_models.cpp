@@ -1016,6 +1016,16 @@ int tomographicModels::get_numCols()
 	return params.numCols;
 }
 
+float tomographicModels::get_pixelWidth()
+{
+	return params.pixelWidth;
+}
+
+float tomographicModels::get_pixelHeight()
+{
+	return params.pixelHeight;
+}
+
 int tomographicModels::get_numX()
 {
 	return params.numX;
@@ -1029,6 +1039,16 @@ int tomographicModels::get_numY()
 int tomographicModels::get_numZ()
 {
 	return params.numZ;
+}
+
+float tomographicModels::get_voxelWidth()
+{
+	return params.voxelWidth;
+}
+
+float tomographicModels::get_voxelHeight()
+{
+	return params.voxelHeight;
 }
 
 bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)

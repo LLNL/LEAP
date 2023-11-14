@@ -76,6 +76,10 @@ class tomographicModels:
         listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
         return self.libprojectors.setGPUs(listOfGPUs, int(listOfGPUs.size))
         
+    def getGPU(self):
+        self.libprojectors.getGPU.restype = ctypes.c_int
+        return self.libprojectors.getGPU()
+        
     def setDiameterFOV(self, d):
         self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
         self.libprojectors.set_rFOV.restype = ctypes.c_bool
@@ -135,16 +139,26 @@ class tomographicModels:
     def setConeBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
         self.libprojectors.setConeBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
         self.libprojectors.setConeBeamParams.restype = ctypes.c_bool
+        if type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = setAngleArray(numAngles, angularRange)
         return self.libprojectors.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+            
         
     def setFanBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
         self.libprojectors.setFanBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
         self.libprojectors.setFanBeamParams.restype = ctypes.c_bool
+        if type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = setAngleArray(numAngles, angularRange)
         return self.libprojectors.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
 
     def setParallelBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
         self.libprojectors.setParallelBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.setParallelBeamParams.restype = ctypes.c_bool
+        if type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = setAngleArray(numAngles, angularRange)
         return self.libprojectors.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def setModularBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
@@ -188,17 +202,13 @@ class tomographicModels:
         return self.libprojectors.get_FBPscalar()
 
     def FBP(self, g, f, inplace=False):
-        '''
-        self.rampFilterProjections(g)
-        self.backproject(g,f)
-        '''
         self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.FBP.restype = ctypes.c_bool
-        if inplace:
-            self.libprojectors.FBP(g,f,True)
-        else:
+        if inplace == False and self.getGPU() < 0:
             q  = g.copy()
             self.libprojectors.FBP(q,f,True)
+        else:
+            self.libprojectors.FBP(g,f,True)
         return f
         
     def BPF(self, g, f):
@@ -368,6 +378,14 @@ class tomographicModels:
     def get_numCols(self):
         return self.libprojectors.get_numCols()
         
+    def get_pixelHeight(self):
+        self.libprojectors.get_pixelHeight.restype = ctypes.c_float
+        return self.libprojectors.get_pixelHeight()
+        
+    def get_pixelWidth(self):
+        self.libprojectors.get_pixelWidth.restype = ctypes.c_float
+        return self.libprojectors.get_pixelWidth()
+        
     def get_numX(self):
         return self.libprojectors.get_numX()
     
@@ -376,6 +394,25 @@ class tomographicModels:
     
     def get_numZ(self):
         return self.libprojectors.get_numZ()
+        
+    def get_voxelHeight(self):
+        self.libprojectors.get_voxelHeight.restype = ctypes.c_float
+        return self.libprojectors.get_voxelHeight()
+        
+    def get_voxelWidth(self):
+        self.libprojectors.get_voxelWidth.restype = ctypes.c_float
+        return self.libprojectors.get_voxelWidth()
+        
+    def voxelSamples(self):
+        x = (np.array(range(self.get_numX())) - 0.5*(self.get_numX()-1))*self.get_voxelWidth()
+        y = (np.array(range(self.get_numY())) - 0.5*(self.get_numY()-1))*self.get_voxelWidth()
+        z = (np.array(range(self.get_numZ())) - 0.5*(self.get_numZ()-1))*self.get_voxelHeight()
+        if self.getVolumeDimensionOrder() == 0:
+            x,y,z = np.meshgrid(x,y,z, indexing='ij')
+        else:
+            z,y,x = np.meshgrid(z,y,x, indexing='ij')
+        return x,y,z
+        
         
     def BlurFilter(self, f, FWHM=2.0):
         #bool BlurFilter(float* f, int, int, int, float FWHM);

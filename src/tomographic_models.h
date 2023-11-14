@@ -17,23 +17,12 @@ public:
 
 	bool project(float* g, float* f, bool cpu_to_gpu);
 	bool backproject(float* g, float* f, bool cpu_to_gpu);
+	bool FBP(float* g, float* f, bool cpu_to_gpu);
 
-	bool project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
-	bool backproject(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
-
-	bool rampFilterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
 	bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar);
-	bool rampFilterVolume(float* f, bool cpu_to_gpu);
-
-	bool filterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
 	bool filterProjections(float* g, bool cpu_to_gpu, float scalar);
 
-	bool FBP(float* g, float* f, bool cpu_to_gpu);
-	bool FBP(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
-
-	bool project_multiGPU(float* g, float* f);
-	bool backproject_multiGPU(float* g, float* f);
-	bool FBP_multiGPU(float* g, float* f);
+	bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
 	bool printParameters();
 
@@ -68,11 +57,16 @@ public:
 	int get_numAngles();
 	int get_numRows();
 	int get_numCols();
-	float get_FBPscalar();
+	float get_pixelWidth();
+	float get_pixelHeight();
 
 	int get_numX();
 	int get_numY();
 	int get_numZ();
+	float get_voxelWidth();
+	float get_voxelHeight();
+
+	float get_FBPscalar();
 
 	// Filters for 3D data
 	bool BlurFilter(float* f, int, int, int, float FWHM, bool cpu_to_gpu);
@@ -86,9 +80,21 @@ public:
 	
 	parameters params;
 private:
+
+	bool project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
+	bool backproject(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
+	bool FBP(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
+
+	bool project_multiGPU(float* g, float* f);
+	bool backproject_multiGPU(float* g, float* f);
+	bool FBP_multiGPU(float* g, float* f);
+	
 	bool backproject_FBP_multiGPU(float* g, float* f, bool doFBP);
 	float* copyRows(float*, int, int);
 	bool combineRows(float*, float*, int, int);
+
+	bool rampFilterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
+	bool filterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
 
 	float requiredGPUmemory(parameters* ctParams = NULL);
 	bool hasSufficientGPUmemory(parameters* ctParams = NULL);

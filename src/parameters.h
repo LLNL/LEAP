@@ -31,6 +31,7 @@ public:
 
     void assign(const parameters& other);
     void setDefaults(int N);
+	void initialize();
 	void printAll();
 	void clearAll();
 	bool allDefined();

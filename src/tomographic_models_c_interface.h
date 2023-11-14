@@ -56,6 +56,7 @@ extern "C" PROJECTOR_API bool backprojectParallelBeam(float* g, float* f, bool c
 
 extern "C" PROJECTOR_API bool setGPU(int whichGPU);
 extern "C" PROJECTOR_API bool setGPUs(int* whichGPUs, int N);
+extern "C" PROJECTOR_API int getGPU();
 extern "C" PROJECTOR_API bool set_axisOfSymmetry(float axisOfSymmetry);
 extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool setProjector(int which);
@@ -66,11 +67,16 @@ extern "C" PROJECTOR_API bool reset();
 extern "C" PROJECTOR_API int get_numAngles();
 extern "C" PROJECTOR_API int get_numRows();
 extern "C" PROJECTOR_API int get_numCols();
+extern "C" PROJECTOR_API float get_pixelWidth();
+extern "C" PROJECTOR_API float get_pixelHeight();
+
 extern "C" PROJECTOR_API float get_FBPscalar();
 
 extern "C" PROJECTOR_API int get_numX();
 extern "C" PROJECTOR_API int get_numY();
 extern "C" PROJECTOR_API int get_numZ();
+extern "C" PROJECTOR_API float get_voxelWidth();
+extern "C" PROJECTOR_API float get_voxelHeight();
 
 // Filters for 3D data
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool cpu_to_gpu);

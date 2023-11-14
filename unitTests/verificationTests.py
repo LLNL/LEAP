@@ -1,3 +1,5 @@
+# This script performs regression tests for the non-AI portions of LEAP
+# It requires Livermore Tomography Tools (LTT) to run
 import sys
 import os
 import time
@@ -5,7 +7,8 @@ import numpy as np
 from LTTserver import LTTserver
 from leapctype import *
 
-objfile = r'C:\Users\champley\Documents\tools\LTT\sampleScripts\FORBILD_head_noEar.pd'
+#objfile = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'FORBILD_head.pd')
+objfile = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'FORBILD_head_noEar.pd')
 
 LTT = LTTserver()
 leapct = tomographicModels()
@@ -110,6 +113,8 @@ for n in range(3):
     #leapct.displayVolume(g_leap_GPU)
     #leapct.displayVolume(g_leap_CPU)
     #'''
+    
+    quit()
     
     #'''
     # Test Backprojection on CPU & GPU

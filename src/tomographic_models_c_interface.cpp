@@ -135,6 +135,11 @@ bool setGPUs(int* whichGPUs, int N)
 	return tomo.setGPUs(whichGPUs, N);
 }
 
+int getGPU()
+{
+	return tomo.getGPU();
+}
+
 bool setProjector(int which)
 {
 	return tomo.setProjector(which);
@@ -205,6 +210,16 @@ int get_numCols()
 	return tomo.get_numCols();
 }
 
+float get_pixelWidth()
+{
+	return tomo.get_pixelWidth();
+}
+
+float get_pixelHeight()
+{
+	return tomo.get_pixelHeight();
+}
+
 int get_numX()
 {
 	return tomo.get_numX();
@@ -218,6 +233,16 @@ int get_numY()
 int get_numZ()
 {
 	return tomo.get_numZ();
+}
+
+float get_voxelWidth()
+{
+	return tomo.get_voxelWidth();
+}
+
+float get_voxelHeight()
+{
+	return tomo.get_voxelHeight();
 }
 
 bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)

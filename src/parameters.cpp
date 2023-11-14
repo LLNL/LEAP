@@ -23,7 +23,8 @@ parameters::parameters()
 	rowVectors = NULL;
 	colVectors = NULL;
 	phis = NULL;
-	setDefaults(1);
+	initialize();
+	//setDefaults(1);
 }
 
 parameters::parameters(int N)
@@ -33,7 +34,53 @@ parameters::parameters(int N)
 	rowVectors = NULL;
 	colVectors = NULL;
 	phis = NULL;
-	setDefaults(N);
+	initialize();
+	//setDefaults(N);
+}
+
+void parameters::initialize()
+{
+	whichGPUs.clear();
+	int numGPUs = numberOfGPUs();
+	if (numGPUs > 0)
+	{
+		whichGPU = 0;
+		for (int i = 0; i < numGPUs; i++)
+			whichGPUs.push_back(i);
+	}
+	else
+		whichGPU = -1;
+	whichProjector = SEPARABLE_FOOTPRINT;
+	volumeDimensionOrder = ZYX;
+	rampID = 2;
+
+	geometry = CONE;
+	detectorType = FLAT;
+	sod = 0.0;
+	sdd = 0.0;
+	numCols = 0;
+	numRows = 0;
+	numAngles = 0;
+	pixelWidth = 0.0;
+	pixelHeight = 0.0;
+	angularRange = 0.0;
+	centerCol = 0.0;
+	centerRow = 0.0;
+	tau = 0.0;
+	rFOVspecified = 0.0;
+
+	normalizeConeAndFanCoordinateFunctions = false;
+
+	axisOfSymmetry = 90.0; // must be less than 30 to be activated
+
+	numX = 0;
+	numY = 0;
+	numZ = 0;
+	voxelHeight = 0.0;
+	voxelWidth = 0.0;
+	offsetX = 0.0;
+	offsetY = 0.0;
+	offsetZ = 0.0;
 }
 
 parameters::parameters(const parameters& other)
@@ -43,7 +90,8 @@ parameters::parameters(const parameters& other)
     rowVectors = NULL;
     colVectors = NULL;
     phis = NULL;
-    setDefaults(1);
+    //setDefaults(1);
+	initialize();
     assign(other);
 }
 
