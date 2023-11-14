@@ -58,7 +58,7 @@ for n in range(3):
     LTT.cmd('diskIO=off')
     LTT.cmd('archdir=pwd')
     LTT.cmd('objfile = ' + str(objfile))
-    LTT.cmd('axisOfSymmetry = 0.0')
+    #LTT.cmd('axisOfSymmetry = 0.0')
     pixelSize = 1.0
     numAngles = int(720.0/pixelSize)
     if LTT.unknown('axisOfSymmetry') == False:

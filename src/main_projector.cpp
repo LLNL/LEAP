@@ -468,7 +468,7 @@ bool setVolumeParams(int param_id, int numX, int numY, int numZ, float voxelWidt
     return p_model->setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool setDefaultVolumeParams(float scale)
+bool setDefaultVolumeParams(int param_id, float scale)
 {
     tomographicModels* p_model;
     if (param_id == -1)

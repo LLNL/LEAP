@@ -20,6 +20,9 @@ class tomographicModels:
     Usage Example:
     from leapctype import *
     leapct = tomographicModels()
+    leapct.setConeParams(...)
+    leapct.setDefaultVolume(...)
+    ...
     leapct.project(g,f)
     '''
 
@@ -29,31 +32,10 @@ class tomographicModels:
         else:
             current_dir = os.path.abspath(os.path.dirname(__file__))
 
-        '''currentDirectoryPath         = os.path.dirname(os.path.realpath(__file__))
-
-        if os.path.isdir(currentDirectoryPath) == False:
-            currentDirectoryPath, thePartIdontWant = os.path.split(currentDirectoryPath)
-        currentDirectoryPath = os.path.join(currentDirectoryPath, "lib")
-        
-        if _platform == "linux" or _platform == "linux2":
-            fullProjectorsPath = os.path.join(currentDirectoryPath, "libprojectors.so")
-        elif _platform == "darwin":
-            fullProjectorsPath = os.path.join(currentDirectoryPath, "libprojectors.dylib")
-        elif _platform == "win32":
-            fullProjectorsPath = os.path.join(currentDirectoryPath, "libprojectors.dll")
-        if os.path.isfile(fullProjectorsPath) == True:
-            fullProjectorsPath = currentDirectoryPath
-        else:
-            fullProjectorsPath, thePartIdontWant = os.path.split(currentDirectoryPath)
-        '''
-
         if _platform == "linux" or _platform == "linux2":
             import readline
             from ctypes import cdll
-            self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "libLEAP.so"))
-        elif _platform == "darwin":
-            from ctypes import cdll
-            self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "libLEAP.dylib"))
+            self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "../build/lib/libleap.so"))
         elif _platform == "win32":
             from ctypes import windll
             self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libLEAP.dll'))
@@ -64,48 +46,91 @@ class tomographicModels:
     def printParameters(self):
         self.libprojectors.printParameters.restype = ctypes.c_bool
         return self.libprojectors.printParameters()
+
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
+    ###################################################################################################################
+    ###################################################################################################################
+    def setConeBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
+        '''
+        The origin of the coordinate system is always at the center of rotation
         
-    def setGPU(self, which):
-        self.libprojectors.setGPU.argtypes = [ctypes.c_int]
-        self.libprojectors.setGPU.restype = ctypes.c_bool
-        return self.libprojectors.setGPU(which)
+        The first three parameters specify the projection data array size
+        numAngles = number of projection angles
+        numRows = number of rows in the x-ray detector
+        numCols = number of columns in the x-ray detector
         
-    def setGPUs(self, listOfGPUs):
-        self.libprojectors.setGPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
-        self.libprojectors.setGPUs.restype = ctypes.c_bool
-        listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
-        return self.libprojectors.setGPUs(listOfGPUs, int(listOfGPUs.size))
+        The next two parameters specify the detector pixel size in mm
+        pixelHeight = the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+        pixelWidth = the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
         
-    def getGPU(self):
-        self.libprojectors.getGPU.restype = ctypes.c_int
-        return self.libprojectors.getGPU()
+        The next two parameters specify the placement of the detector, i.e.,
+        changing these parameters causes shifts in the detector location relative to the source
+        centerRow = the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
+        centerCol = the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
         
-    def setDiameterFOV(self, d):
-        self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
-        self.libprojectors.set_rFOV.restype = ctypes.c_bool
-        return self.libprojectors.set_rFOV(0.5*d)
+        phis = a numpy array for specifying the angles of each projection, measured in degrees
+        
+        sod = source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
+        sdd = source to detector distance, measured in mm
+        '''
+        self.libprojectors.setConeBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
+        self.libprojectors.setConeBeamParams.restype = ctypes.c_bool
+        if type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = self.setAngleArray(numAngles, angularRange)
+        return self.libprojectors.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+            
+    def setFanBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
+        ''' see comments in the setConeBeamParams function '''
+        self.libprojectors.setFanBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
+        self.libprojectors.setFanBeamParams.restype = ctypes.c_bool
+        if type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = self.setAngleArray(numAngles, angularRange)
+        return self.libprojectors.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+
+    def setParallelBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
+        ''' see comments in the setConeBeamParams function '''
+        self.libprojectors.setParallelBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.setParallelBeamParams.restype = ctypes.c_bool
+        if type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = self.setAngleArray(numAngles, angularRange)
+        return self.libprojectors.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
+
+    def setModularBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
+        self.libprojectors.setModularBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.setModularBeamParams.restype = ctypes.c_bool
+        return self.libprojectors.setModularBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
-    def set_axisOfSymmetry(self,val):
-        self.libprojectors.set_axisOfSymmetry.argtypes = [ctypes.c_float]
-        self.libprojectors.set_axisOfSymmetry.restype = ctypes.c_bool
-        return self.libprojectors.set_axisOfSymmetry(val)
-        
-    def clear_axisOfSymmetry(self):
-        self.libprojectors.clear_axisOfSymmetry.argtypes = []
-        self.libprojectors.clear_axisOfSymmetry.restype = ctypes.c_bool
-        return self.libprojectors.clear_axisOfSymmetry()
-        
-    def setProjector(self,which):
-        self.libprojectors.setProjector.argtypes = [ctypes.c_int]
-        self.libprojectors.setProjector.restype = ctypes.c_bool
-        return self.libprojectors.setProjector(which)
-        
-    def setRampFilter(self,which):
-        self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
-        self.libprojectors.set_rampID.restype = ctypes.c_bool
-        return self.libprojectors.set_rampID(which)
-    
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION OF FUNCTIONS SET THE CT VOLUME PARAMETERS
+    ###################################################################################################################
+    ###################################################################################################################
     def setVolumeParams(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
+        '''
+        The first three parameters specify the volume array size
+        For parallel- and fan-beam data, it is required that numRows=numZ
+        numX = number of voxels in the x-dimension
+        numY = number of voxels in the y-dimension
+        numZ = number of voxels in the z-dimension
+        
+        The next two parameters specify the size of the voxels in mm
+        For parallel- and fan-beam data, it is required that pixelHeight=voxelHeigh
+        voxelWidth = voxel pitch (size) in the x and y dimensions
+        voxelHeight = voxel pitch (size) in the z dimension
+        
+        The final three parameters specify the location of the voxel array
+        The default position is that the voxels are centered around the origin
+        and these parameters allow one to shift the volume around
+        For parallel- and fan-beam data, it is required that offsetZ=0.0
+        offsetX = shift the volume in the x-dimension, measured in mm
+        offsetY = shift the volume in the y-dimension, measured in mm
+        offsetZ = shift the volume in the z-dimension, measured in mm
+        '''
         self.libprojectors.setVolumeParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.setVolumeParams.restype = ctypes.c_bool
         if voxelWidth is None:
@@ -126,82 +151,95 @@ class tomographicModels:
         return self.libprojectors.setDefaultVolumeParameters(scale)
         
     def setVolumeDimensionOrder(self,which):
+        '''
+        Sets the order of the dimensions of the volume
+        setVolumeDimensionOrder(0) set the order to XYZ
+        setVolumeDimensionOrder(1) set the order to ZYX (this is the default value)
+        '''
         self.libprojectors.setVolumeDimensionOrder.argtypes = [ctypes.c_int]
         self.libprojectors.setVolumeDimensionOrder.restype = ctypes.c_bool
         return self.libprojectors.setVolumeDimensionOrder(which)
         
     def getVolumeDimensionOrder(self):
         return self.libprojectors.getVolumeDimensionOrder()
-
+        
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION OF FUNCTIONS PROVIDE CONVENIENT ROUTINES TO MAKE THE PROJECTION DATA AND VOLUME DATA NUMPY ARRAYS
+    ###################################################################################################################
+    ###################################################################################################################
+    def allocateProjections(self):
+        N_phis = self.get_numAngles()
+        N_rows = self.get_numRows()
+        N_cols = self.get_numCols()
+        if N_phis > 0 and N_rows > 0 and N_cols > 0:
+            return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
+        else:
+            return None
+        
+    def allocateVolume(self):
+        N_x = self.get_numX()
+        N_y = self.get_numY()
+        N_z = self.get_numZ()
+        if N_x > 0 and N_y > 0 and N_z > 0:
+            if self.getVolumeDimensionOrder() == 0:
+                return np.ascontiguousarray(np.zeros((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
+            else:
+                return np.ascontiguousarray(np.zeros((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
+        else:
+            return None
+            
     def setAngleArray(self,numAngles,angularRange):
         return np.array(range(numAngles)).astype(np.float32) * angularRange/float(numAngles)
     
-    def setConeBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
-        self.libprojectors.setConeBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
-        self.libprojectors.setConeBeamParams.restype = ctypes.c_bool
-        if type(phis) is not np.ndarray:
-            angularRange = float(phis)
-            phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
-            
-        
-    def setFanBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
-        self.libprojectors.setFanBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
-        self.libprojectors.setFanBeamParams.restype = ctypes.c_bool
-        if type(phis) is not np.ndarray:
-            angularRange = float(phis)
-            phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
-
-    def setParallelBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
-        self.libprojectors.setParallelBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.setParallelBeamParams.restype = ctypes.c_bool
-        if type(phis) is not np.ndarray:
-            angularRange = float(phis)
-            phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
-
-    def setModularBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
-        self.libprojectors.setModularBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.setModularBeamParams.restype = ctypes.c_bool
-        return self.libprojectors.setModularBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
-    
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION OF FUNCTIONS EXECUTE THE MAIN CPU/GPU ROUTINES IN LEAP
+    ###################################################################################################################
+    ###################################################################################################################
     def project(self,g,f):
+        ''' Calculate the forward projection of f and stores the result in g '''
         self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.project.restype = ctypes.c_bool
         self.libprojectors.project(g,f,True)
         return g
         
     def filterProjections(self, g):
+        ''' Filters the projection data, g, so that its backprojection results in an FBP reconstruction '''
         self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.filterProjections.restype = ctypes.c_bool
         self.libprojectors.filterProjections(g,True,1.0)
         return g
         
     def rampFilterProjections(self, g):
+        ''' Applies the ramp filter to the projection data which is a subset of the operations in the filterProjections function '''
         self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
         self.libprojectors.rampFilterProjections(g,True,1.0)
         return g
     
     def backproject(self,g,f):
+        ''' Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f '''
         self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.backproject.restype = ctypes.c_bool
         self.libprojectors.backproject(g,f,True)
         return f
         
     def rampFilterVolume(self, f):
+        ''' Applies the 2D ramp filter to the volume data, f, for each z-slice '''
         self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.rampFilterVolume.restype = ctypes.c_bool
         self.libprojectors.rampFilterVolume(f,True)
         return f
 
     def get_FBPscalar(self):
+        ''' Returns the scalar necessary for quantitative reconstruction when using the filterProjections and backproject functions '''
         self.libprojectors.get_FBPscalar.argtypes = []
         self.libprojectors.get_FBPscalar.restype = ctypes.c_float
         return self.libprojectors.get_FBPscalar()
 
     def FBP(self, g, f, inplace=False):
+        ''' Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f '''
         self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.FBP.restype = ctypes.c_bool
         if inplace == False and self.getGPU() < 0:
@@ -212,11 +250,17 @@ class tomographicModels:
         return f
         
     def BPF(self, g, f):
+        ''' Performs a Backprojection Filtration (BPF) reconstruction of the projection data, g, and stores the result in f '''
         self.backproject(g,f)
         self.rampFilterVolume(f)
         f *= self.get_FBPscalar()
         return f
-        
+    
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION PROVIDES ITERATIVE RECONSTRUCTION ALGORITHM THAT USE THE LEAP FORWARD AND BACKPROJECTION OPERATIONS
+    ###################################################################################################################
+    ###################################################################################################################
     def MLEM(self, g, f, numIter):
         if not np.any(f):
             f[:] = 1.0
@@ -369,51 +413,12 @@ class tomographicModels:
         print('\tlambda = ' + str(stepSize))
         return stepSize
 
-    def get_numAngles(self):
-        return self.libprojectors.get_numAngles()
-        
-    def get_numRows(self):
-        return self.libprojectors.get_numRows()
-        
-    def get_numCols(self):
-        return self.libprojectors.get_numCols()
-        
-    def get_pixelHeight(self):
-        self.libprojectors.get_pixelHeight.restype = ctypes.c_float
-        return self.libprojectors.get_pixelHeight()
-        
-    def get_pixelWidth(self):
-        self.libprojectors.get_pixelWidth.restype = ctypes.c_float
-        return self.libprojectors.get_pixelWidth()
-        
-    def get_numX(self):
-        return self.libprojectors.get_numX()
-    
-    def get_numY(self):
-        return self.libprojectors.get_numY()
-    
-    def get_numZ(self):
-        return self.libprojectors.get_numZ()
-        
-    def get_voxelHeight(self):
-        self.libprojectors.get_voxelHeight.restype = ctypes.c_float
-        return self.libprojectors.get_voxelHeight()
-        
-    def get_voxelWidth(self):
-        self.libprojectors.get_voxelWidth.restype = ctypes.c_float
-        return self.libprojectors.get_voxelWidth()
-        
-    def voxelSamples(self):
-        x = (np.array(range(self.get_numX())) - 0.5*(self.get_numX()-1))*self.get_voxelWidth()
-        y = (np.array(range(self.get_numY())) - 0.5*(self.get_numY()-1))*self.get_voxelWidth()
-        z = (np.array(range(self.get_numZ())) - 0.5*(self.get_numZ()-1))*self.get_voxelHeight()
-        if self.getVolumeDimensionOrder() == 0:
-            x,y,z = np.meshgrid(x,y,z, indexing='ij')
-        else:
-            z,y,x = np.meshgrid(z,y,x, indexing='ij')
-        return x,y,z
-        
-        
+
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION OF FUNCTIONS EXECUTE LEAP'S GPU DENOISING FILTERS
+    ###################################################################################################################
+    ###################################################################################################################
     def BlurFilter(self, f, FWHM=2.0):
         #bool BlurFilter(float* f, int, int, int, float FWHM);
         self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
@@ -466,27 +471,100 @@ class tomographicModels:
         return f
         '''
 
-    def allocateProjections(self):
-        N_phis = self.get_numAngles()
-        N_rows = self.get_numRows()
-        N_cols = self.get_numCols()
-        if N_phis > 0 and N_rows > 0 and N_cols > 0:
-            return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
-        else:
-            return None
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION OF FUNCTIONS SET AND GET VARIOUS PARAMETERS, INCLUDING THOSE THAT SET HOW LEAP IS TO BE RUN
+    ###################################################################################################################
+    ###################################################################################################################
+    def setGPU(self, which):
+        self.libprojectors.setGPU.argtypes = [ctypes.c_int]
+        self.libprojectors.setGPU.restype = ctypes.c_bool
+        return self.libprojectors.setGPU(which)
         
-    def allocateVolume(self):
-        N_x = self.get_numX()
-        N_y = self.get_numY()
-        N_z = self.get_numZ()
-        if N_x > 0 and N_y > 0 and N_z > 0:
-            if self.getVolumeDimensionOrder() == 0:
-                return np.ascontiguousarray(np.zeros((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
-            else:
-                return np.ascontiguousarray(np.zeros((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
-        else:
-            return None
+    def setGPUs(self, listOfGPUs):
+        self.libprojectors.setGPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+        self.libprojectors.setGPUs.restype = ctypes.c_bool
+        listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
+        return self.libprojectors.setGPUs(listOfGPUs, int(listOfGPUs.size))
+        
+    def getGPU(self):
+        self.libprojectors.getGPU.restype = ctypes.c_int
+        return self.libprojectors.getGPU()
+        
+    def setDiameterFOV(self, d):
+        self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
+        self.libprojectors.set_rFOV.restype = ctypes.c_bool
+        return self.libprojectors.set_rFOV(0.5*d)
     
+    def set_axisOfSymmetry(self,val):
+        self.libprojectors.set_axisOfSymmetry.argtypes = [ctypes.c_float]
+        self.libprojectors.set_axisOfSymmetry.restype = ctypes.c_bool
+        return self.libprojectors.set_axisOfSymmetry(val)
+        
+    def clear_axisOfSymmetry(self):
+        self.libprojectors.clear_axisOfSymmetry.argtypes = []
+        self.libprojectors.clear_axisOfSymmetry.restype = ctypes.c_bool
+        return self.libprojectors.clear_axisOfSymmetry()
+        
+    def setProjector(self,which):
+        self.libprojectors.setProjector.argtypes = [ctypes.c_int]
+        self.libprojectors.setProjector.restype = ctypes.c_bool
+        return self.libprojectors.setProjector(which)
+        
+    def setRampFilter(self,which):
+        self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
+        self.libprojectors.set_rampID.restype = ctypes.c_bool
+        return self.libprojectors.set_rampID(which)
+
+    ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION RETRIEVES THE VARIOUS CT GEOMETRY AND VOLUME PARAMETERS THAT HAS BEEN SET IN LEAP
+    ###################################################################################################################
+    ###################################################################################################################
+    def get_numAngles(self):
+        return self.libprojectors.get_numAngles()
+        
+    def get_numRows(self):
+        return self.libprojectors.get_numRows()
+        
+    def get_numCols(self):
+        return self.libprojectors.get_numCols()
+        
+    def get_pixelHeight(self):
+        self.libprojectors.get_pixelHeight.restype = ctypes.c_float
+        return self.libprojectors.get_pixelHeight()
+        
+    def get_pixelWidth(self):
+        self.libprojectors.get_pixelWidth.restype = ctypes.c_float
+        return self.libprojectors.get_pixelWidth()
+        
+    def get_numX(self):
+        return self.libprojectors.get_numX()
+    
+    def get_numY(self):
+        return self.libprojectors.get_numY()
+    
+    def get_numZ(self):
+        return self.libprojectors.get_numZ()
+        
+    def get_voxelHeight(self):
+        self.libprojectors.get_voxelHeight.restype = ctypes.c_float
+        return self.libprojectors.get_voxelHeight()
+        
+    def get_voxelWidth(self):
+        self.libprojectors.get_voxelWidth.restype = ctypes.c_float
+        return self.libprojectors.get_voxelWidth()
+        
+    def voxelSamples(self):
+        x = (np.array(range(self.get_numX())) - 0.5*(self.get_numX()-1))*self.get_voxelWidth()
+        y = (np.array(range(self.get_numY())) - 0.5*(self.get_numY()-1))*self.get_voxelWidth()
+        z = (np.array(range(self.get_numZ())) - 0.5*(self.get_numZ()-1))*self.get_voxelHeight()
+        if self.getVolumeDimensionOrder() == 0:
+            x,y,z = np.meshgrid(x,y,z, indexing='ij')
+        else:
+            z,y,x = np.meshgrid(z,y,x, indexing='ij')
+        return x,y,z
+
     def displayVolume(self,vol):
         try:
             import napari
