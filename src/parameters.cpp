@@ -64,6 +64,8 @@ void parameters::assign(const parameters& other)
     this->clearAll();
     
     this->whichGPU = other.whichGPU;
+	for (int i = 0; i < int(other.whichGPUs.size()); i++)
+		this->whichGPUs.push_back(other.whichGPUs[i]);
     this->whichProjector = other.whichProjector;
 	this->rampID = other.rampID;
     this->geometry = other.geometry;
@@ -104,12 +106,16 @@ void parameters::assign(const parameters& other)
 
 void parameters::setDefaults(int N)
 {
-	if (numberOfGPUs() > 0)
+	whichGPUs.clear();
+	int numGPUs = numberOfGPUs();
+	if (numGPUs > 0)
+	{
 		whichGPU = 0;
+		for (int i = 0; i < numGPUs; i++)
+			whichGPUs.push_back(i);
+	}
 	else
 		whichGPU = -1;
-	whichGPUs.clear();
-	whichGPUs.push_back(whichGPU);
     whichProjector = SEPARABLE_FOOTPRINT;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
@@ -615,6 +621,11 @@ float parameters::z_0()
 		return offsetZ - centerRow * ((sod / sdd * pixelHeight) / voxelHeight) * voxelHeight;
 }
 
+float parameters::z_samples(int iz)
+{
+	return iz * voxelHeight + z_0();
+}
+
 bool parameters::anglesAreEquispaced()
 {
 	if (phis == NULL || numAngles < 2)
@@ -640,4 +651,72 @@ float parameters::projectionDataSize()
 float parameters::volumeDataSize()
 {
 	return float(4.0 * double(numX) * double(numY) * double(numZ) / pow(2.0, 30.0));
+}
+
+bool parameters::rowRangeNeededForReconstruction(int firstSlice, int lastSlice , int* rowsNeeded)
+{
+	if (rowsNeeded == NULL || firstSlice > lastSlice)
+		return false;
+
+	if (geometry == PARALLEL || geometry == FAN)
+	{
+		rowsNeeded[0] = max(0, firstSlice);
+		rowsNeeded[1] = min(numRows-1, lastSlice);
+	}
+	else if (geometry == MODULAR)
+	{
+		rowsNeeded[0] = 0;
+		rowsNeeded[1] = numRows - 1;
+	}
+	else
+	{
+		float z_lo = float(firstSlice) * voxelHeight + z_0() - 0.5 * voxelHeight;
+		float z_hi = float(lastSlice) * voxelHeight + z_0() + 0.5 * voxelHeight;
+
+		// v = z / (R - <x, theta>)
+		// v = z / (R - rFOV())
+		float T_v = pixelHeight / sdd;
+		float v_denom_min = sod - rFOV() - voxelWidth;
+		float v_denom_max = sod + rFOV() + voxelWidth;
+		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5*pixelHeight/sdd;
+		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5*pixelHeight/sdd;
+
+		rowsNeeded[0] = max(0, int(floor((v_lo - v_0() / sdd) / T_v)));
+		rowsNeeded[1] = min(numRows-1, int(ceil((v_hi - v_0() / sdd) / T_v)));
+	}
+	return true;
+}
+
+bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded)
+{
+	if (slicesNeeded == NULL || firstRow > lastRow)
+		return false;
+
+	if (geometry == PARALLEL || geometry == FAN)
+	{
+		slicesNeeded[0] = max(0, firstRow);
+		slicesNeeded[1] = min(numZ - 1, lastRow);
+	}
+	else if (geometry == MODULAR)
+	{
+		slicesNeeded[0] = 0;
+		slicesNeeded[1] = numZ - 1;
+	}
+	else
+	{
+		float v_lo = (float(firstRow) * pixelHeight + v_0() - 0.5 * pixelHeight) / sdd;
+		float v_hi = (float(lastRow) * pixelHeight + v_0() + 0.5 * pixelHeight) / sdd;
+
+		// v = z / (R - <x, theta>)
+		// v = z / (R - rFOV())
+		float T_z = voxelHeight;
+		float v_denom_min = sod - rFOV() - voxelWidth;
+		float v_denom_max = sod + rFOV() + voxelWidth;
+		float z_lo = min(v_lo * v_denom_min, v_lo * v_denom_max) - 0.5 * voxelHeight;
+		float z_hi = max(v_hi * v_denom_min, v_hi * v_denom_max) + 0.5 * voxelHeight;
+
+		slicesNeeded[0] = max(0, int(floor((z_lo - z_0()) / T_z)));
+		slicesNeeded[1] = min(numZ - 1, int(ceil((z_hi - z_0()) / T_z)));
+	}
+	return true;
 }

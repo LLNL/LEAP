@@ -91,6 +91,22 @@ bool tomographicModels::backproject_cpu(float* g, float* f)
 	return retVal;
 }
 
+bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
+{
+	if (cpu_to_gpu == true && project_multiGPU(g, f) == true)
+		return true;
+	else
+		return project(g, f, &params, cpu_to_gpu);
+}
+
+bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
+{
+	if (cpu_to_gpu == true && backproject_multiGPU(g, f) == true)
+		return true;
+	else
+		return backproject(g, f, &params, cpu_to_gpu);
+}
+
 bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu)
 {
 	if (ctParams == NULL)
@@ -104,7 +120,7 @@ bool tomographicModels::project(float* g, float* f, parameters* ctParams, bool c
 	{
 		if (cpu_to_gpu)
 		{
-			if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+			if (hasSufficientGPUmemory(ctParams) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;
@@ -170,7 +186,7 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 	{
 		if (cpu_to_gpu)
 		{
-			if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+			if (hasSufficientGPUmemory(ctParams) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;
@@ -226,22 +242,6 @@ bool tomographicModels::backproject(float* g, float* f, parameters* ctParams, bo
 		else
 			return CPUbackproject_modular(g, f, ctParams);
 	}
-}
-
-bool tomographicModels::project(float* g, float* f, bool cpu_to_gpu)
-{
-	if (cpu_to_gpu == true && project_multiGPU(g, f) == true)
-		return true;
-	else
-		return project(g, f, &params, cpu_to_gpu);
-}
-
-bool tomographicModels::backproject(float* g, float* f, bool cpu_to_gpu)
-{
-	if (cpu_to_gpu == true && backproject_multiGPU(g, f) == true)
-		return true;
-	else
-		return backproject(g, f, &params, cpu_to_gpu);
 }
 
 bool tomographicModels::rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
@@ -409,43 +409,62 @@ bool tomographicModels::FBP_multiGPU(float* g, float* f)
 
 bool tomographicModels::project_multiGPU(float* g, float* f)
 {
-	if (params.volumeDimensionOrder != parameters::ZYX)
-		return false;
-	if (int(params.whichGPUs.size()) <= 1)
+	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
 
-	int numSlicesPerChunk = std::min(64, params.numZ);
-	int numChunks = int(ceil(float(params.numZ) / float(numSlicesPerChunk)));
+	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
+	int numRowsPerChunk = std::min(64, params.numRows);
+	int numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
+	if (hasSufficientGPUmemory() == false)
+	{
+		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memNeeded = requiredGPUmemory();
+
+		while (memAvailable < memNeeded * float(numRowsPerChunk) / float(params.numRows))
+			numRowsPerChunk = numRowsPerChunk / 2;
+		if (numRowsPerChunk < 1)
+			return false;
+		numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
+	}
+	else if (int(params.whichGPUs.size()) <= 1 || requiredGPUmemory() <= 0.5)
+		return false;
+
 	if (numChunks <= 1)
 		return false;
 
-	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL)
+	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
 		return false;
 
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
 	#pragma omp parallel for
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
-		int firstSlice = ichunk * numSlicesPerChunk;
-		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ - 1);
-		int numSlices = lastSlice - firstSlice + 1;
+		int firstRow = ichunk * numRowsPerChunk;
+		int lastRow = std::min(firstRow + numRowsPerChunk - 1, params.numRows - 1);
+		int numRows = lastRow - firstRow + 1;
 
-		float* f_chunk = &f[firstSlice * params.numX * params.numY];
+		int sliceRange[2];
+		params.sliceRangeNeededForProjection(firstRow, lastRow, sliceRange);
+		int numSlices = sliceRange[1] - sliceRange[0] + 1;
+
+		float* f_chunk = &f[sliceRange[0] * params.numX * params.numY];
 
 		// make a copy of the relavent rows
-		float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numSlices);
+		float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numRows);
 
 		// make a copy of the params
 		parameters chunk_params;
 		chunk_params = params;
-		chunk_params.numRows = numSlices;
+		chunk_params.numRows = numRows;
 		chunk_params.numZ = numSlices;
+		chunk_params.offsetZ = params.offsetZ + (sliceRange[0] - firstRow) * params.voxelHeight;
+		chunk_params.centerRow = params.centerRow - firstRow;
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
 
 		// Do Computation
 		project(g_chunk, f_chunk, &chunk_params, true);
-		combineRows(g, g_chunk, firstSlice, lastSlice);
+		combineRows(g, g_chunk, firstRow, lastRow);
 
 		// clean up
 		free(g_chunk);
@@ -456,17 +475,30 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 {
-	if (params.volumeDimensionOrder != parameters::ZYX)
+	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
-	if (int(params.whichGPUs.size()) <= 1)
+	
+	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
+	int numSlicesPerChunk = std::min(64, params.numZ);
+	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	if (hasSufficientGPUmemory() == false)
+	{
+		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memNeeded = requiredGPUmemory();
+
+		while (memAvailable < memNeeded * float(numSlicesPerChunk) / float(params.numZ))
+			numSlicesPerChunk = numSlicesPerChunk / 2;
+		if (numSlicesPerChunk < 1)
+			return false;
+		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	}
+	else if (int(params.whichGPUs.size()) <= 1 || requiredGPUmemory() <= 0.5)
 		return false;
 
-	int numSlicesPerChunk = std::min(64, params.numZ);
-	int numChunks = int(ceil(float(params.numZ) / float(numSlicesPerChunk)));
 	if (numChunks <= 1)
 		return false;
 
-	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL)
+	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
 		return false;
 
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
@@ -480,15 +512,29 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		float* f_chunk = &f[firstSlice * params.numX * params.numY];
 
 		// make a copy of the relavent rows
-		float* g_chunk = copyRows(g, firstSlice, lastSlice);
+		int rowRange[2];
+		params.rowRangeNeededForReconstruction(firstSlice, lastSlice, rowRange);
+		float* g_chunk = copyRows(g, rowRange[0], rowRange[1]);
 
 		// make a copy of the params
 		parameters chunk_params;
 		chunk_params = params;
-		chunk_params.numRows = numSlices;
+		chunk_params.numRows = rowRange[1] - rowRange[0] + 1;
 		chunk_params.numZ = numSlices;
+		chunk_params.offsetZ = params.offsetZ + (firstSlice - rowRange[0]) * params.voxelHeight;
+		chunk_params.centerRow = params.centerRow - rowRange[0];
+
+		//v[i] = i*pixelHeight - centerRow * pixelHeight
+		//v[rowRange[0]] = -(centerRow-rowRange[0]) * pixelHeight
+
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
+
+		//printf("slices: (%d, %d); rows: (%d, %d); GPU = %d...\n", firstSlice, lastSlice, rowRange[0], rowRange[1], chunk_params.whichGPU);
+		//float magFactor = 1.0;
+		//if (chunk_params.geometry == parameters::CONE)
+		//	magFactor = chunk_params.sod / chunk_params.sdd;
+		//printf("slices: (%f, %f); rows: (%f, %f); GPU = %d...\n", chunk_params.z_samples(0), chunk_params.z_samples(chunk_params.numZ-1), magFactor*chunk_params.v(0), magFactor*chunk_params.v(chunk_params.numRows-1), chunk_params.whichGPU);
 
 		// Do Computation
 		if (doFBP)
@@ -537,7 +583,7 @@ bool tomographicModels::FBP(float* g, float* f, parameters* ctParams, bool cpu_t
 	}
 	else
 	{
-		if (getAvailableGPUmemory(ctParams->whichGPU) < ctParams->projectionDataSize() + ctParams->volumeDataSize())
+		if (hasSufficientGPUmemory(ctParams) == false)
 		{
 			printf("Error: insufficient GPU memory\n");
 			return false;
@@ -1015,19 +1061,28 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	return diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu, params.whichGPU);
 }
 
-/*
-// Scanner Parameters
-int geometry;
-int detectorType;
-float sod, sdd;
-float pixelWidth, pixelHeight, angularRange;
-int numCols, numRows, numAngles;
-float centerCol, centerRow;
-float* phis;
+float tomographicModels::requiredGPUmemory(parameters* ctParams)
+{
+	if (ctParams != NULL)
+		return ctParams->projectionDataSize() + ctParams->volumeDataSize();
+	else
+		return params.projectionDataSize() + params.volumeDataSize();
+}
 
-// Volume Parameters
-int volumeDimensionOrder;
-int numX, numY, numZ;
-float voxelWidth, voxelHeight;
-float offsetX, offsetY, offsetZ;
-//*/
+bool tomographicModels::hasSufficientGPUmemory(parameters* ctParams)
+{
+	if (ctParams != NULL)
+	{
+		if (getAvailableGPUmemory(ctParams->whichGPU) < requiredGPUmemory(ctParams))
+			return false;
+		else
+			return true;
+	}
+	else
+	{
+		if (getAvailableGPUmemory(params.whichGPU) < requiredGPUmemory())
+			return false;
+		else
+			return true;
+	}
+}
