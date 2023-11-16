@@ -19,7 +19,8 @@ Installation and usage information is posted on the wiki page here: https://gith
 
 
 ## Authors
-Kyle Champley (champley@gmail.com) 
+Kyle Champley (champley@gmail.com)
+
 Hyojin Kim (hkim@llnl.gov)   
 
 
