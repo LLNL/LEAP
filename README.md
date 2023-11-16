@@ -19,8 +19,8 @@ Installation and usage information is posted on the wiki page here: https://gith
 
 
 ## Authors
-Hyojin Kim (hkim@llnl.gov)  
-Kyle Champley (champley@gmail.com)  
+Kyle Champley (champley@gmail.com) 
+Hyojin Kim (hkim@llnl.gov)   
 
 
 ## License
@@ -29,4 +29,4 @@ See [LICENSE](LICENSE) for more details.
 SPDX-License-Identifier: MIT  
 LLNL-CODE-848657  
 
-Please cite our work by referencing this github page and citing our article: Hyojin Kim and Kyle Champley, Differentiable Forward Projector for X-ray Computed Tomography”, ICML, 2023
+Please cite our work by referencing this github page and citing our article: Hyojin Kim and Kyle Champley, "Differentiable Forward Projector for X-ray Computed Tomography”, ICML, 2023
