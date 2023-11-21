@@ -563,6 +563,8 @@ bool CPUbackproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* param
             //v_denom = R_minus_x_dot_theta;
 
             theWeight = sampleConstant * l_phi;
+            if (params->doWeightedBackprojection)
+                theWeight *= params->sod / R_minus_x_dot_theta;
 
             tauInd_low = (tau[0] - u_0) / T_u;
             tauInd_high = (tau[1] - u_0) / T_u;

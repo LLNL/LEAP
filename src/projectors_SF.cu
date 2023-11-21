@@ -232,7 +232,7 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-__global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
+__global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -305,6 +305,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
             x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
             R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
             R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
+            const float bpWeight_A = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
 
             u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
             x_denom = fabs(u_arg * cos_phi - sin_phi);
@@ -355,6 +356,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
             x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
             R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
             R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
+            const float bpWeight_B = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
 
             u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
             x_denom = fabs(u_arg * cos_phi - sin_phi);
@@ -404,6 +406,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
             x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
             R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
             R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
+            const float bpWeight_C = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
 
             u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
             x_denom = fabs(u_arg * cos_phi - sin_phi);
@@ -453,6 +456,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
             x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
             R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
             R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
+            const float bpWeight_D = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
 
             u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
             x_denom = fabs(u_arg * cos_phi - sin_phi);
@@ -497,13 +501,13 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
             //*/
 
             val += (tex3D<float>(g, s_oneAndtwo_A, iv, L) * horizontalWeights_0_A
-                +   tex3D<float>(g, s_three_A, iv, L) * horizontalWeights_1_A)
+                +   tex3D<float>(g, s_three_A, iv, L) * horizontalWeights_1_A) * bpWeight_A
                 +  (tex3D<float>(g, s_oneAndtwo_B, iv, L1) * horizontalWeights_0_B
-                  + tex3D<float>(g, s_three_B, iv, L1) * horizontalWeights_1_B)
+                  + tex3D<float>(g, s_three_B, iv, L1) * horizontalWeights_1_B) * bpWeight_B
                 +  (tex3D<float>(g, s_oneAndtwo_C, iv, L2) * horizontalWeights_0_C
-                  + tex3D<float>(g, s_three_C, iv, L2) * horizontalWeights_1_C)
+                  + tex3D<float>(g, s_three_C, iv, L2) * horizontalWeights_1_C) * bpWeight_C
                 +  (tex3D<float>(g, s_oneAndtwo_D, iv, L3) * horizontalWeights_0_D
-                  + tex3D<float>(g, s_three_D, iv, L3) * horizontalWeights_1_D);
+                  + tex3D<float>(g, s_three_D, iv, L3) * horizontalWeights_1_D) * bpWeight_D;
 
             /*
             val += (tex3D<float>(g, s_oneAndtwo_A, row_high_A, L) * horizontalWeights_0_A
@@ -554,6 +558,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
             x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
             R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
             R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
+            const float bpWeight = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
 
             u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
             x_denom = fabs(u_arg * cos_phi - sin_phi);
@@ -587,7 +592,7 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
             const float s_three_A = ind_last;
 
             val += (tex3D<float>(g, s_oneAndtwo_A, iv, L) * horizontalWeights_0_A
-                + tex3D<float>(g, s_three_A, iv, L) * horizontalWeights_1_A);
+                + tex3D<float>(g, s_three_A, iv, L) * horizontalWeights_1_A) * bpWeight;
 
             /*
             const float row_high_plus_one_A = row_high_A + 1.0f;
@@ -1597,7 +1602,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
     }
     else if (params->geometry == parameters::FAN)
     {
-        fanBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        fanBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, params->doWeightedBackprojection);
     }
     else if (params->geometry == parameters::CONE)
     {

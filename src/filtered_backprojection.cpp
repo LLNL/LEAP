@@ -164,15 +164,20 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		// no transfers to/from GPU are necessary; just run the code
 		filterProjections(g, params, false);
 
+		bool retVal = true;
+		bool doWeightedBackprojection_save = params->doWeightedBackprojection;
+		params->doWeightedBackprojection = true;
 		if (params->isSymmetric())
 		{
 			if (params->whichGPU < 0)
-				return CPUinverse_symmetric(g, f, params);
+				retVal = CPUinverse_symmetric(g, f, params);
 			else
-				return inverse_symmetric(g, f, params, cpu_to_gpu);
+				retVal = inverse_symmetric(g, f, params, cpu_to_gpu);
 		}
 		else
-			return proj.backproject(g, f, params, cpu_to_gpu);
+			retVal = proj.backproject(g, f, params, cpu_to_gpu);
+		params->doWeightedBackprojection = doWeightedBackprojection_save;
+		return retVal;
 	}
 	else
 	{
