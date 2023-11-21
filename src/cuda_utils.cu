@@ -2,6 +2,53 @@
 #include "cuda_runtime.h"
 #include <string.h>
 
+__global__ void cosKernel(float* lhs, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = cos(lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+}
+
+__global__ void sinKernel(float* lhs, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = sin(lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+}
+
+__global__ void expKernel(float* lhs, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = expf(lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+}
+
+__global__ void negExpKernel(float* lhs, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = expf(-lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+}
 
 __global__ void setToConstantKernel(float* lhs, const float c, const int3 dim)
 {
@@ -13,6 +60,18 @@ __global__ void setToConstantKernel(float* lhs, const float c, const int3 dim)
         return;
 
     lhs[iz * dim.x * dim.y + iy * dim.x + ix] = c;
+}
+
+__global__ void equalKernel(float* lhs, const float* rhs, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = rhs[iz * dim.x * dim.y + iy * dim.x + ix];
 }
 
 __global__ void multiplyKernel(float* lhs, const float* rhs, const int3 dim)
@@ -77,6 +136,18 @@ __global__ void subKernel(float* lhs, const float* rhs, const int3 dim)
         return;
 
     lhs[iz * dim.x * dim.y + iy * dim.x + ix] -= rhs[iz * dim.x * dim.y + iy * dim.x + ix];
+}
+
+__global__ void scaleKernel(float* lhs, const float c, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    lhs[iz * dim.x * dim.y + iy * dim.x + ix] *= c;
 }
 
 __global__ void scalarAddKernel(float* lhs, const float c, const float* rhs, const int3 dim)
@@ -170,6 +241,16 @@ cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int which
     return cudaPeekAtLastError();
 }
 
+cudaError_t equal(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    equalKernel <<< dimGrid, dimBlock >>> (dev_lhs, dev_rhs, N);
+    return cudaPeekAtLastError();
+}
+
 cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU)
 {
     cudaSetDevice(whichGPU);
@@ -220,6 +301,16 @@ cudaError_t sub(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU
     return cudaPeekAtLastError();
 }
 
+cudaError_t scale(float* dev_lhs, const float c, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    scaleKernel <<< dimGrid, dimBlock >>> (dev_lhs, c, N);
+    return cudaPeekAtLastError();
+}
+
 cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const int3 N, int whichGPU)
 {
     cudaSetDevice(whichGPU);
@@ -227,6 +318,46 @@ cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
     scalarAddKernel <<< dimGrid, dimBlock >>> (dev_lhs, c, dev_rhs, N);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t cosFcn(float* dev_lhs, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    cosKernel <<< dimGrid, dimBlock >>> (dev_lhs, N);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t sinFcn(float* dev_lhs, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    sinKernel <<< dimGrid, dimBlock >>> (dev_lhs, N);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t expFcn(float* dev_lhs, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    expKernel <<< dimGrid, dimBlock >>> (dev_lhs, N);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t negExpFcn(float* dev_lhs, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    negExpKernel <<< dimGrid, dimBlock >>> (dev_lhs, N);
     return cudaPeekAtLastError();
 }
 

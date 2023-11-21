@@ -22,13 +22,15 @@ if cuda:
 
     source_files = ['main_projector.cpp', 
                  'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
-                 'projectors_cpu.cpp', 'projectors_SF_cpu.cpp',
-                 'projectors_symmetric_cpu.cpp', 'parameters.cpp', 
-                 'ramp_filter_cpu.cpp', 'cuda_utils.cu', 
-                 'noise_filters.cu', 'ramp_filter.cu', 
-                 'ray_weighting.cu', 'total_variation.cu', 
-                 'projectors.cu', 'projectors_extendedSF.cu',
-                 'projectors_symmetric.cu','projectors_SF.cu']
+                 'parameters.cpp', 'projectors.cpp', 
+                 'projectors_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
+                 'projectors_SF_cpu.cpp', 'ramp_filter_cpu.cpp', 
+                 'filtered_backprojection.cpp', 'projectors_Siddon.cu',
+                 'projectors_SF.cu', 'projectors_extendedSF.cu', 
+                 'ramp_filter.cu', 'noise_filters.cu', 
+                 'total_variation.cu', 'cuda_utils.cu', 
+                 'ray_weighting.cu', 'projectors_symmetric.cu', 
+                 'projectors_attenuated.cu']
     for i in range(len(source_files)):
         source_files[i] = os.path.join('src', source_files[i])
 
@@ -40,10 +42,11 @@ if cuda:
     )
 else:
     source_files=['main_projector.cpp', 
-                 'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
-                 'projectors_cpu.cpp', 'projectors_SF_cpu.cpp',
-                 'projectors_symmetric_cpu.cpp', 'parameters.cpp',
-                 'ramp_filter_cpu.cpp']
+                  'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
+                  'parameters.cpp', 'projectors.cpp', 
+                  'projectors_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
+                  'projectors_SF_cpu.cpp', 'ramp_filter_cpu.cpp', 
+                  'filtered_backprojection.cpp']
     for i in range(len(source_files)):
         source_files[i] = os.path.join('src',source_files[i])
 

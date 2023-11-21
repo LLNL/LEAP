@@ -37,12 +37,19 @@ bool setProjectionGPUparams(parameters*, int4&, float4&, float4&, bool doNormali
 bool setVolumeGPUparams(parameters*, int4&, float4&, float4&);
 
 extern cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
+extern cudaError_t equal(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t divide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t add(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t add(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t sub(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
+extern cudaError_t scale(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const int3 N, int whichGPU = 0);
+
+extern cudaError_t cosFcn(float* dev_lhs, const int3 N, int whichGPU = 0);
+extern cudaError_t sinFcn(float* dev_lhs, const int3 N, int whichGPU = 0);
+extern cudaError_t expFcn(float* dev_lhs, const int3 N, int whichGPU = 0);
+extern cudaError_t negExpFcn(float* dev_lhs, const int3 N, int whichGPU = 0);
 
 extern float sum(const float* dev_lhs, const int3 N, int whichGPU = 0);
 extern float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);

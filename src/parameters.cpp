@@ -23,6 +23,7 @@ parameters::parameters()
 	rowVectors = NULL;
 	colVectors = NULL;
 	phis = NULL;
+	mu = NULL;
 	initialize();
 	//setDefaults(1);
 }
@@ -34,6 +35,7 @@ parameters::parameters(int N)
 	rowVectors = NULL;
 	colVectors = NULL;
 	phis = NULL;
+	mu = NULL;
 	initialize();
 	//setDefaults(N);
 }
@@ -51,8 +53,10 @@ void parameters::initialize()
 	else
 		whichGPU = -1;
 	whichProjector = SEPARABLE_FOOTPRINT;
+	doWeightedBackprojection = false;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
+	colShiftFromFilter = 0.0;
 
 	geometry = CONE;
 	detectorType = FLAT;
@@ -68,6 +72,9 @@ void parameters::initialize()
 	centerRow = 0.0;
 	tau = 0.0;
 	rFOVspecified = 0.0;
+
+	muCoeff = 0.0;
+	muRadius = 0.0;
 
 	normalizeConeAndFanCoordinateFunctions = false;
 
@@ -115,7 +122,12 @@ void parameters::assign(const parameters& other)
 	for (int i = 0; i < int(other.whichGPUs.size()); i++)
 		this->whichGPUs.push_back(other.whichGPUs[i]);
     this->whichProjector = other.whichProjector;
+	this->doWeightedBackprojection = other.doWeightedBackprojection;
 	this->rampID = other.rampID;
+	this->colShiftFromFilter = other.colShiftFromFilter;
+	this->mu = other.mu;
+	this->muCoeff = other.muCoeff;
+	this->muRadius = other.muRadius;
     this->geometry = other.geometry;
     this->detectorType = other.detectorType;
     this->sod = other.sod;
@@ -165,8 +177,10 @@ void parameters::setDefaults(int N)
 	else
 		whichGPU = -1;
     whichProjector = SEPARABLE_FOOTPRINT;
+	doWeightedBackprojection = false;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
+	colShiftFromFilter = 0.0;
 
 	geometry = CONE;
 	detectorType = FLAT;
@@ -323,6 +337,14 @@ bool parameters::useSF()
 bool parameters::isSymmetric()
 {
 	if (numAngles == 1 && fabs(axisOfSymmetry) <= 30.0 && (geometry == CONE || geometry == PARALLEL))
+		return true;
+	else
+		return false;
+}
+
+bool parameters::muSpecified()
+{
+	if (mu != NULL || (muCoeff != 0.0 && muRadius > 0.0))
 		return true;
 	else
 		return false;
@@ -567,6 +589,21 @@ bool parameters::setAngles()
 	}
 }
 
+bool parameters::phaseShift(float radians)
+{
+	if (phis == NULL || numAngles <= 0)
+		return false;
+	else
+	{
+		if (fabs(radians) > 2.0 * PI)
+			printf("Warning: phaseShift argument is given in radians\n");
+		for (int i = 0; i < numAngles; i++)
+			phis[i] += radians;
+
+		return true;
+	}
+}
+
 bool parameters::setAngles(float* phis_new, int numAngles_new)
 {
 	if (phis != NULL)
@@ -616,7 +653,7 @@ bool parameters::setSourcesAndModules(float* sourcePositions_in, float* moduleCe
 
 float parameters::u_0()
 {
-	return -centerCol * pixelWidth;
+	return -(centerCol + colShiftFromFilter) * pixelWidth;
 }
 
 float parameters::v_0()
@@ -767,4 +804,20 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 		slicesNeeded[1] = min(numZ - 1, int(ceil((z_hi - z_0()) / T_z)));
 	}
 	return true;
+}
+
+float parameters::requiredGPUmemory()
+{
+	if (mu != NULL)
+		return projectionDataSize() + 2.0*volumeDataSize();
+	else
+		return projectionDataSize() + volumeDataSize();
+}
+
+bool parameters::hasSufficientGPUmemory()
+{
+	if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory())
+		return false;
+	else
+		return true;
 }

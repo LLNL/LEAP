@@ -1,7 +1,16 @@
+
+#ifndef __TOMOGRAPHIC_MODELS_H
+#define __TOMOGRAPHIC_MODELS_H
+
+#ifdef WIN32
 #pragma once
+#endif
+
 
 #include <stdlib.h>
 #include "parameters.h"
+#include "projectors.h"
+#include "filtered_backprojection.h"
 
 class tomographicModels
 {
@@ -17,10 +26,12 @@ public:
 
 	bool project(float* g, float* f, bool cpu_to_gpu);
 	bool backproject(float* g, float* f, bool cpu_to_gpu);
-	bool FBP(float* g, float* f, bool cpu_to_gpu);
+	bool weightedBackproject(float* g, float* f, bool cpu_to_gpu);
+	bool doFBP(float* g, float* f, bool cpu_to_gpu);
 
+	bool HilbertFilterProjections(float* g, bool cpu_to_gpu, float scalar);
 	bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar);
-	bool filterProjections(float* g, bool cpu_to_gpu, float scalar);
+	bool filterProjections(float* g, bool cpu_to_gpu);
 
 	bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
@@ -68,6 +79,10 @@ public:
 
 	float get_FBPscalar();
 
+	bool setAttenuationMap(float*);
+	bool setAttenuationMap(float, float);
+	bool clearAttenuationMap();
+
 	// Filters for 3D data
 	bool BlurFilter(float* f, int, int, int, float FWHM, bool cpu_to_gpu);
 	bool MedianFilter(float* f, int, int, int, float threshold, bool cpu_to_gpu);
@@ -81,10 +96,6 @@ public:
 	parameters params;
 private:
 
-	bool project(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
-	bool backproject(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
-	bool FBP(float* g, float* f, parameters* ctParams, bool cpu_to_gpu);
-
 	bool project_multiGPU(float* g, float* f);
 	bool backproject_multiGPU(float* g, float* f);
 	bool FBP_multiGPU(float* g, float* f);
@@ -93,9 +104,8 @@ private:
 	float* copyRows(float*, int, int);
 	bool combineRows(float*, float*, int, int);
 
-	bool rampFilterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
-	bool filterProjections(float* g, parameters* ctParams, bool cpu_to_gpu, float scalar);
-
-	float requiredGPUmemory(parameters* ctParams = NULL);
-	bool hasSufficientGPUmemory(parameters* ctParams = NULL);
+	filteredBackprojection FBP;
+	projectors proj;
 };
+
+#endif

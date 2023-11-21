@@ -6,7 +6,11 @@
 #endif
 
 #include "parameters.h"
+#include <complex>
+typedef std::complex<double> Complex;
 
+bool conv1D_cpu(float*& g, parameters* params, float scalar = 1.0, int whichFilter = 0);
+bool Hilbert1D_cpu(float*& g, parameters* params, float scalar = 1.0);
 bool rampFilter1D_cpu(float*& g, parameters* params, float scalar = 1.0);
 float* rampFilterFrequencyResponseMagnitude_cpu(int N, parameters* params);
 
@@ -16,7 +20,13 @@ double rampFrequencyResponse(double X, double T);
 double frequencySamples(int i, int N, double T);
 double timeSamples(int i, int N);
 double rampImpulseResponse(int N, double T, int n, int rampID);
-double* rampImpulseResponse(int N, double T, int rampID);
+double* rampImpulseResponse(int N, double T, parameters* params);
+
+double rampImpulseResponse_bandLimited(int N, double T, int i, float mu);
+
+// Hilbert Transform
+double* HilbertTransformImpulseResponse(int N, int whichDirection = 1);
+Complex* HilbertTransformFrequencyResponse_cpu(int N, parameters* params);
 
 bool splitLeftAndRight(float* g, float* g_left, float* g_right, parameters* params);
 bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* params);

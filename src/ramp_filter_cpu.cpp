@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <algorithm>
 
-#include <complex>
 #include <iostream>
 #include <valarray>
 #include <omp.h>
@@ -12,7 +11,7 @@
 #define PI 3.141592653589793
 #endif
 
-typedef std::complex<double> Complex;
+//typedef std::complex<double> Complex;
 typedef std::valarray<Complex> CArray;
 
 // source: https://tfetimes.com/c-fast-fourier-transform/
@@ -57,14 +56,36 @@ void ifft(CArray& x)
 
 bool rampFilter1D_cpu(float*& g, parameters* params, float scalar)
 {
+    return conv1D_cpu(g, params, scalar, 0);
+}
+
+bool Hilbert1D_cpu(float*& g, parameters* params, float scalar)
+{
+    return conv1D_cpu(g, params, scalar, 1);
+}
+
+bool conv1D_cpu(float*& g, parameters* params, float scalar, int whichFilter)
+{
     int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
     //int N_H_over2 = N_H / 2 + 1;
-    float* H_real = rampFilterFrequencyResponseMagnitude_cpu(N_H, params);
+    float* H_real = NULL;
+    Complex* H_comp = NULL;
+    if (whichFilter == 0)
+        H_real = rampFilterFrequencyResponseMagnitude_cpu(N_H, params);
+    else
+        H_comp = HilbertTransformFrequencyResponse_cpu(N_H, params);
     if (scalar != 1.0)
     {
         for (int i = 0; i < N_H; i++)
-            H_real[i] *= scalar;
+        {
+            if (H_real != NULL)
+                H_real[i] *= scalar;
+            if (H_comp != NULL)
+                H_comp[i] *= scalar;
+        }
     }
+    //for (int i = 0; i < N_H; i++)
+    //    printf("%f, %f\n", real(H_comp[i])*float(N_H), imag(H_comp[i]) * float(N_H));
 
     omp_set_num_threads(omp_get_num_procs());
     #pragma omp parallel for
@@ -91,7 +112,12 @@ bool rampFilter1D_cpu(float*& g, parameters* params, float scalar)
 
             // Multiply by filter
             for (int i = 0; i < N_H; i++)
-                data[i] *= H_real[i];
+            {
+                if (H_real != NULL)
+                    data[i] *= H_real[i];
+                if (H_comp != NULL)
+                    data[i] *= H_comp[i];
+            }
 
             // Do IFFT
             ifft(data);
@@ -102,7 +128,10 @@ bool rampFilter1D_cpu(float*& g, parameters* params, float scalar)
         }
         delete[] paddedArray;
     }
-    delete[] H_real;
+    if (H_real != NULL)
+        delete[] H_real;
+    if (H_comp != NULL)
+        delete[] H_comp;
 
     return true;
 }
@@ -118,9 +147,7 @@ float* rampFilterFrequencyResponseMagnitude_cpu(int N, parameters* params)
             isCurved = true;
     }
 
-    int rampID = params->rampID;
-
-    double* h_d = rampImpulseResponse(N, T, rampID);
+    double* h_d = rampImpulseResponse(N, T, params);
     float* h = new float[N];
     for (int i = 0; i < N; i++)
     {
@@ -262,12 +289,88 @@ double rampImpulseResponse(int N, double T, int n, int rampID)
     return retVal;
 }
 
-double* rampImpulseResponse(int N, double T, int rampID)
+double* rampImpulseResponse(int N, double T, parameters* params)
 {
     double* h = (double*)malloc(sizeof(double) * N);
     for (int i = 0; i < N; i++)
-        h[i] = rampImpulseResponse(N, T, i, rampID);
+    {
+        if (params->muCoeff == 0.0)
+            h[i] = rampImpulseResponse(N, T, i, params->rampID);
+        else
+            h[i] = rampImpulseResponse(N, T, i, 2) - rampImpulseResponse_bandLimited(N, T, i, fabs(params->muCoeff) * params->pixelWidth / (2.0*PI));
+    }
     return h;
+}
+
+double rampImpulseResponse_bandLimited(int N, double T, int i, float mu)
+{
+    double retVal;
+    double s = timeSamples(i, N);
+    if (s != 0.0)
+        retVal = (2.0 * PI * s * mu * sin(2.0 * PI * mu * s) + cos(2.0 * PI * mu * s) - 1.0) / (PI * s * s);
+    else
+        retVal = 2.0 * PI * mu * mu;
+
+    retVal = retVal / T;
+    return retVal;
+}
+
+double* HilbertTransformImpulseResponse(int N, int whichDirection/* = 1*/)
+{
+    double shifter;
+    if (whichDirection < 0)
+        shifter = -0.5;
+    else if (whichDirection > 0)
+        shifter = 0.5;
+    else
+        shifter = 0.0;
+    double* h = (double*)malloc(sizeof(double) * N);
+    double s;
+    for (int i = 0; i < N; i++)
+    {
+        s = timeSamples(i, N) + shifter;
+        if (shifter != 0.0)
+            h[i] = 1.0 / (PI * s);
+        else
+        {
+            if (i % 2 == 0)
+                h[i] = 0.0;
+            else
+                h[i] = 2.0 / (PI * s);
+        }
+    }
+
+    return h;
+}
+
+Complex* HilbertTransformFrequencyResponse_cpu(int N, parameters* params)
+{
+    //double* h_d = HilbertTransformImpulseResponse(N);
+    double* h_d = HilbertTransformImpulseResponse(N, 0);
+    float* h = new float[N];
+    for (int i = 0; i < N; i++)
+        h[i] = h_d[i];
+    delete[] h_d;
+
+    Complex* test = new Complex[N];
+    for (int i = 0; i < N; i++)
+        test[i] = h[i];
+    CArray data(test, N);
+
+    // forward fft
+    fft(data);
+
+    Complex* H_comp = new Complex[N];
+    for (int i = 0; i < N; i++)
+    {
+        H_comp[i] = data[i] / Complex(N);
+    }
+
+    // Clean up
+    delete[] h;
+    delete[] test;
+
+    return H_comp;
 }
 
 bool splitLeftAndRight(float* g, float* g_left, float* g_right, parameters* params)

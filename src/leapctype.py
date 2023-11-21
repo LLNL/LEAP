@@ -206,9 +206,9 @@ class tomographicModels:
         
     def filterProjections(self, g):
         ''' Filters the projection data, g, so that its backprojection results in an FBP reconstruction '''
-        self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
+        self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.filterProjections.restype = ctypes.c_bool
-        self.libprojectors.filterProjections(g,True,1.0)
+        self.libprojectors.filterProjections(g, True)
         return g
         
     def rampFilterProjections(self, g):
@@ -217,12 +217,26 @@ class tomographicModels:
         self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
         self.libprojectors.rampFilterProjections(g,True,1.0)
         return g
+        
+    def HilbertFilterProjections(self, g):
+        ''' Applies the Hilbert filter to the projection data which is a subset of the operations in the filterProjections function '''
+        self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
+        self.libprojectors.HilbertFilterProjections.restype = ctypes.c_bool
+        self.libprojectors.HilbertFilterProjections(g,True,1.0)
+        return g
     
     def backproject(self,g,f):
         ''' Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f '''
         self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.backproject.restype = ctypes.c_bool
         self.libprojectors.backproject(g,f,True)
+        return f
+        
+    def weightedBackproject(self,g,f):
+        ''' Calculate the weighted backprojection (adjoint of the forward projection) of g and stores the result in f '''
+        self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.weightedBackproject.restype = ctypes.c_bool
+        self.libprojectors.weightedBackproject(g,f,True)
         return f
         
     def rampFilterVolume(self, f):
@@ -301,6 +315,12 @@ class tomographicModels:
             self.backproject(Pd,d)
             f += 0.9*d / Pstar1
         return f
+        
+    def LS(self, g, f, numIter, SQS=False):
+        return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, SQS)
+        
+    def WLS(self, g, f, numIter, W=None, SQS=False):
+        return self.RWLS(g, f, numIter, 0.0, 0.0, W, SQS)
         
     def RLS(self, g, f, numIter, delta=0.0, beta=0.0, SQS=False):
         return self.RWLS(g, f, numIter, delta, beta, 1.0, SQS)
@@ -413,6 +433,8 @@ class tomographicModels:
         print('\tlambda = ' + str(stepSize))
         return stepSize
 
+    def ASDPOCS(self, g, f, numIter, numTV, delta=0.0):
+        print('Not implemented yet!')
 
     ###################################################################################################################
     ###################################################################################################################
@@ -515,6 +537,20 @@ class tomographicModels:
         self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
         self.libprojectors.set_rampID.restype = ctypes.c_bool
         return self.libprojectors.set_rampID(which)
+        
+    def setAttenuationMap(self, mu):
+        self.libprojectors.setAttenuationMap.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.setAttenuationMap.restype = ctypes.c_bool
+        return self.libprojectors.setAttenuationMap(mu)
+        
+    def setCylindircalAttenuationMap(self, c, R):
+        self.libprojectors.setCylindircalAttenuationMap.argtypes = [ctypes.c_float, ctypes.c_float]
+        self.libprojectors.setCylindircalAttenuationMap.restype = ctypes.c_bool
+        return self.libprojectors.setCylindircalAttenuationMap(c, R)
+        
+    def clearAttenuationMap(self):
+        self.libprojectors.clearAttenuationMap.restype = ctypes.c_bool
+        return self.libprojectors.clearAttenuationMap()
 
     ###################################################################################################################
     ###################################################################################################################

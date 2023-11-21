@@ -782,12 +782,23 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
                 const float y = iy * params->voxelWidth + params->y_0();
                 if (x*x + y*y <= rFOVsq && s_arg > -1.0 && s_arg < double(params->numCols))
                 {
+                    float expAttenWeight = 1.0;
+                    if (params->muCoeff != 0.0)
+                    {
+                        float x_dot_theta_perp = -sin_phi * x + cos_phi * y; // u
+                        float x_dot_theta = x * cos_phi + y * sin_phi; // t
+                        if (x_dot_theta_perp * x_dot_theta_perp + x_dot_theta * x_dot_theta < params->muRadius * params->muRadius)
+                            expAttenWeight = exp(-params->muCoeff * (sqrt(params->muRadius * params->muRadius - x_dot_theta_perp * x_dot_theta_perp) - x_dot_theta));
+                        else
+                            expAttenWeight = 0.0;
+                    }
+
                     float* zLine = &xSlice[iy*params->numZ];
                     
                     s_low = int(s_arg);
                     if (s_arg < 0.0 || s_arg > N_s_minus_one)
                     {
-                        ds_conj = maxWeight;
+                        ds_conj = maxWeight * expAttenWeight;
                         for (int k = 0; k < params->numZ; k++)
                             aProj[(k+ iv_shift)*params->numCols+s_low] += ds_conj*zLine[k];
                     }
@@ -797,13 +808,13 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
                         ds = s_arg - double(s_low);
                         if (A > ds)
                         {
-                            ds_conj = maxWeight;
+                            ds_conj = maxWeight * expAttenWeight;
                             for (int k = 0; k < params->numZ; k++)
                                 aProj[(k + iv_shift)*params->numCols+s_low] += ds_conj*zLine[k];
                         }
                         else if (ds > one_minus_A)
                         {
-                            ds = maxWeight;
+                            ds = maxWeight * expAttenWeight;
                             for (int k = 0; k < params->numZ; k++)
                                 aProj[(k + iv_shift)*params->numCols+s_high] += ds*zLine[k];
                         }
@@ -811,6 +822,9 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
                         {
                             ds_conj = T_x_mult_l_phi*(one_minus_A - ds);
                             ds = maxWeight - ds_conj;
+                            ds_conj *= expAttenWeight;
+                            ds *= expAttenWeight;
+
                             for (int k = 0; k < params->numZ; k++)
                             {
                                 aProj[(k + iv_shift)*params->numCols+s_low] += ds_conj*zLine[k];
@@ -876,12 +890,23 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
                 const float y = iy * params->voxelWidth + params->y_0();
                 if (x*x + y*y <= rFOVsq && s_arg > -1.0 && s_arg < double(params->numCols))
                 {
+                    float expAttenWeight = 1.0;
+                    if (params->muCoeff != 0.0)
+                    {
+                        float x_dot_theta_perp = -sin_phi * x + cos_phi * y; // u
+                        float x_dot_theta = x * cos_phi + y * sin_phi; // t
+                        if (x_dot_theta_perp * x_dot_theta_perp + x_dot_theta * x_dot_theta < params->muRadius * params->muRadius)
+                            expAttenWeight = exp(-params->muCoeff * (sqrt(params->muRadius * params->muRadius - x_dot_theta_perp * x_dot_theta_perp) - x_dot_theta));
+                        else
+                            expAttenWeight = 0.0;
+                    }
+
                     float* zLine = &xSlice[iy*params->numZ];
                     
                     s_low = int(s_arg);
                     if (s_arg < 0.0 || s_arg > N_s_minus_one)
                     {
-                        ds_conj = maxWeight;
+                        ds_conj = maxWeight * expAttenWeight;
                         for (int k = 0; k < params->numZ; k++)
                             zLine[k] += ds_conj*aProj[(k+iv_shift)*params->numCols+s_low];
                     }
@@ -891,13 +916,13 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
                         ds = s_arg - double(s_low);
                         if (A > ds)
                         {
-                            ds_conj = maxWeight;
+                            ds_conj = maxWeight * expAttenWeight;
                             for (int k = 0; k < params->numZ; k++)
                                 zLine[k] += ds_conj*aProj[(k + iv_shift)*params->numCols+s_low];
                         }
                         else if (ds > one_minus_A)
                         {
-                            ds = maxWeight;
+                            ds = maxWeight * expAttenWeight;
                             for (int k = 0; k < params->numZ; k++)
                                 zLine[k] += ds*aProj[(k + iv_shift)*params->numCols+s_high];
                         }
@@ -905,6 +930,10 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
                         {
                             ds_conj = T_x_mult_l_phi*(one_minus_A - ds);
                             ds = maxWeight - ds_conj;
+
+                            ds_conj *= expAttenWeight;
+                            ds *= expAttenWeight;
+
                             for (int k = 0; k < params->numZ; k++)
                                 zLine[k] += ds_conj*aProj[(k + iv_shift)*params->numCols+s_low] + ds*aProj[(k + iv_shift)*params->numCols+s_high];
                         }

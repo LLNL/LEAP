@@ -7,6 +7,21 @@
 #include <math.h>
 #include <stdio.h>
 
+__global__ void convertARTtoERTkernel(float* g, const float muCoeff, const float muRadius, const float T_u, const float u_0, int3 N)
+{
+	const int i = threadIdx.x + blockIdx.x * blockDim.x;
+	const int j = threadIdx.y + blockIdx.y * blockDim.y;
+	const int k = threadIdx.z + blockIdx.z * blockDim.z;
+	if (i >= N.x || j >= N.y || k >= N.z)
+		return;
+
+	//weight = np.sqrt(np.clip(150.0 * *2 - u * *2, 0.0, 150.0 * *2))
+	//weight = np.exp(muCoeff * weight)
+	const float u = T_u * k + u_0;
+	if (fabs(u) < muRadius)
+		g[i * N.y * N.z + j * N.z + k] *= expf(muCoeff * sqrt(muRadius*muRadius - u*u));
+}
+
 __global__ void applyWeightsKernel(float* g, const float* w_view, const float* w_ray, int3 N)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -482,7 +497,66 @@ bool applyPostRampFilterWeights(float* g, parameters* params, bool cpu_to_gpu)
 		return applyPostRampFilterWeights_GPU(g, params, cpu_to_gpu);
 }
 
-bool FBP_inplaceFiltering(float* g, float* f, parameters* params, bool cpu_to_gpu)
+bool convertARTtoERT(float* g, parameters* params, bool cpu_to_gpu, bool doInverse)
 {
-	return false;
+	if (params->whichGPU < 0)
+		return convertARTtoERT_CPU(g, params, doInverse);
+	else
+	{
+		cudaSetDevice(params->whichGPU);
+		cudaError_t cudaStatus;
+
+		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
+		float* dev_g = 0;
+		if (cpu_to_gpu)
+			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		else
+			dev_g = g;
+
+		float muCoeff = params->muCoeff;
+		if (doInverse)
+			muCoeff *= -1.0;
+
+		dim3 dimBlock = setBlockSize(N);
+		dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+			int(ceil(double(N.z) / double(dimBlock.z))));
+		convertARTtoERTkernel <<< dimGrid, dimBlock >>> (dev_g, muCoeff, params->muRadius, params->pixelWidth, params->u_0(), N);
+
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess)
+		{
+			fprintf(stderr, "kernel failed!\n");
+			fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+		}
+
+		if (cpu_to_gpu)
+			pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+
+		if (cpu_to_gpu == true && dev_g != 0)
+			cudaFree(dev_g);
+
+		return true;
+	}
+}
+
+bool convertARTtoERT_CPU(float* g, parameters* params, bool doInverse)
+{
+	float muCoeff = params->muCoeff;
+	if (doInverse)
+		muCoeff *= -1.0;
+	for (int iphi = 0; iphi < params->numAngles; iphi++)
+	{
+		for (int iv = 0; iv < params->numRows; iv++)
+		{
+			for (int iu = 0; iu < params->numCols; iu++)
+			{
+				float u = params->u(iu);
+
+				if (fabs(u) < params->muRadius)
+					g[iphi * params->numRows * params->numCols + iv * params->numCols + iu] *= exp(muCoeff * sqrt(params->muRadius * params->muRadius - u * u));
+			}
+		}
+	}
+	return true;
 }

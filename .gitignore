@@ -1,3 +1,6 @@
+# specific files
+test_ART.py
+
 # data files
 *.dat
 *.raw

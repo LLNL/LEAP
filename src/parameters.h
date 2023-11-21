@@ -41,6 +41,8 @@ public:
 	bool setAngles(float*, int);
 	bool setAngles();
 
+	bool phaseShift(float radians);
+
 	bool anglesAreEquispaced();
 
 	float u_0();
@@ -61,6 +63,7 @@ public:
 	int whichGPU;
 	std::vector<int> whichGPUs;
     int whichProjector;
+	int doWeightedBackprojection;
 
 	// Scanner Parameters
 	int geometry;
@@ -72,12 +75,23 @@ public:
 	float* phis;
 	float tau;
 	float rFOVspecified;
+
+
+	// Attenuated Radon Transform
+	float* mu;
+	float muCoeff;
+	float muRadius;
+	bool muSpecified();
+
+	// Reconstruction Parameters
 	int rampID;
+	float colShiftFromFilter;
+	float axisOfSymmetry;
     
     float T_phi();
     float rFOV();
 
-	float axisOfSymmetry;
+	
 	bool isSymmetric();
     bool useSF();
 	bool setToZero(float*, int);
@@ -92,6 +106,8 @@ public:
 
 	bool rowRangeNeededForReconstruction(int, int, int*);
 	bool sliceRangeNeededForProjection(int, int, int*);
+	float requiredGPUmemory();
+	bool hasSufficientGPUmemory();
 
 	// Volume Parameters
 	int volumeDimensionOrder;
@@ -107,6 +123,7 @@ public:
 	float* rowVectors;
 	float* colVectors;
 
+	// Enums
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };

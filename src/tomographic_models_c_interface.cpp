@@ -60,9 +60,19 @@ bool backproject(float* g, float* f, bool cpu_to_gpu)
 	return tomo.backproject(g, f, cpu_to_gpu);
 }
 
-bool filterProjections(float* g, bool cpu_to_gpu, float scalar)
+bool weightedBackproject(float* g, float* f, bool cpu_to_gpu)
 {
-	return tomo.filterProjections(g, cpu_to_gpu, scalar);
+	return tomo.weightedBackproject(g, f, cpu_to_gpu);
+}
+
+bool filterProjections(float* g, bool cpu_to_gpu)
+{
+	return tomo.filterProjections(g, cpu_to_gpu);
+}
+
+bool HilbertFilterProjections(float* g, bool cpu_to_gpu, float scalar)
+{
+	return tomo.HilbertFilterProjections(g, cpu_to_gpu, scalar);
 }
 
 bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
@@ -77,7 +87,7 @@ bool rampFilterVolume(float* f, bool cpu_to_gpu)
 
 bool FBP(float* g, float* f, bool cpu_to_gpu)
 {
-	return tomo.FBP(g, f, cpu_to_gpu);
+	return tomo.doFBP(g, f, cpu_to_gpu);
 }
 
 float get_FBPscalar()
@@ -163,6 +173,21 @@ bool set_rFOV(float rFOV_in)
 bool set_rampID(int whichRampFilter)
 {
 	return tomo.set_rampID(whichRampFilter);
+}
+
+bool setAttenuationMap(float* mu)
+{
+	return tomo.setAttenuationMap(mu);
+}
+
+bool setCylindircalAttenuationMap(float c, float R)
+{
+	return tomo.setAttenuationMap(c, R);
+}
+
+bool clearAttenuationMap()
+{
+	return tomo.clearAttenuationMap();
 }
 
 bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)

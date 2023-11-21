@@ -22,9 +22,10 @@ set(HEADER
   tomographic_models.h
   tomographic_models_c_interface.h
   parameters.h
+  projectors.h
   projectors_cpu.h
   projectors_symmetric_cpu.h
-  projectors.h
+  projectors_Siddon.h
   projectors_SF.h
   projectors_extendedSF.h
   cuda_utils.h
@@ -34,20 +35,24 @@ set(HEADER
   total_variation.cuh
   ray_weighting.cuh
   projectors_symmetric.cuh
+  projectors_attenuated.cuh
+  filtered_backprojection.h
 )
 
 set(SRC_CPP
   tomographic_models.cpp
   tomographic_models_c_interface.cpp
   parameters.cpp
+  projectors.cpp
   projectors_cpu.cpp
   projectors_symmetric_cpu.cpp
   projectors_SF_cpu.cpp
   ramp_filter_cpu.cpp
+  filtered_backprojection.cpp
 )
 
 set(SRC_CU
-  projectors.cu
+  projectors_Siddon.cu
   projectors_SF.cu
   projectors_extendedSF.cu
   ramp_filter.cu
@@ -56,6 +61,7 @@ set(SRC_CU
   cuda_utils.cu
   ray_weighting.cu
   projectors_symmetric.cu
+  projectors_attenuated.cu
 )
 
 include_directories(

@@ -18,4 +18,5 @@ bool applyPostRampFilterWeights_CPU(float* g, parameters*);
 bool applyPreRampFilterWeights_GPU(float* g, parameters*, bool cpu_to_gpu);
 bool applyPostRampFilterWeights_GPU(float* g, parameters*, bool cpu_to_gpu);
 
-bool FBP_inplaceFiltering(float* g, float* f, parameters*, bool cpu_to_gpu);
+bool convertARTtoERT(float* g, parameters*, bool cpu_to_gpu, bool doInverse=false);
+bool convertARTtoERT_CPU(float* g, parameters*, bool doInverse = false);

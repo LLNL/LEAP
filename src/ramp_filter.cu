@@ -143,6 +143,22 @@ __global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N
     }
 }
 
+__global__ void multiplyComplexFilterKernel(cufftComplex* G, const cufftComplex* H, int3 N)
+{
+    int j = threadIdx.x;
+    int i = blockIdx.x;
+    if (i > N.x - 1 || j > N.y - 1)
+        return;
+    cufftComplex* G_row = &G[i * N.y * N.z + j * N.z];
+    for (int k = 0; k < N.z; k++)
+    {
+        const float realPart = G_row[k].x * H[k].x - G_row[k].y * H[k].y;
+        const float imagPart = G_row[k].x * H[k].y + G_row[k].y * H[k].x;
+        G_row[k].x = realPart;
+        G_row[k].y = imagPart;
+    }
+}
+
 __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView)
 {
     int j = threadIdx.x;
@@ -153,6 +169,58 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
     float* data_block = &data[i * N.z * N.y + j * N.z];
     for (int k = 0; k < N.z; k++)
         data_block[k] = data_padded_block[k];
+}
+
+cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar)
+{
+    cudaError_t cudaStatus;
+    double* h_d = HilbertTransformImpulseResponse(N);
+    float* h = new float[N];
+    for (int i = 0; i < N; i++)
+        h[i] = h_d[i] * scalar / float(N);
+    delete[] h_d;
+
+    // Make cuFFT Plans
+    cufftResult result;
+    cufftHandle forward_plan;
+    if (CUFFT_SUCCESS != cufftPlan1d(&forward_plan, N, CUFFT_R2C, 1))
+    {
+        fprintf(stderr, "Failed to plan 1d r2c fft");
+        return NULL;
+    }
+
+    float* dev_h = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_h, N * sizeof(float)))
+    {
+        fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
+        return NULL;
+    }
+    cudaStatus = cudaMemcpy(dev_h, h, N * sizeof(float), cudaMemcpyHostToDevice);
+
+    // Make data for the result of the FFT
+    int N_over2 = N / 2 + 1;
+    cufftComplex* dev_H = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_H, N_over2 * sizeof(cufftComplex)))
+    {
+        fprintf(stderr, "cudaMalloc(Fourier transform of ramp filter) failed!\n");
+        return NULL;
+    }
+
+    // FFT
+    result = cufftExecR2C(forward_plan, (cufftReal*)dev_h, dev_H);
+    cudaDeviceSynchronize();
+
+    // get result
+    cufftComplex* H_Hilb = new cufftComplex[N_over2];
+    cudaStatus = cudaMemcpy(H_Hilb, dev_H, N_over2 * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+
+    // Clean up
+    cufftDestroy(forward_plan);
+    cudaFree(dev_h);
+    cudaFree(dev_H);
+    delete[] h;
+
+    return H_Hilb;
 }
 
 float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
@@ -166,10 +234,8 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
             isCurved = true;
     }
 
-    int rampID = params->rampID;
-
     cudaError_t cudaStatus;
-    double* h_d = rampImpulseResponse(N, T, rampID);
+    double* h_d = rampImpulseResponse(N, T, params);
     float* h = new float[N];
     for (int i = 0; i < N; i++)
     {
@@ -286,6 +352,16 @@ bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar)
 
 bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
 {
+    return conv1D(g, params, cpu_to_gpu, scalar, 0);
+}
+
+bool Hilbert1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
+{
+    return conv1D(g, params, cpu_to_gpu, scalar, 1);
+}
+
+bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int which)
+{
     bool retVal = true;
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -303,12 +379,23 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
     // PUT CODE HERE
     int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
     int N_H_over2 = N_H / 2 + 1;
-    float* H_real = rampFilterFrequencyResponseMagnitude(N_H, params);
+    float* H_real = NULL;
+    cufftComplex* H_comp = NULL;
+    if (which == 0)
+        H_real = rampFilterFrequencyResponseMagnitude(N_H, params);
+    else
+        H_comp = HilbertTransformFrequencyResponse(N_H, params, scalar);
     if (scalar != 1.0)
     {
         for (int i = 0; i < N_H_over2; i++)
-            H_real[i] *= scalar;
+        {
+            if (H_real != NULL)
+                H_real[i] *= scalar;
+        }
     }
+
+    //if (H_comp != NULL)
+    //    printf("doing Hilbert filter\n");
 
     //int N_viewChunk = params->numAngles;
     int N_viewChunk = max(1, params->numAngles / 40); // number of views in a chunk (needs to be optimized)
@@ -347,17 +434,32 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
 
     // Copy filter to device
     float* dev_H = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_H, N_H_over2 * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (H_real == NULL)
-        printf("H_real is NULL!!!\n");
-    cudaStatus = cudaMemcpy(dev_H, H_real, N_H_over2 * sizeof(float), cudaMemcpyHostToDevice);
-    if (cudaSuccess != cudaStatus)
+    cufftComplex* dev_cH = 0;
+    if (H_real != NULL)
     {
-        fprintf(stderr, "cudaMemcpy(H) failed!\n");
-        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-        retVal = false;
+        if (cudaSuccess != cudaMalloc((void**)&dev_H, N_H_over2 * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+        cudaStatus = cudaMemcpy(dev_H, H_real, N_H_over2 * sizeof(float), cudaMemcpyHostToDevice);
+        if (cudaSuccess != cudaStatus)
+        {
+            fprintf(stderr, "cudaMemcpy(H) failed!\n");
+            fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+            fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+            retVal = false;
+        }
+    }
+    else if (H_comp != NULL)
+    {
+        if (cudaSuccess != cudaMalloc((void**)&dev_cH, N_H_over2 * sizeof(cufftComplex)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+        cudaStatus = cudaMemcpy(dev_cH, H_comp, N_H_over2 * sizeof(cufftComplex), cudaMemcpyHostToDevice);
+        if (cudaSuccess != cudaStatus)
+        {
+            fprintf(stderr, "cudaMemcpy(H) failed!\n");
+            fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+            fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+            retVal = false;
+        }
     }
     int3 dataSize; dataSize.x = N_viewChunk; dataSize.y = params->numRows; dataSize.z = N_H_over2;
     int3 origSize; origSize.x = params->numAngles; origSize.y = params->numRows; origSize.z = params->numCols;
@@ -378,7 +480,10 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
             result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);
 
             // Multiply Filter
-            multiplyRampFilterKernel <<< N_viewChunk, params->numRows >>> (dev_G, dev_H, dataSize);
+            if (dev_H != 0)
+                multiplyRampFilterKernel <<< N_viewChunk, params->numRows >>> (dev_G, dev_H, dataSize);
+            else if (dev_cH != 0)
+                multiplyComplexFilterKernel <<< N_viewChunk, params->numRows >>> (dev_G, dev_cH, dataSize);
             cudaDeviceSynchronize();
 
             // IFFT
@@ -407,9 +512,15 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
     cudaFree(dev_g_pad);
     if (cpu_to_gpu)
         cudaFree(dev_g);
-    cudaFree(dev_H);
+    if (dev_H != 0)
+        cudaFree(dev_H);
+    if (dev_cH != 0)
+        cudaFree(dev_cH);
     cudaFree(dev_G);
-    delete[] H_real;
+    if (H_real != NULL)
+        delete[] H_real;
+    if (H_comp != NULL)
+        delete[] H_comp;
 
     return retVal;
 }
@@ -609,6 +720,13 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu)
     //printf("CUFFT libraries not available!\n");
     //return false;
     return rampFilter1D_cpu(g, params);
+}
+
+bool Hilbert1D(float*& g, parameters* params, bool cpu_to_gpu)
+{
+    //printf("CUFFT libraries not available!\n");
+    //return false;
+    return Hilbert1D_cpu(g, params);
 }
 
 bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
