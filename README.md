@@ -5,6 +5,10 @@ Our projectors are implemented for the standard 3D CT geometry types: parallel-,
 
 We also provide projectors for cylindrically-symmetric/anitsymmetric objects (related to the Abel Transform) in parallel- and cone-beam geometries with user-specified symmetry axis [Champley and Maddox, Optica, 2021].
 
+We also provide projectors and analytic inversion algorithms, i.e., FBP, for a few specialized x-ray/Radon transforms:
+1) Cylindrically-symmetric/anitsymmetric objects (related to the Abel Transform) in parallel- and cone-beam geometries with user-specified symmetry axis [Champley and Maddox, Optica, 2021].  These are often used in flash radiography applications.
+2) Attenuated Radon Transform (ART) for parallel-beam geometries.  These are used in parallel-hole collimator SPECT and Volumetric Additive Manufacturing (VAM).
+
 In addition to the projectors, we also provide a few other algorithms for tomographic imaging, including:
 1) Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
 2) A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction.
