@@ -100,7 +100,7 @@ bool FBP_cpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
     
     int whichGPU_save = p_model->get_GPU();
     p_model->set_GPU(-1);
-    bool retVal = p_model->FBP(g, f, false);
+    bool retVal = p_model->doFBP(g, f, false);
     p_model->set_GPU(whichGPU_save);
     
     return retVal;
@@ -158,7 +158,7 @@ bool FBP_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
     float* g = g_tensor.data_ptr<float>();
     float* f = f_tensor.data_ptr<float>();
     
-    return p_model->FBP(g, f, false);
+    return p_model->doFBP(g, f, false);
 }
 
 #endif
