@@ -39,6 +39,7 @@ set(HEADER
   filtered_backprojection.h
   sensitivity_cpu.h
   sensitivity.cuh
+  leap_defines.h
 )
 
 set(SRC_CPP

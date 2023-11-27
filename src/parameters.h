@@ -14,10 +14,7 @@
 #pragma once
 #endif
 
-#ifndef PI
-    #define PI 3.1415926535897932385
-#endif
-
+#include "leap_defines.h"
 #include <vector>
 
 class parameters
@@ -26,38 +23,173 @@ public:
 	parameters();
     parameters(const parameters& other);
 	~parameters();
+
+	/**
+	 * \fn          operator =
+	 * \brief       makes a deep copy of the given parameter object
+	 */
     parameters& operator = (const parameters& other);
 
-    void assign(const parameters& other);
+	/**
+	 * \fn          initialize
+	 * \brief       initialize all CT geometry and CT volume parameter values
+	 */
 	void initialize();
-	void printAll();
-	void clearAll();
-	bool allDefined();
-	bool geometryDefined();
-	bool volumeDefined();
-	bool setDefaultVolumeParameters(float scale = 1.0);
-	bool setAngles(float*, int);
-	bool setAngles();
-	bool getAngles(float*);
 
+	/**
+	 * \fn          printAll
+	 * \brief       prints all CT geometry and CT volume parameter values
+	 */
+	void printAll();
+
+	/**
+	 * \fn          clearAll
+	 * \brief       clears all (including memory) CT geometry and CT volume parameter values
+	 */
+	void clearAll();
+
+	/**
+	 * \fn          allDefined
+	 * \brief       returns whether all CT geometry and CT volume parameter values are defined and valid
+	 * \return      returns true if all CT geometry and CT volume parameter values are defined and valid, false otherwise
+	 */
+	bool allDefined();
+
+	/**
+	 * \fn          allDefined
+	 * \brief       returns whether all CT geometry parameter values are defined and valid
+	 * \return      returns true if all CT geometry parameter values are defined and valid, false otherwise
+	 */
+	bool geometryDefined();
+
+	/**
+	 * \fn          allDefined
+	 * \brief       returns whether all CT volume parameter values are defined and valid
+	 * \return      returns true if all CT volume parameter values are defined and valid, false otherwise
+	 */
+	bool volumeDefined();
+
+	/**
+	 * \fn          set_defaultVolume
+	 * \brief       sets the default CT volume parameters
+	 * \param[in]   scale the default voxel size is divided by this number
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool set_defaultVolume(float scale = 1.0);
+
+	/**
+	 * \fn          set_angles
+	 * \brief       sets phis, an array of the projection angles
+	 * \param[in]   phis_in an array (degrees) of the projection angles
+	 * \param[in]   numPhis the number of elements in the input array
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool set_angles(float* phis_in, int numPhis);
+
+	/**
+	 * \fn          set_angles
+	 * \brief       sets phis, an array of the projection angles based on angularRange and numAngles
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool set_angles();
+
+	/**
+	 * \fn          get_angles
+	 * \brief       populates the input array with phis, an array of the projection angles
+	 * \param[in]   phis_in an array (degrees) of the projection angles
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool get_angles(float* phis_in);
+
+	/**
+	 * \fn          phaseShift
+	 * \brief       shifts the values in the projection angle array
+	 * \param[in]   radians the phase shift (in radians)
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
 	bool phaseShift(float radians);
 
+	/**
+	 * \fn          anglesAreEquispaced
+	 * \brief       returns whether or not the projection angle array values are equi-spaced
+	 * \return      true if the projection angle array values are equi-spaced, false otherwise
+	 */
 	bool anglesAreEquispaced();
 
+	/**
+	 * \fn          u_0
+	 * \brief       returns the location (in mm) of the first detector pixel column
+	 * \return      returns the location (in mm) of the first detector pixel column
+	 */
 	float u_0();
+
+	/**
+	 * \fn          v_0
+	 * \brief       returns the location (in mm) of the first detector pixel row
+	 * \return      returns the location (in mm) of the first detector pixel row
+	 */
 	float v_0();
+
+	/**
+	 * \fn          x_0
+	 * \brief       returns the location (in mm) of the first x-coordinate value
+	 * \return      returns the location (in mm) of the first x-coordinate value
+	 */
 	float x_0();
+
+	/**
+	 * \fn          y_0
+	 * \brief       returns the location (in mm) of the first y-coordinate value
+	 * \return      returns the location (in mm) of the first y-coordinate value
+	 */
 	float y_0();
+
+	/**
+	 * \fn          z_0
+	 * \brief       returns the location (in mm) of the first z-coordinate value
+	 * \return      returns the location (in mm) of the first z-coordinate value
+	 */
 	float z_0();
 
+	/**
+	 * \fn          furthestFromCenter
+	 * \brief       returns the largest distance from the z-axis of all the voxel positions
+	 * \return      returns the largest distance from the z-axis of all the voxel positions
+	 */
 	float furthestFromCenter();
 
+	/**
+	 * \fn          pixelWidth_normalized
+	 * \brief       returns pixelWidth/sdd for fan- and cone-beam, pixelWidth otherwise
+	 * \return      returns pixelWidth/sdd for fan- and cone-beam, pixelWidth otherwise
+	 */
 	float pixelWidth_normalized();
-	float u(int);
-	float v(int);
-	bool normalizeConeAndFanCoordinateFunctions;
 
-	float z_samples(int);
+	/**
+	 * \fn          u
+	 * \brief       returns the position of the i-th detector column (mm)
+	 * \param       i the index of the i-th detector column
+	 * \return      returns the position of the i-th detector column (mm)
+	 */
+	float u(int i);
+
+	/**
+	 * \fn          v
+	 * \brief       returns the position of the i-th detector row (mm)
+	 * \param       i the index of the i-th detector row
+	 * \return      returns the position of the i-th detector row (mm)
+	 */
+	float v(int i);
+
+	/**
+	 * \fn          z_samples
+	 * \brief       returns the position of the k-th z-coordinate value (mm)
+	 * \param[in]   i the index of the k-th z-coordinate
+	 * \return      returns the position of the k-th z-coordinate value (mm)
+	 */
+	float z_samples(int k);
+
+	bool normalizeConeAndFanCoordinateFunctions;
 
 	int whichGPU;
 	std::vector<int> whichGPUs;
@@ -79,17 +211,33 @@ public:
 	float offsetX, offsetY, offsetZ;
 
 	// Modular-Beam Parameters
-	bool clearModularBeamParameters();
-	bool setSourcesAndModules(float*, float*, float*, float*, int);
 	float* sourcePositions;
 	float* moduleCenters;
 	float* rowVectors;
 	float* colVectors;
 
+	/**
+	 * \fn          set_sourcesAndModules
+	 * \brief       sets the modular-beam source and detector positions and orientations
+	 * \param[in]   sourcePositions_in (numPairs x 3) array of the source positions
+	 * \param[in]   moduleCenters_in (numPairs x 3) array of the detector module center positions
+	 * \param[in]   rowVectors_in (numPairs x 3) array of the vectors pointing along the row dimension
+	 * \param[in]   colVectors_in (numPairs x 3) array of the vectors pointing along the column dimension
+	 * \param[in]   numPairs the number of source-detector pairs
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs);
+
 	// Attenuated Radon Transform
 	float* mu;
 	float muCoeff;
 	float muRadius;
+
+	/**
+	 * \fn          muSpecified
+	 * \brief       returns whether or not an attenuation map (for the Attenuated Radon Transform) has been specified
+	 * \return      true if mu != NULL or (muCoeff != 0.0 and muRadius > 0.0), false otherwise
+	 */
 	bool muSpecified();
 
 	// Reconstruction Parameters
@@ -102,31 +250,133 @@ public:
 	float axisOfSymmetry;
 	float chunkingMemorySizeThreshold;
     
+	/**
+	 * \fn          T_phi
+	 * \brief       returns the mean distance between projection angles (radians)
+	 * \return      returns the mean distance between projection angles (radians)
+	 */
     float T_phi();
+
+	/**
+	 * \fn          rFOV
+	 * \brief       returns the radius of the field of view of the CT system
+	 * \return      returns the radius of the field of view of the CT system
+	 */
     float rFOV();
 	
+	/**
+	 * \fn          isSymmetric
+	 * \brief       returns whether or not the cylindrically symmetric projectors are enabled
+	 * \return      returns true if the cylindrically symmetric projectors are enabled, false otherwise
+	 */
 	bool isSymmetric();
+
+	/**
+	 * \fn          useSF
+	 * \brief       returns whether or not the Separable Footprint projectors are to be used
+	 * \return      returns true if the Separable Footprint projectors are to be used, false otherwise
+	 */
     bool useSF();
-	bool setToZero(float*, int);
+
+	/**
+	 * \fn          setToConstant
+	 * \brief       sets the array to value
+	 * \return      returns pointer to the array if successful
+	 */
+	float* setToConstant(float* data, uint64 N, float val = 0.0);
+
+	/**
+	 * \fn          setToZero
+	 * \brief       sets the array to zero
+	 * \return      returns pointer to the array if successful
+	 */
+	float* setToZero(float* data, uint64 N);
+
+	/**
+	 * \fn          windowFOV
+	 * \brief       sets the array to zero for those values outside the field of view
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
 	bool windowFOV(float*);
 
 	//float smallestVoxelForFastSF();
 	//float largestVoxelForFastSF();
+
+	/**
+	 * \fn          voxelSizeWorksForFastSF
+	 * \brief       returns whether or not the voxel size is appropriate for the fast SF projectors
+	 * \return      returns true if the voxel size is appropriate for the fast SF projectors, false otherwise
+	 */
 	bool voxelSizeWorksForFastSF();
 
+	/**
+	 * \fn          projectionDataSize
+	 * \brief       returns the number of GB of memory required for the projection data
+	 * \return      returns the number of GB of memory required for the projection data
+	 */
 	float projectionDataSize();
+
+	/**
+	 * \fn          volumeDataSize
+	 * \brief       returns the number of GB of memory required for the volume data
+	 * \return      returns the number of GB of memory required for the volume data
+	 */
 	float volumeDataSize();
 
-	bool rowRangeNeededForReconstruction(int firstSlice, int lastSlice, int* rowsNeeded);
-	bool sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded, bool doClip = true);
+	/**
+	 * \fn          requiredGPUmemory
+	 * \brief       returns projectionDataSize() + volumeDataSize()
+	 * \return      returns projectionDataSize() + volumeDataSize()
+	 */
 	float requiredGPUmemory();
+
+	/**
+	 * \fn          hasSufficientGPUmemory
+	 * \brief       returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
+	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
+	 */
 	bool hasSufficientGPUmemory();
+
+	/**
+	 * \fn          rowRangeNeededForBackprojection
+	 * \brief       calculates the necessary detector rows needed to backproject a selection of volume z-slices
+	 * \param[in]   firstSlice the index of the first z-slice of a slab
+	 * \param[in]   lastSlice the index of the last z-slice of a slab
+	 * \param[in]   rowsNeeded 2-element array where the first and last row indices are saved
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool rowRangeNeededForBackprojection(int firstSlice, int lastSlice, int* rowsNeeded);
+
+	/**
+	 * \fn          sliceRangeNeededForProjection
+	 * \brief       calculates the necessary z-slices needed to project a selection of detector rows
+	 * \param[in]   firstRow the index of the first detector row
+	 * \param[in]   lastRow the index of the last detector row
+	 * \param[in]   slicesNeeded 2-element array where the first and last z-slice indices are saved
+	 * \param[in]   doClip
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded, bool doClip = true);
 
 	// Enums
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };
     enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2};
+private:
+
+	/**
+	 * \fn          assign
+	 * \brief       makes a deep copy of the given parameter object
+	 */
+	void assign(const parameters& other);
+
+	/**
+	 * \fn          clearModularBeamParameters
+	 * \brief       frees all memory of arrays used to specify a modular-beam geometry
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool clearModularBeamParameters();
 };
 
 #endif

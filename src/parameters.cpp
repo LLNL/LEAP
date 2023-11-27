@@ -150,7 +150,7 @@ void parameters::assign(const parameters& other)
     for (int i = 0; i < numAngles; i++)
         this->phis[i] = other.phis[i];
     
-    this->setSourcesAndModules(other.sourcePositions, other.moduleCenters, \
+    this->set_sourcesAndModules(other.sourcePositions, other.moduleCenters, \
         other.rowVectors, other.colVectors, other.numAngles);
         
 }
@@ -377,7 +377,7 @@ bool parameters::volumeDefined()
 	}
 }
 
-bool parameters::setDefaultVolumeParameters(float scale)
+bool parameters::set_defaultVolume(float scale)
 {
 	if (geometryDefined() == false)
 		return false;
@@ -504,16 +504,22 @@ void parameters::printAll()
 	printf("\n");
 }
 
-bool parameters::setToZero(float* data, int N)
+float* parameters::setToConstant(float* data, uint64 N, float val)
 {
-	if (data != NULL && N > 0)
-	{
-		for (int i = 0; i < N; i++)
-			data[i] = 0.0;
-		return true;
-	}
-	else
-		return false;
+	if (N <= 0)
+		return NULL;
+	if (data == NULL)
+		data = (float*)malloc(sizeof(float) * N);
+
+	for (uint64 i = 0; i < N; i++)
+		data[i] = val;
+
+	return data;
+}
+
+float* parameters::setToZero(float* data, uint64 N)
+{
+	return setToConstant(data, N, 0.0);
 }
 
 bool parameters::windowFOV(float* f)
@@ -541,7 +547,7 @@ bool parameters::windowFOV(float* f)
 	}
 }
 
-bool parameters::setAngles()
+bool parameters::set_angles()
 {
 	if (phis != NULL)
 		delete[] phis;
@@ -572,7 +578,7 @@ bool parameters::phaseShift(float radians)
 	}
 }
 
-bool parameters::setAngles(float* phis_new, int numAngles_new)
+bool parameters::set_angles(float* phis_new, int numAngles_new)
 {
 	if (phis != NULL)
 		delete[] phis;
@@ -595,7 +601,7 @@ bool parameters::setAngles(float* phis_new, int numAngles_new)
 	}
 }
 
-bool parameters::getAngles(float* phis_out)
+bool parameters::get_angles(float* phis_out)
 {
 	if (phis_out == NULL || phis == NULL || numAngles <= 0)
 		return false;
@@ -604,7 +610,7 @@ bool parameters::getAngles(float* phis_out)
 	return true;
 }
 
-bool parameters::setSourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
+bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
 {
 	clearModularBeamParameters();
 	if (sourcePositions_in == NULL || moduleCenters_in == NULL || rowVectors_in == NULL || colVectors_in == NULL || numPairs <= 0)
@@ -715,7 +721,7 @@ float parameters::volumeDataSize()
 	return float(4.0 * double(numX) * double(numY) * double(numZ) / pow(2.0, 30.0));
 }
 
-bool parameters::rowRangeNeededForReconstruction(int firstSlice, int lastSlice , int* rowsNeeded)
+bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice , int* rowsNeeded)
 {
 	if (rowsNeeded == NULL || firstSlice > lastSlice)
 		return false;

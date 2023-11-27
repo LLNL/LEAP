@@ -314,7 +314,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 
 		// make a copy of the relavent rows
 		int rowRange[2];
-		params.rowRangeNeededForReconstruction(firstSlice, lastSlice, rowRange);
+		params.rowRangeNeededForBackprojection(firstSlice, lastSlice, rowRange);
 		float* g_chunk = copyRows(g, rowRange[0], rowRange[1]);
 
 		// make a copy of the params
@@ -366,16 +366,7 @@ bool tomographicModels::sensitivity(float* f, bool cpu_to_gpu)
 	{
 		if (params.whichGPU < 0 || cpu_to_gpu == true)
 		{
-			float* g = (float*)malloc(sizeof(float) * params.numAngles * params.numRows * params.numCols);
-			for (int i = 0; i < params.numAngles; i++)
-			{
-				float* aProj = &g[i*params.numRows* params.numCols];
-				for (int j = 0; j < params.numRows; j++)
-				{
-					for (int k = 0; k < params.numCols; k++)
-						aProj[j*params.numCols+k] = 1.0;
-				}
-			}
+			float* g = params.setToConstant(NULL, uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols), 1.0);
 			bool retVal = backproject(g, f, cpu_to_gpu);
 			free(g);
 			return retVal;
@@ -470,7 +461,7 @@ bool tomographicModels::set_coneBeam(int numAngles, int numRows, int numCols, fl
 	params.numAngles = numAngles;
 	params.centerCol = centerCol;
 	params.centerRow = centerRow;
-	params.setAngles(phis, numAngles);
+	params.set_angles(phis, numAngles);
 	return params.geometryDefined();
 }
 
@@ -487,7 +478,7 @@ bool tomographicModels::set_fanBeam(int numAngles, int numRows, int numCols, flo
 	params.numAngles = numAngles;
 	params.centerCol = centerCol;
 	params.centerRow = centerRow;
-	params.setAngles(phis, numAngles);
+	params.set_angles(phis, numAngles);
 	return params.geometryDefined();
 }
 
@@ -501,7 +492,7 @@ bool tomographicModels::set_parallelBeam(int numAngles, int numRows, int numCols
 	params.numAngles = numAngles;
 	params.centerCol = centerCol;
 	params.centerRow = centerRow;
-	params.setAngles(phis, numAngles);
+	params.set_angles(phis, numAngles);
 	return params.geometryDefined();
 }
 
@@ -513,7 +504,7 @@ bool tomographicModels::set_modularBeam(int numAngles, int numRows, int numCols,
 	params.numCols = numCols;
 	params.numRows = numRows;
 	params.numAngles = numAngles;
-	params.setSourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
+	params.set_sourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
 	return params.geometryDefined();
 }
 
@@ -547,7 +538,7 @@ bool tomographicModels::set_volume(int numX, int numY, int numZ, float voxelWidt
 
 bool tomographicModels::set_defaultVolume(float scale)
 {
-	return params.setDefaultVolumeParameters(scale);
+	return params.set_defaultVolume(scale);
 }
 
 bool tomographicModels::set_volumeDimensionOrder(int which)
@@ -690,7 +681,7 @@ bool tomographicModels::projectFanBeam(float* g, float* f, bool cpu_to_gpu, int 
 	tempParams.numAngles = numAngles;
 	tempParams.centerCol = centerCol;
 	tempParams.centerRow = centerRow;
-	tempParams.setAngles(phis, numAngles);
+	tempParams.set_angles(phis, numAngles);
 
 	tempParams.numX = numX;
 	tempParams.numY = numY;
@@ -718,7 +709,7 @@ bool tomographicModels::backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, 
 	tempParams.numAngles = numAngles;
 	tempParams.centerCol = centerCol;
 	tempParams.centerRow = centerRow;
-	tempParams.setAngles(phis, numAngles);
+	tempParams.set_angles(phis, numAngles);
 
 	tempParams.numX = numX;
 	tempParams.numY = numY;
@@ -746,7 +737,7 @@ bool tomographicModels::projectConeBeam(float* g, float* f, bool cpu_to_gpu, int
 	tempParams.numAngles = numAngles;
 	tempParams.centerCol = centerCol;
 	tempParams.centerRow = centerRow;
-	tempParams.setAngles(phis, numAngles);
+	tempParams.set_angles(phis, numAngles);
 
 	tempParams.numX = numX;
 	tempParams.numY = numY;
@@ -774,7 +765,7 @@ bool tomographicModels::backprojectConeBeam(float* g, float* f, bool cpu_to_gpu,
 	tempParams.numAngles = numAngles;
 	tempParams.centerCol = centerCol;
 	tempParams.centerRow = centerRow;
-	tempParams.setAngles(phis, numAngles);
+	tempParams.set_angles(phis, numAngles);
 
 	tempParams.numX = numX;
 	tempParams.numY = numY;
@@ -800,7 +791,7 @@ bool tomographicModels::projectParallelBeam(float* g, float* f, bool cpu_to_gpu,
 	tempParams.numAngles = numAngles;
 	tempParams.centerCol = centerCol;
 	tempParams.centerRow = centerRow;
-	tempParams.setAngles(phis, numAngles);
+	tempParams.set_angles(phis, numAngles);
 
 	tempParams.numX = numX;
 	tempParams.numY = numY;
@@ -826,7 +817,7 @@ bool tomographicModels::backprojectParallelBeam(float* g, float* f, bool cpu_to_
 	tempParams.numAngles = numAngles;
 	tempParams.centerCol = centerCol;
 	tempParams.centerRow = centerRow;
-	tempParams.setAngles(phis, numAngles);
+	tempParams.set_angles(phis, numAngles);
 
 	tempParams.numX = numX;
 	tempParams.numY = numY;

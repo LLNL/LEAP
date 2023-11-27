@@ -297,12 +297,12 @@ bool get_colVectors(float* x)
 
 bool set_angles(float* phis, int N)
 {
-	return tomo.params.setAngles(phis, N);
+	return tomo.params.set_angles(phis, N);
 }
 
 bool get_angles(float* phis)
 {
-	return tomo.params.getAngles(phis);
+	return tomo.params.get_angles(phis);
 }
 
 int get_numX()

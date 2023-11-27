@@ -55,5 +55,4 @@ extern float sum(const float* dev_lhs, const int3 N, int whichGPU = 0);
 extern float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern float weightedInnerProduct(const float* dev_lhs, const float* dev_w, const float* dev_rhs, const int3 N, int whichGPU = 0);
 
-
 #endif
