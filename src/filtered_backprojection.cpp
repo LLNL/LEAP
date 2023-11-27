@@ -12,8 +12,6 @@
 #include "projectors_cpu.h"
 #include "ramp_filter.cuh"
 #include "ray_weighting.cuh"
-#include "noise_filters.cuh"
-#include "total_variation.cuh"
 #include "cuda_utils.h"
 #include "projectors_symmetric.cuh"
 #include "projectors_symmetric_cpu.h"

@@ -8,18 +8,12 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "tomographic_models.h"
-#include "projectors_Siddon.h"
-#include "projectors_SF.h"
-#include "projectors_cpu.h"
-#include "ramp_filter.cuh"
 #include "ray_weighting.cuh"
+#include "ramp_filter_cpu.h"
+#include "ramp_filter.cuh"
 #include "noise_filters.cuh"
 #include "total_variation.cuh"
 #include "cuda_utils.h"
-#include "projectors_symmetric.cuh"
-#include "projectors_symmetric_cpu.h"
-#include "ramp_filter_cpu.h"
-#include "projectors_attenuated.cuh"
 #include "sensitivity_cpu.h"
 #include "sensitivity.cuh"
 #include <stdlib.h>
@@ -230,7 +224,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		return false;
 
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
 		int firstRow = ichunk * numRowsPerChunk;
@@ -303,7 +297,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		return false;
 
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
 		int firstSlice = ichunk * numSlicesPerChunk;

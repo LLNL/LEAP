@@ -17,9 +17,9 @@
 	#define PI 3.1415926535897932385
 #endif
 
-#ifndef NAN
-	#define NAN sqrt(-1)
-#endif
+//#ifndef NAN
+//	#define NAN sqrt(-1)
+//#endif
 
 #ifndef E
 	#define E 2.7182818284590452354

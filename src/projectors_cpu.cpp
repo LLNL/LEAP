@@ -32,7 +32,7 @@ bool CPUproject_cone(float* g, float* f, parameters* params)
 		num_thread_row = num_threads;
 
 	omp_set_num_threads(num_thread_phi);
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int i = 0; i < params->numAngles; i++)
 	{
 		float cos_phi = cos(params->phis[i]);
@@ -45,7 +45,7 @@ bool CPUproject_cone(float* g, float* f, parameters* params)
 		float* aProj = &g[i*params->numRows*params->numCols];
 
 		omp_set_num_threads(num_thread_row);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < params->numRows; j++)
 		{
 			float v = params->pixelHeight*j + params->v_0();
@@ -93,7 +93,7 @@ bool CPUbackproject_cone(float* g, float* f, parameters* params)
 	{
 		int num_threads = omp_get_num_procs();
 		omp_set_num_threads(num_threads);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int ix = 0; ix < params->numX; ix++)
 		{
 			const float x = ix * params->voxelWidth + params->x_0();
@@ -182,7 +182,7 @@ bool CPUbackproject_cone(float* g, float* f, parameters* params)
 	{
 		int num_threads = omp_get_num_procs();
 		omp_set_num_threads(num_threads);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int iz = 0; iz < params->numZ; iz++)
 		{
 			const float z = iz * params->voxelHeight + params->z_0();
@@ -284,7 +284,7 @@ bool CPUproject_parallel(float* g, float* f, parameters* params)
 		num_thread_row = num_threads;
 
 	omp_set_num_threads(num_thread_phi);
-    #pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int i = 0; i < params->numAngles; i++)
 	{
 		float cos_phi = cos(params->phis[i]);
@@ -298,7 +298,7 @@ bool CPUproject_parallel(float* g, float* f, parameters* params)
 		float* aProj = &g[i*params->numRows*params->numCols];
 
 		omp_set_num_threads(num_thread_row);
-        #pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < params->numRows; j++)
 		{
 			double v = params->pixelHeight*j + params->v_0();
@@ -343,7 +343,7 @@ bool CPUbackproject_parallel(float* g, float* f, parameters* params)
 	{
 		int num_threads = omp_get_num_procs();
 		omp_set_num_threads(num_threads);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int ix = 0; ix < params->numX; ix++)
 		{
 			const float x = ix * params->voxelWidth + params->x_0();
@@ -417,7 +417,7 @@ bool CPUbackproject_parallel(float* g, float* f, parameters* params)
 	{
 		int num_threads = omp_get_num_procs();
 		omp_set_num_threads(num_threads);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int iz = 0; iz < params->numZ; iz++)
 		{
 			const float z = iz * params->voxelHeight + params->z_0();
@@ -504,14 +504,14 @@ bool CPUproject_fan(float* g, float* f, parameters* params)
 		num_thread_row = num_threads;
 
 	omp_set_num_threads(num_thread_phi);
-    #pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int i = 0; i < params->numAngles; i++) {
 		float cos_phi = cos(params->phis[i]);
 		float sin_phi = sin(params->phis[i]);
 		float* aProj = &g[i*params->numRows*params->numCols];
 
 		omp_set_num_threads(num_thread_row);
-        #pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < params->numRows; j++) {
 			double v = params->pixelHeight*j + params->v_0();
 			float* aLine = &aProj[j*params->numCols];
@@ -564,7 +564,7 @@ bool CPUproject_modular(float* g, float* f, parameters* params)
 		num_thread_row = num_threads;
 
 	omp_set_num_threads(num_thread_phi);
-    #pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int i = 0; i < params->numAngles; i++)
 	{
 		float cos_phi = cos(params->phis[i]);
@@ -578,7 +578,7 @@ bool CPUproject_modular(float* g, float* f, parameters* params)
 		float* aProj = &g[i*params->numRows*params->numCols];
 
 		omp_set_num_threads(num_thread_row);
-        #pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int j = 0; j < params->numRows; j++)
 		{
 			double v = params->pixelHeight*j + params->v_0();
@@ -623,7 +623,7 @@ bool CPUbackproject_modular(float* g, float* f, parameters* params)
 	{
 		int num_threads = omp_get_num_procs();
 		omp_set_num_threads(num_threads);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int ix = 0; ix < params->numX; ix++)
 		{
 			const float x = ix * params->voxelWidth + params->x_0();
@@ -726,7 +726,7 @@ bool CPUbackproject_modular(float* g, float* f, parameters* params)
 	{
 		int num_threads = omp_get_num_procs();
 		omp_set_num_threads(num_threads);
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(dynamic)
 		for (int iz = 0; iz < params->numZ; iz++)
 		{
 			const float z = iz * params->voxelHeight + params->z_0();

@@ -7,18 +7,12 @@
 // main c++ module for ctype binding
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "filtered_backprojection.h"
 #include "projectors.h"
 #include "projectors_SF.h"
 #include "projectors_cpu.h"
-#include "ramp_filter.cuh"
-#include "ray_weighting.cuh"
-#include "noise_filters.cuh"
-#include "total_variation.cuh"
 #include "cuda_utils.h"
 #include "projectors_symmetric.cuh"
 #include "projectors_symmetric_cpu.h"
-#include "ramp_filter_cpu.h"
 #include "projectors_attenuated.cuh"
 #include <stdlib.h>
 #include <stdio.h>

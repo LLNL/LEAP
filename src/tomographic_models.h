@@ -1,4 +1,10 @@
-
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
+// LEAP project developers. See the LICENSE file for details.
+// SPDX-License-Identifier: MIT
+//
+// LivermorE AI Projector for Computed Tomography (LEAP)
+////////////////////////////////////////////////////////////////////////////////
 #ifndef __TOMOGRAPHIC_MODELS_H
 #define __TOMOGRAPHIC_MODELS_H
 
@@ -11,6 +17,15 @@
 #include "parameters.h"
 #include "projectors.h"
 #include "filtered_backprojection.h"
+
+/**
+ *  tomographicModels class
+ * This is the main interface for LEAP.  All calls to forward project, backproject, FBP, filtering, noise filters come through this class.
+ * There are no dependencies on torch from here and all layers beneath.  These torch dependencies are stripped in "main_projectors.cpp".
+ * The main job of this class is to set/get parameters, do error checks, and dispath jobs.  It contains almost no algorithm logic.
+ * In addition to the jobs listed above, this class is also responsible for divide jobs across multiple GPUs or dividing up GPU jobs so that
+ * they fit into the available GPU memory.  Functions called from this class are either CPU based or single GPU based.
+ */
 
 class tomographicModels
 {

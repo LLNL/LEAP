@@ -6,7 +6,6 @@
 // LivermorE AI Projector for Computed Tomography (LEAP)
 // header for cpu-based sensitivity calculation
 ////////////////////////////////////////////////////////////////////////////////
-
 #ifndef __SENSITIVITY_CPU_H
 #define __SENSITIVITY_CPU_H
 

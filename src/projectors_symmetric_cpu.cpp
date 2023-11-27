@@ -59,7 +59,7 @@ bool CPUinverse_symmetric(float* g, float* f, parameters* params)
 	// XYZ and numX=1
 
 	omp_set_num_threads(omp_get_num_procs());
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int iy = 0; iy < params->numY; iy++)
 	{
 		float r_val = params->voxelWidth * float(iy) + params->y_0();
@@ -209,7 +209,7 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 	double Rcos_sq_plus_tau_sq = params->sod*params->sod*cos_beta*cos_beta + params->tau*params->tau;
 
 	omp_set_num_threads(omp_get_num_procs());
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < params->numRows; j++)
 	{
 		double v = j * T_v + v_0;
@@ -363,7 +363,7 @@ bool CPUbackproject_AbelCone(float* g, float* f, parameters* params)
 	double z_0 = params->z_0();
 
 	omp_set_num_threads(omp_get_num_procs());
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < params->numY; j++)
 	{
 		float* zLine = &f[j*params->numZ];
@@ -495,7 +495,7 @@ bool CPUproject_AbelParallel(float* g, float* f, parameters* params)
 	double r_max = (params->numY - 1)*params->voxelWidth + y_0;
 
 	omp_set_num_threads(omp_get_num_procs());
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < params->numRows; j++)
 	{
 		double v = j * T_v + v_0;//cos_beta;
@@ -653,7 +653,7 @@ bool CPUbackproject_AbelParallel(float* g, float* f, parameters* params)
 	double z_0 = params->z_0();
 
 	omp_set_num_threads(omp_get_num_procs());
-	#pragma omp parallel for
+	#pragma omp parallel for schedule(dynamic)
 	for (int j = 0; j < params->numY; j++)
 	{
 		float* zLine = &f[j*params->numZ];

@@ -41,7 +41,7 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
     if (params->volumeDimensionOrder == parameters::ZYX)
     {
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int iz = 0; iz < params->numZ; iz++)
         {
             float z = iz * params->voxelHeight + params->z_0();
@@ -73,7 +73,7 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
     else
     {
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
             float* xSlice = &s[ix * params->numY * params->numZ];
@@ -120,7 +120,7 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
     if (params->volumeDimensionOrder == parameters::ZYX)
     {
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int iy = 0; iy < params->numY; iy++)
         {
             float y = iy * params->voxelWidth + params->y_0();
@@ -144,7 +144,7 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
         }
 
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int iz = 0; iz < params->numZ; iz++)
         {
             float* zSlice = &s[iz * params->numY * params->numX];
@@ -160,7 +160,7 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
     else
     {
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
             float x = ix * params->voxelWidth + params->x_0();
@@ -184,7 +184,7 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
         }
 
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
             float* xSlice = &s[ix * params->numY * params->numZ];
@@ -216,7 +216,7 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
     if (params->volumeDimensionOrder == parameters::ZYX)
     {
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int iy = 0; iy < params->numY; iy++)
         {
             float y = iy * params->voxelWidth + params->y_0();
@@ -239,7 +239,7 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
         }
 
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int iz = 0; iz < params->numZ; iz++)
         {
             float* zSlice = &s[iz * params->numY * params->numX];
@@ -255,7 +255,7 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
     else
     {
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
             float x = ix * params->voxelWidth + params->x_0();
@@ -278,7 +278,7 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
         }
 
         omp_set_num_threads(omp_get_num_procs());
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
             float* xSlice = &s[ix * params->numY * params->numZ];

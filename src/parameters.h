@@ -17,6 +17,14 @@
 #include "leap_defines.h"
 #include <vector>
 
+/**
+ *  parameters class
+ * This class tracks all the LEAP parameters including: the CT geometry parameters, CT volume parameters, which GPUs to use, etc.
+ * A pointer to an instance of this class is usually passed with the input/output arrays so that the algorithms are aware of the
+ * CT parameters.  For dividing parameters into chunks, usually copies of the original object are made and certain parameters
+ * updated to hande the sub-job.
+ */
+
 class parameters
 {
 public:

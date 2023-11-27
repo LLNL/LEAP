@@ -10,6 +10,12 @@
 #include "parameters.h"
 #include "projectors.h"
 
+/**
+ *  filteredBackprojection class
+ * This class is responsible for all the logic required for analytic reconstruction, e.g., Filtered Backprojection (FBP),
+ * of a particular geometry.
+ */
+
 class filteredBackprojection
 {
 public:

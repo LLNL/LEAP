@@ -157,7 +157,7 @@ bool CPUproject_SF_fan(float* g, float* f, parameters* params, bool setToZero)
         return CPUproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int iphi = 0; iphi < params->numAngles; iphi++)
     {
         float* aProj = &g[iphi * params->numCols * params->numRows];
@@ -181,7 +181,7 @@ bool CPUbackproject_SF_fan(float* g, float* f, parameters* params, bool setToZer
         return CPUbackproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int ix = 0; ix < params->numX; ix++)
     {
         float* xSlice = &f[ix * params->numY * params->numZ];
@@ -750,7 +750,7 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
 
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int iphi = 0; iphi < params->numAngles; iphi++)
     {
         float* aProj = &g[iphi*params->numCols*params->numRows];
@@ -858,7 +858,7 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
 
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int ix = 0; ix < params->numX; ix++)
     {
         const float x = ix * params->voxelWidth + params->x_0();
@@ -958,7 +958,7 @@ bool CPUproject_SF_cone(float* g, float* f, parameters* params, bool setToZero)
         return CPUproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int iphi = 0; iphi < params->numAngles; iphi++)
     {
         float* aProj = &g[iphi*params->numCols*params->numRows];
@@ -985,7 +985,7 @@ bool CPUbackproject_SF_cone(float* g, float* f, parameters* params, bool setToZe
         return CPUbackproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
-    #pragma omp parallel for
+    #pragma omp parallel for schedule(dynamic)
     for (int ix = 0; ix < params->numX; ix++)
     {
         float* xSlice = &f[ix*params->numY*params->numZ];
