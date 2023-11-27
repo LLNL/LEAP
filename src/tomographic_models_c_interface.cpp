@@ -90,69 +90,74 @@ bool FBP(float* g, float* f, bool cpu_to_gpu)
 	return tomo.doFBP(g, f, cpu_to_gpu);
 }
 
+bool sensitivity(float* f, bool cpu_to_gpu)
+{
+	return tomo.sensitivity(f, cpu_to_gpu);
+}
+
 float get_FBPscalar()
 {
 	return tomo.get_FBPscalar();
 }
 
-bool setConeBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
 {
-	return tomo.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+	return tomo.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
 }
 
-bool setFanBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
 {
-	return tomo.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+	return tomo.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
 }
 
-bool setParallelBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
+bool set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
 {
-	return tomo.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
+	return tomo.set_parallelBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
 }
 
-bool setModularBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
+bool set_modularBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
 {
-	return tomo.setModularBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
+	return tomo.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
 }
 
-bool setVolumeParams(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-	return tomo.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+	return tomo.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool setDefaultVolumeParameters(float scale)
+bool set_defaultVolume(float scale)
 {
-	return tomo.setDefaultVolumeParameters(scale);
+	return tomo.set_defaultVolume(scale);
 }
 
-bool setVolumeDimensionOrder(int which)
+bool set_volumeDimensionOrder(int which)
 {
-	return tomo.setVolumeDimensionOrder(which);
+	return tomo.set_volumeDimensionOrder(which);
 }
 
-int getVolumeDimensionOrder()
+int get_volumeDimensionOrder()
 {
-	return tomo.getVolumeDimensionOrder();
+	return tomo.get_volumeDimensionOrder();
 }
 
-bool setGPU(int whichGPU)
+bool set_GPU(int whichGPU)
 {
-	return tomo.setGPU(whichGPU);
+	return tomo.set_GPU(whichGPU);
 }
 
-bool setGPUs(int* whichGPUs, int N)
+bool set_GPUs(int* whichGPUs, int N)
 {
-	return tomo.setGPUs(whichGPUs, N);
+	return tomo.set_GPUs(whichGPUs, N);
 }
 
-int getGPU()
+int get_GPU()
 {
-	return tomo.getGPU();
+	return tomo.get_GPU();
 }
 
-bool setProjector(int which)
+bool set_projector(int which)
 {
-	return tomo.setProjector(which);
+	return tomo.set_projector(which);
 }
 
 bool set_axisOfSymmetry(float axisOfSymmetry)
@@ -175,19 +180,19 @@ bool set_rampID(int whichRampFilter)
 	return tomo.set_rampID(whichRampFilter);
 }
 
-bool setAttenuationMap(float* mu)
+bool set_attenuationMap(float* mu)
 {
-	return tomo.setAttenuationMap(mu);
+	return tomo.set_attenuationMap(mu);
 }
 
-bool setCylindircalAttenuationMap(float c, float R)
+bool set_cylindircalAttenuationMap(float c, float R)
 {
-	return tomo.setAttenuationMap(c, R);
+	return tomo.set_attenuationMap(c, R);
 }
 
-bool clearAttenuationMap()
+bool clear_attenuationMap()
 {
-	return tomo.clearAttenuationMap();
+	return tomo.clear_attenuationMap();
 }
 
 bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -220,6 +225,21 @@ bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles,
 	return tomo.backprojectParallelBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
+int get_geometry()
+{
+	return tomo.params.geometry;
+}
+
+float get_sod()
+{
+	return tomo.params.sod;
+}
+
+float get_sdd()
+{
+	return tomo.params.sdd;
+}
+
 int get_numAngles()
 {
 	return tomo.get_numAngles();
@@ -245,6 +265,46 @@ float get_pixelHeight()
 	return tomo.get_pixelHeight();
 }
 
+float get_centerRow()
+{
+	return tomo.params.centerRow;
+}
+
+float get_centerCol()
+{
+	return tomo.params.centerCol;
+}
+
+bool get_sourcePositions(float* x)
+{
+	return tomo.get_sourcePositions(x);
+}
+
+bool get_moduleCenters(float* x)
+{
+	return tomo.get_moduleCenters(x);
+}
+
+bool get_rowVectors(float* x)
+{
+	return tomo.get_rowVectors(x);
+}
+
+bool get_colVectors(float* x)
+{
+	return tomo.get_colVectors(x);
+}
+
+bool set_angles(float* phis, int N)
+{
+	return tomo.params.setAngles(phis, N);
+}
+
+bool get_angles(float* phis)
+{
+	return tomo.params.getAngles(phis);
+}
+
 int get_numX()
 {
 	return tomo.get_numX();
@@ -268,6 +328,21 @@ float get_voxelWidth()
 float get_voxelHeight()
 {
 	return tomo.get_voxelHeight();
+}
+
+float get_offsetX()
+{
+	return tomo.params.offsetX;
+}
+
+float get_offsetY()
+{
+	return tomo.params.offsetY;
+}
+
+float get_offsetZ()
+{
+	return tomo.params.offsetZ;
 }
 
 bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)

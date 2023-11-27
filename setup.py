@@ -25,12 +25,13 @@ if cuda:
                  'parameters.cpp', 'projectors.cpp', 
                  'projectors_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
                  'projectors_SF_cpu.cpp', 'ramp_filter_cpu.cpp', 
-                 'filtered_backprojection.cpp', 'projectors_Siddon.cu',
-                 'projectors_SF.cu', 'projectors_extendedSF.cu', 
-                 'ramp_filter.cu', 'noise_filters.cu', 
-                 'total_variation.cu', 'cuda_utils.cu', 
-                 'ray_weighting.cu', 'projectors_symmetric.cu', 
-                 'projectors_attenuated.cu']
+                 'filtered_backprojection.cpp', 'sensitivity_cpu.cpp', 
+                 'projectors_Siddon.cu', 'projectors_SF.cu', 
+                 'projectors_extendedSF.cu', 'ramp_filter.cu', 
+                 'noise_filters.cu', 'total_variation.cu', 
+                 'cuda_utils.cu', 'ray_weighting.cu', 
+                 'projectors_symmetric.cu', 'projectors_attenuated.cu', 
+                 'sensitivity.cu']
     for i in range(len(source_files)):
         source_files[i] = os.path.join('src', source_files[i])
 
@@ -46,7 +47,7 @@ else:
                   'parameters.cpp', 'projectors.cpp', 
                   'projectors_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
                   'projectors_SF_cpu.cpp', 'ramp_filter_cpu.cpp', 
-                  'filtered_backprojection.cpp']
+                  'filtered_backprojection.cpp', 'sensitivity_cpu.cpp']
     for i in range(len(source_files)):
         source_files[i] = os.path.join('src',source_files[i])
 

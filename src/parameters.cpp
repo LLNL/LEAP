@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
+#include <omp.h>
 #include "parameters.h"
 #include "cuda_utils.h"
 
@@ -25,19 +26,6 @@ parameters::parameters()
 	phis = NULL;
 	mu = NULL;
 	initialize();
-	//setDefaults(1);
-}
-
-parameters::parameters(int N)
-{
-	sourcePositions = NULL;
-	moduleCenters = NULL;
-	rowVectors = NULL;
-	colVectors = NULL;
-	phis = NULL;
-	mu = NULL;
-	initialize();
-	//setDefaults(N);
 }
 
 void parameters::initialize()
@@ -54,8 +42,10 @@ void parameters::initialize()
 		whichGPU = -1;
 	whichProjector = SEPARABLE_FOOTPRINT;
 	doWeightedBackprojection = false;
+	doExtrapolation = false;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
+	chunkingMemorySizeThreshold = 0.5;
 	colShiftFromFilter = 0.0;
 
 	geometry = CONE;
@@ -97,7 +87,6 @@ parameters::parameters(const parameters& other)
     rowVectors = NULL;
     colVectors = NULL;
     phis = NULL;
-    //setDefaults(1);
 	initialize();
     assign(other);
 }
@@ -123,7 +112,9 @@ void parameters::assign(const parameters& other)
 		this->whichGPUs.push_back(other.whichGPUs[i]);
     this->whichProjector = other.whichProjector;
 	this->doWeightedBackprojection = other.doWeightedBackprojection;
+	this->doExtrapolation = other.doExtrapolation;
 	this->rampID = other.rampID;
+	this->chunkingMemorySizeThreshold = other.chunkingMemorySizeThreshold;
 	this->colShiftFromFilter = other.colShiftFromFilter;
 	this->mu = other.mu;
 	this->muCoeff = other.muCoeff;
@@ -162,47 +153,6 @@ void parameters::assign(const parameters& other)
     this->setSourcesAndModules(other.sourcePositions, other.moduleCenters, \
         other.rowVectors, other.colVectors, other.numAngles);
         
-}
-
-void parameters::setDefaults(int N)
-{
-	whichGPUs.clear();
-	int numGPUs = numberOfGPUs();
-	if (numGPUs > 0)
-	{
-		whichGPU = 0;
-		for (int i = 0; i < numGPUs; i++)
-			whichGPUs.push_back(i);
-	}
-	else
-		whichGPU = -1;
-    whichProjector = SEPARABLE_FOOTPRINT;
-	doWeightedBackprojection = false;
-	volumeDimensionOrder = ZYX;
-	rampID = 2;
-	colShiftFromFilter = 0.0;
-
-	geometry = CONE;
-	detectorType = FLAT;
-	sod = 1100.0;
-	sdd = 1400.0;
-	numCols = 2048 / N;
-	numRows = numCols;
-	numAngles = int(ceil(1440.0*float(numCols) / 2048.0));
-	pixelWidth = 0.2*2048.0 / float(numCols);
-	pixelHeight = pixelWidth;
-	angularRange = 360.0;
-	centerCol = float(numCols - 1) / 2.0;
-	centerRow = float(numCols - 1) / 2.0;
-	tau = 0.0;
-	rFOVspecified = 0.0;
-
-	normalizeConeAndFanCoordinateFunctions = false;
-
-	axisOfSymmetry = 90.0; // must be less than 30 to be activated
-
-    setAngles(); // added by Hyojin
-	setDefaultVolumeParameters();
 }
 
 float parameters::T_phi()
@@ -529,9 +479,27 @@ void parameters::printAll()
 	printf("voxel size: %f mm x %f mm x %f mm\n", voxelWidth, voxelWidth, voxelHeight);
 	if (offsetX != 0.0 || offsetY != 0.0 || offsetZ != 0.0)
 		printf("volume offset: %f mm, %f mm, %f mm\n", offsetX, offsetY, offsetZ);
+	printf("FOV: [%f, %f] x [%f, %f] x [%f, %f]\n", x_0()-0.5*voxelWidth, (numX-1)*voxelWidth+x_0()+0.5*voxelWidth, y_0()- 0.5 * voxelWidth, (numY - 1) * voxelWidth + y_0()+ 0.5 * voxelWidth, z_0()- 0.5 * voxelHeight, (numZ - 1) * voxelHeight + z_0()+ 0.5 * voxelHeight);
 	if (isSymmetric())
 		printf("axis of symmetry = %f degrees\n", axisOfSymmetry);
 	//printf("x_0 = %f, y_0 = %f, z_0 = %f\n", x_0(), y_0(), z_0());
+	printf("\n");
+
+	printf("======== Processing Settings ========\n");
+	if (whichGPU < 0)
+		printf("%d-core CPU processing\n", int(omp_get_num_procs()));
+	else
+	{
+		if (whichGPUs.size() == 1)
+			printf("GPU processing on device %d", whichGPU);
+		else
+		{
+			printf("GPU processing on devices ");
+			for (int i = 0; i < int(whichGPUs.size())-1; i++)
+				printf("%d, ", whichGPUs[i]);
+			printf("%d\n", whichGPUs[whichGPUs.size() - 1]);
+		}
+	}
 
 	printf("\n");
 }
@@ -625,6 +593,15 @@ bool parameters::setAngles(float* phis_new, int numAngles_new)
 
 		return true;
 	}
+}
+
+bool parameters::getAngles(float* phis_out)
+{
+	if (phis_out == NULL || phis == NULL || numAngles <= 0)
+		return false;
+	for (int i = 0; i < numAngles; i++)
+		phis_out[i] = (phis[i]+0.5*PI)*180.0/PI;
+	return true;
 }
 
 bool parameters::setSourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
@@ -772,7 +749,7 @@ bool parameters::rowRangeNeededForReconstruction(int firstSlice, int lastSlice ,
 	return true;
 }
 
-bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded)
+bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded, bool doClip)
 {
 	if (slicesNeeded == NULL || firstRow > lastRow)
 		return false;
@@ -800,8 +777,14 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 		float z_lo = min(v_lo * v_denom_min, v_lo * v_denom_max) - 0.5 * voxelHeight;
 		float z_hi = max(v_hi * v_denom_min, v_hi * v_denom_max) + 0.5 * voxelHeight;
 
-		slicesNeeded[0] = max(0, int(floor((z_lo - z_0()) / T_z)));
-		slicesNeeded[1] = min(numZ - 1, int(ceil((z_hi - z_0()) / T_z)));
+		slicesNeeded[0] = int(floor((z_lo - z_0()) / T_z));
+		slicesNeeded[1] = int(ceil((z_hi - z_0()) / T_z));
+
+		if (doClip)
+		{
+			slicesNeeded[0] = max(0, slicesNeeded[0]);
+			slicesNeeded[1] = min(numZ - 1, slicesNeeded[1]);
+		}
 	}
 	return true;
 }

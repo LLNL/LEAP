@@ -1,0 +1,53 @@
+
+%\begin{figure}[h]
+\psset{unit=0.15mm,linewidth=1.5pt,drawCoor=false,Alpha=55}
+\pspicture(-600,-425)(200,250)%
+
+\pstThreeDLine(-173.16, 400, -248.03)(256.72, 400, -248.03)(256.72, 400, 182.38)(-173.16, 400, 182.38)(-173.16, 400, -248.03) % outline of detector
+%\pstThreeDDot(85.44, -593.89, 0) % dot at source position
+\pstThreeDDot(0.0, -600.0, 0) % dot at source position
+\pstThreeDDot[linewidth=3pt,linecolor=red](0,0,0) % dot at origin
+\pstThreeDLine[linewidth=3pt]{->}(-173.16, 400, 182.38)(-173.16, 400, 82.378) % v vector
+\pstThreeDLine[linewidth=3pt]{->}(-173.16, 400, 182.38)(-73.158, 400, 182.38) % u vector
+%\pstThreeDLine(85.44, -593.89, 0)(85.44, 400, 0) % line to perp
+%\pstThreeDLine(85.44, -593.89, 0)(0,0,0)(-43.16, 400, 0) % line to pxcenter
+\pstThreeDLine(0.0, -600.0, 0)(0.0, 400, 0) % line to perp
+\pstThreeDLine(0.0, -600.0, 0)(0,0,0)(0.0, 400, 0) % line to pxcenter
+%\pstThreeDLine[linestyle=dotted](-43.16, 400, -248.03)(-43.16, 400, 182.38) % pxcenter column
+\pstThreeDLine[linestyle=dotted](-0.0, 400, -248.03)(-0.0, 400, 182.38) % pxcenter column
+%\pstThreeDLine[linestyle=solid]{->}(85.44, 400, -98.034)(-43.16, 400, -98.034)
+%\pstThreeDLine[linestyle=dotted](85.44, 400, -248.03)(85.44, 400, 182.38) % pxoffset column
+%\pstThreeDLine[linestyle=solid]{->}(-173.16, 400, -173.03)(85.44, 400, -173.03) % s_c arrow
+\pstThreeDLine[linestyle=solid]{->}(-173.16, 400, -120.03)(0.0, 400, -120.03) % s_c arrow
+%\pstThreeDLine(135.44, 400, 0)(135.44, 350, 0)(85.44, 350, 0) % perp
+\pstThreeDLine[linestyle=dotted](-173.16, 400, 0)(256.72, 400, 0) % pzcenter column
+\pstThreeDLine[linestyle=solid]{->}(-123.16, 400, 182.38)(-123.16, 400, 0) % pzcenter arrow
+
+% detector labels
+\pstThreeDPut(-200,400,80){\Large $j$}
+\pstThreeDPut(-90,400,220){\Large $i$}
+\pstThreeDPut(-50,400,-160){\Large $i_c$}
+\pstThreeDPut(-90,400,70){\Large $j_c$}
+%\pstThreeDPut(0,400,-130){\Large $s_0$}
+
+\pstThreeDPut(80,-600,20){\Large source}
+%\pstThreeDPut(80,-630,-50){\large (0,sod,0)}
+%\pstThreeDPut(0,0,31){\Large center of rotation/origin}
+%\pstThreeDPut(-160,400,-60){\large (0,odd,0)}
+
+\pstThreeDLine[linestyle=dashed]{<->}(-50,-600,0)(-50,0,0)
+\pstThreeDPut(-100,-300,0){\Large sod}
+\pstThreeDLine[linestyle=dashed]{<->}(100,-600,0)(100,400,0)
+\pstThreeDPut(140,-300,0){\Large sdd}
+
+\pstPlanePut[plane=xz,planecorr=normal](90,400,-290){\Large detector}
+
+%\pstThreeDCoor[xMin=-150,xMax=150,yMin=150,yMax=-150,zMin=150,zMax=-150]
+\pstThreeDLine[linestyle=solid,linecolor=red]{->}(-150,0,0)(150,0,0)
+\pstThreeDLine[linestyle=solid,linecolor=red]{->}(0,150,0)(0,-150,0)
+\pstThreeDLine[linestyle=solid,linecolor=red]{->}(0,0,150)(0,0,-150)
+\pstThreeDPut(150,0,-20){\Large x}
+\pstThreeDPut(0,-150,-30){\Large y}
+\pstThreeDPut(-30,0,-150){\Large z}
+
+\endpspicture

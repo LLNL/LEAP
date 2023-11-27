@@ -1,5 +1,5 @@
 ################################################################################
-# Copyright 2022-2022 Lawrence Livermore National Security, LLC and other 
+# Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
 # LEAP project developers. See the LICENSE file for details.
 # SPDX-License-Identifier: MIT
 #
@@ -52,7 +52,7 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
     ###################################################################################################################
     ###################################################################################################################
-    def setConeBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
+    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
         '''
         The origin of the coordinate system is always at the center of rotation
         
@@ -75,42 +75,42 @@ class tomographicModels:
         sod = source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
         sdd = source to detector distance, measured in mm
         '''
-        self.libprojectors.setConeBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
-        self.libprojectors.setConeBeamParams.restype = ctypes.c_bool
+        self.libprojectors.set_coneBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_coneBeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+        return self.libprojectors.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
             
-    def setFanBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
+    def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
         ''' see comments in the setConeBeamParams function '''
-        self.libprojectors.setFanBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
-        self.libprojectors.setFanBeamParams.restype = ctypes.c_bool
+        self.libprojectors.set_fanBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_fanBeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+        return self.libprojectors.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
 
-    def setParallelBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
+    def set_parallelBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
         ''' see comments in the setConeBeamParams function '''
-        self.libprojectors.setParallelBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.setParallelBeamParams.restype = ctypes.c_bool
+        self.libprojectors.set_parallelBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.set_parallelBeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
+        return self.libprojectors.set_parallelBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
-    def setModularBeamParams(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
-        self.libprojectors.setModularBeamParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.setModularBeamParams.restype = ctypes.c_bool
-        return self.libprojectors.setModularBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+    def set_modularBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
+        self.libprojectors.set_modularBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.set_modularBeam.restype = ctypes.c_bool
+        return self.libprojectors.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT VOLUME PARAMETERS
     ###################################################################################################################
     ###################################################################################################################
-    def setVolumeParams(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
+    def set_volume(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
         '''
         The first three parameters specify the volume array size
         For parallel- and fan-beam data, it is required that numRows=numZ
@@ -131,8 +131,8 @@ class tomographicModels:
         offsetY = shift the volume in the y-dimension, measured in mm
         offsetZ = shift the volume in the z-dimension, measured in mm
         '''
-        self.libprojectors.setVolumeParams.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
-        self.libprojectors.setVolumeParams.restype = ctypes.c_bool
+        self.libprojectors.set_volume.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_volume.restype = ctypes.c_bool
         if voxelWidth is None:
             voxelWidth = 0.0
         if voxelHeight is None:
@@ -143,49 +143,58 @@ class tomographicModels:
             offsetY = 0.0
         if offsetZ is None:
             offsetZ = 0.0
-        return self.libprojectors.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
+        return self.libprojectors.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
         
-    def setDefaultVolume(self,scale=1.0):
-        self.libprojectors.setDefaultVolumeParameters.argtypes = [ctypes.c_float]
-        self.libprojectors.setDefaultVolumeParameters.restype = ctypes.c_bool
-        return self.libprojectors.setDefaultVolumeParameters(scale)
+    def set_defaultVolume(self,scale=1.0):
+        self.libprojectors.set_defaultVolume.argtypes = [ctypes.c_float]
+        self.libprojectors.set_defaultVolume.restype = ctypes.c_bool
+        return self.libprojectors.set_defaultVolume(scale)
         
-    def setVolumeDimensionOrder(self,which):
+    def set_volumeDimensionOrder(self,which):
         '''
         Sets the order of the dimensions of the volume
         setVolumeDimensionOrder(0) set the order to XYZ
         setVolumeDimensionOrder(1) set the order to ZYX (this is the default value)
         '''
-        self.libprojectors.setVolumeDimensionOrder.argtypes = [ctypes.c_int]
-        self.libprojectors.setVolumeDimensionOrder.restype = ctypes.c_bool
-        return self.libprojectors.setVolumeDimensionOrder(which)
+        self.libprojectors.set_volumeDimensionOrder.argtypes = [ctypes.c_int]
+        self.libprojectors.set_volumeDimensionOrder.restype = ctypes.c_bool
+        return self.libprojectors.set_volumeDimensionOrder(which)
         
-    def getVolumeDimensionOrder(self):
-        return self.libprojectors.getVolumeDimensionOrder()
+    def get_volumeDimensionOrder(self):
+        return self.libprojectors.get_volumeDimensionOrder()
         
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS PROVIDE CONVENIENT ROUTINES TO MAKE THE PROJECTION DATA AND VOLUME DATA NUMPY ARRAYS
     ###################################################################################################################
     ###################################################################################################################
-    def allocateProjections(self):
+    def allocateProjections(self,val=0.0):
         N_phis = self.get_numAngles()
         N_rows = self.get_numRows()
         N_cols = self.get_numCols()
         if N_phis > 0 and N_rows > 0 and N_cols > 0:
-            return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
+            if val == 0.0:
+                return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
+            else:
+                return np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
         else:
             return None
         
-    def allocateVolume(self):
+    def allocateVolume(self,val=0.0):
         N_x = self.get_numX()
         N_y = self.get_numY()
         N_z = self.get_numZ()
         if N_x > 0 and N_y > 0 and N_z > 0:
-            if self.getVolumeDimensionOrder() == 0:
-                return np.ascontiguousarray(np.zeros((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
+            if self.get_volumeDimensionOrder() == 0:
+                if val == 0.0:
+                    return np.ascontiguousarray(np.zeros((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
+                else:
+                    return np.ascontiguousarray(val*np.ones((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
             else:
-                return np.ascontiguousarray(np.zeros((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
+                if val == 0.0:
+                    return np.ascontiguousarray(np.zeros((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
+                else:
+                    return np.ascontiguousarray(val*np.ones((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
         else:
             return None
             
@@ -256,7 +265,7 @@ class tomographicModels:
         ''' Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f '''
         self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.FBP.restype = ctypes.c_bool
-        if inplace == False and self.getGPU() < 0:
+        if inplace == False and self.get_GPU() < 0:
             q  = g.copy()
             self.libprojectors.FBP(q,f,True)
         else:
@@ -269,6 +278,16 @@ class tomographicModels:
         self.rampFilterVolume(f)
         f *= self.get_FBPscalar()
         return f
+        
+    def sensitivity(self, f=None):
+        if f is None:
+            f = self.allocateVolume()
+        #bool sensitivity(float* f, bool cpu_to_gpu);
+        self.libprojectors.sensitivity.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.sensitivity.restype = ctypes.c_bool
+        self.libprojectors.sensitivity(f,True)
+        return f
+    
     
     ###################################################################################################################
     ###################################################################################################################
@@ -278,43 +297,128 @@ class tomographicModels:
     def MLEM(self, g, f, numIter):
         if not np.any(f):
             f[:] = 1.0
-        ones = self.allocateProjections()
-        ones[:] = 1.0
-        Pstar1 = self.allocateVolume()
-        self.backproject(ones, Pstar1)
+        else:
+            f[f<0.0] = 0.0
+ 
+        Pstar1 = self.sensitivity()
         Pstar1[Pstar1==0.0] = 1.0
         d = self.allocateVolume()
-        Pd = ones
+        Pd = self.allocateProjections()
+        
         for n in range(numIter):
+            print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
             self.project(Pd,f)
             ind = Pd != 0.0
             Pd[ind] = g[ind]/Pd[ind]
             self.backproject(Pd,d)
             f *= d/Pstar1
         return f
+    
+    def OSEM(self, g, f, numIter, numSubsets=1):
+        if not np.any(f):
+            f[:] = 1.0
+        else:
+            f[f<0.0] = 0.0
+ 
+        numSubsets = min(numSubsets, self.get_numAngles())
+        if numSubsets <= 1:
+            return self.MLEM(g,f,numIter)
+        else:
         
-    def SART(self, g, f, numIter):
-        ones = self.allocateVolume()
-        ones[:] = 1.0
-        P1 = self.allocateProjections()
-        self.project(P1,ones)
-        P1[P1==0.0] = 1.0
-        
-        Pstar1 = ones
-        ones = self.allocateProjections()
-        ones[:] = 1.0
-        self.backproject(ones, Pstar1)
-        Pstar1[Pstar1==0.0] = 1.0
-        
-        Pd = ones
-        d = self.allocateVolume()
+            phis = self.get_angles()
+            
+            # divide g and phis
+            phis_subsets = []
+            g_subsets = []
+            for m in range(numSubsets):
+                phis_subset = np.ascontiguousarray(phis[m:-1:numSubsets], np.float32)
+                phis_subsets.append(phis_subset)
+                
+                g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
+                g_subsets.append(g_subset)
+                
+            d = self.allocateVolume()
+            for n in range(numIter):
+                print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
+                for m in range(numSubsets):
+                
+                    # set angle array
+                    self.set_angles(phis_subsets[m])
+                    
+                    Pstar1 = self.sensitivity()
+                    #Pstar1[Pstar1=0.0] = 1.0
 
-        for n in range(numIter):
-            self.project(Pd,f)
-            Pd = (g-Pd) / P1
-            self.backproject(Pd,d)
-            f += 0.9*d / Pstar1
-        return f
+                    Pd = self.allocateProjections()
+                    self.project(Pd,f)
+                    ind = Pd != 0.0
+                    Pd[ind] = g_subsets[m][ind]/Pd[ind]
+                    self.backproject(Pd,d)
+                    f *= d/Pstar1
+            return f
+        
+    def SART(self, g, f, numIter, numSubsets=1):
+        numSubsets = min(numSubsets, self.get_numAngles())
+        if numSubsets <= 1:
+            P1 = self.allocateProjections()
+            self.project(P1,self.allocateVolume(1.0))
+            P1[P1==0.0] = 1.0
+            
+            Pstar1 = self.sensitivity()
+            Pstar1[Pstar1==0.0] = 1.0
+            
+            Pd = self.allocateProjections()
+            d = self.allocateVolume()
+
+            for n in range(numIter):
+                print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
+                self.project(Pd,f)
+                Pd = (g-Pd) / P1
+                self.backproject(Pd,d)
+                f += 0.9*d / Pstar1
+                f[f<0.0] = 0.0
+            return f
+        else:
+            P1 = self.allocateProjections()
+            self.project(P1,self.allocateVolume(1.0))
+            P1[P1==0.0] = 1.0
+            
+            phis = self.get_angles()
+            
+            # divide g, P1, and phis
+            phis_subsets = []
+            g_subsets = []
+            P1_subsets = []
+            for m in range(numSubsets):
+                phis_subset = np.ascontiguousarray(phis[m:-1:numSubsets], np.float32)
+                phis_subsets.append(phis_subset)
+                
+                g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
+                g_subsets.append(g_subset)
+                
+                P1_subset = np.ascontiguousarray(P1[m:-1:numSubsets,:,:], np.float32)
+                P1_subsets.append(P1_subset)
+            
+            d = self.allocateVolume()
+            for n in range(numIter):
+                print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
+                for m in range(numSubsets):
+                
+                    # set angle array
+                    self.set_angles(phis_subsets[m])
+                    
+                    Pstar1 = self.sensitivity()
+                    #Pstar1[Pstar1==0.0] = 1.0
+
+                    Pd = self.allocateProjections()
+                    self.project(Pd,f)
+                    Pd = (g_subsets[m]-Pd) / P1_subsets[m]
+                    self.backproject(Pd,d)
+                    f += 0.9*d / Pstar1
+                    f[f<0.0] = 0.0
+            return f
+            
+    def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0):
+        print('Not implemented yet!')
         
     def LS(self, g, f, numIter, SQS=False):
         return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, SQS)
@@ -433,8 +537,6 @@ class tomographicModels:
         print('\tlambda = ' + str(stepSize))
         return stepSize
 
-    def ASDPOCS(self, g, f, numIter, numTV, delta=0.0):
-        print('Not implemented yet!')
 
     ###################################################################################################################
     ###################################################################################################################
@@ -498,22 +600,22 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS SET AND GET VARIOUS PARAMETERS, INCLUDING THOSE THAT SET HOW LEAP IS TO BE RUN
     ###################################################################################################################
     ###################################################################################################################
-    def setGPU(self, which):
-        self.libprojectors.setGPU.argtypes = [ctypes.c_int]
-        self.libprojectors.setGPU.restype = ctypes.c_bool
-        return self.libprojectors.setGPU(which)
+    def set_GPU(self, which):
+        self.libprojectors.set_GPU.argtypes = [ctypes.c_int]
+        self.libprojectors.set_GPU.restype = ctypes.c_bool
+        return self.libprojectors.set_GPU(which)
         
-    def setGPUs(self, listOfGPUs):
-        self.libprojectors.setGPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
-        self.libprojectors.setGPUs.restype = ctypes.c_bool
+    def set_GPUs(self, listOfGPUs):
+        self.libprojectors.set_GPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+        self.libprojectors.set_GPUs.restype = ctypes.c_bool
         listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
-        return self.libprojectors.setGPUs(listOfGPUs, int(listOfGPUs.size))
+        return self.libprojectors.set_GPUs(listOfGPUs, int(listOfGPUs.size))
         
-    def getGPU(self):
-        self.libprojectors.getGPU.restype = ctypes.c_int
-        return self.libprojectors.getGPU()
+    def get_GPU(self):
+        self.libprojectors.get_GPU.restype = ctypes.c_int
+        return self.libprojectors.get_GPU()
         
-    def setDiameterFOV(self, d):
+    def set_diameterFOV(self, d):
         self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
         self.libprojectors.set_rFOV.restype = ctypes.c_bool
         return self.libprojectors.set_rFOV(0.5*d)
@@ -528,35 +630,69 @@ class tomographicModels:
         self.libprojectors.clear_axisOfSymmetry.restype = ctypes.c_bool
         return self.libprojectors.clear_axisOfSymmetry()
         
-    def setProjector(self,which):
-        self.libprojectors.setProjector.argtypes = [ctypes.c_int]
-        self.libprojectors.setProjector.restype = ctypes.c_bool
-        return self.libprojectors.setProjector(which)
+    def set_projector(self,which):
+        self.libprojectors.set_projector.argtypes = [ctypes.c_int]
+        self.libprojectors.set_projector.restype = ctypes.c_bool
+        return self.libprojectors.set_projector(which)
         
-    def setRampFilter(self,which):
+    def set_rampFilter(self,which):
         self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
         self.libprojectors.set_rampID.restype = ctypes.c_bool
         return self.libprojectors.set_rampID(which)
         
-    def setAttenuationMap(self, mu):
-        self.libprojectors.setAttenuationMap.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.setAttenuationMap.restype = ctypes.c_bool
-        return self.libprojectors.setAttenuationMap(mu)
+    def set_attenuationMap(self, mu):
+        self.libprojectors.set_attenuationMap.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.set_attenuationMap.restype = ctypes.c_bool
+        return self.libprojectors.set_attenuationMap(mu)
         
-    def setCylindircalAttenuationMap(self, c, R):
-        self.libprojectors.setCylindircalAttenuationMap.argtypes = [ctypes.c_float, ctypes.c_float]
-        self.libprojectors.setCylindircalAttenuationMap.restype = ctypes.c_bool
-        return self.libprojectors.setCylindircalAttenuationMap(c, R)
+    def set_cylindircalAttenuationMap(self, c, R):
+        self.libprojectors.set_cylindircalAttenuationMap.argtypes = [ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_cylindircalAttenuationMap.restype = ctypes.c_bool
+        return self.libprojectors.set_cylindircalAttenuationMap(c, R)
         
-    def clearAttenuationMap(self):
-        self.libprojectors.clearAttenuationMap.restype = ctypes.c_bool
-        return self.libprojectors.clearAttenuationMap()
+    def clear_attenuationMap(self):
+        self.libprojectors.clear_attenuationMap.restype = ctypes.c_bool
+        return self.libprojectors.clear_attenuationMap()
+        
+    def get_angles(self):
+        phis = np.ascontiguousarray(np.zeros(self.get_numAngles()).astype(np.float32), dtype=np.float32)
+        self.libprojectors.get_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.get_angles.restype = ctypes.c_bool
+        self.libprojectors.get_angles(phis)
+        return phis
+        
+    def set_angles(self,phis):
+        self.libprojectors.set_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+        self.libprojectors.set_angles.restype = ctypes.c_bool
+        return self.libprojectors.set_angles(phis, int(phis.size))
 
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION RETRIEVES THE VARIOUS CT GEOMETRY AND VOLUME PARAMETERS THAT HAS BEEN SET IN LEAP
     ###################################################################################################################
     ###################################################################################################################
+    def get_geometry(self):
+        self.libprojectors.get_geometry.restype = ctypes.c_int
+        geometryType = self.libprojectors.get_geometry()
+        if geometryType == 0:
+            return 'CONE'
+        elif geometryType == 1:
+            return 'PARALLEL'
+        elif geometryType == 2:
+            return 'FAN'
+        elif geometryType == 3:
+            return 'MODULAR'
+        else:
+            return 'UNKNOWN'
+            
+    def get_sod(self):
+        self.libprojectors.get_sod.restype = ctypes.c_float
+        return self.libprojectors.get_sod()
+        
+    def get_sdd(self):
+        self.libprojectors.get_sdd.restype = ctypes.c_float
+        return self.libprojectors.get_sdd()
+    
     def get_numAngles(self):
         return self.libprojectors.get_numAngles()
         
@@ -573,6 +709,58 @@ class tomographicModels:
     def get_pixelWidth(self):
         self.libprojectors.get_pixelWidth.restype = ctypes.c_float
         return self.libprojectors.get_pixelWidth()
+        
+    def get_centerRow(self):
+        self.libprojectors.get_centerRow.restype = ctypes.c_float
+        return self.libprojectors.get_centerRow()
+        
+    def get_centerCol(self):
+        self.libprojectors.get_centerCol.restype = ctypes.c_float
+        return self.libprojectors.get_centerCol()
+        
+    def get_sourcePositions(self):
+        #bool get_sourcePositions(float*);
+        if self.get_numAngles() <= 0:
+            return None
+        else:
+            x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
+            self.libprojectors.get_sourcePositions.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.get_sourcePositions.restype = ctypes.c_bool
+            self.libprojectors.get_sourcePositions(x)
+            return x
+        
+    def get_moduleCenters(self):
+	    #bool get_moduleCenters(float*);
+        if self.get_numAngles() <= 0:
+            return None
+        else:
+            x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
+            self.libprojectors.get_moduleCenters.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.get_moduleCenters.restype = ctypes.c_bool
+            self.libprojectors.get_moduleCenters(x)
+            return x
+        
+    def get_rowVectors(self):
+	    #bool get_rowVectors(float*);
+        if self.get_numAngles() <= 0:
+            return None
+        else:
+            x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
+            self.libprojectors.get_rowVectors.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.get_rowVectors.restype = ctypes.c_bool
+            self.libprojectors.get_rowVectors(x)
+            return x
+        
+    def get_colVectors(self):
+	    #bool get_colVectors(float*);
+        if self.get_numAngles() <= 0:
+            return None
+        else:
+            x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
+            self.libprojectors.get_colVectors.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.get_colVectors.restype = ctypes.c_bool
+            self.libprojectors.get_colVectors(x)
+            return x
         
     def get_numX(self):
         return self.libprojectors.get_numX()
@@ -591,11 +779,29 @@ class tomographicModels:
         self.libprojectors.get_voxelWidth.restype = ctypes.c_float
         return self.libprojectors.get_voxelWidth()
         
+    def get_offsetX(self):
+        self.libprojectors.get_offsetX.restype = ctypes.c_float
+        return self.libprojectors.get_offsetX()
+        
+    def get_offsetY(self):
+        self.libprojectors.get_offsetY.restype = ctypes.c_float
+        return self.libprojectors.get_offsetY()
+        
+    def get_offsetZ(self):
+        self.libprojectors.get_offsetZ.restype = ctypes.c_float
+        return self.libprojectors.get_offsetZ()
+
+    
+    ###################################################################################################################
+    ###################################################################################################################
+    # UTILITY FUNCTIONS
+    ###################################################################################################################
+    ###################################################################################################################
     def voxelSamples(self):
         x = (np.array(range(self.get_numX())) - 0.5*(self.get_numX()-1))*self.get_voxelWidth()
         y = (np.array(range(self.get_numY())) - 0.5*(self.get_numY()-1))*self.get_voxelWidth()
         z = (np.array(range(self.get_numZ())) - 0.5*(self.get_numZ()-1))*self.get_voxelHeight()
-        if self.getVolumeDimensionOrder() == 0:
+        if self.get_volumeDimensionOrder() == 0:
             x,y,z = np.meshgrid(x,y,z, indexing='ij')
         else:
             z,y,x = np.meshgrid(z,y,x, indexing='ij')
@@ -612,3 +818,210 @@ class tomographicModels:
         except:
             print('Cannot load napari, to install run this command:')
             print('pip install napari[all]')
+            
+    def sketchSystem(self):
+    
+        if self.get_numAngles() <= 0 or self.get_numRows() <= 0 or self.get_numCols() <= 0:
+            print('CT geometry not set!')
+            return False
+    
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
+        import matplotlib.pyplot as plt
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        self.drawCT(ax)
+        self.drawVolume(ax)
+        
+        ax.set_xlabel('X (mm)')
+        ax.set_ylabel('Y (mm)')
+        ax.set_zlabel('Z (mm)')
+        x_limits = ax.get_xlim3d()
+        y_limits = ax.get_ylim3d()
+        z_limits = ax.get_zlim3d()
+
+        x_range = abs(x_limits[1] - x_limits[0])
+        x_middle = np.mean(x_limits)
+        y_range = abs(y_limits[1] - y_limits[0])
+        y_middle = np.mean(y_limits)
+        z_range = abs(z_limits[1] - z_limits[0])
+        z_middle = np.mean(z_limits)
+
+        # The plot bounding box is a sphere in the sense of the infinity
+        # norm, hence I call half the max range the plot radius.
+        plot_radius = 0.5*max([x_range, y_range, z_range])
+        print(plot_radius)
+
+        ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+        ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+        ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+        
+        ax.view_init(90, -90)
+        plt.show()
+    
+    def drawCT(self, ax):
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
+        import matplotlib.pyplot as plt
+        
+        pixelWidth = self.get_pixelWidth()
+        pixelHeight = self.get_pixelHeight()
+        numCols = self.get_numCols()
+        numRows = self.get_numRows()
+        centerRow = self.get_centerRow()
+        centerCol = self.get_centerCol()
+        
+        geometryText = self.get_geometry()
+        if geometryText == 'CONE' or geometryText == 'FAN':
+            sod = self.get_sod()
+            sdd = self.get_sdd()
+            tau = 0.0
+            #tau = pxmidoff * pxsize * sod / sdd
+            R = np.sqrt(sod*sod - tau*tau)
+            D = np.sqrt(sdd*sdd - tau*tau)
+            odd = D-R
+            detectorWidth = numCols*pixelWidth
+            detectorHeight = numRows*pixelHeight
+            detectorLeft = -centerCol*pixelWidth + tau
+            detectorRight = (numCols-1-centerCol)*pixelWidth + tau
+            detectorBottom = -centerRow*pixelHeight
+            detectorTop = (numRows-1-centerRow)*pixelHeight
+            xs = [detectorLeft, detectorRight, detectorRight, detectorLeft, detectorLeft]
+            ys = [-odd, -odd, -odd, -odd, -odd]
+            zs = [detectorBottom, detectorBottom, detectorTop, detectorTop, detectorBottom]
+            ax.plot(xs,ys,zs,color='black')
+
+            if geometryText == 'CONE':
+                ax.plot([tau, tau], [R, -odd], [0, 0], color='green') # pxcenter line
+                #ax.plot([tau, tau-tau*(R+odd)/R], [R, -odd], [0, 0], color='green') # pxmidoff line
+                ax.plot([tau, detectorLeft, tau, detectorRight, tau, detectorLeft, tau, detectorRight], [R, -odd, R, -odd, R, -odd, R, -odd], [0, detectorBottom, 0, detectorBottom, 0, detectorTop, 0, detectorTop],color='red')
+            else:
+                ax.plot([tau, tau], [R, -odd], [0, 0], color='green')  # pxcenter line
+                #ax.plot([tau, tau - tau * (R + odd) / R], [R, -odd], [0, 0], color='green')  # pxmidoff line
+                ax.plot([tau, detectorLeft, detectorRight, tau], [R, -odd, -odd, R], [detectorBottom, detectorBottom, detectorBottom, detectorBottom], color='red')
+                ax.plot([tau, detectorLeft, detectorRight, tau], [R, -odd, -odd, R], [0, 0, 0, 0], color='red')
+                ax.plot([tau, detectorLeft, detectorRight, tau], [R, -odd, -odd, R], [detectorTop, detectorTop, detectorTop, detectorTop], color='red')
+
+            topLeft = np.array([detectorLeft, ys[0], detectorTop])
+            topRight = np.array([detectorRight, ys[1], detectorTop])
+            bottomLeft = np.array([detectorLeft, ys[2], detectorBottom])
+            bottomRight = np.array([detectorRight, ys[3], detectorBottom])
+            Z = np.squeeze(np.array([topLeft.tolist(), topRight.tolist(), bottomRight.tolist(), bottomLeft.tolist(), bottomLeft.tolist(), bottomRight.tolist(), topRight.tolist(), topLeft.tolist()]))
+            ax.scatter3D(Z[:,0], Z[:,1], Z[:,2])
+            verts = [[Z[0],Z[1],Z[2],Z[3]],
+            [Z[4],Z[5],Z[6],Z[7]],
+            [Z[1],Z[2],Z[5],Z[6]],
+            [Z[0],Z[3],Z[4],Z[7]],
+            [Z[0],Z[1],Z[6],Z[7]],
+            [Z[2],Z[3],Z[4],Z[5]]]
+            ax.add_collection3d(Poly3DCollection(verts, facecolors='black', linewidths=1, edgecolors='k', alpha=.20))
+
+        elif geometryText == 'PARALLEL':
+            tau = 0.0
+            detectorWidth = numCols*pixelWidth
+            detectorHeight = numRows*pixelHeight
+            detectorLeft = -centerCol*pixelWidth + tau
+            detectorRight = (numCols-1-centerCol)*pixelWidth + tau
+            detectorBottom = -centerRow*pixelHeight
+            detectorTop = (numRows-1-centerRow)*pixelHeight
+
+            sod = detectorWidth
+            sdd = 2*sod
+            odd = sdd - sod
+
+            xs = [detectorLeft, detectorRight, detectorRight, detectorLeft, detectorLeft]
+            ys = [-odd, -odd, -odd, -odd, -odd]
+            zs = [detectorBottom, detectorBottom, detectorTop, detectorTop, detectorBottom]
+            ax.plot(xs, ys, zs, color='black')
+
+            ax.plot([0, 0], [sod, -odd], [0, 0], color='green')
+            ax.plot([detectorLeft, detectorLeft, detectorRight, detectorRight], [sod, -odd, -odd, sod], [detectorBottom, detectorBottom, detectorBottom, detectorBottom], color='red')
+            ax.plot([detectorLeft, detectorLeft, detectorRight, detectorRight], [sod, -odd, -odd, sod], [0, 0, 0, 0], color='red')
+            ax.plot([detectorLeft, detectorLeft, detectorRight, detectorRight], [sod, -odd, -odd, sod], [detectorTop, detectorTop, detectorTop, detectorTop], color='red')
+
+            topLeft = np.array([detectorLeft, ys[0], detectorTop])
+            topRight = np.array([detectorRight, ys[1], detectorTop])
+            bottomLeft = np.array([detectorLeft, ys[2], detectorBottom])
+            bottomRight = np.array([detectorRight, ys[3], detectorBottom])
+            Z = np.squeeze(np.array([topLeft.tolist(), topRight.tolist(), bottomRight.tolist(), bottomLeft.tolist(), bottomLeft.tolist(), bottomRight.tolist(), topRight.tolist(), topLeft.tolist()]))
+            ax.scatter3D(Z[:,0], Z[:,1], Z[:,2])
+            verts = [[Z[0],Z[1],Z[2],Z[3]],
+            [Z[4],Z[5],Z[6],Z[7]],
+            [Z[1],Z[2],Z[5],Z[6]],
+            [Z[0],Z[3],Z[4],Z[7]],
+            [Z[0],Z[1],Z[6],Z[7]],
+            [Z[2],Z[3],Z[4],Z[5]]]
+            ax.add_collection3d(Poly3DCollection(verts, facecolors='black', linewidths=1, edgecolors='k', alpha=.20))
+            
+        elif geometryText == 'MODULAR':
+            sourcePositions = self.get_sourcePositions()
+            moduleCenters = self.get_moduleCenters()
+            rowVecs = self.get_rowVectors()
+            colVecs = self.get_colVectors()
+            for n in range(self.get_numAngles()):
+                sourcePos = sourcePositions[n,:]
+                detPos = moduleCenters[n,:]
+                rowVec = rowVecs[n,:]
+                colVec = colVecs[n,:]
+                
+                rowMin = -0.5*(numRows-1)*pixelHeight*rowVec
+                rowMax = 0.5*(numRows-1)*pixelHeight*rowVec
+                colMin = -0.5*(numCols-1)*pixelWidth*colVec
+                colMax = 0.5*(numCols-1)*pixelWidth*colVec
+                
+                topLeft = detPos + rowMax + colMin
+                topRight = detPos + rowMax + colMax
+                bottomLeft = detPos + rowMin + colMin
+                bottomRight = detPos + rowMin + colMax
+                
+                ax.plot([sourcePos[0], topLeft[0]], [sourcePos[1], topLeft[1]], [sourcePos[2], topLeft[2]], color='red')
+                ax.plot([sourcePos[0], topRight[0]], [sourcePos[1], topRight[1]], [sourcePos[2], topRight[2]], color='red')
+                ax.plot([sourcePos[0], bottomLeft[0]], [sourcePos[1], bottomLeft[1]], [sourcePos[2], bottomLeft[2]], color='red')
+                ax.plot([sourcePos[0], bottomRight[0]], [sourcePos[1], bottomRight[1]], [sourcePos[2], bottomRight[2]], color='red')
+                
+                Z = np.squeeze(np.array([topLeft.tolist(), topRight.tolist(), bottomRight.tolist(), bottomLeft.tolist(), bottomLeft.tolist(), bottomRight.tolist(), topRight.tolist(), topLeft.tolist()]))
+                ax.scatter3D(Z[:,0], Z[:,1], Z[:,2])
+                verts = [[Z[0],Z[1],Z[2],Z[3]],
+                [Z[4],Z[5],Z[6],Z[7]],
+                [Z[1],Z[2],Z[5],Z[6]],
+                [Z[0],Z[3],Z[4],Z[7]],
+                [Z[0],Z[1],Z[6],Z[7]],
+                [Z[2],Z[3],Z[4],Z[5]]]
+                ax.add_collection3d(Poly3DCollection(verts, facecolors='black', linewidths=1, edgecolors='k', alpha=.20))
+                
+    
+    def drawVolume(self, ax):
+        from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
+        import matplotlib.pyplot as plt
+        N_x = self.get_numX()
+        N_y = self.get_numY()
+        N_z = self.get_numZ()
+        if N_x > 0 and N_y > 0 and N_z > 0:
+            x_c = self.get_offsetX()
+            y_c = self.get_offsetY()
+            z_c = self.get_offsetZ()
+            T = self.get_voxelWidth()
+            T_z = self.get_voxelHeight()
+            x_min = -0.5*float(N_x-1)*T + x_c
+            x_max = 0.5*float(N_x-1)*T + x_c
+            y_min = -0.5*float(N_y-1)*T + y_c
+            y_max = 0.5*float(N_y-1)*T + y_c
+            z_min = -0.5*float(N_z-1)*T_z + z_c
+            z_max = 0.5*float(N_z-1)*T_z + z_c
+
+            topLeft_front = np.array([x_min, y_max, z_max])
+            topRight_front = np.array([x_max, y_max, z_max])
+            bottomLeft_front = np.array([x_min, y_min, z_max])
+            bottomRight_front = np.array([x_max, y_min, z_max])
+            topLeft_back = np.array([x_min, y_max, z_min])
+            topRight_back = np.array([x_max, y_max, z_min])
+            bottomLeft_back = np.array([x_min, y_min, z_min])
+            bottomRight_back = np.array([x_max, y_min, z_min])
+            Z = np.squeeze(np.array([topLeft_front.tolist(), topRight_front.tolist(), bottomRight_front.tolist(), bottomLeft_front.tolist(), bottomLeft_back.tolist(), bottomRight_back.tolist(), topRight_back.tolist(), topLeft_back.tolist()]))
+            ax.scatter3D(Z[:,0], Z[:,1], Z[:,2])
+            verts = [[Z[0],Z[1],Z[2],Z[3]],
+            [Z[4],Z[5],Z[6],Z[7]],
+            [Z[1],Z[2],Z[5],Z[6]],
+            [Z[0],Z[3],Z[4],Z[7]],
+            [Z[0],Z[1],Z[6],Z[7]],
+            [Z[2],Z[3],Z[4],Z[5]]]
+            ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))

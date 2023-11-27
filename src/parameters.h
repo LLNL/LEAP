@@ -24,13 +24,11 @@ class parameters
 {
 public:
 	parameters();
-	parameters(int N);
     parameters(const parameters& other);
 	~parameters();
     parameters& operator = (const parameters& other);
 
     void assign(const parameters& other);
-    void setDefaults(int N);
 	void initialize();
 	void printAll();
 	void clearAll();
@@ -40,6 +38,7 @@ public:
 	bool setDefaultVolumeParameters(float scale = 1.0);
 	bool setAngles(float*, int);
 	bool setAngles();
+	bool getAngles(float*);
 
 	bool phaseShift(float radians);
 
@@ -62,8 +61,6 @@ public:
 
 	int whichGPU;
 	std::vector<int> whichGPUs;
-    int whichProjector;
-	int doWeightedBackprojection;
 
 	// Scanner Parameters
 	int geometry;
@@ -74,40 +71,6 @@ public:
 	float centerCol, centerRow;
 	float* phis;
 	float tau;
-	float rFOVspecified;
-
-
-	// Attenuated Radon Transform
-	float* mu;
-	float muCoeff;
-	float muRadius;
-	bool muSpecified();
-
-	// Reconstruction Parameters
-	int rampID;
-	float colShiftFromFilter;
-	float axisOfSymmetry;
-    
-    float T_phi();
-    float rFOV();
-
-	
-	bool isSymmetric();
-    bool useSF();
-	bool setToZero(float*, int);
-	bool windowFOV(float*);
-
-	//float smallestVoxelForFastSF();
-	//float largestVoxelForFastSF();
-	bool voxelSizeWorksForFastSF();
-
-	float projectionDataSize();
-	float volumeDataSize();
-
-	bool rowRangeNeededForReconstruction(int, int, int*);
-	bool sliceRangeNeededForProjection(int, int, int*);
-	float requiredGPUmemory();
-	bool hasSufficientGPUmemory();
 
 	// Volume Parameters
 	int volumeDimensionOrder;
@@ -122,6 +85,42 @@ public:
 	float* moduleCenters;
 	float* rowVectors;
 	float* colVectors;
+
+	// Attenuated Radon Transform
+	float* mu;
+	float muCoeff;
+	float muRadius;
+	bool muSpecified();
+
+	// Reconstruction Parameters
+	int whichProjector;
+	bool doWeightedBackprojection;
+	bool doExtrapolation;
+	float rFOVspecified;
+	int rampID;
+	float colShiftFromFilter;
+	float axisOfSymmetry;
+	float chunkingMemorySizeThreshold;
+    
+    float T_phi();
+    float rFOV();
+	
+	bool isSymmetric();
+    bool useSF();
+	bool setToZero(float*, int);
+	bool windowFOV(float*);
+
+	//float smallestVoxelForFastSF();
+	//float largestVoxelForFastSF();
+	bool voxelSizeWorksForFastSF();
+
+	float projectionDataSize();
+	float volumeDataSize();
+
+	bool rowRangeNeededForReconstruction(int firstSlice, int lastSlice, int* rowsNeeded);
+	bool sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded, bool doClip = true);
+	float requiredGPUmemory();
+	bool hasSufficientGPUmemory();
 
 	// Enums
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };

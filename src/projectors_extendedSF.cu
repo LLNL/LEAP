@@ -787,7 +787,8 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool cpu_to_gpu)
         dev_g = g;
 
     cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, false);
+    //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, false);
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, false);
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);

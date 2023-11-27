@@ -1,10 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright 2022-2022 Lawrence Livermore National Security, LLC and other 
+// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
 // LEAP project developers. See the LICENSE file for details.
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
-// main c++ module for ctype binding
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "filtered_backprojection.h"
@@ -167,6 +166,8 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		bool retVal = true;
 		bool doWeightedBackprojection_save = params->doWeightedBackprojection;
 		params->doWeightedBackprojection = true;
+		bool doExtrapolation_save = params->doExtrapolation;
+		params->doExtrapolation = true;
 		if (params->isSymmetric())
 		{
 			if (params->whichGPU < 0)
@@ -177,6 +178,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		else
 			retVal = proj.backproject(g, f, params, cpu_to_gpu);
 		params->doWeightedBackprojection = doWeightedBackprojection_save;
+		params->doExtrapolation = doExtrapolation_save;
 		return retVal;
 	}
 	else

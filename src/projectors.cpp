@@ -187,7 +187,10 @@ bool projectors::weightedBackproject(float* g, float* f, parameters* params, boo
 {
 	bool doWeightedBackprojection_save = params->doWeightedBackprojection;
 	params->doWeightedBackprojection = true;
+	bool doExtrapolation_save = params->doExtrapolation;
+	params->doExtrapolation = true;
 	bool retVal = backproject(g, f, params, cpu_to_gpu);
 	params->doWeightedBackprojection = doWeightedBackprojection_save;
+	params->doExtrapolation = doExtrapolation_save;
 	return retVal;
 }

@@ -37,6 +37,8 @@ set(HEADER
   projectors_symmetric.cuh
   projectors_attenuated.cuh
   filtered_backprojection.h
+  sensitivity_cpu.h
+  sensitivity.cuh
 )
 
 set(SRC_CPP
@@ -49,6 +51,7 @@ set(SRC_CPP
   projectors_SF_cpu.cpp
   ramp_filter_cpu.cpp
   filtered_backprojection.cpp
+  sensitivity_cpu.cpp
 )
 
 set(SRC_CU
@@ -62,6 +65,7 @@ set(SRC_CU
   ray_weighting.cu
   projectors_symmetric.cu
   projectors_attenuated.cu
+  sensitivity.cu
 )
 
 include_directories(

@@ -26,13 +26,13 @@ def setLEAPfromLTT():
     if geometry == 'CONE':
         sod = float(LTT.getParam('sod'))
         sdd = float(LTT.getParam('sdd'))
-        leapct.setConeBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
+        leapct.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
     elif geometry == 'FAN':
         sod = float(LTT.getParam('sod'))
         sdd = float(LTT.getParam('sdd'))
-        leapct.setFanBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
+        leapct.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
     elif geometry == 'PARALLEL':
-        leapct.setParallelBeamParams(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange))
+        leapct.set_parallelBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange))
     
     if LTT.unknown('axisOfSymmetry') == False:
         leapct.set_axisOfSymmetry(float(LTT.getParam('axisOfSymmetry')))
@@ -48,7 +48,7 @@ def setLEAPfromLTT():
     offsetY = float(LTT.getParam('ryref')) - 0.5*float(numY-1)
     offsetZ = float(LTT.getParam('rzref')) - 0.5*float(numZ-1)
     
-    leapct.setVolumeParams(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
+    leapct.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
     
 for n in range(3):
     LTT.cmd('clearAll')
@@ -77,14 +77,14 @@ for n in range(3):
     LTT.cmd('projectorType=SF')
 
     setLEAPfromLTT()
-    #leapct.setVolumeDimensionOrder(0) # XYZ
-    leapct.setVolumeDimensionOrder(1) # ZYX
+    #leapct.set_volumeDimensionOrder(0) # XYZ
+    leapct.set_volumeDimensionOrder(1) # ZYX
 
     #'''
     # Test Forward Projection on CPU & GPU    
     LTT.cmd('voxelizePhantom #{overSampling=3}')
     f_true = LTT.getAllReconSlicesZ()
-    if leapct.getVolumeDimensionOrder() == 1: # leap is ZYX
+    if leapct.get_volumeDimensionOrder() == 1: # leap is ZYX
         f_true = np.ascontiguousarray(np.flip(f_true, 1), dtype=np.float32) # LTT is ZYX, but Y is flipped
     else: # leap is XYZ
         f_true = np.ascontiguousarray(np.flip(np.swapaxes(f_true, 0, 2),axis=1), dtype=np.float32)
@@ -92,13 +92,13 @@ for n in range(3):
     LTT.cmd('project')
     g_LTT = LTT.getAllProjections()
 
-    leapct.setGPU(0)
+    leapct.set_GPU(0)
     g_leap_GPU = leapct.allocateProjections()
     startTime = time.time()
     leapct.project(g_leap_GPU,f_true)
     print('project GPU elapsed time: ' + str(time.time()-startTime))
 
-    leapct.setGPU(-1)
+    leapct.set_GPU(-1)
     g_leap_CPU = leapct.allocateProjections()
     startTime = time.time()
     leapct.project(g_leap_CPU,f_true)
@@ -118,18 +118,18 @@ for n in range(3):
     
     LTT.cmd('backproject')
     f_LTT = LTT.getAllReconSlicesZ()
-    if leapct.getVolumeDimensionOrder() == 1: # leap is ZYX
+    if leapct.get_volumeDimensionOrder() == 1: # leap is ZYX
         f_LTT = np.ascontiguousarray(np.flip(f_LTT, 1), dtype=np.float32) # LTT is ZYX, but Y is flipped
     else: # leap is XYZ
         f_LTT = np.ascontiguousarray(np.flip(np.swapaxes(f_LTT, 0, 2),axis=1), dtype=np.float32)
     
-    leapct.setGPU(0)
+    leapct.set_GPU(0)
     f_leap_GPU = leapct.allocateVolume()
     startTime = time.time()
     leapct.backproject(g_true, f_leap_GPU)
     print('backproject GPU elapsed time: ' + str(time.time()-startTime))
     
-    leapct.setGPU(-1)
+    leapct.set_GPU(-1)
     f_leap_CPU = leapct.allocateVolume()
     startTime = time.time()
     leapct.backproject(g_true, f_leap_CPU)
@@ -149,18 +149,18 @@ for n in range(3):
     
     LTT.cmd('FBP')
     f_LTT = LTT.getAllReconSlicesZ()
-    if leapct.getVolumeDimensionOrder() == 1: # leap is ZYX
+    if leapct.get_volumeDimensionOrder() == 1: # leap is ZYX
         f_LTT = np.ascontiguousarray(np.flip(f_LTT, 1), dtype=np.float32) # LTT is ZYX, but Y is flipped
     else: # leap is XYZ
         f_LTT = np.ascontiguousarray(np.flip(np.swapaxes(f_LTT, 0, 2),axis=1), dtype=np.float32)
     
-    leapct.setGPU(0)
+    leapct.set_GPU(0)
     f_leap_GPU = leapct.allocateVolume()
     startTime = time.time()
     leapct.FBP(g_true, f_leap_GPU)
     print('FBP GPU elapsed time: ' + str(time.time()-startTime))
 
-    leapct.setGPU(-1)
+    leapct.set_GPU(-1)
     #leapct.setGPUs(np.array([0,1]))
     f_leap_CPU = leapct.allocateVolume()
     startTime = time.time()
@@ -182,13 +182,13 @@ for n in range(3):
     LTT.cmd('allocateVolume')
     #LTT.cmd('FBP')
     f_LTT = LTT.getAllReconSlicesZ()
-    if leapct.getVolumeDimensionOrder() == 1: # leap is ZYX
+    if leapct.get_volumeDimensionOrder() == 1: # leap is ZYX
         f_LTT = np.ascontiguousarray(np.flip(f_LTT, 1), dtype=np.float32) # LTT is ZYX, but Y is flipped
     else: # leap is XYZ
         f_LTT = np.ascontiguousarray(np.flip(np.swapaxes(f_LTT, 0, 2),axis=1), dtype=np.float32)
     
-    leapct.setGPU(0)
-    leapct.setGPUs([0,1])
+    leapct.set_GPU(0)
+    leapct.set_GPUs([0,1])
     f_leap_GPU = leapct.allocateVolume()
     startTime = time.time()
     #leapct.SART(g_true, f_leap_GPU, 10)

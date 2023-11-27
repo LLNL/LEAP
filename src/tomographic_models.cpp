@@ -20,6 +20,8 @@
 #include "projectors_symmetric_cpu.h"
 #include "ramp_filter_cpu.h"
 #include "projectors_attenuated.cuh"
+#include "sensitivity_cpu.h"
+#include "sensitivity.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -32,7 +34,7 @@
 
 tomographicModels::tomographicModels()
 {
-	params.setDefaults(1);
+	params.initialize();
 }
 
 tomographicModels::~tomographicModels()
@@ -49,7 +51,7 @@ bool tomographicModels::printParameters()
 bool tomographicModels::reset()
 {
 	params.clearAll();
-	params.setDefaults(1);
+	params.initialize();
 	return true;
 }
 
@@ -213,8 +215,13 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 			return false;
 		numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
 	}
-	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= 0.5)
+	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= params.chunkingMemorySizeThreshold)
 		return false;
+	else
+	{
+		numRowsPerChunk = int(ceil(float(params.numRows) / float(params.whichGPUs.size())));
+		numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
+	}
 
 	if (numChunks <= 1)
 		return false;
@@ -281,8 +288,13 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 			return false;
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
-	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= 0.5)
+	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= params.chunkingMemorySizeThreshold)
 		return false;
+	else
+	{
+		numSlicesPerChunk = int(ceil(float(params.numZ) / float(params.whichGPUs.size())));
+		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	}
 
 	if (numChunks <= 1)
 		return false;
@@ -348,12 +360,104 @@ bool tomographicModels::doFBP(float* g, float* f, bool cpu_to_gpu)
 		return FBP.execute(g, f, &params, cpu_to_gpu);
 }
 
+bool tomographicModels::sensitivity(float* f, bool cpu_to_gpu)
+{
+	if (params.muSpecified() == true || params.isSymmetric() == true || params.geometry == parameters::MODULAR)
+	{
+		if (params.whichGPU < 0 || cpu_to_gpu == true)
+		{
+			float* g = (float*)malloc(sizeof(float) * params.numAngles * params.numRows * params.numCols);
+			for (int i = 0; i < params.numAngles; i++)
+			{
+				float* aProj = &g[i*params.numRows* params.numCols];
+				for (int j = 0; j < params.numRows; j++)
+				{
+					for (int k = 0; k < params.numCols; k++)
+						aProj[j*params.numCols+k] = 1.0;
+				}
+			}
+			bool retVal = backproject(g, f, cpu_to_gpu);
+			free(g);
+			return retVal;
+		}
+		else
+		{
+			float* dev_g = 0;
+			if (cudaMalloc((void**)&dev_g, params.numAngles * params.numRows * params.numCols * sizeof(float)) != cudaSuccess)
+			{
+				fprintf(stderr, "cudaMalloc(projection) failed!\n");
+				return false;
+			}
+			setToConstant(dev_g, 1.0, make_int3(params.numAngles, params.numRows, params.numCols), params.whichGPU);
+			bool retVal = backproject(dev_g, f, false);
+			cudaFree(dev_g);
+			return retVal;
+		}
+	}
+
+	if (params.whichGPU < 0)
+		return sensitivity_CPU(f, &params);
+	else
+	{
+		if (cpu_to_gpu)
+		{
+			if (getAvailableGPUmemory(params.whichGPU) < params.volumeDataSize())
+			{
+				if (params.volumeDimensionOrder == parameters::XYZ)
+				{
+					printf("Error: insufficient GPU memory\n");
+					return false;
+				}
+				else
+				{
+					// do chunking
+					int numSlicesPerChunk = std::max(1,params.numZ / 2);
+					while (getAvailableGPUmemory(params.whichGPU) < params.volumeDataSize() * float(numSlicesPerChunk) / float(params.numZ))
+					{
+						numSlicesPerChunk = numSlicesPerChunk / 2;
+						if (numSlicesPerChunk <= 1)
+						{
+							numSlicesPerChunk = 1;
+							break;
+						}
+					}
+					int numChunks = int(ceil(float(params.numZ) / float(numSlicesPerChunk)));
+					for (int ichunk = 0; ichunk < numChunks; ichunk++)
+					{
+						int firstSlice = ichunk * numSlicesPerChunk;
+						int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ-1);
+						if (firstSlice < params.numZ)
+						{
+							int numZ_save = params.numZ;
+							float offsetZ_save = params.offsetZ;
+
+							params.numZ = lastSlice - firstSlice + 1;
+							params.offsetZ = params.offsetZ + (firstSlice - 0) * params.voxelHeight;
+
+							float* f_chunk = &f[firstSlice * params.numX * params.numZ];
+							sensitivity_gpu(f_chunk, &params, true);
+
+							params.numZ = numZ_save;
+							params.offsetZ = offsetZ_save;
+						}
+					}
+					return true;
+				}
+			}
+			else
+				return sensitivity_gpu(f, &params, cpu_to_gpu);
+		}
+		else
+			return sensitivity_gpu(f, &params, cpu_to_gpu);
+	}
+}
+
 float tomographicModels::get_FBPscalar()
 {
 	return FBPscalar(&params);
 }
 
-bool tomographicModels::setConeBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool tomographicModels::set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
 {
 	params.geometry = parameters::CONE;
 	params.detectorType = parameters::FLAT;
@@ -370,7 +474,7 @@ bool tomographicModels::setConeBeamParams(int numAngles, int numRows, int numCol
 	return params.geometryDefined();
 }
 
-bool tomographicModels::setFanBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool tomographicModels::set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
 {
 	params.geometry = parameters::FAN;
 	params.detectorType = parameters::FLAT;
@@ -387,7 +491,7 @@ bool tomographicModels::setFanBeamParams(int numAngles, int numRows, int numCols
 	return params.geometryDefined();
 }
 
-bool tomographicModels::setParallelBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
+bool tomographicModels::set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
 {
 	params.geometry = parameters::PARALLEL;
 	params.pixelWidth = pixelWidth;
@@ -401,7 +505,7 @@ bool tomographicModels::setParallelBeamParams(int numAngles, int numRows, int nu
 	return params.geometryDefined();
 }
 
-bool tomographicModels::setModularBeamParams(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
+bool tomographicModels::set_modularBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
 {
 	params.geometry = parameters::MODULAR;
 	params.pixelWidth = pixelWidth;
@@ -413,7 +517,7 @@ bool tomographicModels::setModularBeamParams(int numAngles, int numRows, int num
 	return params.geometryDefined();
 }
 
-bool tomographicModels::setVolumeParams(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool tomographicModels::set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	if (voxelWidth <= 0.0)
 	{
@@ -441,12 +545,12 @@ bool tomographicModels::setVolumeParams(int numX, int numY, int numZ, float voxe
 	return params.volumeDefined();
 }
 
-bool tomographicModels::setDefaultVolumeParameters(float scale)
+bool tomographicModels::set_defaultVolume(float scale)
 {
 	return params.setDefaultVolumeParameters(scale);
 }
 
-bool tomographicModels::setVolumeDimensionOrder(int which)
+bool tomographicModels::set_volumeDimensionOrder(int which)
 {
 	if (parameters::XYZ <= which && which <= parameters::ZYX)
 	{
@@ -460,12 +564,12 @@ bool tomographicModels::setVolumeDimensionOrder(int which)
 	}
 }
 
-int tomographicModels::getVolumeDimensionOrder()
+int tomographicModels::get_volumeDimensionOrder()
 {
 	return params.volumeDimensionOrder;
 }
 
-bool tomographicModels::setGPU(int whichGPU)
+bool tomographicModels::set_GPU(int whichGPU)
 {
 	if (numberOfGPUs() <= 0)
 		params.whichGPU = -1;
@@ -476,7 +580,7 @@ bool tomographicModels::setGPU(int whichGPU)
 	return true;
 }
 
-bool tomographicModels::setGPUs(int* whichGPUs, int N)
+bool tomographicModels::set_GPUs(int* whichGPUs, int N)
 {
 	if (whichGPUs == NULL || N <= 0)
 		return false;
@@ -487,12 +591,12 @@ bool tomographicModels::setGPUs(int* whichGPUs, int N)
 	return true;
 }
 
-int tomographicModels::getGPU()
+int tomographicModels::get_GPU()
 {
 	return params.whichGPU;
 }
 
-bool tomographicModels::setProjector(int which)
+bool tomographicModels::set_projector(int which)
 {
 	if (which == parameters::SEPARABLE_FOOTPRINT)
 		params.whichProjector = parameters::SEPARABLE_FOOTPRINT;
@@ -534,7 +638,7 @@ bool tomographicModels::set_rampID(int whichRampFilter)
 	}
 }
 
-bool tomographicModels::setAttenuationMap(float* mu)
+bool tomographicModels::set_attenuationMap(float* mu)
 {
 	params.mu = mu;
 	if (params.mu == NULL)
@@ -547,7 +651,7 @@ bool tomographicModels::setAttenuationMap(float* mu)
 	}
 }
 
-bool tomographicModels::setAttenuationMap(float c, float R)
+bool tomographicModels::set_attenuationMap(float c, float R)
 {
 	params.muCoeff = c;
 	params.muRadius = R;
@@ -564,7 +668,7 @@ bool tomographicModels::setAttenuationMap(float c, float R)
 	}
 }
 
-bool tomographicModels::clearAttenuationMap()
+bool tomographicModels::clear_attenuationMap()
 {
 	params.mu = NULL;
 	params.muCoeff = 0.0;
@@ -759,6 +863,54 @@ float tomographicModels::get_pixelWidth()
 float tomographicModels::get_pixelHeight()
 {
 	return params.pixelHeight;
+}
+
+bool tomographicModels::get_sourcePositions(float* x)
+{
+	if (x == NULL || params.sourcePositions == NULL)
+		return false;
+	else
+	{
+		for (int i = 0; i < 3*params.numAngles; i++)
+			x[i] = params.sourcePositions[i];
+		return true;
+	}
+}
+
+bool tomographicModels::get_moduleCenters(float* x)
+{
+	if (x == NULL || params.moduleCenters == NULL)
+		return false;
+	else
+	{
+		for (int i = 0; i < 3 * params.numAngles; i++)
+			x[i] = params.moduleCenters[i];
+		return true;
+	}
+}
+
+bool tomographicModels::get_rowVectors(float* x)
+{
+	if (x == NULL || params.rowVectors == NULL)
+		return false;
+	else
+	{
+		for (int i = 0; i < 3 * params.numAngles; i++)
+			x[i] = params.rowVectors[i];
+		return true;
+	}
+}
+
+bool tomographicModels::get_colVectors(float* x)
+{
+	if (x == NULL || params.colVectors == NULL)
+		return false;
+	else
+	{
+		for (int i = 0; i < 3 * params.numAngles; i++)
+			x[i] = params.colVectors[i];
+		return true;
+	}
 }
 
 int tomographicModels::get_numX()

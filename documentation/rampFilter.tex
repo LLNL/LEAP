@@ -1,0 +1,223 @@
+\section{Digital Filters for CT}
+
+Typical digital signal processing (DSP) texts are not motivated by imaging applications.  Many filters in these texts are designed for the one-dimensional DSP, such as the audio processing field and are ill-suited for imaging applications.  For example, many DSP texts state the superior interpolation performance of low-pass filters that approximate the \textit{ideal} low-pass filter (a rect function) over linear interpolation.  These approximations to the \textit{ideal} low-pass filter have sharp transitions in their frequency response which result in oscillatory impulse responses.  If used in imaging applications, these filters cause ringing artifacts (Gibb's phenomena) in the image and may also result in negative values in the filtered signal which may also be undesirable.  The sinc interpolation kernel of an \textit{ideal} low-pass filter is, in fact, just as arbitrary as any other interpolation kernel.  In some applications, a polynomial interpolation kernel will produce a more desired result.  Linear interpolation is computationally efficient, does not cause ringing artifacts, does not boost noise, produces a nonnegative output (provided that the input is nonnegative), is flexible, and easy to implement.
+
+In this section we derive a collection of digital filters specifically designed for use in tomographic image reconstruction.  This includes the following filters: ramp, derivative, Hilbert, and low-pass.  We start with the ramp filter.
+
+\subsection{Ramp Filter} \label{sec:rampFilter}
+
+This section is focused on deriving discrete impulse responses for the ramp filter.  The (continous space) ramp filter for $f \in L^1(\mathbb{R}^n)$ is given by
+\begin{eqnarray}
+\R f(x) &:=& c_n \int_{\mathbb{R}^n} \frac{f(y)}{\| x-y\|^{n+1}} \, dy, \\
+c_n &:=& -\frac{2}{(2\sqrt{\pi})^n} \frac{\Gamma(n)}{\Gamma(n/2)},
+\end{eqnarray}
+where $c_n = -\frac{1}{\pi}, -\frac{1}{2\pi}, -\frac{1}{\pi^2}$ for $n = 1, 2, 3$, respectively.  We also define the Fourier transform by
+\begin{eqnarray}
+\Fourier f(\xi) &:=& F(\xi) := \int_{\mathbb{R}^n} f(x) e^{-2\pi i <x,\xi>} \, dx.
+\end{eqnarray}
+Then $\Fourier \{\R f\}(\xi) = \|2\pi \xi\| F(\xi)$.
+
+We define the Hilbert transform for $f \in L^1(\mathbb{R})$ by
+\begin{eqnarray}
+\Hilbert f(s) := \frac{1}{\pi}\int_\mathbb{R} \frac{f(t)}{s-t} \, dt.
+\end{eqnarray}
+With respect to Fourier transforms, the Hilbert transform is given by $$\Fourier \{\Hilbert f\}(\sigma) = i\sgn(\sigma)F(\sigma).$$  If we let $\mathcal{D} = \frac{d}{ds}$ be the derivative operator, then $\Fourier \{\mathcal{D} f\}(\sigma) = -2\pi i\sigma F(\sigma)$.  Therefore we have for $n = 1$ that $\R = \mathcal{D}\Hilbert = \Hilbert\mathcal{D}$.  We will exploit this property in the derivation of our discrete ramp filters.
+
+Ramp filters are used in both analytic and iterative Computed Tomography (CT) image reconstruction algorithms.  The most common analytic CT image reconstruction algorithms are the filtered backprojection (FBP) and backprojection filtration (BPF) algorithms which require one and two dimensional ramp filters, respectively.  In iterative reconstruction one can use the 2D ramp filter as a preconditioner for the gradient descent or conjugate gradient algorithms to improve their rate of convergence.
+
+The topic of digital ramp filter design has been addressed in a large amount of papers.  Most of these papers derive the digital impulse response by windowing the ideal ramp filter in frequency space.  Although this method of filter design allows the user to exactly specify the frequency response, the impulse response of many of these filters are highly oscillatory and thus produce results that are highly oscillatory which is undesirable.  For speed, application of the ramp filter is performed in the frequency domain using fast Fourier transform (FFT) operations, but all ramp filters are defined in the spatial domain to avoid a negative bias on the result \cite{Crawford_TMI_1991}.
+
+
+\subsubsection{Derivation of Ramp Filters} \label{subset:rampFilterDevelopment}
+
+The band-limited filter with least $L^2$ error is given by
+\begin{eqnarray*}
+h_{ramp}(s) &=& \int_{-1/2}^{1/2} 2\pi|\sigma| e^{2\pi i s\sigma} \, d\sigma \\
+&=& 4\pi \int_0^{1/2} \sigma \cos(2\pi s \sigma) \, d\sigma \\
+&=& \frac{\pi s\sin(\pi s) + \cos(\pi s) - 1}{\pi s^2}
+\end{eqnarray*}
+and the discrete filter is given by $h_{ramp}[k] = h_{ramp}(k) = \frac{(-1)^k-1}{\pi k^2}$.  This is known as the Ram-Lak filter and thus we define $h_{RL}[k] := h_{ramp}[k]$.  Although the frequency response of this filter is ideal, the impulse response oscillates with every sample as shown in Figure \ref{fig:impulseResponse}.  Thus we see that convolution with this filter will invariably produce oscillatory functions which is undesired.  To understand and mitigate this effect we focus on the Hilbert transform which is one part of the ramp filter.  
+
+Now the band-limited Hilbert filter is given by
+\begin{eqnarray}
+h_{hilb}(s) &:=& \int_{-1/2}^{1/2} i\sgn(\sigma) e^{2\pi i s \sigma} \, d\sigma \\
+&=& \frac{1-\cos(\pi s)}{\pi s}.
+\end{eqnarray}
+Note that $h_{hilb}'(s) = h_{ramp}(s)$, as expected. Now consider two discrete Hilbert filters
+\begin{eqnarray}
+h_{hilb}[k] &:=& h_{hilb}(k) = \frac{1 - (-1)^k}{\pi k} \\
+h_{hilb,1/2}[k] &:=& h_{hilb}(k-1/2) = \frac{1}{\pi(k-\frac{1}{2})}. \label{eq:shiftedHilbertFilter}
+\end{eqnarray}
+In Figure \ref{fig:HilbertImpulseResponse} we notice that while $h_{hilb}[k]$ is oscillatory, $h_{hilb,1/2}[k]$ is not.  This oscillatory behavior can thus be removed by introduceing a (backward) half sample shift into the filter.  Now we can define a ramp filter by convolving $h_{hilb,1/2}[k]$ with a finite difference filter with a half sample forward shift.
+
+\begin{figure}[h]
+\begin{center}
+\psset{xunit=0.4cm,yunit=5.0cm}
+\begin{pspicture}(-20,-0.7)(20,0.7)
+\psaxes[ticks=none,labels=none,linewidth=0.5pt,linestyle=dashed]{<->}(0,0)(-21,-0.8)(21,0.8)
+%\psplot[plotpoints=41,linewidth=1.25pt,linecolor=blue,showpoints=true]{-20}{20}{1 x 0.5 sub div 0.3183098861837907 mul}
+\psplot[plotpoints=21,linewidth=1.25pt,linecolor=blue,showpoints=true]{-20.5}{-0.5}{1 x div 0.3183098861837907 mul}
+\psplot[plotpoints=20,linewidth=1.25pt,linecolor=blue,showpoints=true]{0.5}{19.5}{1 x div 0.3183098861837907 mul}
+\psline[linewidth=1.25pt,linecolor=blue](-0.5,-0.63661977236758133307)(0.5,0.63661977236758133307)
+\psplot[plotpoints=20,linewidth=1.25pt,linecolor=red,showpoints=true]{-20}{-1}{1 -1 x exp sub x div 0.3183098861837907 mul}
+\psplot[plotpoints=20,linewidth=1.25pt,linecolor=red,showpoints=true]{1}{20}{1 -1 x exp sub x div 0.3183098861837907 mul}
+\psline[linewidth=1.25pt,linecolor=red](-1,-0.63661977236758133307)(0,0)(1,0.63661977236758133307)
+\psplot{-20}{-0.01}{1 180 x mul cos sub x div 0.3183098861837907 mul}
+\psplot{0.01}{20}{1 180 x mul cos sub x div 0.3183098861837907 mul}
+\end{pspicture}
+\end{center}
+\caption{Discrete impulse response of the ideal Hilbert filter with zero shift (red) and half shift (blue).  The continuous space impulse response is shown in black.} \label{fig:HilbertImpulseResponse}
+\end{figure}
+
+We find the finite difference coefficients by solving the following linear system
+\begin{eqnarray}
+\begin{bmatrix} 2 \\ 0 \\ 0 \\ \vdots \\ 0 \end{bmatrix} &=& \begin{bmatrix} 1 & 3 & 5 & \cdots & 2M-1 \\ 1 & 3^3 & 5^3 & \cdots & (2M-1)^3 \\ 1 & 3^5 & 5^5 & \cdots & (2M-1)^5 \\ \vdots & \vdots & \vdots & \ddots & \vdots \\ 1 & 3^{2M-1} & 5^{2M-1} & \cdots & (2M-1)^{2M-1} \end{bmatrix} \begin{bmatrix} a_0 \\ a_1 \\ a_2 \\ \vdots \\ a_{M-1} \end{bmatrix} \label{eq:derivEq1} \\
+h_{d,2M}[k] &:=& \frac{1}{2}\begin{cases} -a_{-k}, & k = -M+1, -M+2, \dots 0, \\ a_{k-1}, & k = 1, 2, \dots, M \end{cases} \label{eq:derivEq2}
+\end{eqnarray}
+and thus for $M = 1, 2, 3, 4, 5$ the filter coefficients are given by
+\begin{eqnarray}
+\{h_{d,2}[k]\}_{k=0}^1 &:=& \left\{-1, 1\right\} \label{eq:DERIV_FD2} \\
+\{h_{d,4}[k]\}_{k=-1}^2 &:=& \left\{\frac{1}{24}, -\frac{9}{8}, \frac{9}{8}, -\frac{1}{24}\right\} \label{eq:DERIV_FD4} \\
+\{h_{d,6}[k]\}_{k=-2}^3 &:=& \left\{-\frac{3}{640}, \frac{25}{384}, -\frac{75}{64}, \frac{75}{64}, -\frac{25}{384}, \frac{3}{640}\right\} \label{eq:DERIV_FD6} \\
+\{h_{d,8}[k]\}_{k=-3}^4 &:=& \left\{\frac{5}{7168}, -\frac{49}{5120}, \frac{245}{3072}, -\frac{1225}{1024}, \frac{1225}{1024}, -\frac{245}{3072}, \frac{49}{5120}, -\frac{5}{7168}\right\}  \label{eq:DERIV_FD8} \\
+\{h_{d,10}[k]\}_{k=-4}^5 &:=& \left\{-\frac{35}{294912}, \frac{405}{229376}, -\frac{567}{40960}, \frac{735}{8192}, -\frac{19845}{16384}, \right. \notag \\ && \left. \quad \; \; \frac{19845}{16384}, -\frac{735}{8192}, \frac{567}{40960}, -\frac{405}{229376}, \frac{35}{294912} \right\} \label{eq:DERIV_FD10}
+\end{eqnarray}
+Note that $h_{d,M}$ has $M$ nonzero entries and is accurate to the $M$th order, i.e., $f'\left(\frac{1}{2}T\right) = f(kT) * h_{d,M}[k] + O(T^M)$ as $T \ra 0$.  The impulse response of the limiting case is given by
+\begin{eqnarray}
+h_{d,\infty}[k] &:=& \lim_{M \ra \infty} h_{d,M}[k] = \frac{(-1)^k}{\pi\left(k+\frac{1}{2}\right)^2}.
+\end{eqnarray}
+
+The impulse response of the M-th order digital ramp filter is given by
+\begin{eqnarray}
+h_M[k] := h_{hilb,1/2} * h_{d,M}[k], \label{eq:convHilbertAndDeriv}
+\end{eqnarray}
+where
+\begin{eqnarray}
+h_2[k] &:=& \frac{1}{\pi\left(\frac{1}{4}-k^2\right)} \label{eq:RAMP_FD2} \\
+h_4[k] &:=& \frac{1}{\pi\left(\frac{1}{4}-k^2\right)} \frac{k^2-\frac{5}{2}}{k^2-\frac{9}{4}} \label{eq:RAMP_FD4} \\
+h_6[k] &:=& \frac{1}{\pi\left(\frac{1}{4}-k^2\right)} \frac{k^4-\frac{35}{4}k^2+\frac{259}{16}}{\left(k^2-\frac{9}{4}\right)\left(k^2-\frac{25}{4}\right)} \label{eq:RAMP_FD6} \\
+h_8[k] &:=& \frac{1}{\pi\left(\frac{1}{4}-k^2\right)} \frac{k^6-\frac{336}{16}k^4+\frac{1974}{16}k^2-\frac{3229}{16}}{\left(k^2-\frac{9}{4}\right)\left(k^2-\frac{25}{4}\right)\left(k^2-\frac{49}{4}\right)} \label{eq:RAMP_FD8} \\
+h_{10}[k] &:=& \frac{1}{\pi\left(\frac{1}{4}-k^2\right)} \frac{k^8 - \frac{165}{4}k^6 + \frac{4389}{8}k^4 - \frac{86405}{32}k^2 + \frac{1057221}{256}}{\left(k^2-\frac{9}{4}\right)\left(k^2-\frac{25}{4}\right)\left(k^2-\frac{49}{4}\right)\left(k^2-\frac{81}{4}\right)} \label{eq:RAMP_FD10}
+\end{eqnarray}
+and the corresponding frequency responses are given by
+\begin{eqnarray}
+H_2(X) &:=& \left[2\sin\left(\pi X\right)\right]\sgn(X) \label{eq:rampFreq2} \\
+H_4(X) &:=& \left[\frac{9}{4}\sin\left(\pi X\right) - \frac{1}{12}\sin\left(3\pi X\right)\right]\sgn(X) \\
+H_6(X) &:=& \left[\frac{75}{32}\sin\left(\pi X\right) - \frac{25}{192}\sin\left(3\pi X\right) + \frac{3}{320}\sin\left(5\pi X\right)\right]\sgn(X) \\
+H_8(X) &:=& \left[\frac{1225}{512}\sin\left(\pi X\right) - \frac{245}{1536}\sin\left(3\pi X\right) \right. \notag \\ &+& \left. \frac{49}{2560}\sin\left(5\pi X\right) - \frac{5}{3584}\sin\left(7\pi X\right)\right]\sgn(X) \\
+H_{10}(X) &:=& \left[\frac{19845}{8192}\sin\left(\pi X\right) - \frac{735}{4096}\sin\left(3\pi X\right) + \frac{567}{20480}\sin\left(5\pi X\right) \right. \notag \\ &-& \left. \frac{405}{114688}\sin\left(7\pi X\right) + \frac{35}{147456}\sin\left(9\pi X\right)\right]\sgn(X) \label{eq:rampFreq10}
+\end{eqnarray}
+for $X \in \left[-\frac{1}{2}, \frac{1}{2}\right)$.  The impulse and frequency responses of these filters are shown in Figures \ref{fig:impulseResponse} and \ref{fig:frequencyResponse}, respectively.  Note that $h_{\infty}[k] = h_{RL}[k]$.
+
+We additionally define $h_0[k] := h_2[k] * \left\{ \frac{1}{4}, \frac{1}{2}, \frac{1}{4} \right\} = h_2[k] \frac{k^2-\frac{3}{4}}{k^2-\frac{9}{4}}$ and $H_0(X) = H_2(X)\frac{1+\cos(2\pi X)}{2}$.  The zero subscript here does not specify the order of the finite difference as in the other filter definitions, but was chosen to uniformity of notation and to denote that the frequency response of this filter at Nyquist is zero.
+
+Note that the sign of the derivative of these filters only changes three times, while the sign of the derivative of $h_{RL}[n]$ changes with every sample.
+
+Since $h_M[k]$ have infinite impulse response (IIR), one must window these filters.  Suppose one wishes to filter $g[k]$, where $g[k] \neq 0$ for $k = -N/2, \dots, N/2-1$ with the ramp filter.  Then one can filter the data using FFT operations by
+\begin{eqnarray*}
+IFFT_{2N}(FFT_{2N}(g) FFT_{2N}(w h_M))[k],
+\end{eqnarray*}
+where $w[k]$ is a window function ($w[k] = 0$ for $k \notin [-N, N-1]$) and $FFT_{2N}$ and $IFFT_{2N}$ are the $2N$ point Fast Fourier Transform and Inverse Fast Fourier Transform operations, respectively.  Since $h_M[k] = O(k^{-2})$, the ramp filter decays rapidly and thus one can use the rectangular window given by $$w[k] = \begin{cases} 1, & k = -N, -N+1, \dots, N-1, \\ 0, & \text{otherwise} \end{cases}$$ without any significant distortion of the frequency response.  It is advised that one performs the filtering in this fashion, rather than using equations (\ref{eq:rampFreq2}-\ref{eq:rampFreq10}) explicitly.
+
+\begin{figure}[h]
+\begin{center}
+\psset{xunit=0.75cm,yunit=3.75cm}
+\begin{pspicture}(-10,-0.45)(10,1.75)
+\psaxes[ticks=none,labels=none,linewidth=0.5pt,linestyle=dashed]{<->}(0,0)(-11,-0.6)(11,1.7)
+\psplot[plotpoints=21,linewidth=1.25pt,showpoints=true]{-10}{10}{1 0.25 x x mul sub div 0.3183098861837907 mul}
+\psplot[plotpoints=21,linewidth=1.25pt,showpoints=true,linecolor=blue]{-10}{10}{1 0.25 x x mul sub div 2.5 x x mul sub 2.25 x x mul sub div mul 0.3183098861837907 mul}
+\psplot[plotpoints=10,linewidth=1.25pt,showpoints=true,linecolor=red]{-10}{-1}{-1 x exp 1 sub x x mul div 0.3183098861837907 mul}
+\psplot[plotpoints=10,linewidth=1.25pt,showpoints=true,linecolor=red]{1}{10}{-1 x exp 1 sub x x mul div 0.3183098861837907 mul}
+\psline[linewidth=1.25pt,showpoints=true,linecolor=red](-1,-0.63661977236758133307)(0,1.5707963267948966613)(1,-0.63661977236758133307)
+\end{pspicture}
+\end{center}
+\caption{Impulse response of Ram-Lak (red), $h_4[k]$ (blue), and $h_2[k]$ (Shepp-Logan, black) ramp filters.} \label{fig:impulseResponse}
+\end{figure}
+
+% pi/2 = 1.57079632679489658
+% pi   = 3.14159265358979311
+% 1/12 = 0.08333333333333333
+\begin{figure}[h]
+\begin{center}
+\psset{xunit=10.0cm,yunit=1.8cm}
+\begin{pspicture}(-0.5,-0.05)(0.5,3.2)
+\psaxes[ticks=none,labels=none,linewidth=0.5pt]{<->}(0,0)(-0.55,0)(0.55,3.3)
+\psline(-0.05,3.14159265358979311)(0.05,3.14159265358979311) \rput(0.075,3.14159265358979311){\Large $\pi$}
+\psline(0.5,-0.1)(0.5,0.1) \rput(0.485,-0.25){\Large $\frac{1}{2}$} \psline(-0.5,-0.1)(-0.5,0.1) \rput(-0.485,-0.25){\Large $-\frac{1}{2}$}
+%\psplot[linecolor=black]{0}{0.5}{180 x mul sin 2 mul 0.5 0.5 360 x mul cos mul add mul}
+%\psplot[linecolor=black]{-0.5}{0}{-1 180 x mul sin 2 mul 0.5 0.5 360 x mul cos mul add mul mul}
+
+%\psplot[linecolor=black]{0}{0.5}{180 x mul sin 2 mul 5 8 div 0.5 360 x mul cos mul add -0.125 720 x mul cos mul add mul}
+%\psplot[linecolor=black]{-0.5}{0}{-1 180 x mul sin 2 mul 5 8 div 0.5 360 x mul cos mul add -0.125 720 x mul cos mul add mul mul}
+
+%\psplot[linecolor=black]{0}{0.5}{180 x mul sin 2 mul 0.6875 0.4688 360 x mul cos mul add -0.1875 720 x mul cos mul add 0.0313 1080 x mul cos mul add mul}
+%\psplot[linecolor=black]{-0.5}{0}{-1 180 x mul sin 2 mul 0.6875 0.4688 360 x mul cos mul add -0.1875 720 x mul cos mul add 0.0313 1080 x mul cos mul add mul mul}
+
+\psplot[linecolor=black]{0}{0.5}{180 x mul sin 2 mul} \psplot[linecolor=black]{-0.5}{0}{180 x mul sin -2 mul}
+\psplot[linecolor=blue]{0}{0.5}{180 x mul sin 2.25 mul 540 x mul sin -0.08333333333333333 mul add} \psplot[linecolor=blue]{-0.5}{0}{180 x mul sin -2.25 mul 540 x mul sin 0.08333333333333333 mul add}
+\psplot[linecolor=cyan]{0}{0.5}{360 2 div x mul sin 75 32 div mul 3 360 2 div mul x mul sin -25 192 div mul add 5 360 2 div mul x mul sin 3 320 div mul add}
+\psplot[linecolor=cyan]{-0.5}{0}{-1 360 2 div x mul sin 75 32 div mul 3 360 2 div mul x mul sin -25 192 div mul add 5 360 2 div mul x mul sin 3 320 div mul add mul}
+\psplot[linecolor=magenta]{0}{0.5}{360 2 div x mul sin 1225 512 div mul 3 360 2 div mul x mul sin -245 1536 div mul add 5 360 2 div mul x mul sin 49 2560 div mul add 7 360 2 div mul x mul sin -5 3584 div mul add}
+\psplot[linecolor=magenta]{-0.5}{0}{-1 360 2 div x mul sin 1225 512 div mul 3 360 2 div mul x mul sin -245 1536 div mul add 5 360 2 div mul x mul sin 49 2560 div mul add 7 360 2 div mul x mul sin -5 3584 div mul add mul}
+\psplot[linecolor=green]{0}{0.5}{2 360 2 div x mul sin 19845 16384 div mul 3 360 2 div mul x mul sin -735 8192 div mul add 5 360 2 div mul x mul sin 567 40960 div mul add 7 360 2 div mul x mul sin -405 229376 div mul add 9 360 2 div mul x mul sin 35 294912 div mul add mul}
+\psplot[linecolor=green]{-0.5}{0}{-2 360 2 div x mul sin 19845 16384 div mul 3 360 2 div mul x mul sin -735 8192 div mul add 5 360 2 div mul x mul sin 567 40960 div mul add 7 360 2 div mul x mul sin -405 229376 div mul add 9 360 2 div mul x mul sin 35 294912 div mul add mul}
+\psplot[linecolor=red]{0}{0.5}{3.14159265358979311 2 mul x mul} \psplot[linecolor=red]{-0.5}{0}{-3.14159265358979311 2 mul x mul} % 2pi x
+\rput[r](-0.5,3.14){\red $H_{RL}(X)$}
+\rput[l](0.5,2.6334){\green $H_{10}(X)$}
+\rput[r](-0.5,2.56){\magenta $H_8(X)$}
+\rput[l](0.5,2.46){\cyan $H_6(X)$}
+\rput[r](-0.5,2.3){\blue $H_4(X)$}
+\rput[l](0.5,1.975){\black $H_2(X)$}
+\end{pspicture}
+\end{center}
+\caption{Frequency response of Ram-Lak (red), $H_{10}(X)$ (green), $H_8(X)$ (magenta), $H_6(X)$ (cyan), $H_4(X)$ (blue), and $H_2(X)$ (Shepp-Logan, black) ramp filters.} \label{fig:frequencyResponse}
+\end{figure}
+
+\begin{table}[h]
+\caption{Relative $L^2$ difference $\left( \frac{\| H_M - H_{RL} \|}{\| H_{RL} \|} \right)$ between $H_M(X)$ and $H_{RL}(X)$.}
+\begin{center}
+\begin{tabular}{l|l}
+Filter & Relative $L^2$ Difference \\
+\hline
+$H_2(X)$ & 24.5\% \\ % 77.97\% = sqrt(sumAll(h_M.^2)/sumAll(h_RL.^2))*100
+$H_4(X)$ & 14.7\% \\ % 87.78\%
+$H_6(X)$ & 10.9\% \\ % 91.51\%
+$H_8(X)$ & 8.7\% \\ % 93.48\%
+$H_{10}(X)$ & 7.4\% % 94.71\%
+\end{tabular}
+\end{center}
+\end{table}
+
+Higher order filters can be found using equations (\ref{eq:shiftedHilbertFilter}, \ref{eq:derivEq1}, \ref{eq:derivEq2}, \ref{eq:convHilbertAndDeriv}), but are unlikely to provide more accurate reconstructions because they will further amplify noise and ringing artifacts and some of the gained resolution will be lost in the interpolation methods used in the backproject step of FBP or BPF.
+
+\subsubsection{Two Dimensional Extensions}
+
+The filters defined above can be extended to two dimensions by the following
+\begin{eqnarray}
+H_{2D}(X,Y) &:=& \sqrt{H^2(X) + H^2(Y) - \frac{1}{H^2(1/2)}H^2(X)H^2(Y)}.
+\end{eqnarray}
+Note that $H_{2D}(X,0) = H(X)$, $H_{2D}(0,Y) = H(Y)$, and $H_{2D}(X,\pm 1/2) = H_{2D}(\pm 1/2, Y) = H(1/2)$.  Thus we see that $H_{2D}(X,Y)$ (including its periodic extension) is infinitely differentiable everywhere except at the origin.  This ensures that the impulse response will decay rapidly.
+
+One can show and it is well known that $\mathcal{R} = -\Delta$, where $\Delta = \sum_i \frac{\partial^2}{\partial x_i^2}$ is the Laplace operator.  Using $H(X) = H_2(X)$, we have that
+\begin{eqnarray*}
+H_{2D}^2(X,Y) = 4\sin^2(\pi X) + 4\sin^2(\pi Y) - 4\sin^2(\pi X)\sin^2(\pi Y)
+\end{eqnarray*}
+which is the frequency response of $$-\begin{bmatrix} 0.25 & 0.5 & 0.25 \\ 0.5 & -3 & 0.5 \\ 0.25 & 0.5 & 0.25 \end{bmatrix}.$$  This is a common filter for the discrete Laplacian, where the weight of the derivative on the diagonals are weighted by their distance from the center sample.  Thus we see that our choice of $H_{2D}(X,Y)$ is not only practical, but also theoretically relevant.
+
+It is sometimes advantageous to add a lowpass filter, $U(X)$, to the ramp filter by $H_{LP}(X) := U(X)H(X)$, where $U(0) = 1$ and $U(\pm 1/2) = 0$.  One can extend this to the 2D ramp filter by
+\begin{eqnarray}
+H_{2D,LP}(X,Y) &:=& U(X)U(Y)\sqrt{H^2(X) + H^2(Y) - \frac{1}{H^2(1/2)}H^2(X)H^2(Y)}.
+\end{eqnarray}
+
+\subsubsection{Edge Response and Modular Transfer Functions}
+
+We illustrate the resolution of the filters defined above by performing a simulation experiment.  We simulated a circular disk and reconstructed it with a collection of filters.  The edge spread function (ESF) and modular transfer function (MTF) plots are shown in Figure \ref{fig:ESF_MTF}.  We also include a common ramp filter, which we denote $h_{Butterworth}[k]$ and is given by $H_{Butterworth}(X) = H_{RL}(X) \frac{1}{1+X^{10}}$.  Note that the ESF of $h_{Butterworth}[k]$ is highly oscillatory (even more so than the Ram-Lak filter).  The filter $h_4[k]$ has nearly identical resolution as $h_{Butterworth}[k]$, but with very little ringing.
+
+\begin{figure}[h]
+\begin{tabular}{ccc}
+\includegraphics[scale=0.3]{ESF}
+& \includegraphics[scale=0.3]{ESF_zoom}
+& \includegraphics[scale=0.3]{MTF}
+\end{tabular}
+\caption{The ESF and MTF using $h_0[k]$, $h_2[k]$, $h_4[k]$, $h_{10}[k]$, $h_{RL}[k]$, and $h_{Butterworth}[k]$.} \label{fig:ESF_MTF}
+\end{figure}
