@@ -139,6 +139,13 @@ public:
 	float v_0();
 
 	/**
+	 * \fn          v_0
+	 * \brief       returns the angle of the first projection (radians)
+	 * \return      returns the angle of the first projection (radians)
+	 */
+	float phi_0();
+
+	/**
 	 * \fn          x_0
 	 * \brief       returns the location (in mm) of the first x-coordinate value
 	 * \return      returns the location (in mm) of the first x-coordinate value

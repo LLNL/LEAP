@@ -14,6 +14,7 @@
 #include "projectors_symmetric.cuh"
 #include "projectors_symmetric_cpu.h"
 #include "projectors_attenuated.cuh"
+#include "projectors_Joseph.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -54,6 +55,8 @@ bool projectors::project(float* g, float* f, parameters* params, bool cpu_to_gpu
 			return project_symmetric(g, f, params, cpu_to_gpu);
 		else if (params->muSpecified())
 			return project_attenuated(g, f, params, cpu_to_gpu);
+		else if (params->geometry == parameters::MODULAR)
+			return project_Joseph_modular(g, f, params, cpu_to_gpu);
 		else
 			return project_SF(g, f, params, cpu_to_gpu);
 	}
@@ -122,6 +125,8 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool cpu_to
 			return backproject_symmetric(g, f, params, cpu_to_gpu);
 		else if (params->muSpecified())
 			return backproject_attenuated(g, f, params, cpu_to_gpu);
+		else if (params->geometry == parameters::MODULAR)
+			return backproject_Joseph_modular(g, f, params, cpu_to_gpu);
 		else
 			return backproject_SF(g, f, params, cpu_to_gpu);
 	}

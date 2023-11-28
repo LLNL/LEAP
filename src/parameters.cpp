@@ -45,7 +45,7 @@ void parameters::initialize()
 	doExtrapolation = false;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
-	chunkingMemorySizeThreshold = 0.5;
+	chunkingMemorySizeThreshold = 0.1;
 	colShiftFromFilter = 0.0;
 
 	geometry = CONE;
@@ -146,9 +146,12 @@ void parameters::assign(const parameters& other)
 
     if (this->phis != NULL)
         delete [] this->phis;
-    this->phis = new float[numAngles];
-    for (int i = 0; i < numAngles; i++)
-        this->phis[i] = other.phis[i];
+	if (other.phis != NULL)
+	{
+		this->phis = new float[numAngles];
+		for (int i = 0; i < numAngles; i++)
+			this->phis[i] = other.phis[i];
+	}
     
     this->set_sourcesAndModules(other.sourcePositions, other.moduleCenters, \
         other.rowVectors, other.colVectors, other.numAngles);
@@ -167,36 +170,38 @@ float parameters::rFOV()
 {
 	if (rFOVspecified > 0.0)
 		return rFOVspecified;
-    else if (geometry == MODULAR)
-        return 1.0e16;
-    else if (geometry == PARALLEL)
-        return min(fabs(u_0()), fabs(pixelWidth*float(numCols-1) + u_0()));
-    else if (geometry == FAN || geometry == CONE)
+	else if (geometry == MODULAR)
+		return 1.0e16;
+	else if (geometry == PARALLEL)
+		return min(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0()));
+	else if (geometry == FAN || geometry == CONE)
 	{
-        /*
-        double alpha_right = lateral(0);
-        double alpha_left = lateral(N_lateral-1);
-        if (isFlatPanel == true)
-        {
-            alpha_right = atan(alpha_right);
-            alpha_left = atan(alpha_left);
-        }
-        //return R_tau*sin(min(fabs(alpha_right+atan(tau/R)), fabs(alpha_left+atan(tau/R))));
-        double retVal = R_tau*sin(min(fabs(alpha_right-atan(tau/R)), fabs(alpha_left-atan(tau/R))));
+		/*
+		double alpha_right = lateral(0);
+		double alpha_left = lateral(N_lateral-1);
+		if (isFlatPanel == true)
+		{
+			alpha_right = atan(alpha_right);
+			alpha_left = atan(alpha_left);
+		}
+		//return R_tau*sin(min(fabs(alpha_right+atan(tau/R)), fabs(alpha_left+atan(tau/R))));
+		double retVal = R_tau*sin(min(fabs(alpha_right-atan(tau/R)), fabs(alpha_left-atan(tau/R))));
 
-        //sid/sdd * c / sqrt(1+(c/sdd)*(c/sdd))
-        //return R*u_max()/sqrt(1.0+u_max()*u_max());
-        if (theSCT->dxfov.unknown == false && theSCT->dxfov.value > 0.0)
-            retVal = min(retVal, 0.5*theSCT->dxfov.value);
-        return retVal;
-        //*/
-        
-        float alpha_right = u_0();
-        float alpha_left = pixelWidth*float(numCols-1) + u_0();
-        alpha_right = atan(alpha_right/sdd);
-        alpha_left = atan(alpha_left/sdd);
-        return sod*sin(min(fabs(alpha_right),fabs(alpha_left)));
-    }
+		//sid/sdd * c / sqrt(1+(c/sdd)*(c/sdd))
+		//return R*u_max()/sqrt(1.0+u_max()*u_max());
+		if (theSCT->dxfov.unknown == false && theSCT->dxfov.value > 0.0)
+			retVal = min(retVal, 0.5*theSCT->dxfov.value);
+		return retVal;
+		//*/
+
+		float alpha_right = u_0();
+		float alpha_left = pixelWidth * float(numCols - 1) + u_0();
+		alpha_right = atan(alpha_right / sdd);
+		alpha_left = atan(alpha_left / sdd);
+		return sod * sin(min(fabs(alpha_right), fabs(alpha_left)));
+	}
+	else
+		return 1.0e16;
 }
 
 float parameters::furthestFromCenter()
@@ -642,6 +647,14 @@ float parameters::u_0()
 float parameters::v_0()
 {
 	return -centerRow * pixelHeight;
+}
+
+float parameters::phi_0()
+{
+	if (phis == NULL)
+		return 0.0;
+	else
+		return phis[0];
 }
 
 float parameters::u(int i)

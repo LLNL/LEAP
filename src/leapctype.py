@@ -321,6 +321,9 @@ class tomographicModels:
             f[f<0.0] = 0.0
  
         numSubsets = min(numSubsets, self.get_numAngles())
+        if self.get_geometry() == 'MODULAR' and numSubsets > 1:
+            print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
+            numSubsets = 1
         if numSubsets <= 1:
             return self.MLEM(g,f,numIter)
         else:
@@ -358,6 +361,9 @@ class tomographicModels:
         
     def SART(self, g, f, numIter, numSubsets=1):
         numSubsets = min(numSubsets, self.get_numAngles())
+        if self.get_geometry() == 'MODULAR' and numSubsets > 1:
+            print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
+            numSubsets = 1
         if numSubsets <= 1:
             P1 = self.allocateProjections()
             self.project(P1,self.allocateVolume(1.0))
@@ -819,7 +825,7 @@ class tomographicModels:
             print('Cannot load napari, to install run this command:')
             print('pip install napari[all]')
             
-    def sketchSystem(self):
+    def sketchSystem(self,whichView=None):
     
         if self.get_numAngles() <= 0 or self.get_numRows() <= 0 or self.get_numCols() <= 0:
             print('CT geometry not set!')
@@ -830,7 +836,7 @@ class tomographicModels:
 
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        self.drawCT(ax)
+        self.drawCT(ax,whichView)
         self.drawVolume(ax)
         
         ax.set_xlabel('X (mm)')
@@ -859,7 +865,7 @@ class tomographicModels:
         ax.view_init(90, -90)
         plt.show()
     
-    def drawCT(self, ax):
+    def drawCT(self, ax, whichView=None):
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
         import matplotlib.pyplot as plt
         
@@ -957,7 +963,14 @@ class tomographicModels:
             moduleCenters = self.get_moduleCenters()
             rowVecs = self.get_rowVectors()
             colVecs = self.get_colVectors()
-            for n in range(self.get_numAngles()):
+            
+            ind_lo = 0
+            ind_hi = self.get_numAngles()-1
+            if whichView is not None:
+                ind_lo = whichView
+                ind_hi = whichView
+            
+            for n in range(ind_lo,ind_hi+1):
                 sourcePos = sourcePositions[n,:]
                 detPos = moduleCenters[n,:]
                 rowVec = rowVecs[n,:]

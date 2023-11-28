@@ -293,8 +293,8 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	if (numChunks <= 1)
 		return false;
 
-	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
-		return false;
+	//if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
+	//	return false;
 
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
 	#pragma omp parallel for schedule(dynamic)
@@ -309,7 +309,11 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		// make a copy of the relavent rows
 		int rowRange[2];
 		params.rowRangeNeededForBackprojection(firstSlice, lastSlice, rowRange);
-		float* g_chunk = copyRows(g, rowRange[0], rowRange[1]);
+		float* g_chunk = NULL;
+		if (rowRange[0] == 0 && rowRange[1] == params.numRows - 1)
+			g_chunk = g;
+		else
+			g_chunk = copyRows(g, rowRange[0], rowRange[1]);
 
 		// make a copy of the params
 		parameters chunk_params;
@@ -317,6 +321,8 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		chunk_params.numRows = rowRange[1] - rowRange[0] + 1;
 		chunk_params.numZ = numSlices;
 		chunk_params.offsetZ = params.offsetZ + (firstSlice - rowRange[0]) * params.voxelHeight;
+		if (params.geometry == parameters::MODULAR)
+			chunk_params.offsetZ += 0.5*(chunk_params.numZ - params.numZ)* params.voxelHeight;
 		chunk_params.centerRow = params.centerRow - rowRange[0];
 		if (params.mu != NULL)
 			chunk_params.mu = &params.mu[firstSlice * params.numX * params.numY];
@@ -327,6 +333,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
 
+		//printf("z_0: %f to %f\n", params.z_0(), chunk_params.z_0());
 		//printf("slices: (%d, %d); rows: (%d, %d); GPU = %d...\n", firstSlice, lastSlice, rowRange[0], rowRange[1], chunk_params.whichGPU);
 		//float magFactor = 1.0;
 		//if (chunk_params.geometry == parameters::CONE)
@@ -340,7 +347,8 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 			proj.backproject(g_chunk, f_chunk, &chunk_params, true);
 
 		// clean up
-		free(g_chunk);
+		if (g_chunk != g)
+			free(g_chunk);
 		
 	}
 	return true;
@@ -498,6 +506,8 @@ bool tomographicModels::set_modularBeam(int numAngles, int numRows, int numCols,
 	params.numCols = numCols;
 	params.numRows = numRows;
 	params.numAngles = numAngles;
+	params.centerCol = 0.5*float(numCols-1);
+	params.centerRow = 0.5*float(numRows-1);
 	params.set_sourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
 	return params.geometryDefined();
 }

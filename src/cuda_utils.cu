@@ -693,7 +693,7 @@ bool setProjectionGPUparams(parameters* params, int4& N, float4& T, float4& star
     {
         N.x = params->numAngles; N.y = params->numRows; N.z = params->numCols;
         T.x = params->T_phi(); T.y = params->pixelHeight; T.z = params->pixelWidth;
-        startVals.x = params->phis[0]; startVals.y = params->v_0(); startVals.z = params->u_0();
+        startVals.x = params->phi_0(); startVals.y = params->v_0(); startVals.z = params->u_0();
 
         if (doNormalize)
         {

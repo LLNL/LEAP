@@ -40,6 +40,7 @@ set(HEADER
   sensitivity_cpu.h
   sensitivity.cuh
   leap_defines.h
+  projectors_Joseph.cuh
 )
 
 set(SRC_CPP
@@ -67,6 +68,7 @@ set(SRC_CU
   projectors_symmetric.cu
   projectors_attenuated.cu
   sensitivity.cu
+  projectors_Joseph.cu
 )
 
 include_directories(
