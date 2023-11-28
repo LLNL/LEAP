@@ -8,8 +8,6 @@
 
 #include "filtered_backprojection.h"
 #include "projectors.h"
-#include "projectors_SF.h"
-#include "projectors_cpu.h"
 #include "ramp_filter.cuh"
 #include "ray_weighting.cuh"
 #include "cuda_utils.h"

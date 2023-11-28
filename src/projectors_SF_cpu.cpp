@@ -12,7 +12,8 @@
 #include <math.h>
 #include <algorithm>
 #include <omp.h>
-#include "projectors_cpu.h"
+#include "projectors_SF_cpu.h"
+#include "cpu_utils.h"
 
 using namespace std;
 
@@ -21,33 +22,6 @@ using namespace std;
 //### Separable Footprint (SF) Projectors
 //########################################################################################################################################################################
 //########################################################################################################################################################################
-
-float* reorder_ZYX_to_XYZ(float* f, parameters* params, int sliceStart, int sliceEnd)
-{
-    if (sliceStart < 0)
-        sliceStart = 0;
-    if (sliceEnd < 0)
-        sliceEnd = params->numZ - 1;
-    int numZ_new = (sliceEnd - sliceStart + 1);
-    float* f_XYZ = (float*)malloc(sizeof(float) * params->numX * params->numY * numZ_new);
-    int num_threads = omp_get_num_procs();
-    omp_set_num_threads(num_threads);
-    #pragma omp parallel for
-    for (int ix = 0; ix < params->numX; ix++)
-    {
-        float* xSlice_out = &f_XYZ[ix * numZ_new * params->numY];
-        for (int iy = 0; iy < params->numY; iy++)
-        {
-            float* zLine_out = &xSlice_out[iy * numZ_new];
-            for (int iz = sliceStart; iz <= sliceEnd; iz++)
-            {
-                zLine_out[iz-sliceStart] = f[iz * params->numX * params->numY + iy * params->numX + ix];
-            }
-        }
-    }
-    return f_XYZ;
-}
-
 bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
 {
     params->setToZero(g, params->numAngles * params->numRows * params->numCols);

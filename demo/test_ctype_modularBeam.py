@@ -61,11 +61,30 @@ leapct.project(g,f_true)
 print('Elapsed time: ' + str(time.time()-startTime))
 #leapct.displayVolume(g)
 
+# Compare Forward Projection to Cone-Beam
+# leapct.set_coneBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+# g_cone = leapct.allocateProjections()
+# startTime = time.time()
+# leapct.project(g_cone,f_true)
+# print('Elapsed time: ' + str(time.time()-startTime))
+# leapct.displayVolume((g-g_cone)/np.max(g_cone))
+# quit()
+
 startTime = time.time()
 #leapct.backproject(g,f)
 #leapct.set_diameterFOV(sod/sdd*pixelSize*N)
 leapct.SART(g,f,100)
 print('Elapsed time: ' + str(time.time()-startTime))
+
+
+# Compare Backprojection to Cone-Beam
+# leapct.set_coneBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+# f_cone = leapct.allocateVolume()
+# startTime = time.time()
+# leapct.backproject(g,f_cone)
+# print('Elapsed time: ' + str(time.time()-startTime))
+# leapct.displayVolume((f-f_cone)/np.max(f_cone))
+# quit()
 
 leapct.displayVolume(f)
 quit()

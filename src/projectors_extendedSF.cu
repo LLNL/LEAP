@@ -1,5 +1,5 @@
 
-#include "projectors_extendedSF.h"
+#include "projectors_extendedSF.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>

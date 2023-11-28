@@ -8,8 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "projectors.h"
-#include "projectors_SF.h"
-#include "projectors_cpu.h"
+#include "projectors_SF_cpu.h"
+#include "projectors_SF.cuh"
+#include "projectors_Siddon_cpu.h"
 #include "cuda_utils.h"
 #include "projectors_symmetric.cuh"
 #include "projectors_symmetric_cpu.h"

@@ -14,10 +14,10 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "projectors.h"
-#include "projectors_SF.h"
+#include "projectors_SF.cuh"
 #include "cuda_utils.h"
 
-#include "projectors_extendedSF.h"
+#include "projectors_extendedSF.cuh"
 
 __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
 {

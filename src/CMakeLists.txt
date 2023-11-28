@@ -23,24 +23,27 @@ set(HEADER
   tomographic_models_c_interface.h
   parameters.h
   projectors.h
-  projectors_cpu.h
-  projectors_symmetric_cpu.h
-  projectors_Siddon.h
-  projectors_SF.h
-  projectors_extendedSF.h
-  cuda_utils.h
-  ramp_filter.cuh
-  ramp_filter_cpu.h
-  noise_filters.cuh
-  total_variation.cuh
-  ray_weighting.cuh
-  projectors_symmetric.cuh
-  projectors_attenuated.cuh
   filtered_backprojection.h
+  projectors_SF.cuh
+  projectors_SF_cpu.h
+  projectors_extendedSF.cuh
+  projectors_Joseph.cuh
+  projectors_Joseph_cpu.h
+  projectors_symmetric.cuh
+  projectors_symmetric_cpu.h
+  projectors_attenuated.cuh
+  projectors_Siddon.cuh
+  projectors_Siddon_cpu.h
   sensitivity_cpu.h
   sensitivity.cuh
+  ramp_filter.cuh
+  ramp_filter_cpu.h
+  ray_weighting.cuh
+  noise_filters.cuh
+  total_variation.cuh
+  cuda_utils.h
+  cpu_utils.h
   leap_defines.h
-  projectors_Joseph.cuh
 )
 
 set(SRC_CPP
@@ -48,27 +51,29 @@ set(SRC_CPP
   tomographic_models_c_interface.cpp
   parameters.cpp
   projectors.cpp
-  projectors_cpu.cpp
-  projectors_symmetric_cpu.cpp
-  projectors_SF_cpu.cpp
-  ramp_filter_cpu.cpp
   filtered_backprojection.cpp
+  projectors_SF_cpu.cpp
+  projectors_Joseph_cpu.cpp
+  projectors_symmetric_cpu.cpp
+  projectors_Siddon_cpu.cpp
   sensitivity_cpu.cpp
+  ramp_filter_cpu.cpp
+  cpu_utils.cpp
 )
 
 set(SRC_CU
-  projectors_Siddon.cu
   projectors_SF.cu
   projectors_extendedSF.cu
+  projectors_Joseph.cu
+  projectors_symmetric.cu
+  projectors_attenuated.cu
+  projectors_Siddon.cu
+  sensitivity.cu
   ramp_filter.cu
   noise_filters.cu
   total_variation.cu
-  cuda_utils.cu
   ray_weighting.cu
-  projectors_symmetric.cu
-  projectors_attenuated.cu
-  sensitivity.cu
-  projectors_Joseph.cu
+  cuda_utils.cu
 )
 
 include_directories(

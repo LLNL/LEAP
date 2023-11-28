@@ -7,8 +7,8 @@
 // cuda header for projector
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef __PROJECTORS_H
-#define __PROJECTORS_H
+#ifndef __PROJECTORS_SIDDON_CUH
+#define __PROJECTORS_SIDDON_CUH
 
 #ifdef WIN32
 #pragma once
