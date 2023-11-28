@@ -30,4 +30,7 @@ bool CPUbackproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* para
 bool applyPolarWeight(float* g, parameters* params);
 bool applyInversePolarWeight(float* g, parameters* params);
 
+bool CPUproject_SF_ZYX(float* g, float* f, parameters* params);
+bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params);
+
 #endif

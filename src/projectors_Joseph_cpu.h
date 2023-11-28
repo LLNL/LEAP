@@ -15,6 +15,7 @@
 #endif
 
 #include "parameters.h"
+#include "cuda_runtime.h"
 
 bool project_Joseph_cpu(float*, float*, parameters*);
 bool backproject_Joseph_cpu(float*, float*, parameters*);
@@ -22,6 +23,7 @@ bool backproject_Joseph_cpu(float*, float*, parameters*);
 bool project_Joseph_modular_cpu(float*, float*, parameters*);
 bool backproject_Joseph_modular_cpu(float*, float*, parameters*);
 
-float projectLine_Joseph(float* f, parameters* params, float* pos, float* traj);
+float projectLine_Joseph(float* f, parameters* params, float3 pos, float3 traj);
+float backproject_Joseph_modular_kernel(float* aProj, parameters* params, float* sourcePosition, float* moduleCenter, float* u_vec, float* v_vec, float x, float y, float z);
 
 #endif

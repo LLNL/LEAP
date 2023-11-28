@@ -17,6 +17,8 @@
 #include "parameters.h"
 
 float tex3D(float* f, int, int, int, parameters* params);
+float tex3D(float* f, float iz, float iy, float ix, parameters* params);
+float tex3D_rev(float* f, float ix, float iy, float iz, parameters* params);
 float* reorder_ZYX_to_XYZ(float* f, parameters* params, int sliceStart, int sliceEnd);
 //bool transpose_ZYX_to_XYZ(float* f, parameters* params);
 

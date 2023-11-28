@@ -8,6 +8,7 @@ leapct = tomographicModels()
 #'''
 N = 300
 numAngles = int(720*N/1024)
+numAngles = 1
 pixelSize = 0.2*2048/N
 
 sod = 1100.0
@@ -37,7 +38,8 @@ for n in range(numAngles):
 leapct.set_modularBeam(numAngles, N, N, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
 
 # Set the volume parameters
-leapct.set_volume(N,N,N,sod/sdd*pixelSize,sod/sdd*pixelSize)
+scale = 1.0
+leapct.set_volume(int(N/scale),int(N/scale),int(N/scale),sod/sdd*pixelSize*scale,sod/sdd*pixelSize*scale)
 
 # Trouble-Shooting Functions
 #leapct.printParameters()
@@ -56,6 +58,7 @@ f_true[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
 #f_true[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 1.0
 
 # "Simulate" projection data
+#leapct.set_GPU(-1)
 startTime = time.time()
 leapct.project(g,f_true)
 print('Elapsed time: ' + str(time.time()-startTime))
@@ -67,22 +70,26 @@ print('Elapsed time: ' + str(time.time()-startTime))
 # startTime = time.time()
 # leapct.project(g_cone,f_true)
 # print('Elapsed time: ' + str(time.time()-startTime))
+# leapct.displayVolume(g)
 # leapct.displayVolume((g-g_cone)/np.max(g_cone))
 # quit()
 
+#leapct.set_GPU(-1)
 startTime = time.time()
-#leapct.backproject(g,f)
+leapct.backproject(g,f)
 #leapct.set_diameterFOV(sod/sdd*pixelSize*N)
-leapct.SART(g,f,100)
+#leapct.SART(g,f,100)
 print('Elapsed time: ' + str(time.time()-startTime))
 
 
 # Compare Backprojection to Cone-Beam
+# leapct.set_GPU(0)
 # leapct.set_coneBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 # f_cone = leapct.allocateVolume()
 # startTime = time.time()
 # leapct.backproject(g,f_cone)
 # print('Elapsed time: ' + str(time.time()-startTime))
+# leapct.displayVolume(f)
 # leapct.displayVolume((f-f_cone)/np.max(f_cone))
 # quit()
 

@@ -10,6 +10,7 @@
 #include "projectors.h"
 #include "projectors_SF_cpu.h"
 #include "projectors_SF.cuh"
+#include "projectors_Joseph_cpu.h"
 #include "projectors_Siddon_cpu.h"
 #include "cuda_utils.h"
 #include "projectors_symmetric.cuh"
@@ -103,7 +104,7 @@ bool projectors::project(float* g, float* f, parameters* params, bool cpu_to_gpu
 			}
 		}
 		else
-			return CPUproject_modular(g, f, params);
+			return project_Joseph_modular_cpu(g, f, params);
 	}
 }
 
@@ -179,7 +180,7 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool cpu_to
 			}
 		}
 		else
-			return CPUbackproject_modular(g, f, params);
+			return backproject_Joseph_modular_cpu(g, f, params);
 	}
 }
 
