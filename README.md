@@ -10,7 +10,7 @@ We also provide projectors and analytic inversion algorithms, i.e., FBP, for a f
 In addition to the projectors, we also provide a few other algorithms for tomographic imaging, including:
 1) Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
 2) A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction.
-3) Python implementations of some iterative reconstruction algorithms: ML-EM, SART, and RWLS.
+3) Python implementations of some iterative reconstruction algorithms: OSEM, SART, ASD-POCS, and RWLS.
 
 The CPU- and GPU-based projectors are nearly identical (32-bit floating point precision) and are quantitatively accurate and thus can be used in conjuction with physics-based corrections, such as, scatter and beam hardening correction.  If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948)
 

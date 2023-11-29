@@ -31,11 +31,12 @@ in poor computational performance.
 N = 300
 numAngles = int(720*N/1024)
 pixelSize = 0.2*2048/N
+M = N
 
 # Set the scanner geometry
 #leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_coneBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+leapct.set_coneBeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
 # Set the volume parameters
 leapct.set_defaultVolume()
@@ -57,12 +58,16 @@ f_true[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
 
 # "Simulate" projection data
 leapct.project(g,f_true)
+g[g<0.0] = 0.0
+g[:] = np.random.poisson(g)
 
 # Reconstruct with FBP
-leapct.FBP(g,f)
+#leapct.FBP(g,f)
 
 # Iterative Reconstruction
 startTime = time.time()
+leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
+#leapct.diffuse(f,1.0/20.0,3)
 #leapct.SART(g,f,10,10)
 #leapct.MLEM(g,f,5,1)
 #leapct.LS(g,f,10)

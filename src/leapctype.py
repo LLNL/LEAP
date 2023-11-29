@@ -424,7 +424,122 @@ class tomographicModels:
             return f
             
     def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0):
-        print('Not implemented yet!')
+        #if numTV <= 0:
+        #    return self.SART(g,f,numIter,numSubsets)
+        numSubsets = min(numSubsets, self.get_numAngles())
+        if self.get_geometry() == 'MODULAR' and numSubsets > 1:
+            print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
+            numSubsets = 1
+        omega = 0.8
+        P1 = self.allocateProjections()
+        self.project(P1,self.allocateVolume(1.0))
+        P1[P1==0.0] = 1.0
+
+        phis_subsets = []
+        g_subsets = []
+        P1_subsets = []
+        phis = self.get_angles()
+        if numSubsets > 1:
+            # divide g, P1, and phis
+            for m in range(numSubsets):
+                phis_subset = np.ascontiguousarray(phis[m:-1:numSubsets], np.float32)
+                phis_subsets.append(phis_subset)
+                
+                g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
+                g_subsets.append(g_subset)
+                
+                P1_subset = np.ascontiguousarray(P1[m:-1:numSubsets,:,:], np.float32)
+                P1_subsets.append(P1_subset)
+        else:
+            Pstar1 = self.sensitivity()
+            Pstar1[Pstar1==0.0] = 1.0
+        
+        #Pd = self.allocateProjections()
+        Pf_minus_g = self.allocateProjections()
+        Pf_TV_minus_g = self.allocateProjections()
+        d = self.allocateVolume()
+        f_TV = self.allocateVolume()
+
+        self.project(Pf_minus_g, f)
+        Pf_minus_g -= g
+        
+        curCost = np.sum(Pf_minus_g**2)
+        
+        for n in range(numIter):
+            print('ASDPOCS iteration ' + str(n+1) + ' of ' + str(numIter))
+            
+            # SART Update
+            if numSubsets <= 1:
+                Pf_minus_g = Pf_minus_g / P1
+                self.backproject(Pf_minus_g,d)
+                f -= 0.9*d / Pstar1
+                f[f<0.0] = 0.0
+            else:
+                for m in range(numSubsets):
+                    self.set_angles(phis_subsets[m])
+                    Pstar1 = self.sensitivity()
+                    #Pstar1[Pstar1==0.0] = 1.0
+
+                    Pd = self.allocateProjections()
+                    self.project(Pd,f)
+                    Pd = (g_subsets[m]-Pd) / P1_subsets[m]
+                    self.backproject(Pd,d)
+                    f += 0.9*d / Pstar1
+                    f[f<0.0] = 0.0
+                self.set_angles(phis)
+
+            # Calculate SART error sinogram and calculate cost            
+            self.project(Pf_minus_g, f)
+            Pf_minus_g = Pf_minus_g - g
+            epsilon_SART = np.sum(Pf_minus_g**2)
+
+            #'''            
+            # TV step(s)
+            f_TV[:] = f[:]
+            self.diffuse(f_TV, delta, numTV)
+            #self.displayVolume(f_TV)
+            self.project(Pf_TV_minus_g, f_TV)
+            Pf_TV_minus_g = Pf_TV_minus_g - g
+            epsilon_TV = np.sum(Pf_TV_minus_g**2)
+            
+            # Combine SART and TV Steps
+            temp = np.sum(Pf_minus_g*Pf_TV_minus_g)
+            a = epsilon_SART - 2.0 * temp + epsilon_TV
+            b = temp - epsilon_SART
+            c = epsilon_SART - ((1.0 - omega) * epsilon_SART + omega * curCost)
+            disc = b * b - a * c
+            alpha = 0.0
+            alpha_1 = 0.0
+            alpha_2 = 0.0
+            if disc < 0.0:
+                print("  Unable to estimate step size, setting lambda to zero!")
+                alpha = 0.0
+            else:
+                if a != 0.0:
+                    alpha_1 = (-b + np.sqrt(disc)) / a
+                    alpha_2 = (-b - np.sqrt(disc)) / a
+                if a == 0.0:
+                    alpha = 1.0
+                elif a > 0.0:
+                    alpha = alpha_1
+                else:
+                    alpha = alpha_2
+                print('  lambda = ' + str(np.round(1000.0*alpha)/1000.0) + ' (' + str(np.round(1000.0*alpha_1)/1000.0) + ', ' + str(np.round(1000.0*alpha_2)/1000.0) + ')')
+            alpha = min(1.0, alpha)
+            alpha = max(0.0, min(1.0, alpha))  # force lambda to be a valid number
+            if alpha < 0.0:
+                print("  Stopping criteria met, stopping iterations.")
+                break
+                
+                
+            # Do Update
+            f[:] = (1.0-alpha)*f[:] + alpha*f_TV[:]
+            Pf_minus_g[:] = (1.0-alpha)*Pf_minus_g[:] + alpha*Pf_TV_minus_g[:]
+            curCost = np.sum(Pf_minus_g**2)
+            #'''
+                        
+        return f
+        
         
     def LS(self, g, f, numIter, SQS=False):
         return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, SQS)
