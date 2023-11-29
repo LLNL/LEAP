@@ -192,6 +192,49 @@ __global__ void innerProductKernel(const float* x, const float* y, float* sum_x,
     }
 }
 
+__global__ void sum_2D(const float* x, float* sum_x, int3 N)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i >= N.x)
+        return;
+
+    const float* x_slice = &x[i * N.y * N.z];
+    float accum = 0.0f;
+    for (int j = 0; j < N.y; j++)
+    {
+        for (int k = 0; k < N.z; k++)
+            accum += x_slice[j * N.z + k];
+    }
+    sum_x[i] = accum;
+}
+
+__global__ void innerProductKernel_2D(const float* x, const float* y, float* sum_x, const int3 N)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i >= N.x)
+        return;
+
+    const float* x_slice = &x[i * N.y * N.z];
+    const float* y_slice = &y[i * N.y * N.z];
+    float accum = 0.0f;
+    for (int j = 0; j < N.y; j++)
+    {
+        for (int k = 0; k < N.z; k++)
+            accum += x_slice[j * N.z + k] * y_slice[j * N.z + k];
+    }
+    sum_x[i] = accum;
+}
+
+__global__ void sum_1D(const float* x, float* sum_x, int N)
+{
+    if (threadIdx.x > 0)
+        return;
+
+    *sum_x = 0.0f;
+    for (int i = 0; i < N; i++)
+        *sum_x += x[i];
+}
+
 __global__ void weightedInnerProductKernel(const float* x, const float* w, const float* y, float* sum_x, const int3 N)
 {
     if (threadIdx.x > 0)
@@ -371,7 +414,21 @@ float sum(const float* dev_lhs, const int3 N, int whichGPU)
         fprintf(stderr, "cudaMalloc failed!\n");
         return 0.0;
     }
-    sumKernel<<<1,1>>>(dev_lhs, dev_sum, N);
+    //sumKernel<<<1,1>>>(dev_lhs, dev_sum, N);
+
+    //*
+    float* dev_sum_1D = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_sum_1D, N.x * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc failed!\n");
+        return 0.0;
+    }
+    int blockSize = 8;
+    int gridSize = int(ceil(double(N.x) / double(blockSize)));
+    sum_2D <<< gridSize, blockSize >>> (dev_lhs, dev_sum_1D, N);
+    sum_1D <<< 1, 1 >>> (dev_sum_1D, dev_sum, N.x);
+    cudaFree(dev_sum_1D);
+    //*/
 
     float retVal = 0.0;
     cudaMemcpy(&retVal, dev_sum, sizeof(float), cudaMemcpyDeviceToHost);
@@ -393,7 +450,21 @@ float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int
         fprintf(stderr, "cudaMalloc failed!\n");
         return 0.0;
     }
-    innerProductKernel <<<1, 1 >>> (dev_lhs, dev_rhs, dev_sum, N);
+    //innerProductKernel <<<1, 1 >>> (dev_lhs, dev_rhs, dev_sum, N);
+
+    //*
+    float* dev_sum_1D = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_sum_1D, N.x * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc failed!\n");
+        return 0.0;
+    }
+    int blockSize = 8;
+    int gridSize = int(ceil(double(N.x) / double(blockSize)));
+    innerProductKernel_2D <<< gridSize, blockSize >>> (dev_lhs, dev_rhs, dev_sum_1D, N);
+    sum_1D <<< 1, 1 >>> (dev_sum_1D, dev_sum, N.x);
+    cudaFree(dev_sum_1D);
+    //*/
 
     float retVal = 0.0;
     cudaMemcpy(&retVal, dev_sum, sizeof(float), cudaMemcpyDeviceToHost);

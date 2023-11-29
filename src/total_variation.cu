@@ -345,7 +345,8 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     aTV_Huber_quadForm <<< dimGrid, dimBlock >>> (dev_f, dev_d, dev_quad, N, delta, beta);
     cudaDeviceSynchronize();
 
-    // pull result off GPU
+    float retVal = sum(dev_quad, N, whichGPU);
+    /* pull result off GPU
     float* quadTerms = (float*)malloc(sizeof(float) * N.x * N.y * N.z);
     pull3DdataFromGPU(quadTerms, N, dev_quad, whichGPU);
     float retVal = 0.0;
@@ -357,6 +358,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
         }
     }
     free(quadTerms);
+    //*/
 
     // Clean up
     if (cpu_to_gpu && dev_f != 0)
@@ -409,7 +411,8 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     aTV_Huber_cost <<< dimGrid, dimBlock >>> (dev_f, dev_d, N, delta, beta);
     cudaDeviceSynchronize();
 
-    // pull result off GPU
+    float retVal = sum(dev_d, N, whichGPU);
+    /* pull result off GPU
     float* costTerms = (float*)malloc(sizeof(float) * N.x * N.y * N.z);
     pull3DdataFromGPU(costTerms, N, dev_d, whichGPU);
     float retVal = 0.0;
@@ -421,6 +424,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
         }
     }
     free(costTerms);
+    //*/
 
     // Clean up
     if (cpu_to_gpu && dev_f != 0)
@@ -469,6 +473,8 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
             break;
         float stepSize = num / denom;
         scalarAdd(dev_f, -stepSize, dev_d, N, whichGPU);
+
+        //printf("cost = %f\n", anisotropicTotalVariation_cost(dev_f, N_1, N_2, N_3, delta, beta, false, whichGPU));
     }
 
     // pull result off GPU

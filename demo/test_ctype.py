@@ -71,6 +71,6 @@ leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
 #leapct.SART(g,f,10,10)
 #leapct.MLEM(g,f,5,1)
 #leapct.LS(g,f,10)
-#print('Elapsed time: ' + str(time.time()-startTime))
+print('Elapsed time: ' + str(time.time()-startTime))
 
 leapct.displayVolume(f)
