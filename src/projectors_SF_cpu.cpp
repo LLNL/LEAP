@@ -983,6 +983,8 @@ bool CPUproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, 
     const float cos_phi = cos(params->phis[iphi]);
     const float sin_phi = sin(params->phis[iphi]);
     const float x = params->voxelWidth*ix + params->x_0();
+
+    const float z_source = params->z_source(iphi);
     
 	float A_x, B_x, A_y, B_y;
 	float T_x_over_2 = params->voxelWidth / 2.0;
@@ -1024,7 +1026,7 @@ bool CPUproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, 
     float x_dot_theta, x_dot_theta_perp;
     
     float v_denom;//, v_phi_x;
-    float pitch_mult_phi_plus_startZ = 0.0;
+    float pitch_mult_phi_plus_startZ = z_source;
 
     float t_neg, t_pos, t_1, t_2;
     int t_ind_min, t_ind_max;
@@ -1406,7 +1408,7 @@ bool CPUbackproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* para
     float sin_phi = sin(phi);
 
     float v_denom, v_phi_x;
-    float pitch_mult_phi_plus_startZ = 0.0;
+    float pitch_mult_phi_plus_startZ = params->z_source(iphi);
 
     float t_neg, t_pos; //, t_1, t_2;
     //int t_ind_min, t_ind_max;

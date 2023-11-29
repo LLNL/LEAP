@@ -119,14 +119,17 @@ __global__ void coneBeamSensitivityKernel(int4 N_g, float4 T_g, float4 startVals
     {
         const float cos_phi = cos(phis[l]);
         const float sin_phi = sin(phis[l]);
+        const float z_source = phis[l] * T_g.w + startVals_g.w;
 
         const float v_denom_inv = 1.0 / (R - x * cos_phi - y * sin_phi);
         const float u_arg = (-sin_phi * x + cos_phi * y + tau) * v_denom_inv;
-        const float v_arg = z * v_denom_inv;
+        const float v_arg = (z - z_source) * v_denom_inv;
         if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
             val += sqrt(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
     }
-    f[ind] = val* scalar;
+    if (val == 0.0f)
+        val = 1.0f / scalar;
+    f[ind] = val * scalar;
 }
 
 bool sensitivity_gpu(float*& f, parameters* params, bool cpu_to_gpu)

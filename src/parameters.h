@@ -199,10 +199,32 @@ public:
 	/**
 	 * \fn          z_samples
 	 * \brief       returns the position of the k-th z-coordinate value (mm)
-	 * \param[in]   i the index of the k-th z-coordinate
+	 * \param[in]   k the index of the k-th z-coordinate
 	 * \return      returns the position of the k-th z-coordinate value (mm)
 	 */
 	float z_samples(int k);
+
+	/**
+	 * \fn          z_source
+	 * \brief       returns the z-coordinate of the source position at the i-th rotation angle
+	 * \param[in]   i the index of the i-th rotation angle
+	 * \return      returns the z-coordinate of the source position at the i-th rotation angle
+	 */
+	float z_source(int i);
+
+	/**
+	 * \fn          normalizedHelicalPitch
+	 * \brief       calculates the normalized helical pitch
+	 * \return      returns the normalized helical pitch
+	 */
+	float normalizedHelicalPitch();
+
+	/**
+	 * \fn          set_helicalPitch
+	 * \brief       sets the helicalPitch and z_source_offset parameters
+	 * \return      true is successful, false otherwise
+	 */
+	bool set_helicalPitch(float h);
 
 	bool normalizeConeAndFanCoordinateFunctions;
 
@@ -218,6 +240,8 @@ public:
 	float centerCol, centerRow;
 	float* phis;
 	float tau;
+	float helicalPitch;
+	float z_source_offset;
 
 	// Volume Parameters
 	int volumeDimensionOrder;

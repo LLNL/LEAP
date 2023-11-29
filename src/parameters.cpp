@@ -61,6 +61,8 @@ void parameters::initialize()
 	centerCol = 0.0;
 	centerRow = 0.0;
 	tau = 0.0;
+	helicalPitch = 0.0;
+	z_source_offset = 0.0;
 	rFOVspecified = 0.0;
 
 	muCoeff = 0.0;
@@ -132,6 +134,8 @@ void parameters::assign(const parameters& other)
     this->centerCol = other.centerCol;
     this->centerRow = other.centerRow;
     this->tau = other.tau;
+	this->helicalPitch = other.helicalPitch;
+	this->z_source_offset = other.z_source_offset;
     this->rFOVspecified = other.rFOVspecified;
     this->axisOfSymmetry = other.axisOfSymmetry;
     this->volumeDimensionOrder = other.volumeDimensionOrder;
@@ -413,6 +417,23 @@ bool parameters::set_defaultVolume(float scale)
 	offsetY = 0.0;
 	offsetZ = 0.0;
 
+	if (geometry == CONE && helicalPitch != 0.0)
+	{
+		int minSlices = int(sod / sdd * float(numRows) * pixelHeight / voxelHeight + 0.5);
+		if (fabs(angularRange) <= 180.0)
+			numZ = minSlices;
+		else if (fabs(angularRange) <= 360.0)
+		{
+			numZ = (sod / sdd * (numRows - 1) * pixelHeight + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight;
+			numZ = max(minSlices, numZ);
+		}
+		else
+		{
+			numZ = fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight;
+			numZ = max(minSlices, numZ);
+		}
+	}
+
 	if (isSymmetric())
 	{
 		numX = 1;
@@ -476,6 +497,13 @@ void parameters::printAll()
 	{
 		printf("sod = %f mm\n", sod);
 		printf("sdd = %f mm\n", sdd);
+	}
+	if (geometry == CONE && helicalPitch != 0.0)
+	{
+		printf("helicalPitch = %f (radians/mm)\n", helicalPitch);
+		printf("normalized helicalPitch = %f\n", normalizedHelicalPitch());
+		//for (int i = 0; i < numAngles; i++)
+		//	printf("%f\n", z_source(i));
 	}
 	printf("\n");
 
@@ -699,12 +727,64 @@ float parameters::z_0()
 	else if (geometry == MODULAR)
 		return offsetZ - 0.5*float(numZ-1) * voxelHeight;
 	else
-		return offsetZ - centerRow * ((sod / sdd * pixelHeight) / voxelHeight) * voxelHeight;
+	{
+		float rzref = -centerRow * ((sod / sdd * pixelHeight) / voxelHeight) * voxelHeight;
+		if (helicalPitch != 0.0)
+		{
+			rzref = (0.5 * float(numRows - 1) - centerRow) * (sod / sdd * pixelHeight) / voxelHeight;
+			rzref -= 0.5 * float(numZ - 1);
+			rzref *= voxelHeight;
+		}
+		return offsetZ + rzref;
+	}
 }
 
 float parameters::z_samples(int iz)
 {
 	return iz * voxelHeight + z_0();
+}
+
+float parameters::z_source(int i)
+{
+	if (geometry != CONE || phis == NULL || helicalPitch == 0.0)
+		return 0.0;
+	else
+	{
+		//float midAngle = 0.5 * (phis[numAngles - 1] + phis[0]);
+		//return (phis[i] - midAngle) * helicalPitch;
+		return phis[i] * helicalPitch + z_source_offset;
+	}
+}
+
+bool parameters::set_helicalPitch(float h)
+{
+	if (geometry != CONE || phis == NULL)
+	{
+		printf("Error: must set CT geometry before setting helicalPitch");
+		return false;
+	}
+	else
+	{
+		helicalPitch = h;
+		if (h == 0.0)
+			z_source_offset = 0.0;
+		else
+		{
+			float midAngle = 0.5 * (phis[numAngles - 1] + phis[0]);
+			//return (phis[i] - midAngle) * helicalPitch;
+			z_source_offset = -midAngle * helicalPitch;
+		}
+		return true;
+	}
+}
+
+float parameters::normalizedHelicalPitch()
+{
+	//helicalPitch = normalizedHelicalPitch*pzsize*nslices*(sod/sdd)/(2pi)
+	if (geometry != CONE)
+		return 0.0;
+	else
+		return 2.0 * PI * helicalPitch / (numRows * pixelHeight * sod / sdd);
 }
 
 bool parameters::anglesAreEquispaced()

@@ -907,6 +907,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
     const float v0_over_Tv = startVals_g.y / T_g.y;
     const float Tz_over_Tv = T_f.z / T_g.y;
     const float v_phi_x_start_num = z / T_g.y;
+    const float Tv_inv = 1.0f / T_g.y;
     const float Tu_inv = 1.0f/T_g.z;
     float sin_phi, cos_phi;
 
@@ -915,6 +916,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
         if (l+3 < N_g.x)
         {
             const float L = (float)l+0.5f;
+            float z_source_over_T_v = (phis[l] * T_g.w + startVals_g.w) * Tv_inv;
             sin_phi = sin(phis[l]);
             cos_phi = cos(phis[l]);
             if (sin_phi < 0.0f)
@@ -956,7 +958,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             ind_last = ind_first + 2.5f;
             ind_first = ind_first+0.5f + max(0.0f, min(tau_high-ind_first-0.5f, 1.0f)) * l_phi / horizontalWeights_0_A;
 
-            v_phi_x = v_phi_x_start_num*R_minus_x_dot_theta_inv - v0_over_Tv;
+            v_phi_x = (v_phi_x_start_num - z_source_over_T_v)*R_minus_x_dot_theta_inv - v0_over_Tv;
             const float v_phi_x_step_A = Tz_over_Tv * R_minus_x_dot_theta_inv;
 
             row_high_A = floor(v_phi_x - 0.5f*v_phi_x_step_A + 0.5f) + 0.5f;
@@ -966,6 +968,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             const float s_three_A = ind_last;
 
             const float L1 = L+1.0f;
+            z_source_over_T_v = (phis[l+1] * T_g.w + startVals_g.w) * Tv_inv;
             sin_phi = sin(phis[l+1]);
             cos_phi = cos(phis[l+1]);
 
@@ -1006,7 +1009,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             ind_last = ind_first + 2.5f;
             ind_first = ind_first+0.5f + max(0.0f, min(tau_high-ind_first-0.5f, 1.0f)) * l_phi / horizontalWeights_0_B;
 
-            v_phi_x = v_phi_x_start_num*R_minus_x_dot_theta_inv - v0_over_Tv;
+            v_phi_x = (v_phi_x_start_num - z_source_over_T_v) *R_minus_x_dot_theta_inv - v0_over_Tv;
             const float v_phi_x_step_B = Tz_over_Tv * R_minus_x_dot_theta_inv;
 
             row_high_B = floor(v_phi_x - 0.5f*v_phi_x_step_B + 0.5f) + 0.5f;
@@ -1016,6 +1019,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             const float s_three_B = ind_last;
 
             const float L2 = L+2.0f;
+            z_source_over_T_v = (phis[l+2] * T_g.w + startVals_g.w) * Tv_inv;
             sin_phi = sin(phis[l+2]);
             cos_phi = cos(phis[l+2]);
             if (sin_phi < 0.0f)
@@ -1055,7 +1059,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             ind_last = ind_first + 2.5f;
             ind_first = ind_first+0.5f + max(0.0f, min(tau_high-ind_first-0.5f, 1.0f)) * l_phi / horizontalWeights_0_C;
 
-            v_phi_x = v_phi_x_start_num*R_minus_x_dot_theta_inv - v0_over_Tv;
+            v_phi_x = (v_phi_x_start_num - z_source_over_T_v) *R_minus_x_dot_theta_inv - v0_over_Tv;
             const float v_phi_x_step_C = Tz_over_Tv * R_minus_x_dot_theta_inv;
 
             row_high_C = floor(v_phi_x - 0.5f*v_phi_x_step_C + 0.5f) + 0.5f;
@@ -1065,6 +1069,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             const float s_three_C = ind_last;
 
             const float L3 = L+3.0f;
+            z_source_over_T_v = (phis[l+3] * T_g.w + startVals_g.w) * Tv_inv;
             sin_phi = sin(phis[l+3]);
             cos_phi = cos(phis[l+3]);
             if (sin_phi < 0.0f)
@@ -1104,7 +1109,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             ind_last = ind_first + 2.5f;
             ind_first = ind_first+0.5f + max(0.0f, min(tau_high-ind_first-0.5f, 1.0f)) * l_phi / horizontalWeights_0_D;
 
-            v_phi_x = v_phi_x_start_num*R_minus_x_dot_theta_inv - v0_over_Tv;
+            v_phi_x = (v_phi_x_start_num - z_source_over_T_v) *R_minus_x_dot_theta_inv - v0_over_Tv;
             const float v_phi_x_step_D = Tz_over_Tv * R_minus_x_dot_theta_inv;
 
             row_high_D = floor(v_phi_x - 0.5f*v_phi_x_step_D + 0.5f) + 0.5f;
@@ -1151,6 +1156,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
         else
         {
             const float L = (float)l+0.5f;
+            float z_source_over_T_v = (phis[l] * T_g.w + startVals_g.w) * Tv_inv;
             sin_phi = sin(phis[l]);
             cos_phi = cos(phis[l]);
             if (sin_phi < 0.0f)
@@ -1190,7 +1196,7 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, 
             ind_last = ind_first + 2.5f;
             ind_first = ind_first+0.5f + max(0.0f, min(tau_high-ind_first-0.5f, 1.0f)) * l_phi / horizontalWeights_0_A;
 
-            v_phi_x = v_phi_x_start_num*R_minus_x_dot_theta_inv - v0_over_Tv;
+            v_phi_x = (v_phi_x_start_num - z_source_over_T_v) *R_minus_x_dot_theta_inv - v0_over_Tv;
             const float v_phi_x_step_A = Tz_over_Tv * R_minus_x_dot_theta_inv;
 
             row_high_A = floor(v_phi_x - 0.5f*v_phi_x_step_A + 0.5f) + 0.5f;
@@ -1225,19 +1231,21 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
     const float u = n * T_g.z + startVals_g.z;
     
     const float sin_phi = sin(phis[l]);
-     const float cos_phi = cos(phis[l]);
+    const float cos_phi = cos(phis[l]);
 
-     const float n_minus_half = (float)n - 0.5f + startVals_g.z / T_g.z;
-     const float n_plus_half = (float)n + 0.5f + startVals_g.z / T_g.z;
-     const float m_minus_half = (float)m - 0.5f;
-     const float m_plus_half = (float)m + 0.5f;
+    const float n_minus_half = (float)n - 0.5f + startVals_g.z / T_g.z;
+    const float n_plus_half = (float)n + 0.5f + startVals_g.z / T_g.z;
+    const float m_minus_half = (float)m - 0.5f;
+    const float m_plus_half = (float)m + 0.5f;
 
-     const float v0_over_Tv = startVals_g.y / T_g.y;
+    const float v0_over_Tv = startVals_g.y / T_g.y;
 
-     const float z0_over_Tz_plus_half = startVals_f.z / T_f.z + 0.5f;
-     const float z_ind_offset = -z0_over_Tz_plus_half + 0.0f*((float)l * T_g.x + startVals_g.x);
+    const float z_source = phis[l] * T_g.w + startVals_g.w;
 
-     const float z_ind_slope = (v - 0.5f*T_g.y) / T_f.z;
+    const float z0_over_Tz_plus_half = startVals_f.z / T_f.z + 0.5f;
+    const float z_ind_offset = -z0_over_Tz_plus_half + z_source/T_f.z;
+
+    const float z_ind_slope = (v - 0.5f*T_g.y) / T_f.z;
 
     float g_output = 0.0f;
     

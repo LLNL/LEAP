@@ -105,6 +105,11 @@ class tomographicModels:
         self.libprojectors.set_modularBeam.restype = ctypes.c_bool
         return self.libprojectors.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
+    def set_helicalPitch(self, h):
+        self.libprojectors.set_helicalPitch.argtypes = [ctypes.c_float]
+        self.libprojectors.set_helicalPitch.restype = ctypes.c_bool
+        return self.libprojectors.set_helicalPitch(h)
+    
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT VOLUME PARAMETERS

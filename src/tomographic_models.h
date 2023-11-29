@@ -373,6 +373,13 @@ public:
 	 */
 	float get_pixelHeight();
 
+	/**
+	 * \fn          set_helicalPitch
+	 * \brief       sets the helicalPitch parameter
+	 * \return      true is successful, false otherwise
+	 */
+	bool set_helicalPitch(float);
+
 	bool get_sourcePositions(float*);
 	bool get_moduleCenters(float*);
 	bool get_rowVectors(float*);

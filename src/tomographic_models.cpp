@@ -194,6 +194,8 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 {
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
+	if (params.geometry == parameters::CONE && params.helicalPitch != 0.0)
+		return false;
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	int numRowsPerChunk = std::min(64, params.numRows);
@@ -266,6 +268,8 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 {
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
+		return false;
+	if (params.geometry == parameters::CONE && params.helicalPitch != 0.0)
 		return false;
 	
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
@@ -858,6 +862,11 @@ float tomographicModels::get_pixelWidth()
 float tomographicModels::get_pixelHeight()
 {
 	return params.pixelHeight;
+}
+
+bool tomographicModels::set_helicalPitch(float h)
+{
+	return params.set_helicalPitch(h);
 }
 
 bool tomographicModels::get_sourcePositions(float* x)

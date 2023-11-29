@@ -58,13 +58,16 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
                     {
                         float cos_phi = cos(params->phis[iphi]);
                         float sin_phi = sin(params->phis[iphi]);
+                        float z_source = params->z_source(iphi);
 
                         float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
                         float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
-                        float v_arg = z * v_denom_inv;
+                        float v_arg = (z-z_source) * v_denom_inv;
                         if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
                             curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
                     }
+                    if (curVal == 0.0)
+                        curVal = 1.0;
                     xLine[ix] = float(curVal);
                 }
             }
@@ -90,13 +93,16 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
                     {
                         float cos_phi = cos(params->phis[iphi]);
                         float sin_phi = sin(params->phis[iphi]);
+                        float z_source = params->z_source(iphi);
 
                         float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
                         float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
-                        float v_arg = z * v_denom_inv;
+                        float v_arg = (z-z_source) * v_denom_inv;
                         if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_max <= v_arg)
                             curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
                     }
+                    if (curVal == 0.0)
+                        curVal = 1.0;
                     zLine[iz] = float(curVal);
                 }
             }

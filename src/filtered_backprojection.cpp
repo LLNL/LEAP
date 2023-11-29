@@ -150,6 +150,11 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		printf("Error: FBP not implemented for modular geometries\n");
 		return false;
 	}
+	if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
+	{
+		printf("Error: FBP not yet implemented for helical cone-beam geometry\n");
+		return false;
+	}
 
 	if (params->muSpecified())
 		return execute_attenuated(g, f, params, cpu_to_gpu);
@@ -163,7 +168,8 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		bool doWeightedBackprojection_save = params->doWeightedBackprojection;
 		params->doWeightedBackprojection = true;
 		bool doExtrapolation_save = params->doExtrapolation;
-		params->doExtrapolation = true;
+		if (params->geometry != parameters::CONE || params->helicalPitch == 0.0)
+			params->doExtrapolation = true;
 		if (params->isSymmetric())
 		{
 			if (params->whichGPU < 0)

@@ -180,6 +180,11 @@ bool set_rampID(int whichRampFilter)
 	return tomo.set_rampID(whichRampFilter);
 }
 
+bool set_helicalPitch(float h)
+{
+	return tomo.set_helicalPitch(h);
+}
+
 bool set_attenuationMap(float* mu)
 {
 	return tomo.set_attenuationMap(mu);

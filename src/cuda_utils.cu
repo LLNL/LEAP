@@ -766,6 +766,18 @@ bool setProjectionGPUparams(parameters* params, int4& N, float4& T, float4& star
         T.x = params->T_phi(); T.y = params->pixelHeight; T.z = params->pixelWidth;
         startVals.x = params->phi_0(); startVals.y = params->v_0(); startVals.z = params->u_0();
 
+        if (params->geometry == parameters::CONE)
+        {
+            N.w = params->numAngles;
+            T.w = params->helicalPitch;
+            startVals.w = params->z_source_offset;
+        }
+        else
+        {
+            N.w = params->numAngles;
+            T.w = 0.0;
+            startVals.w = 0.0;
+        }
         if (doNormalize)
         {
             if (params->geometry == parameters::CONE)
