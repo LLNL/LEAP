@@ -424,8 +424,8 @@ class tomographicModels:
             return f
             
     def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0):
-        #if numTV <= 0:
-        #    return self.SART(g,f,numIter,numSubsets)
+        if numTV <= 0:
+            return self.SART(g,f,numIter,numSubsets)
         numSubsets = min(numSubsets, self.get_numAngles())
         if self.get_geometry() == 'MODULAR' and numSubsets > 1:
             print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
