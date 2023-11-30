@@ -198,11 +198,12 @@ float parameters::rFOV()
 		return retVal;
 		//*/
 
+		//float R_tau = sqrt(sod * sod + tau * tau);
 		float alpha_right = u_0();
 		float alpha_left = pixelWidth * float(numCols - 1) + u_0();
 		alpha_right = atan(alpha_right / sdd);
 		alpha_left = atan(alpha_left / sdd);
-		return sod * sin(min(fabs(alpha_right), fabs(alpha_left)));
+		return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left-float(atan(tau / sod)))));
 	}
 	else
 		return 1.0e16;
@@ -497,13 +498,13 @@ void parameters::printAll()
 	{
 		printf("sod = %f mm\n", sod);
 		printf("sdd = %f mm\n", sdd);
+		if (tau != 0.0)
+			printf("tau = %f mm\n", tau);
 	}
 	if (geometry == CONE && helicalPitch != 0.0)
 	{
-		printf("helicalPitch = %f (radians/mm)\n", helicalPitch);
+		printf("helicalPitch = %f (mm/radian)\n", helicalPitch);
 		printf("normalized helicalPitch = %f\n", normalizedHelicalPitch());
-		//for (int i = 0; i < numAngles; i++)
-		//	printf("%f\n", z_source(i));
 	}
 	printf("\n");
 
@@ -754,6 +755,19 @@ float parameters::z_source(int i)
 		//return (phis[i] - midAngle) * helicalPitch;
 		return phis[i] * helicalPitch + z_source_offset;
 	}
+}
+
+bool parameters::set_tau(float tau_in)
+{
+	tau = tau_in;
+	return true;
+}
+
+bool parameters::set_normalizedHelicalPitch(float h_normalized)
+{
+	//h_normalized = 2.0 * PI * helicalPitch / (numRows * pixelHeight * sod / sdd)
+	float h = h_normalized * (numRows * pixelHeight * sod / sdd) / (2.0*PI);
+	return set_helicalPitch(h);
 }
 
 bool parameters::set_helicalPitch(float h)

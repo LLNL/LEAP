@@ -52,7 +52,7 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
     ###################################################################################################################
     ###################################################################################################################
-    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
+    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
         '''
         The origin of the coordinate system is always at the center of rotation
         
@@ -75,21 +75,21 @@ class tomographicModels:
         sod = source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
         sdd = source to detector distance, measured in mm
         '''
-        self.libprojectors.set_coneBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_coneBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_coneBeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+        return self.libprojectors.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
             
-    def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
+    def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
         ''' see comments in the setConeBeamParams function '''
-        self.libprojectors.set_fanBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_fanBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_fanBeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+        return self.libprojectors.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
 
     def set_parallelBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
         ''' see comments in the setConeBeamParams function '''
@@ -105,10 +105,20 @@ class tomographicModels:
         self.libprojectors.set_modularBeam.restype = ctypes.c_bool
         return self.libprojectors.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
+    def set_tau(self, tau):
+        self.libprojectors.set_tau.argtypes = [ctypes.c_float]
+        self.libprojectors.set_tau.restype = ctypes.c_bool
+        return self.libprojectors.set_tau(tau)
+    
     def set_helicalPitch(self, h):
         self.libprojectors.set_helicalPitch.argtypes = [ctypes.c_float]
         self.libprojectors.set_helicalPitch.restype = ctypes.c_bool
         return self.libprojectors.set_helicalPitch(h)
+        
+    def set_normalizedHelicalPitch(self, h_normalized):
+        self.libprojectors.set_normalizedHelicalPitch.argtypes = [ctypes.c_float]
+        self.libprojectors.set_normalizedHelicalPitch.restype = ctypes.c_bool
+        return self.libprojectors.set_normalizedHelicalPitch(h_normalized)
     
     ###################################################################################################################
     ###################################################################################################################
@@ -818,6 +828,14 @@ class tomographicModels:
     def get_sdd(self):
         self.libprojectors.get_sdd.restype = ctypes.c_float
         return self.libprojectors.get_sdd()
+        
+    def get_helicalPitch(self):
+        self.libprojectors.get_helicalPitch.restype = ctypes.c_float
+        return self.libprojectors.get_helicalPitch()
+        
+    def get_z_source_offset(self):
+        self.libprojectors.get_z_source_offset.restype = ctypes.c_float
+        return self.libprojectors.get_z_source_offset()
     
     def get_numAngles(self):
         return self.libprojectors.get_numAngles()
@@ -843,6 +861,10 @@ class tomographicModels:
     def get_centerCol(self):
         self.libprojectors.get_centerCol.restype = ctypes.c_float
         return self.libprojectors.get_centerCol()
+        
+    def get_tau(self):
+        self.libprojectors.get_tau.restype = ctypes.c_float
+        return self.libprojectors.get_tau()
         
     def get_sourcePositions(self):
         #bool get_sourcePositions(float*);
@@ -983,6 +1005,7 @@ class tomographicModels:
         ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
         
         ax.view_init(90, -90)
+        #ax.figure.set_size_inches(8, 8)
         plt.show()
     
     def drawCT(self, ax, whichView=None):
@@ -997,13 +1020,15 @@ class tomographicModels:
         centerCol = self.get_centerCol()
         
         geometryText = self.get_geometry()
+        
         if geometryText == 'CONE' or geometryText == 'FAN':
             sod = self.get_sod()
             sdd = self.get_sdd()
-            tau = 0.0
-            #tau = pxmidoff * pxsize * sod / sdd
-            R = np.sqrt(sod*sod - tau*tau)
-            D = np.sqrt(sdd*sdd - tau*tau)
+            tau = self.get_tau()
+            #R = np.sqrt(sod*sod - tau*tau)
+            #D = np.sqrt(sdd*sdd - tau*tau)
+            R = sod
+            D = sdd
             odd = D-R
             detectorWidth = numCols*pixelWidth
             detectorHeight = numRows*pixelHeight
@@ -1121,6 +1146,16 @@ class tomographicModels:
                 [Z[2],Z[3],Z[4],Z[5]]]
                 ax.add_collection3d(Poly3DCollection(verts, facecolors='black', linewidths=1, edgecolors='k', alpha=.20))
                 
+        if geometryText == 'PARALLEL' or geometryText == 'FAN' or geometryText == 'CONE':
+            if geometryText == 'CONE':
+                pitch = self.get_helicalPitch()
+                z_source_offset = self.get_z_source_offset()
+            else:
+                pitch = 0.0
+                z_source_offset = 0.0
+                
+            phis = np.pi/180.0*self.get_angles() - 0.5*np.pi
+            ax.plot(sod*np.cos(phis), sod*np.sin(phis), (pitch*phis+z_source_offset), '.', color='green')
     
     def drawVolume(self, ax):
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection

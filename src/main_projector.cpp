@@ -348,7 +348,7 @@ bool get_volumeDimensionOrder(int param_id, int& which)
 
 bool set_coneBeam(int param_id, int numAngles, int numRows, int numCols, 
                        float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
-                       torch::Tensor& phis_tensor, float sod, float sdd)
+                       torch::Tensor& phis_tensor, float sod, float sdd, float tau, float helicalPitch)
 {
     tomographicModels* p_model = get_model(param_id);
     if (p_model == NULL)
@@ -357,12 +357,12 @@ bool set_coneBeam(int param_id, int numAngles, int numRows, int numCols,
     float* phis = phis_tensor.data_ptr<float>();
     return p_model->set_coneBeam(numAngles, numRows, numCols, 
                        pixelHeight, pixelWidth, centerRow, centerCol, 
-                       phis, sod, sdd);
+                       phis, sod, sdd, tau, helicalPitch);
 }
 
 bool set_fanBeam(int param_id, int numAngles, int numRows, int numCols, 
                       float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
-                      torch::Tensor& phis_tensor, float sod, float sdd)
+                      torch::Tensor& phis_tensor, float sod, float sdd, float tau)
 {
     tomographicModels* p_model = get_model(param_id);
     if (p_model == NULL)
@@ -371,7 +371,7 @@ bool set_fanBeam(int param_id, int numAngles, int numRows, int numCols,
     float* phis = phis_tensor.data_ptr<float>();
     return p_model->set_fanBeam(numAngles, numRows, numCols, 
                       pixelHeight, pixelWidth, centerRow, centerCol, 
-                      phis, sod, sdd);
+                      phis, sod, sdd, tau);
     return false;
 }
 

@@ -100,14 +100,14 @@ float get_FBPscalar()
 	return tomo.get_FBPscalar();
 }
 
-bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
 {
-	return tomo.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+	return tomo.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch);
 }
 
-bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
 {
-	return tomo.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd);
+	return tomo.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau);
 }
 
 bool set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
@@ -180,9 +180,19 @@ bool set_rampID(int whichRampFilter)
 	return tomo.set_rampID(whichRampFilter);
 }
 
+bool set_tau(float tau)
+{
+	return tomo.set_tau(tau);
+}
+
 bool set_helicalPitch(float h)
 {
 	return tomo.set_helicalPitch(h);
+}
+
+bool set_normalizedHelicalPitch(float h_normalized)
+{
+	return tomo.set_normalizedHelicalPitch(h_normalized);
 }
 
 bool set_attenuationMap(float* mu)
@@ -278,6 +288,21 @@ float get_centerRow()
 float get_centerCol()
 {
 	return tomo.params.centerCol;
+}
+
+float get_tau()
+{
+	return tomo.params.tau;
+}
+
+float get_helicalPitch()
+{
+	return tomo.get_helicalPitch();
+}
+
+float get_z_source_offset()
+{
+	return tomo.get_z_source_offset();
 }
 
 bool get_sourcePositions(float* x)

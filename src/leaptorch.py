@@ -150,21 +150,21 @@ class Projector(torch.nn.Module):
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
             
-    def set_fan_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd):
-        self.set_fanBeam(nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd)
+    def set_fan_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd, tau=0.0):
+        self.set_fanBeam(nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd, tau)
             
-    def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
-        leapct.set_fanBeam(self.param_id, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+    def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
+        leapct.set_fanBeam(self.param_id, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols)).astype(np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
 
-    def set_cone_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd):
-        self.set_coneBeam(nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd
+    def set_cone_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+        self.set_coneBeam(nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd, tau, helicalPitch)
 
-    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd):
-        leapct.set_coneBeam(self.param_id, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+        leapct.set_coneBeam(self.param_id, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols)).astype(np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:

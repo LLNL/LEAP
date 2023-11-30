@@ -454,7 +454,7 @@ float tomographicModels::get_FBPscalar()
 	return FBPscalar(&params);
 }
 
-bool tomographicModels::set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool tomographicModels::set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
 {
 	params.geometry = parameters::CONE;
 	params.detectorType = parameters::FLAT;
@@ -467,11 +467,13 @@ bool tomographicModels::set_coneBeam(int numAngles, int numRows, int numCols, fl
 	params.numAngles = numAngles;
 	params.centerCol = centerCol;
 	params.centerRow = centerRow;
+	params.tau = tau;
+	params.set_helicalPitch(helicalPitch);
 	params.set_angles(phis, numAngles);
 	return params.geometryDefined();
 }
 
-bool tomographicModels::set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd)
+bool tomographicModels::set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
 {
 	params.geometry = parameters::FAN;
 	params.detectorType = parameters::FLAT;
@@ -484,6 +486,7 @@ bool tomographicModels::set_fanBeam(int numAngles, int numRows, int numCols, flo
 	params.numAngles = numAngles;
 	params.centerCol = centerCol;
 	params.centerRow = centerRow;
+	params.tau = tau;
 	params.set_angles(phis, numAngles);
 	return params.geometryDefined();
 }
@@ -864,9 +867,29 @@ float tomographicModels::get_pixelHeight()
 	return params.pixelHeight;
 }
 
+bool tomographicModels::set_tau(float tau)
+{
+	return params.set_tau(tau);
+}
+
 bool tomographicModels::set_helicalPitch(float h)
 {
 	return params.set_helicalPitch(h);
+}
+
+bool tomographicModels::set_normalizedHelicalPitch(float h_normalized)
+{
+	return params.set_normalizedHelicalPitch(h_normalized);
+}
+
+float tomographicModels::get_helicalPitch()
+{
+	return params.helicalPitch;
+}
+
+float tomographicModels::get_z_source_offset()
+{
+	return params.z_source_offset;
 }
 
 bool tomographicModels::get_sourcePositions(float* x)

@@ -42,8 +42,8 @@ extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool cpu_to_gpu);
 
 extern "C" PROJECTOR_API bool sensitivity(float* f, bool cpu_to_gpu);
 
-extern "C" PROJECTOR_API bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd);
-extern "C" PROJECTOR_API bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd);
+extern "C" PROJECTOR_API bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
+extern "C" PROJECTOR_API bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
 extern "C" PROJECTOR_API bool set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
 extern "C" PROJECTOR_API bool set_modularBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float*, float*, float*, float*);
 extern "C" PROJECTOR_API bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
@@ -68,7 +68,9 @@ extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool set_projector(int which);
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);
 extern "C" PROJECTOR_API bool set_rampID(int whichRampFilter);
+extern "C" PROJECTOR_API bool set_tau(float tau);
 extern "C" PROJECTOR_API bool set_helicalPitch(float h);
+extern "C" PROJECTOR_API bool set_normalizedHelicalPitch(float h_normalized);
 extern "C" PROJECTOR_API bool set_attenuationMap(float*);
 extern "C" PROJECTOR_API bool set_cylindircalAttenuationMap(float, float);
 extern "C" PROJECTOR_API bool clear_attenuationMap();
@@ -83,6 +85,9 @@ extern "C" PROJECTOR_API float get_pixelWidth();
 extern "C" PROJECTOR_API float get_pixelHeight();
 extern "C" PROJECTOR_API float get_centerRow();
 extern "C" PROJECTOR_API float get_centerCol();
+extern "C" PROJECTOR_API float get_tau();
+extern "C" PROJECTOR_API float get_helicalPitch();
+extern "C" PROJECTOR_API float get_z_source_offset();
 
 extern "C" PROJECTOR_API bool get_sourcePositions(float*);
 extern "C" PROJECTOR_API bool get_moduleCenters(float*);

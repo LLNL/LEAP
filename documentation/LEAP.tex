@@ -5,7 +5,7 @@
 \usepackage{pst-plot, pst-node, pst-bar, pst-3dplot, pstricks-add}
 %\usepackage{bm}
 
-\title{LEAP Technical Manual}
+\title{LEAP Technical Manual \\ Version 1.0}
 \author{Kyle Champley}
 \date{\today}
 
@@ -44,7 +44,7 @@
 
 This document serves as a technical description of the algorithms in LivermorE AI Projector (LEAP) library.  LEAP is a C/C++/CUDA library of tomographic projectors (forward and back projection) implemented for both multi-GPU and multi-core CPU. We provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
-Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam. These geometry types accommodate shifts of the detectors and non-uniform angular spacing.  Cartoonized sketches of these CT geometry types is shown in Figure \ref{fig:geometrySketches}. For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair. These projectors use the Separable Footprint method [Long, Fessler, and Balter, TMI, 2010] which provides a matched projector pair that models the finite size of the voxel and detector pixel. These matched projectors ensure convergence and provide accurate, smooth results. Unmatched projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations [DeMan and Basu, PMB, 2004].
+Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam with axial or helical source trajectory. These geometry types accommodate shifts of the detectors and non-uniform angular spacing. Cartoonized sketches of these CT geometry types is shown in Figure \ref{fig:geometrySketches}. For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair. All projectors use the Separable Footprint method [Long, Fessler, and Balter, TMI, 2010] which provides a matched projector pair that models the finite size of the voxel and detector pixel. These matched projectors ensure convergence and provide accurate, smooth results. Unmatched projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations [DeMan and Basu, PMB, 2004].
 
 \begin{figure}[h]
 \begin{tabular}{ccc}
@@ -66,7 +66,7 @@ In addition to the projectors, we also provide a few other algorithms for tomogr
 \begin{enumerate}
 \item Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
 \item A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction.
-\item Python implementations of some iterative reconstruction algorithms: OSEM, SART, and RWLS.
+\item Python implementations of some iterative reconstruction algorithms: OSEM, SART, ASD-POCS, and RWLS.
 \end{enumerate}
 
 The CPU- and GPU-based projectors are nearly identical (32-bit floating point precision) and are quantitatively accurate and thus can be used in conjuction with physics-based corrections, such as, scatter and beam hardening correction. If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT \cite{ChampleyLTT}.
@@ -104,26 +104,39 @@ The second tool builds a 3D sketch (using matplotlib) of the CT geometry and the
 \begin{itemize}
     \item[] sketchSystem().
 \end{itemize}
-An example of the output of this function with a modular-beam geometry is shown in Figure \ref{fig:modularBeamSketch}.
+Example of the output of this function with a helical cone-beam geometry is shown in Figure \ref{fig:helicalSketch} and a modular-beam geometry is shown in Figure \ref{fig:modularBeamSketch}.
 
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.5]{helical}
+\end{center}
+\vspace{-20pt}\caption{Sketch of a helical cone-beam geometry generated with the \textit{sketchSystem()} Python function.  The  magenta box is the reconstruction volume, the gray rectangle is the detector panel, the green dots are the source positions, and the red lines trace from the source to each of the four corners of the detector.} \label{fig:helicalSketch}
+\end{figure}
 
 \section{LEAP Parameters and General Syntax}
 
-LEAP is a library of CT algorithms that operates on data arrays provided by the user.  These data arrays are the projection data and the volume data (see Section \ref{sec:dataArrays}).  The only permanent memory that LEAP manages is a class with member variables that parameterize the CT geometry and CT volume.  Some temporary memory is allocated during the computation of an algorithm but it is destroyed before the completion of the algorithm.  Prior to running any algorithm in LEAP, one must first set the CT geometry parameters and the CT volume parameters.
+LEAP is a library of CT algorithms that operates on data arrays provided by the user.  These data arrays are the projection data and the volume data (see Section \ref{sec:dataArrays}).  The only permanent memory that LEAP manages itself is a class with member variables that parameterize the CT geometry and CT volume.  Some temporary memory is allocated during the computation of an algorithm but it is destroyed before the completion of the algorithm.  Prior to running any algorithm in LEAP, one must first set the CT geometry parameters and the CT volume parameters.
 
 \subsection{Setting the CT Geometry Parameters}
 
 Setting the CT geometry parameters is done by running one of the functions below
 \begin{itemize}
 \item[] set\_parallelBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
-\item[] set\_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
-\item[] set\_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
+\item[] set\_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0)
+\item[] set\_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0)
 \item[] set\_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVecs, colVecs)
 \end{itemize}
-A description of these parameters can be found in Tables \ref{tab:stdGeometryParameters} and \ref{tab:modularParameters}.
+A description of these parameters can be found in Tables \ref{tab:stdGeometryParameters} and \ref{tab:modularParameters}.  The helical pitch is in units of mm/radian.  One can also set the normalized helical pitch (unitless) with the following function
+\begin{itemize}
+    \item[] set\_normalizedHelicalPitch(normalized helical pitch).
+\end{itemize}
+The helical pitch, $\Delta$, and the normalized helical pitch $\widehat{\Delta}$ are related by
+\begin{eqnarray*}
+\widehat{\Delta} &:=& 2\pi \frac{\Delta}{\text{numRows} * \text{pixelHeight} * \frac{\text{sod}}{\text{sdd}}}.
+\end{eqnarray*}
 
 \begin{table}[h!]
-\caption{Parallel-, fan-, and cone-beam parameters.  Note that sod and sdd only apply to fan- and cone-beam geometries and the centerRow parameter has no effect on parallel- and fan-beam geometries.  Note that the phis parameter values \textit{must} be monotomic.  Internally, LEAP maintains a copy of the phis array, so if you want to make changes to it, you must either re-specify all parameters or use the \texit{set\_angles} function.  More information can be found in Section \ref{sec:CTGeometries}.} \label{tab:stdGeometryParameters}
+\caption{Parallel-, fan-, and cone-beam parameters.  Note that sod, sdd, and tau only apply to fan- and cone-beam geometries and helicalPitch only applies to cone-beam. The centerRow parameter has no effect on parallel- and fan-beam geometries.  Note that the phis parameter values \textit{must} be monotomic.  Internally, LEAP maintains a copy of the phis array, so if you want to make changes to it, you must either re-specify all parameters or use the \textit{set\_angles} function.  More information can be found in Section \ref{sec:CTGeometries}.} \label{tab:stdGeometryParameters}
 \begin{tabular}{l|l|p{9cm}}
 Parameter Name & Type & Description \\
 \hline
@@ -136,7 +149,9 @@ centerRow & float32 & detector pixel row index for the ray that passes from the 
 centerCol & float32 & detector pixel column index for the ray that passes from the source, through the origin, and hits the detector \\
 phis & float32 array & array of the projection angles (degrees) \\
 sod & float32 & source to object distance (mm) \\
-sdd & float32 & source to detector distance (mm)
+sdd & float32 & source to detector distance (mm) \\
+tau & float32 & horizontal translation of the rotation stage (mm) \\
+helicalPitch & float32 & helical pitch (mm/radian)
 \end{tabular}
 \end{table}
 

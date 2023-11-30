@@ -213,6 +213,14 @@ public:
 	float z_source(int i);
 
 	/**
+	 * \fn          set_tau
+	 * \brief       sets tau
+	 * \param[in]   tau the value for tau (mm)
+	 * \return      true is successful, false otherwise
+	 */
+	bool set_tau(float tau_in);
+
+	/**
 	 * \fn          normalizedHelicalPitch
 	 * \brief       calculates the normalized helical pitch
 	 * \return      returns the normalized helical pitch
@@ -222,9 +230,18 @@ public:
 	/**
 	 * \fn          set_helicalPitch
 	 * \brief       sets the helicalPitch and z_source_offset parameters
+	 * \param[in]   h the helicalPitch (mm/radian)
 	 * \return      true is successful, false otherwise
 	 */
 	bool set_helicalPitch(float h);
+
+	/**
+	 * \fn          set_normalizedHelicalPitch
+	 * \brief       sets the helicalPitch and z_source_offset parameters
+	 * \param[in]   h_normalized, the normalized helical pitch
+	 * \return      true is successful, false otherwise
+	 */
+	bool set_normalizedHelicalPitch(float h_normalized);
 
 	bool normalizeConeAndFanCoordinateFunctions;
 

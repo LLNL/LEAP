@@ -183,9 +183,11 @@ public:
 	 * \param[in]   phis pointer to an array for specifying the angles of each projection, measured in degrees
 	 * \param[in]   sod source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
 	 * \param[in]   sdd source to detector distance, measured in mm
+	 * \param[in]   tau the center of rotation horizontal translation (mm)
+	 * \param[in]   helicalPitch the helical pitch (mm/radians)
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd);
+	bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
 
 	/**
 	 * \fn          set_fanBeam
@@ -200,9 +202,10 @@ public:
 	 * \param[in]   phis pointer to an array for specifying the angles of each projection, measured in degrees
 	 * \param[in]   sod source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
 	 * \param[in]   sdd source to detector distance, measured in mm
+	 * \param[in]   tau the center of rotation horizontal translation (mm)
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd);
+	bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0);
 
 	/**
 	 * \fn          set_parallelBeam
@@ -374,11 +377,41 @@ public:
 	float get_pixelHeight();
 
 	/**
+	 * \fn          set_tau
+	 * \brief       sets tau
+	 * \param[in]   tau the value for tau (mm)
+	 * \return      true is successful, false otherwise
+	 */
+	bool set_tau(float tau_in);
+
+	/**
 	 * \fn          set_helicalPitch
-	 * \brief       sets the helicalPitch parameter
+	 * \brief       sets the helicalPitch parameter (mm/radian)
 	 * \return      true is successful, false otherwise
 	 */
 	bool set_helicalPitch(float);
+
+	/**
+	 * \fn          set_normalizedHelicalPitch
+	 * \brief       sets the helicalPitch and z_source_offset parameters
+	 * \param[in]   h_normalized, the normalized helical pitch
+	 * \return      true is successful, false otherwise
+	 */
+	bool set_normalizedHelicalPitch(float h_normalized);
+
+	/**
+	 * \fn          get_helicalPitch
+	 * \brief       gets the helicalPitch
+	 * \return      returns the helicalPitch parameter
+	 */
+	float get_helicalPitch();
+
+	/**
+	 * \fn          get_z_source_offset
+	 * \brief       gets the z_source_offset
+	 * \return      returns the z_source_offset parameter
+	 */
+	float get_z_source_offset();
 
 	bool get_sourcePositions(float*);
 	bool get_moduleCenters(float*);
