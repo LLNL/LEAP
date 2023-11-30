@@ -938,6 +938,10 @@ class tomographicModels:
     def get_offsetZ(self):
         self.libprojectors.get_offsetZ.restype = ctypes.c_float
         return self.libprojectors.get_offsetZ()
+        
+    def get_z0(self):
+        self.libprojectors.get_z0.restype = ctypes.c_float
+        return self.libprojectors.get_z0()
 
     
     ###################################################################################################################
@@ -945,10 +949,18 @@ class tomographicModels:
     # UTILITY FUNCTIONS
     ###################################################################################################################
     ###################################################################################################################
-    def voxelSamples(self):
-        x = (np.array(range(self.get_numX())) - 0.5*(self.get_numX()-1))*self.get_voxelWidth()
-        y = (np.array(range(self.get_numY())) - 0.5*(self.get_numY()-1))*self.get_voxelWidth()
-        z = (np.array(range(self.get_numZ())) - 0.5*(self.get_numZ()-1))*self.get_voxelHeight()
+    def voxelSamples(self,centerCoords=True):
+        if centerCoords:
+            x_0 = -0.5*(self.get_numX()-1)*self.get_voxelWidth()
+            y_0 = -0.5*(self.get_numY()-1)*self.get_voxelWidth()
+            z_0 = -0.5*(self.get_numZ()-1)*self.get_voxelHeight()
+        else:
+            x_0 = self.get_offsetX() - 0.5*(self.get_numX()-1)*self.get_voxelWidth()
+            y_0 = self.get_offsetY() - 0.5*(self.get_numY()-1)*self.get_voxelWidth()
+            z_0 = self.get_z0()
+        x = np.array(range(self.get_numX()))*self.get_voxelWidth() + x_0
+        y = np.array(range(self.get_numY()))*self.get_voxelWidth() + y_0
+        z = np.array(range(self.get_numZ()))*self.get_voxelHeight() + z_0
         if self.get_volumeDimensionOrder() == 0:
             x,y,z = np.meshgrid(x,y,z, indexing='ij')
         else:
@@ -1173,8 +1185,8 @@ class tomographicModels:
             x_max = 0.5*float(N_x-1)*T + x_c
             y_min = -0.5*float(N_y-1)*T + y_c
             y_max = 0.5*float(N_y-1)*T + y_c
-            z_min = -0.5*float(N_z-1)*T_z + z_c
-            z_max = 0.5*float(N_z-1)*T_z + z_c
+            z_min = self.get_z0()
+            z_max = float(N_z-1)*T_z + z_min
 
             topLeft_front = np.array([x_min, y_max, z_max])
             topRight_front = np.array([x_max, y_max, z_max])

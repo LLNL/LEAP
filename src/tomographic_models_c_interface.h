@@ -105,6 +105,7 @@ extern "C" PROJECTOR_API float get_voxelHeight();
 extern "C" PROJECTOR_API float get_offsetX();
 extern "C" PROJECTOR_API float get_offsetY();
 extern "C" PROJECTOR_API float get_offsetZ();
+extern "C" PROJECTOR_API float get_z0();
 
 // Filters for 3D data
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool cpu_to_gpu);

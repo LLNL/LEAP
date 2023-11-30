@@ -375,6 +375,11 @@ float get_offsetZ()
 	return tomo.params.offsetZ;
 }
 
+float get_z0()
+{
+	return tomo.params.z_0();
+}
+
 bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)
 {
 	return tomo.BlurFilter(f, N_1, N_2, N_3, FWHM, cpu_to_gpu);
