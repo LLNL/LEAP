@@ -5,7 +5,7 @@
 #
 # LivermorE AI Projector for tomographic reconstruction (LEAP)
 # demo: test example with projector class
-# this example shows how to use forward projection in LEAP
+# this example shows how to use forward projection and filtered back projection in LEAP
 ################################################################################
 
 # param_fn=/p/vast1/mlct/CT_COE_Imatron/param_parallel512.cfg
@@ -95,59 +95,38 @@ dimz, dimy, dimx = proj.get_volume_dim()
 views, rows, cols = proj.get_projection_dim()
 params, _ = load_param(param_fn)
 
-# created multiple LEAP projectors for another test
-# projs = []
-# aint = params['proj_arange']/params['proj_nangles']
-# for n in range(int(params['proj_nangles'])):
-#     proj2 = Projector(use_gpu=use_cuda, gpu_device=device, batch_size=1)
-#     pdic = proj2.parse_param_dic(param_fn)
-#     pdic['proj_phis'] = str(n*aint)
-#     pdic['proj_nangles'] = 1
-#     pdic['proj_arange'] = aint
-#     proj2.load_param(pdic, param_type=1)
-#     proj2.set_projector(1)
-#     projs.append(proj2)
-# projs = nn.ModuleList(projs)
-
 # load image (f)
 if len(img_fn) > 0:
     f = np.load(img_fn)
-    f = f.reshape((1, 1, f.shape[0], f.shape[1]))
+    f = f.reshape((1, 1, f.shape[0], f.shape[1])) # batch, z, y, x
 else:
     f = simulate_img(dimz, dimx)
 
 
-# use PyTorch Projector class
-if not use_API:
+if not use_API: # use PyTorch Projector class
     print("### use leapct Projector class ###")
+
     # set image tensor
     f_th = torch.from_numpy(f).to(device)
     imageio.imsave(img_fn[:-4] + ".png", f[0,0,:,:]/np.max(f)*255)
 
     # forward project
     g_th = proj(f_th)
-    g = g_th.cpu().detach().numpy()[0,:,0,:]
-
-    # forward project using multiple projector instances
-    # g2_list = []
-    # for proj2 in projs:
-    #     g2_th = proj2(f_th)
-    #     g2_list.append(g2_th.cpu().detach().numpy()[0,:,0,:])
-    # g2 = np.concatenate(g2_list, axis=0)
-
-    # print(g.shape, g2.shape)
-    # g_diff = np.sum(np.abs(g - g2))
-    # print("g_diff: ", g_diff)
+    g = g_th.cpu().detach().numpy()[0,:,0,:]  # batch, angles, detector row, detector col -> which gives "sinogram"
 
     # save projection data
     np.save(out_fn, g)
     imageio.imsave(out_fn[:-4] + ".png", g/np.max(g)*255)
 
-    # np.save(out_fn, g2)
-    # imageio.imsave(out_fn[:-4] + "2.png", g2/np.max(g2)*255)
+    # run filtered back projection
+    f_recon = proj.fbp(g_th)
+    f_recon_slice = f_recon.cpu().detach().numpy()[0,0,:,:]
 
-# use LEAP API functions
-else:
+    # save FBP reconstructed image
+    np.save(out_fn[:-4] + "_FBP.npy", f_recon_slice)
+    imageio.imsave(out_fn[:-4] + "_FBP.png", f_recon_slice/np.max(f_recon_slice)*255)
+
+else: # use LEAP API functions
     print("### use leapct API ###")
     M = int(params["img_dimz"])
     N = int(params["img_dimx"])
@@ -160,9 +139,7 @@ else:
     sdd = params["proj_sdd"]
     print(M,N,N_phis, "aaa")
 
-    # the original LEAP API uses xyz order
-    f = np.ascontiguousarray(np.transpose(f[0,:,:,:], (2, 1, 0)))
-    f = torch.from_numpy(f)
+    f = torch.from_numpy(f[0,:,:,:])
 
     # set up CT parameters
     whichProjector = 1
@@ -197,12 +174,20 @@ else:
     else:
         leapct.project_cpu(-1, g, f)
 
-    # save projection data to file
+    # save projection data to npy file and image file
     g_np = g.cpu().detach().numpy()
-    f_np = f.cpu().detach().numpy()
-    print(np.max(g_np), np.max(f_np))
-    f_np = np.ascontiguousarray(np.transpose(f_np[:,:,0]))
     np.save(out_fn, g_np)
-
-    # save image and sinogram slices as image file
     imageio.imsave(out_fn[:-4] + ".png", g_np[:,0,:]/np.max(g_np))
+
+    # run filtered back projection
+    if use_cuda:
+        leapct.fbp_gpu(-1, g, f)
+    else:
+        leapct.fbp_cpu(-1, g, f)
+    
+    # save FBP reconstructed image
+    f_np = f.cpu().detach().numpy()
+    f_np = f_np[0,:,:]
+    np.save(out_fn[:-4] + "_FBP.npy", f_np)
+    imageio.imsave(out_fn[:-4] + "_FBP.png", f_np[:,0,:]/np.max(f_np))
+

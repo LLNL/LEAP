@@ -16,41 +16,27 @@ import os
 import pybind11
 import torch
 
-'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
-'parameters.cpp', 'projectors.cpp', 
-'filtered_backprojection.cpp', 'projectors_SF_cpu.cpp', 
-'projectors_Joseph_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
-'projectors_Siddon_cpu.cpp', 'sensitivity_cpu.cpp', 
-'ramp_filter_cpu.cpp', 'cpu_utils.cpp'
 
-set(SRC_CU
-'projectors_SF.cu', 'projectors_extendedSF.cu', 
-'projectors_Joseph.cu', 'projectors_symmetric.cu', 
-'projectors_attenuated.cu', 'projectors_Siddon.cu', 
-'sensitivity.cu', 'ramp_filter.cu', 
-'noise_filters.cu', 'total_variation.cu', 
-'ray_weighting.cu', 'cuda_utils.cu']
-)
+cpp_files=['main_projector.cpp', 'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
+           'parameters.cpp', 'projectors.cpp', 'filtered_backprojection.cpp', 
+           'projectors_SF_cpu.cpp', 'projectors_Joseph_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
+           'projectors_Siddon_cpu.cpp', 'sensitivity_cpu.cpp', 'ramp_filter_cpu.cpp', 'cpu_utils.cpp']
+
+cuda_files=['projectors_SF.cu', 'projectors_extendedSF.cu', 
+            'projectors_Joseph.cu', 'projectors_symmetric.cu', 
+            'projectors_attenuated.cu', 'projectors_Siddon.cu', 
+            'sensitivity.cu', 'ramp_filter.cu', 
+            'noise_filters.cu', 'total_variation.cu', 
+            'ray_weighting.cu', 'cuda_utils.cu']
 
 
 cuda = torch.cuda.is_available()
 if cuda:
-
-    source_files=['main_projector.cpp', 
-                  'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
-                  'parameters.cpp', 'projectors.cpp', 
-                  'filtered_backprojection.cpp', 'projectors_SF_cpu.cpp', 
-                  'projectors_Joseph_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
-                  'projectors_Siddon_cpu.cpp', 'sensitivity_cpu.cpp', 
-                  'ramp_filter_cpu.cpp', 'cpu_utils.cpp', 
-                  'projectors_SF.cu', 'projectors_extendedSF.cu', 
-                  'projectors_Joseph.cu', 'projectors_symmetric.cu', 
-                  'projectors_attenuated.cu', 'projectors_Siddon.cu', 
-                  'sensitivity.cu', 'ramp_filter.cu', 
-                  'noise_filters.cu', 'total_variation.cu', 
-                  'ray_weighting.cu', 'cuda_utils.cu']
-    for i in range(len(source_files)):
-        source_files[i] = os.path.join('src', source_files[i])
+    source_files = []
+    for cpp_file in cpp_files:
+        source_files.append(os.path.join('src', cpp_file))
+    for cuda_file in cuda_files:
+        source_files.append(os.path.join('src', cuda_file))
 
     ext_mod = CUDAExtension(
         name='leapct',
@@ -59,16 +45,9 @@ if cuda:
                             'nvcc': ['-g', '-D__USE_GPU']}
     )
 else:
-
-    source_files=['main_projector.cpp', 
-                  'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
-                  'parameters.cpp', 'projectors.cpp', 
-                  'filtered_backprojection.cpp', 'projectors_SF_cpu.cpp', 
-                  'projectors_Joseph_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
-                  'projectors_Siddon_cpu.cpp', 'sensitivity_cpu.cpp', 
-                  'ramp_filter_cpu.cpp', 'cpu_utils.cpp']
-    for i in range(len(source_files)):
-        source_files[i] = os.path.join('src',source_files[i])
+    source_files = []
+    for cpp_file in cpp_files:
+        source_files.append(os.path.join('src', cpp_file))
 
     ext_mod = CppExtension(
         name='leapct',
@@ -80,7 +59,7 @@ else:
 
 setup(
     name='leapct',
-    version='0.91', 
+    version='0.99', 
     author='Hyojin Kim, Kyle Champley', 
     author_email='hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 
