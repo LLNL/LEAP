@@ -314,6 +314,14 @@ public:
     float T_phi();
 
 	/**
+	 * \fn          phi_inv
+	 * \brief       returns the real-valued view index for the given view angle
+	 * \param[in]   angle the angle (in radians) of a projection/view
+	 * \return      returns the real-valued view index for the given view angle
+	 */
+	float phi_inv(float angle);
+
+	/**
 	 * \fn          rFOV
 	 * \brief       returns the radius of the field of view of the CT system
 	 * \return      returns the radius of the field of view of the CT system
@@ -409,10 +417,40 @@ public:
 	 * \param[in]   firstRow the index of the first detector row
 	 * \param[in]   lastRow the index of the last detector row
 	 * \param[in]   slicesNeeded 2-element array where the first and last z-slice indices are saved
-	 * \param[in]   doClip
+	 * \param[in]   doClip clamps the slicesNeeded values to within 0 and numZ-1 if true
 	 * \return      returns true if successful, false otherwise
 	 */
 	bool sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded, bool doClip = true);
+
+	/**
+	 * \fn          sliceRangeNeededForProjectionRange
+	 * \brief       calculates the necessary z-slices needed to project a selection of projections
+	 * \param[in]   firstView the index of the first projection
+	 * \param[in]   lastView the index of the last projection
+	 * \param[in]   slicesNeeded 2-element array where the first and last z-slice indices are saved
+	 * \param[in]   doClip clamps the slicesNeeded values to within 0 and numZ-1 if true
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool sliceRangeNeededForProjectionRange(int firstView, int lastView, int* slicesNeeded, bool doClip = true);
+
+	/**
+	 * \fn          viewRangeNeededForBackprojection
+	 * \brief       calculates the necessary projection range needed to backproject a selection of volume z-slices
+	 * \param[in]   firstSlice the index of the first z-slice
+	 * \param[in]   lastSlice the index of the last z-slice
+	 * \param[in]   viewsNeeded 2-element array where the first and last view indices are saved
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool viewRangeNeededForBackprojection(int firstSlice, int lastSlice, int* viewsNeeded);
+
+	/**
+	 * \fn          removeProjections
+	 * \brief       modifies the parameters (phis, sourcePositions, etc) when only a segment of the projections are kept
+	 * \param[in]   firstProj the index of the first projection to keep
+	 * \param[in]   lastProj the index of the last projection to keep
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool removeProjections(int firstProj, int lastProj);
 
 	// Enums
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };

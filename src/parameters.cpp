@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
+#include <iterator>
 #include <omp.h>
 #include "parameters.h"
 #include "cuda_utils.h"
@@ -168,6 +169,59 @@ float parameters::T_phi()
         return 2.0*PI;
 	else
 		return (phis[numAngles-1] - phis[0]) / float(numAngles-1);
+}
+
+float parameters::phi_inv(float angle)
+{
+	if (phis == NULL)
+		return -1.0;
+	else if (numAngles == 1)
+		return 0.0;
+	else if (angle <= min(phis[numAngles - 1], phis[0]))
+	{
+		if (phis[numAngles - 1] < phis[0])
+			return float(numAngles - 1);
+		else
+			return 0;
+	}
+	else if (angle >= max(phis[numAngles - 1], phis[0]))
+	{
+		if (phis[numAngles - 1] > phis[0])
+			return float(numAngles - 1);
+		else
+			return 0;
+	}
+	else
+	{
+		if (T_phi() > 0.0)
+		{
+			//phis[0] < angle
+			for (int i = 1; i < numAngles; i++)
+			{
+				if (angle <= phis[i])
+				{
+					// phis[i-1] < angle <= phis[i]
+					float d = (angle - phis[i - 1]) / (phis[i] - phis[i - 1]);
+					return float(i - 1) + d;
+				}
+			}
+			return float(numAngles);
+		}
+		else
+		{
+			//phis[numAngles-1] < angle
+			for (int i = numAngles-2; i >= 0; i--)
+			{
+				if (angle <= phis[i])
+				{
+					// phis[i+1] < angle <= phis[i]
+					float d = (angle - phis[i + 1]) / (phis[i] - phis[i + 1]);
+					return float(i+1) - d;
+				}
+			}
+			return 0.0;
+		}
+	}
 }
 
 float parameters::rFOV()
@@ -862,6 +916,100 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice ,
 	return true;
 }
 
+bool parameters::sliceRangeNeededForProjectionRange(int firstView, int lastView, int* slicesNeeded, bool doClip)
+{
+	if (geometry == CONE && helicalPitch != 0.0)
+	{
+		float v_lo = (v_0() - 0.5 * pixelHeight) / sdd;
+		float v_hi = (float(numRows - 1) * pixelHeight + v_0() + 0.5 * pixelHeight) / sdd;
+
+		// v = z / (R - <x, theta>)
+		// v = z / (R - rFOV())
+		float T_z = voxelHeight;
+		float v_denom_min = sod - rFOV() - voxelWidth;
+		float v_denom_max = sod + rFOV() + voxelWidth;
+		//float z_lo = min(v_lo * v_denom_min, v_lo * v_denom_max) - 0.5 * voxelHeight;
+		//float z_hi = max(v_hi * v_denom_min, v_hi * v_denom_max) + 0.5 * voxelHeight;
+
+		float z_source_firstView = phis[firstView] * helicalPitch + z_source_offset;
+		float z_source_lastView = phis[lastView] * helicalPitch + z_source_offset;
+
+		vector<float> slices;
+		slices.push_back(z_source_firstView + v_denom_min * v_lo);
+		slices.push_back(z_source_firstView + v_denom_min * v_hi);
+		slices.push_back(z_source_firstView + v_denom_max * v_lo);
+		slices.push_back(z_source_firstView + v_denom_max * v_hi);
+		slices.push_back(z_source_lastView + v_denom_min * v_lo);
+		slices.push_back(z_source_lastView + v_denom_min * v_hi);
+		slices.push_back(z_source_lastView + v_denom_max * v_lo);
+		slices.push_back(z_source_lastView + v_denom_max * v_hi);
+
+		float z_lo = *std::min_element(std::begin(slices), std::end(slices)) - 0.5 * voxelHeight;
+		float z_hi = *std::max_element(std::begin(slices), std::end(slices)) + 0.5 * voxelHeight;
+
+		slicesNeeded[0] = int(floor((z_lo - z_0()) / T_z));
+		slicesNeeded[1] = int(ceil((z_hi - z_0()) / T_z));
+
+		if (doClip)
+		{
+			slicesNeeded[0] = max(0, slicesNeeded[0]);
+			slicesNeeded[1] = min(numZ - 1, slicesNeeded[1]);
+		}
+
+		return true;
+	}
+	else
+		return sliceRangeNeededForProjection(0, numRows - 1, slicesNeeded, doClip);
+}
+
+bool parameters::viewRangeNeededForBackprojection(int firstSlice, int lastSlice, int* viewsNeeded)
+{
+	viewsNeeded[0] = 0;
+	viewsNeeded[1] = numAngles - 1;
+	if (geometry == CONE && helicalPitch != 0.0)
+	{
+		float v_lo = (v_0() - 0.5 * pixelHeight) / sdd;
+		float v_hi = (float(numRows-1) * pixelHeight + v_0() + 0.5 * pixelHeight) / sdd;
+
+		// v = z / (R - <x, theta>)
+		// v = z / (R - rFOV())
+		float T_z = voxelHeight;
+		float v_denom_min = sod - rFOV() - voxelWidth;
+		float v_denom_max = sod + rFOV() + voxelWidth;
+		//float z_lo = min(v_lo * v_denom_min, v_lo * v_denom_max) - 0.5 * voxelHeight;
+		//float z_hi = max(v_hi * v_denom_min, v_hi * v_denom_max) + 0.5 * voxelHeight;
+		float z_lo = firstSlice * voxelHeight + z_0() - 0.5 * voxelHeight;
+		float z_hi = lastSlice * voxelHeight + z_0() + 0.5 * voxelHeight;
+
+		vector<float> sourcePositions;
+		sourcePositions.push_back(z_lo - v_denom_min * v_lo);
+		sourcePositions.push_back(z_lo - v_denom_max * v_lo);
+		sourcePositions.push_back(z_lo - v_denom_min * v_hi);
+		sourcePositions.push_back(z_lo - v_denom_max * v_hi);
+		sourcePositions.push_back(z_hi - v_denom_min * v_lo);
+		sourcePositions.push_back(z_hi - v_denom_max * v_lo);
+		sourcePositions.push_back(z_hi - v_denom_min * v_hi);
+		sourcePositions.push_back(z_hi - v_denom_max * v_hi);
+		float sourcePositionFloor = *std::min_element(std::begin(sourcePositions), std::end(sourcePositions));
+		float sourcePositionCeil = *std::max_element(std::begin(sourcePositions), std::end(sourcePositions));
+
+		float phi_ind_A = phi_inv((sourcePositionFloor - z_source_offset) / helicalPitch);
+		float phi_ind_B = phi_inv((sourcePositionCeil - z_source_offset) / helicalPitch);
+		
+		if (phi_ind_A <= phi_ind_B)
+		{
+			viewsNeeded[0] = int(floor(phi_ind_A));
+			viewsNeeded[1] = int(ceil(phi_ind_B));
+		}
+		else
+		{
+			viewsNeeded[0] = int(floor(phi_ind_B));
+			viewsNeeded[1] = int(ceil(phi_ind_A));
+		}
+	}
+	return true;
+}
+
 bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* slicesNeeded, bool doClip)
 {
 	if (slicesNeeded == NULL || firstRow > lastRow)
@@ -916,4 +1064,58 @@ bool parameters::hasSufficientGPUmemory()
 		return false;
 	else
 		return true;
+}
+
+bool parameters::removeProjections(int firstProj, int lastProj)
+{
+	if (firstProj < 0 || lastProj >= numAngles || firstProj > lastProj)
+	{
+		printf("Error: invalid range of projections to remove/keep");
+		return false;
+	}
+
+	int numAngles_new = lastProj - firstProj + 1;
+	float* phis_new = NULL;
+	if (phis != NULL)
+	{
+		float* phis_cur = new float[numAngles];
+		get_angles(phis_cur);
+		phis_new = new float[numAngles_new];
+		for (int i = firstProj; i <= lastProj; i++)
+			phis_new[i - firstProj] = phis_cur[i];
+		delete[] phis_cur;
+	}
+	//bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
+	if (geometry == MODULAR)
+	{
+		if (sourcePositions == NULL || moduleCenters == NULL || rowVectors == NULL || colVectors == NULL)
+			return false;
+		float* sourcePositions_new = new float[3 * numAngles_new];
+		float* moduleCenters_new = new float[3 * numAngles_new];
+		float* rowVectors_new = new float[3 * numAngles_new];
+		float* colVectors_new = new float[3 * numAngles_new];
+
+		for (int i = firstProj; i <= lastProj; i++)
+		{
+			int ii = i - firstProj;
+			for (int j = 0; j < 3; j++)
+			{
+				sourcePositions_new[3 * ii + j] = sourcePositions[3 * i + j];
+				moduleCenters_new[3 * ii + j] = moduleCenters[3 * i + j];
+				rowVectors_new[3 * ii + j] = rowVectors[3 * i + j];
+				colVectors_new[3 * ii + j] = colVectors[3 * i + j];
+			}
+		}
+		set_sourcesAndModules(sourcePositions_new, moduleCenters_new, rowVectors_new, colVectors_new, numAngles_new);
+		delete[] sourcePositions_new;
+		delete[] moduleCenters_new;
+		delete[] rowVectors_new;
+		delete[] colVectors_new;
+	}
+	if (phis_new != NULL)
+	{
+		set_angles(phis_new, numAngles_new);
+	}
+	numAngles = numAngles_new;
+	return true;
 }

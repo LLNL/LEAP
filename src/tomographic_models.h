@@ -595,6 +595,15 @@ private:
 	bool project_multiGPU(float* g, float* f);
 
 	/**
+	 * \fn          project_multiGPU_splitViews
+	 * \brief       performs a forward projection on multiple GPUs, by splitting up the projections
+	 * \param[in]   g pointer to the projection data (output)
+	 * \param[in]   f pointer to the volume data (input)
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool project_multiGPU_splitViews(float* g, float* f);
+
+	/**
 	 * \fn          backproject_multiGPU
 	 * \brief       performs a backprojection on multiple GPUs
 	 * \param[in]   g pointer to the projection data (input)
@@ -602,6 +611,15 @@ private:
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
 	bool backproject_multiGPU(float* g, float* f);
+
+	/**
+	 * \fn          backproject_FBP_multiGPU_splitViews
+	 * \brief       performs a backprojection or FBP on multiple GPUs, by splitting up the projections
+	 * \param[in]   g pointer to the projection data (input)
+	 * \param[in]   f pointer to the volume data (output)
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool backproject_FBP_multiGPU_splitViews(float* g, float* f, bool doFBP);
 
 	/**
 	 * \fn          FBP_multiGPU

@@ -29,15 +29,17 @@ in poor computational performance.
 # Specify the number of detector rows and columns which is used below
 # Scale the number of angles and the detector pixel size with N
 N = 300
-numAngles = int(720*N/1024)
+numTurns = 3
+numAngles = int(720*N/1024)*numTurns
 pixelSize = 0.2*2048/N
 M = N
 
 # Set the scanner geometry
 #leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_coneBeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_normalizedHelicalPitch(0.2)
+leapct.set_coneBeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
+#leapct.set_normalizedHelicalPitch(0.2)
+leapct.set_normalizedHelicalPitch(1.0)
 
 # Set the volume parameters
 leapct.set_defaultVolume()
