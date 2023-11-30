@@ -660,6 +660,38 @@ private:
 	 */
 	bool combineRows(float* g, float* g_chunk, int rowStart, int rowEnd);
 
+	/**
+	 * \fn          project_memoryRequired
+	 * \brief       calculates the memory required to run a forward projection using a subset of detector rows
+	 * \param[in]   numRowsPerChunk the number of rows to calculate the projection
+	 * \return      the number of GB of memory required
+	 */
+	float project_memoryRequired(int numRowsPerChunk);
+
+	/**
+	 * \fn          project_memoryRequired_splitViews
+	 * \brief       calculates the memory required to run a forward projection using a subset of views
+	 * \param[in]   numViewsPerChunk the number of views to calculate the projection
+	 * \return      the number of GB of memory required
+	 */
+	float project_memoryRequired_splitViews(int numViewsPerChunk);
+
+	/**
+	 * \fn          backproject_memoryRequired
+	 * \brief       calculates the memory required to run a backprojection using a subset of z-slices
+	 * \param[in]   numSlicesPerChunk the number of z-slice to calculate the backprojection
+	 * \return      the number of GB of memory required
+	 */
+	float backproject_memoryRequired(int numSlicesPerChunk);
+
+	/**
+	 * \fn          backproject_memoryRequired
+	 * \brief       calculates the memory required to run a backprojection using a subset of z-slices and splitting the projections across views
+	 * \param[in]   numSlicesPerChunk the number of z-slice to calculate the backprojection
+	 * \return      the number of GB of memory required
+	 */
+	float backproject_memoryRequired_splitViews(int numSlicesPerChunk);
+
 	filteredBackprojection FBP;
 	projectors proj;
 };

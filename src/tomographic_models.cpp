@@ -204,9 +204,9 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 	if (params.hasSufficientGPUmemory() == false)
 	{
 		float memAvailable = getAvailableGPUmemory(params.whichGPU);
-		float memNeeded = params.requiredGPUmemory();
+		float memNeeded = project_memoryRequired(numRowsPerChunk);
 
-		while (memAvailable < memNeeded * float(numRowsPerChunk) / float(params.numRows))
+		while (memAvailable < memNeeded)
 			numRowsPerChunk = numRowsPerChunk / 2;
 		if (numRowsPerChunk < 1)
 			return false;
@@ -268,6 +268,49 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 	}
 	return true;
+}
+
+float tomographicModels::project_memoryRequired(int numRowsPerChunk)
+{
+	float maxMemory = 0.0;
+
+	int numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstRow = ichunk * numRowsPerChunk;
+		int lastRow = std::min(firstRow + numRowsPerChunk - 1, params.numRows - 1);
+		int numRows = lastRow - firstRow + 1;
+
+		int sliceRange[2];
+		params.sliceRangeNeededForProjection(firstRow, lastRow, sliceRange);
+		int numSlices = sliceRange[1] - sliceRange[0] + 1;
+
+		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize();
+		maxMemory = std::max(maxMemory, memoryNeeded);
+	}
+
+	return maxMemory;
+}
+
+float tomographicModels::project_memoryRequired_splitViews(int numViewsPerChunk)
+{
+	float maxMemory = 0.0;
+
+	int numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstView = ichunk * numViewsPerChunk;
+		int lastView = std::min(firstView + numViewsPerChunk - 1, params.numAngles - 1);
+		int numViews = lastView - firstView + 1;
+
+		int sliceRange[2];
+		params.sliceRangeNeededForProjectionRange(firstView, lastView, sliceRange);
+		int numSlices = sliceRange[1] - sliceRange[0] + 1;
+
+		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
+		maxMemory = std::max(maxMemory, memoryNeeded);
+	}
+	return maxMemory;
 }
 
 bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
@@ -355,7 +398,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		return false;
 	if ((params.geometry == parameters::CONE && params.helicalPitch != 0.0) || params.geometry == parameters::MODULAR)
 		return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
-	
+
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numSlicesPerChunk = std::min(64, params.numZ);
 	int numSlicesPerChunk = std::max(1, int(ceil(float(params.numZ) / 2.0)));
@@ -363,9 +406,9 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	if (params.hasSufficientGPUmemory() == false)
 	{
 		float memAvailable = getAvailableGPUmemory(params.whichGPU);
-		float memNeeded = params.requiredGPUmemory();
+		float memNeeded = backproject_memoryRequired(numSlicesPerChunk);
 
-		while (memAvailable < memNeeded * float(numSlicesPerChunk) / float(params.numZ))
+		while (memAvailable < memNeeded)
 			numSlicesPerChunk = numSlicesPerChunk / 2;
 		if (numSlicesPerChunk < 1)
 			return false;
@@ -443,6 +486,48 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	return true;
 }
 
+float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk)
+{
+	float maxMemory = 0.0;
+
+	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstSlice = ichunk * numSlicesPerChunk;
+		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ - 1);
+		int numSlices = lastSlice - firstSlice + 1;
+
+		int rowRange[2];
+		params.rowRangeNeededForBackprojection(firstSlice, lastSlice, rowRange);
+		int numRows = rowRange[1] - rowRange[0] + 1;
+
+		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize();
+		maxMemory = std::max(maxMemory, memoryNeeded);
+	}
+	return maxMemory;
+}
+
+float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerChunk)
+{
+	float maxMemory = 0.0;
+
+	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstSlice = ichunk * numSlicesPerChunk;
+		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ - 1);
+		int numSlices = lastSlice - firstSlice + 1;
+
+		int viewRange[2];
+		params.viewRangeNeededForBackprojection(firstSlice, lastSlice, viewRange);
+		int numViews = viewRange[1] - viewRange[0] + 1;
+
+		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
+		maxMemory = std::max(maxMemory, memoryNeeded);
+	}
+	return maxMemory;
+}
+
 bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, bool doFBP)
 {
 	//return false;
@@ -456,9 +541,11 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 	if (params.hasSufficientGPUmemory() == false)
 	{
 		float memAvailable = getAvailableGPUmemory(params.whichGPU);
-		float memNeeded = params.requiredGPUmemory();
+		float memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk);
 
-		while (memAvailable < memNeeded * float(numSlicesPerChunk) / float(params.numZ))
+		backproject_memoryRequired_splitViews(numSlicesPerChunk);
+
+		while (memAvailable < memNeeded)
 			numSlicesPerChunk = numSlicesPerChunk / 2;
 		if (numSlicesPerChunk < 1)
 			return false;
@@ -1131,30 +1218,96 @@ float tomographicModels::get_voxelHeight()
 
 bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)
 {
-	return blurFilter(f, N_1, N_2, N_3, FWHM, 3, cpu_to_gpu, params.whichGPU);
+	float numVol = 1.0;
+	if (cpu_to_gpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	{
+		printf("Error: Insufficient GPU memory for this operation!\n");
+		return false;
+	}
+	else
+		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, cpu_to_gpu, params.whichGPU);
 }
 
 bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu)
 {
-	return medianFilter(f, N_1, N_2, N_3, threshold, cpu_to_gpu, params.whichGPU);
+	float numVol = 1.0;
+	if (cpu_to_gpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	{
+		printf("Error: Insufficient GPU memory for this operation!\n");
+		return false;
+	}
+	else
+		return medianFilter(f, N_1, N_2, N_3, threshold, cpu_to_gpu, params.whichGPU);
 }
 
 float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
-	return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
+	float numVol = 1.0;
+	if (cpu_to_gpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	{
+		printf("Error: Insufficient GPU memory for this operation!\n");
+		return false;
+	}
+	else
+		return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
 }
 
 bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
-	return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
+	float numVol = 1.0;
+	if (cpu_to_gpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	{
+		printf("Error: Insufficient GPU memory for this operation!\n");
+		return false;
+	}
+	else
+		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
 }
 
 float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
-	return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
+	float numVol = 1.0;
+	if (cpu_to_gpu)
+		numVol = 3.0;
+	else
+		numVol = 1.0;
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	{
+		printf("Error: Insufficient GPU memory for this operation!\n");
+		return 0.0;
+	}
+	else
+		return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
 }
 
 bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu)
 {
-	return diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu, params.whichGPU);
+	float numVol = 1.0;
+	if (cpu_to_gpu)
+		numVol = 3.0;
+	else
+		numVol = 1.0;
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	{
+		printf("Error: Insufficient GPU memory for this operation!\n");
+		return false;
+	}
+	else
+		return diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu, params.whichGPU);
 }

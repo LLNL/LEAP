@@ -539,9 +539,9 @@ class tomographicModels:
                     alpha = alpha_1
                 else:
                     alpha = alpha_2
-                print('  lambda = ' + str(np.round(1000.0*alpha)/1000.0) + ' (' + str(np.round(1000.0*alpha_1)/1000.0) + ', ' + str(np.round(1000.0*alpha_2)/1000.0) + ')')
             alpha = min(1.0, alpha)
             alpha = max(0.0, min(1.0, alpha))  # force lambda to be a valid number
+            print('  lambda = ' + str(np.round(1000.0*alpha)/1000.0) + ' (' + str(np.round(1000.0*alpha_1)/1000.0) + ', ' + str(np.round(1000.0*alpha_2)/1000.0) + ')')
             if alpha < 0.0:
                 print("  Stopping criteria met, stopping iterations.")
                 break

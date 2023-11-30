@@ -42,7 +42,7 @@ leapct.set_coneBeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1),
 leapct.set_defaultVolume()
 
 # Trouble-Shooting Functions
-#leapct.printParameters()
+leapct.printParameters()
 #leapct.sketchSystem()
 
 # Allocate space for the projections and the volume
