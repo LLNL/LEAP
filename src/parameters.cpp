@@ -81,6 +81,13 @@ void parameters::initialize()
 	offsetX = 0.0;
 	offsetY = 0.0;
 	offsetZ = 0.0;
+
+	extraMemoryReserved = 0.25;
+}
+
+float parameters::get_extraMemoryReserved()
+{
+	return extraMemoryReserved;
 }
 
 parameters::parameters(const parameters& other)
@@ -579,7 +586,7 @@ void parameters::printAll()
 	else
 	{
 		if (whichGPUs.size() == 1)
-			printf("GPU processing on device %d", whichGPU);
+			printf("GPU processing on device %d\n", whichGPU);
 		else
 		{
 			printf("GPU processing on devices ");
@@ -587,6 +594,7 @@ void parameters::printAll()
 				printf("%d, ", whichGPUs[i]);
 			printf("%d\n", whichGPUs[whichGPUs.size() - 1]);
 		}
+		printf("GPU with least amount of memory: %f GB\n", getAvailableGPUmemory(whichGPUs));
 	}
 
 	printf("\n");
@@ -1053,17 +1061,27 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 float parameters::requiredGPUmemory()
 {
 	if (mu != NULL)
-		return projectionDataSize() + 2.0*volumeDataSize();
+		return projectionDataSize() + 2.0*volumeDataSize() + extraMemoryReserved;
 	else
-		return projectionDataSize() + volumeDataSize();
+		return projectionDataSize() + volumeDataSize() + extraMemoryReserved;
 }
 
-bool parameters::hasSufficientGPUmemory()
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory)
 {
-	if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory())
-		return false;
+	if (useLeastGPUmemory)
+	{
+		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory())
+			return false;
+		else
+			return true;
+	}
 	else
-		return true;
+	{
+		if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory())
+			return false;
+		else
+			return true;
+	}
 }
 
 bool parameters::removeProjections(int firstProj, int lastProj)

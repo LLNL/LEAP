@@ -692,6 +692,8 @@ private:
 	 */
 	float backproject_memoryRequired_splitViews(int numSlicesPerChunk);
 
+	int maxSlicesForChunking;
+
 	filteredBackprojection FBP;
 	projectors proj;
 };

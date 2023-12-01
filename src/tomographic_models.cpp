@@ -29,6 +29,7 @@
 tomographicModels::tomographicModels()
 {
 	params.initialize();
+	maxSlicesForChunking = 128;
 }
 
 tomographicModels::~tomographicModels()
@@ -159,20 +160,20 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 	return g_chunk;
 }
 
-bool tomographicModels::combineRows(float* g, float* g_chunk, int firstSlice, int lastSlice)
+bool tomographicModels::combineRows(float* g, float* g_chunk, int firstRow, int lastRow)
 {
-	int numSlices = lastSlice - firstSlice + 1;
+	int numRows = lastRow - firstRow + 1;
 	
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
 	{
 		float* g_proj = &g[iphi * params.numRows * params.numCols];
-		float* g_chunk_proj = &g_chunk[iphi * numSlices * params.numCols];
-		for (int iRow = firstSlice; iRow <= lastSlice; iRow++)
+		float* g_chunk_proj = &g_chunk[iphi * numRows * params.numCols];
+		for (int iRow = firstRow; iRow <= lastRow; iRow++)
 		{
 			float* g_line = &g_proj[iRow * params.numCols];
-			float* g_chunk_line = &g_chunk_proj[(iRow - firstSlice) * params.numCols];
+			float* g_chunk_line = &g_chunk_proj[(iRow - firstRow) * params.numCols];
 			for (int iCol = 0; iCol < params.numCols; iCol++)
 				g_line[iCol] = g_chunk_line[iCol];
 		}
@@ -199,11 +200,12 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numRowsPerChunk = std::min(64, params.numRows);
-	int numRowsPerChunk = std::max(1, int(ceil(float(params.numRows) / 2.0)));
+	int numRowsPerChunk = std::max(1, int(ceil(float(params.numRows) / std::max(2.0, double(params.whichGPUs.size())) )));
+	numRowsPerChunk = std::min(numRowsPerChunk, maxSlicesForChunking);
 	int numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
-	if (params.hasSufficientGPUmemory() == false)
+	if (params.hasSufficientGPUmemory(true) == false)
 	{
-		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
 		float memNeeded = project_memoryRequired(numRowsPerChunk);
 
 		while (memAvailable < memNeeded)
@@ -220,8 +222,11 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 	else
 	{
 		numRowsPerChunk = int(ceil(float(params.numRows) / float(params.whichGPUs.size())));
+		numRowsPerChunk = std::min(numRowsPerChunk, maxSlicesForChunking);
 		numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
 	}
+
+	//printf("numRowsPerChunk = %d\n", numRowsPerChunk);
 
 	if (numChunks <= 1)
 		return false;
@@ -240,6 +245,9 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		int sliceRange[2];
 		params.sliceRangeNeededForProjection(firstRow, lastRow, sliceRange);
 		int numSlices = sliceRange[1] - sliceRange[0] + 1;
+
+		//printf("row range: %d to %d\n", firstRow, lastRow);
+		//printf("slices range: %d to %d\n", sliceRange[0], sliceRange[1]);
 
 		float* f_chunk = &f[sliceRange[0] * params.numX * params.numY];
 
@@ -264,7 +272,9 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 		// Do Computation
 		proj.project(g_chunk, f_chunk, &chunk_params, true);
+		//printf("about to combine...\n");
 		combineRows(g, g_chunk, firstRow, lastRow);
+		//printf("combine done\n");
 
 		// clean up
 		free(g_chunk);
@@ -292,7 +302,7 @@ float tomographicModels::project_memoryRequired(int numRowsPerChunk)
 		maxMemory = std::max(maxMemory, memoryNeeded);
 	}
 
-	return maxMemory;
+	return maxMemory + params.get_extraMemoryReserved();
 }
 
 float tomographicModels::project_memoryRequired_splitViews(int numViewsPerChunk)
@@ -313,7 +323,7 @@ float tomographicModels::project_memoryRequired_splitViews(int numViewsPerChunk)
 		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
 		maxMemory = std::max(maxMemory, memoryNeeded);
 	}
-	return maxMemory;
+	return maxMemory + params.get_extraMemoryReserved();
 }
 
 bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
@@ -324,12 +334,13 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numRowsPerChunk = std::min(64, params.numRows);
-	int numViewsPerChunk = std::max(1, int(ceil(float(params.numAngles) / 2.0)));
+	int numViewsPerChunk = std::max(1, int(ceil(float(params.numAngles) / std::max(2.0, double(params.whichGPUs.size())))));
+	//numViewsPerChunk = std::min(numViewsPerChunk, maxSlicesForChunking);
 	int numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
-	if (params.hasSufficientGPUmemory() == false)
+	if (params.hasSufficientGPUmemory(true) == false)
 	{
 		// FIXME: this does not properly calculate the amount of memory necessary
-		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
 		float memNeeded = project_memoryRequired_splitViews(numViewsPerChunk);
 
 		while (memAvailable < memNeeded)
@@ -346,6 +357,7 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 	else
 	{
 		numViewsPerChunk = int(ceil(float(params.numAngles) / float(params.whichGPUs.size())));
+		//numViewsPerChunk = std::min(numViewsPerChunk, maxSlicesForChunking);
 		numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
 	}
 
@@ -407,11 +419,12 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numSlicesPerChunk = std::min(64, params.numZ);
-	int numSlicesPerChunk = std::max(1, int(ceil(float(params.numZ) / 2.0)));
+	int numSlicesPerChunk = std::max(1, int(ceil(float(params.numZ) / std::max(2.0, double(params.whichGPUs.size())))));
+	numSlicesPerChunk = std::min(numSlicesPerChunk, maxSlicesForChunking);
 	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
-	if (params.hasSufficientGPUmemory() == false)
+	if (params.hasSufficientGPUmemory(true) == false)
 	{
-		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
 		float memNeeded = backproject_memoryRequired(numSlicesPerChunk);
 
 		while (memAvailable < memNeeded)
@@ -428,6 +441,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	else
 	{
 		numSlicesPerChunk = int(ceil(float(params.numZ) / float(params.whichGPUs.size())));
+		numSlicesPerChunk = std::min(numSlicesPerChunk, maxSlicesForChunking);
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
 
@@ -513,7 +527,7 @@ float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk)
 		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize();
 		maxMemory = std::max(maxMemory, memoryNeeded);
 	}
-	return maxMemory;
+	return maxMemory + params.get_extraMemoryReserved();
 }
 
 float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerChunk)
@@ -534,7 +548,7 @@ float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerC
 		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
 		maxMemory = std::max(maxMemory, memoryNeeded);
 	}
-	return maxMemory;
+	return maxMemory + params.get_extraMemoryReserved();
 }
 
 bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, bool doFBP)
@@ -545,11 +559,12 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numSlicesPerChunk = std::min(64, params.numZ);
-	int numSlicesPerChunk = std::max(1, int(ceil(float(params.numZ) / 2.0)));
+	int numSlicesPerChunk = std::max(1, int(ceil(float(params.numZ) / std::max(2.0, double(params.whichGPUs.size())))));
+	numSlicesPerChunk = std::min(numSlicesPerChunk, maxSlicesForChunking);
 	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
-	if (params.hasSufficientGPUmemory() == false)
+	if (params.hasSufficientGPUmemory(true) == false)
 	{
-		float memAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
 		float memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk);
 
 		while (memAvailable < memNeeded)
@@ -566,6 +581,7 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 	else
 	{
 		numSlicesPerChunk = int(ceil(float(params.numZ) / float(params.whichGPUs.size())));
+		numSlicesPerChunk = std::min(numSlicesPerChunk, maxSlicesForChunking);
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
 

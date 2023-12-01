@@ -189,9 +189,9 @@ class tomographicModels:
         N_cols = self.get_numCols()
         if N_phis > 0 and N_rows > 0 and N_cols > 0:
             if val == 0.0:
-                return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
+                return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
             else:
-                return np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols)).astype(np.float32), dtype=np.float32)
+                return np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
         else:
             return None
         
@@ -202,14 +202,14 @@ class tomographicModels:
         if N_x > 0 and N_y > 0 and N_z > 0:
             if self.get_volumeDimensionOrder() == 0:
                 if val == 0.0:
-                    return np.ascontiguousarray(np.zeros((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
+                    return np.ascontiguousarray(np.zeros((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
                 else:
-                    return np.ascontiguousarray(val*np.ones((N_x,N_y,N_z)).astype(np.float32), dtype=np.float32)
+                    return np.ascontiguousarray(val*np.ones((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
             else:
                 if val == 0.0:
-                    return np.ascontiguousarray(np.zeros((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
+                    return np.ascontiguousarray(np.zeros((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
                 else:
-                    return np.ascontiguousarray(val*np.ones((N_z,N_y,N_x)).astype(np.float32), dtype=np.float32)
+                    return np.ascontiguousarray(val*np.ones((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
         else:
             return None
             

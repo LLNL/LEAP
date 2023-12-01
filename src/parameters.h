@@ -399,7 +399,7 @@ public:
 	 * \brief       returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 */
-	bool hasSufficientGPUmemory();
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false);
 
 	/**
 	 * \fn          rowRangeNeededForBackprojection
@@ -457,6 +457,9 @@ public:
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };
     enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2};
+
+	float get_extraMemoryReserved();
+
 private:
 
 	/**
@@ -471,6 +474,8 @@ private:
 	 * \return      returns true if successful, false otherwise
 	 */
 	bool clearModularBeamParameters();
+
+	float extraMemoryReserved;
 };
 
 #endif

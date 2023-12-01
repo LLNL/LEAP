@@ -19,6 +19,7 @@
 
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
+extern float getAvailableGPUmemory(std::vector<int> whichGPUs);
 
 extern dim3 setBlockSize(int3 N);
 extern dim3 setGridSize(int3 N, dim3 dimBlock);

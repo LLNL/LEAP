@@ -260,6 +260,21 @@ int numberOfGPUs()
         return 0;
 }
 
+float getAvailableGPUmemory(std::vector<int> whichGPUs)
+{
+    if (whichGPUs.size() == 0)
+        return 0.0;
+    else if (whichGPUs.size() == 1)
+        return getAvailableGPUmemory(whichGPUs[0]);
+    else
+    {
+        float retVal = getAvailableGPUmemory(whichGPUs[0]);
+        for (int i = 1; i < int(whichGPUs.size()); i++)
+            retVal = std::min(retVal, getAvailableGPUmemory(whichGPUs[i]));
+        return retVal;
+    }
+}
+
 float getAvailableGPUmemory(int whichGPU)
 {
     if (whichGPU >= 0)

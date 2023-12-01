@@ -124,7 +124,7 @@ class Projector(torch.nn.Module):
         
     def set_volume(self, dimx, dimy, dimz, width, height, offsetx, offsety, offsetz):
         leapct.set_volume(self.param_id, dimx, dimy, dimz, width, height, offsetx, offsety, offsetz)
-        vol_np = np.ascontiguousarray(np.zeros((self.batch_size, dimz, dimy, dimx)).astype(np.float32), dtype=np.float32)
+        vol_np = np.ascontiguousarray(np.zeros((self.batch_size, dimz, dimy, dimx),dtype=np.float32), dtype=np.float32)
         self.vol_data = torch.from_numpy(vol_np)
         if self.use_gpu:
             self.vol_data = self.vol_data.float().to(self.gpu_device)
@@ -132,35 +132,35 @@ class Projector(torch.nn.Module):
     def set_default_volume(self, scale=1.0):
         leapct.set_defaultVolume(self.param_id, scale)
         dim1, dim2, dim3 = self.get_volume_dim()
-        vol_np = np.ascontiguousarray(np.zeros((self.batch_size, dim1, dim2, dim3)).astype(np.float32), dtype=np.float32)
+        vol_np = np.ascontiguousarray(np.zeros((self.batch_size, dim1, dim2, dim3),dtype=np.float32), dtype=np.float32)
         self.vol_data = torch.from_numpy(vol_np)
         if self.use_gpu:
             self.vol_data = self.vol_data.float().to(self.gpu_device)
 
     def set_parallel_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis):
         leapct.set_parallelBeam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis)
-        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32), dtype=np.float32)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
             
     def set_fan_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd):
         leapct.set_fanBeam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd)
-        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32), dtype=np.float32)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
 
     def set_cone_beam(self, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd):
         leapct.set_coneBeam(self.param_id, nangles, nrows, ncols, pheight, pwidth, crow, ccol, phis, sod, sdd)
-        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32), dtype=np.float32)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
     
     def set_modular_beam(self, nangles, nrows, ncols, pheight, pwidth, srcpos, modcenter, rowvec, colvec):
         leapct.set_modularBeam(self.param_id, nangles, nrows, ncols, pheight, pwidth, srcpos, modcenter, rowvec, colvec)
-        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols)).astype(np.float32), dtype=np.float32)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, nangles, nrows, ncols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
