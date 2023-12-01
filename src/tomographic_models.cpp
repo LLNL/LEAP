@@ -207,9 +207,12 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		float memNeeded = project_memoryRequired(numRowsPerChunk);
 
 		while (memAvailable < memNeeded)
+		{
 			numRowsPerChunk = numRowsPerChunk / 2;
-		if (numRowsPerChunk < 1)
-			return false;
+			if (numRowsPerChunk <= 1)
+				return false;
+			memNeeded = project_memoryRequired(numRowsPerChunk);
+		}
 		numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
 	}
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= params.chunkingMemorySizeThreshold)
@@ -327,12 +330,15 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 	{
 		// FIXME: this does not properly calculate the amount of memory necessary
 		float memAvailable = getAvailableGPUmemory(params.whichGPU);
-		float memNeeded = params.requiredGPUmemory();
+		float memNeeded = project_memoryRequired_splitViews(numViewsPerChunk);
 
-		while (memAvailable < memNeeded * float(numViewsPerChunk) / float(params.numAngles))
+		while (memAvailable < memNeeded)
+		{
 			numViewsPerChunk = numViewsPerChunk / 2;
-		if (numViewsPerChunk < 1)
-			return false;
+			if (numViewsPerChunk <= 1)
+				return false;
+			memNeeded = project_memoryRequired_splitViews(numViewsPerChunk);
+		}
 		numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
 	}
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= params.chunkingMemorySizeThreshold)
@@ -409,9 +415,12 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		float memNeeded = backproject_memoryRequired(numSlicesPerChunk);
 
 		while (memAvailable < memNeeded)
+		{
 			numSlicesPerChunk = numSlicesPerChunk / 2;
-		if (numSlicesPerChunk < 1)
-			return false;
+			if (numSlicesPerChunk <= 1)
+				return false;
+			memNeeded = backproject_memoryRequired(numSlicesPerChunk);
+		}
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= params.chunkingMemorySizeThreshold)
@@ -543,12 +552,13 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 		float memAvailable = getAvailableGPUmemory(params.whichGPU);
 		float memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk);
 
-		backproject_memoryRequired_splitViews(numSlicesPerChunk);
-
 		while (memAvailable < memNeeded)
+		{
 			numSlicesPerChunk = numSlicesPerChunk / 2;
-		if (numSlicesPerChunk < 1)
-			return false;
+			if (numSlicesPerChunk <= 1)
+				return false;
+			memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk);
+		}
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory() <= params.chunkingMemorySizeThreshold)
