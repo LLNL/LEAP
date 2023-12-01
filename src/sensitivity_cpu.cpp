@@ -9,6 +9,8 @@
 
 #include "sensitivity_cpu.h"
 #include <omp.h>
+#include <stdlib.h>
+#include <math.h>
 
 bool sensitivity_CPU(float*& s, parameters* params)
 {

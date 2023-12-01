@@ -50,23 +50,24 @@ g = leapct.allocateProjections()
 f = leapct.allocateVolume()
 
 # Specify a phantom composed of a 300 mm diameter sphere
-f_true = leapct.allocateVolume()
 x,y,z=leapct.voxelSamples()
-f_true[x**2 + y**2 + (z/1.05)**2 <= 150.0**2] = 1.0
-f_true[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
+f[x**2 + y**2 + (z/1.05)**2 <= 150.0**2] = 1.0
+f[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
 #leapct.displayVolume(f_true)
 
 # "Simulate" projection data
-leapct.project(g,f_true)
+startTime = time.time()
+leapct.project(g,f)
+print('Elapsed time: ' + str(time.time()-startTime))
+f[:] = 0.0
 g[g<0.0] = 0.0
 g[:] = np.random.poisson(g)
 
-# Reconstruct with FBP
-#leapct.FBP(g,f)
 
-# Iterative Reconstruction
+# Reconstruction
 startTime = time.time()
-leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
+leapct.FBP(g,f)
+#leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
 #leapct.diffuse(f,1.0/20.0,3)
 #leapct.SART(g,f,10,10)
 #leapct.MLEM(g,f,5,1)

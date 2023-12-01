@@ -1,4 +1,5 @@
 #include <omp.h>
+#include <stdlib.h>
 #include "cpu_utils.h"
 
 using namespace std;
