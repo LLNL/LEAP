@@ -448,6 +448,22 @@ bool parameters::volumeDefined()
 	}
 }
 
+float parameters::default_voxelWidth()
+{
+	if (geometry == PARALLEL)
+		return pixelWidth;
+	else
+		return sod / sdd * pixelWidth;
+}
+
+float parameters::default_voxelHeight()
+{
+	if (geometry == PARALLEL || geometry == FAN)
+		return pixelHeight;
+	else
+		return sod / sdd * pixelHeight;
+}
+
 bool parameters::set_default_volume(float scale)
 {
 	if (geometryDefined() == false)
@@ -457,24 +473,13 @@ bool parameters::set_default_volume(float scale)
 	//volumeDimensionOrder = ZYX;
 	numX = int(ceil(float(numCols) / scale));
 	numY = numX;
-	numZ = numRows;
-	if (geometry == PARALLEL)
-	{
-		voxelWidth = pixelWidth * scale;
-		voxelHeight = pixelHeight;
-	}
-	else if (geometry == FAN)
-	{
-		voxelWidth = sod / sdd * pixelWidth * scale;
-		voxelHeight = pixelHeight;
-	}
-	else
-	{
-		voxelWidth = sod / sdd * pixelWidth * scale;
-		voxelHeight = sod / sdd * pixelHeight * scale;
+	voxelWidth = default_voxelWidth() * scale;
+	voxelHeight = default_voxelHeight() * scale;
 
+	if (geometry == CONE || geometry == MODULAR)
 		numZ = int(ceil(float(numRows) / scale));
-	}
+	else
+		numZ = numRows;
 	offsetX = 0.0;
 	offsetY = 0.0;
 	offsetZ = 0.0;
@@ -725,6 +730,25 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 			rowVectors[i] = rowVectors_in[i];
 			colVectors[i] = colVectors_in[i];
 		}
+
+		sod = 0.0;
+		sdd = 0.0;
+		for (int i = 0; i < numPairs; i++)
+		{
+			float s_x = sourcePositions[3 * i + 0];
+			float s_y = sourcePositions[3 * i + 1];
+			float s_z = sourcePositions[3 * i + 2];
+
+			float d_x = moduleCenters[3 * i + 0];
+			float d_y = moduleCenters[3 * i + 1];
+			float d_z = moduleCenters[3 * i + 2];
+
+			sod += sqrt(s_x * s_x + s_y * s_y + s_z * s_z);
+			sdd += sqrt(d_x * d_x + d_y * d_y + d_z * d_z);
+		}
+		sod = sod / float(numPairs);
+		sdd = sdd / float(numPairs);
+		sdd += sod;
 
 		return true;
 	}

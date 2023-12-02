@@ -78,6 +78,20 @@ public:
 	bool volumeDefined();
 
 	/**
+	 * \fn          default_voxelWidth
+	 * \brief       calculates the default voxelWidth value
+	 * \return      returns the default voxelWidth value
+	 */
+	float default_voxelWidth();
+
+	/**
+	 * \fn          default_voxelHeight
+	 * \brief       calculates the default voxelHeight value
+	 * \return      returns the default voxelHeight value
+	 */
+	float default_voxelHeight();
+
+	/**
 	 * \fn          set_default_volume
 	 * \brief       sets the default CT volume parameters
 	 * \param[in]   scale the default voxel size is divided by this number

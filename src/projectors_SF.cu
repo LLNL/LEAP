@@ -1460,7 +1460,8 @@ bool project_SF(float *&g, float *f, parameters* params, bool cpu_to_gpu)
     if (params->voxelSizeWorksForFastSF() == false)
     {
         //printf("using extended\n");
-        return project_eSF(g, f, params, cpu_to_gpu);
+        if (params->voxelWidth < params->default_voxelWidth() || params->voxelHeight < params->default_voxelHeight())
+            return project_eSF(g, f, params, cpu_to_gpu);
     }
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -1555,7 +1556,8 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
     if (params->voxelSizeWorksForFastSF() == false)
     {
         //printf("using extended\n");
-        return backproject_eSF_cone(g, f, params, cpu_to_gpu);
+        if (params->voxelWidth > params->default_voxelWidth() || params->voxelHeight > params->default_voxelHeight())
+            return backproject_eSF_cone(g, f, params, cpu_to_gpu);
     }
 
     cudaSetDevice(params->whichGPU);
