@@ -34,16 +34,16 @@ pixelSize = 0.2*2048/N
 M = N
 
 # Set the scanner geometry
-#leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
-#leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_coneBeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_parallelbeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
+#leapct.set_fanbeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
 # Set the volume parameters
-leapct.set_defaultVolume()
+leapct.set_default_volume()
 
 # Trouble-Shooting Functions
-leapct.printParameters()
-#leapct.sketchSystem()
+leapct.print_parameters()
+#leapct.sketch_system()
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()
@@ -53,7 +53,7 @@ f = leapct.allocateVolume()
 x,y,z=leapct.voxelSamples()
 f[x**2 + y**2 + (z/1.05)**2 <= 150.0**2] = 1.0
 f[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
-#leapct.displayVolume(f_true)
+#leapct.displayVolume(f)
 
 # "Simulate" projection data
 startTime = time.time()

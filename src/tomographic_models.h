@@ -164,14 +164,14 @@ public:
 	bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
 	/**
-	 * \fn          printParameters
+	 * \fn          print_parameters
 	 * \brief       prints the CT geometry and CT volume parameters to the screen
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool printParameters();
+	bool print_parameters();
 
 	/**
-	 * \fn          set_coneBeam
+	 * \fn          set_conebeam
 	 * \brief       sets the cone-beam parameters
 	 * \param[in]   numAngles number of projection angles
 	 * \param[in]   numRows number of rows in the x-ray detector
@@ -187,10 +187,10 @@ public:
 	 * \param[in]   helicalPitch the helical pitch (mm/radians)
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
+	bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
 
 	/**
-	 * \fn          set_fanBeam
+	 * \fn          set_fanbeam
 	 * \brief       sets the fan-beam parameters
 	 * \param[in]   numAngles number of projection angles
 	 * \param[in]   numRows number of rows in the x-ray detector
@@ -205,10 +205,10 @@ public:
 	 * \param[in]   tau the center of rotation horizontal translation (mm)
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0);
+	bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0);
 
 	/**
-	 * \fn          set_parallelBeam
+	 * \fn          set_parallelbeam
 	 * \brief       sets the parallel-beam parameters
 	 * \param[in]   numAngles number of projection angles
 	 * \param[in]   numRows number of rows in the x-ray detector
@@ -220,10 +220,10 @@ public:
 	 * \param[in]   phis pointer to an array for specifying the angles of each projection, measured in degrees
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
+	bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
 
 	/**
-	 * \fn          set_modularBeam
+	 * \fn          set_modularbeam
 	 * \brief       sets the modular-beam parameters
 	 * \param[in]   numAngles number of projection angles
 	 * \param[in]   numRows number of rows in the x-ray detector
@@ -238,7 +238,7 @@ public:
 	 * \param[in]   colVectors (numAngles X 3) array of vectors pointing in the positive detector column direction
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_modularBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors);
+	bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors);
 
 	/**
 	 * \fn          set_volume
@@ -261,7 +261,7 @@ public:
 	 * \param[in]   scale the default voxel size is divided by this number
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_defaultVolume(float scale = 1.0);
+	bool set_default_volume(float scale = 1.0);
 
 	/**
 	 * \fn          set_volumeDimensionOrder

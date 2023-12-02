@@ -15,13 +15,13 @@ numAngles = int(720*N/1024)
 pixelSize = 0.2*2048/N
 
 # Set the scanner geometry
-#leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
-#leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_coneBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_parallelbeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
+#leapct.set_fanbeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+leapct.set_conebeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
 # Set the volume parameters
-leapct.set_defaultVolume()
-leapct.printParameters()
+leapct.set_default_volume()
+leapct.print_parameters()
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()

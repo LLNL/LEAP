@@ -26,13 +26,13 @@ def setLEAPfromLTT():
     if geometry == 'CONE':
         sod = float(LTT.getParam('sod'))
         sdd = float(LTT.getParam('sdd'))
-        leapct.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
+        leapct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
     elif geometry == 'FAN':
         sod = float(LTT.getParam('sod'))
         sdd = float(LTT.getParam('sdd'))
-        leapct.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
+        leapct.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
     elif geometry == 'PARALLEL':
-        leapct.set_parallelBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange))
+        leapct.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange))
     
     if LTT.unknown('axisOfSymmetry') == False:
         leapct.set_axisOfSymmetry(float(LTT.getParam('axisOfSymmetry')))
@@ -201,5 +201,5 @@ for n in range(3):
     leapct.displayVolume(f_leap_GPU)
     #'''
     
-    quit()
+    #quit()
     

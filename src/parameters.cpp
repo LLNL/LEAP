@@ -448,7 +448,7 @@ bool parameters::volumeDefined()
 	}
 }
 
-bool parameters::set_defaultVolume(float scale)
+bool parameters::set_default_volume(float scale)
 {
 	if (geometryDefined() == false)
 		return false;

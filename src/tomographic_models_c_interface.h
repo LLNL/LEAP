@@ -19,7 +19,7 @@
     #define PROJECTOR_API
 #endif
 
-extern "C" PROJECTOR_API bool printParameters();
+extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
 
 extern "C" PROJECTOR_API bool project_gpu(float* g, float* f);
@@ -42,14 +42,14 @@ extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool cpu_to_gpu);
 
 extern "C" PROJECTOR_API bool sensitivity(float* f, bool cpu_to_gpu);
 
-extern "C" PROJECTOR_API bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
-extern "C" PROJECTOR_API bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
-extern "C" PROJECTOR_API bool set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
-extern "C" PROJECTOR_API bool set_modularBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float*, float*, float*, float*);
+extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
+extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
+extern "C" PROJECTOR_API bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
+extern "C" PROJECTOR_API bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float*, float*, float*, float*);
 extern "C" PROJECTOR_API bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool set_volumeDimensionOrder(int which);
 extern "C" PROJECTOR_API int get_volumeDimensionOrder();
-extern "C" PROJECTOR_API bool set_defaultVolume(float scale);
+extern "C" PROJECTOR_API bool set_default_volume(float scale);
 
 extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

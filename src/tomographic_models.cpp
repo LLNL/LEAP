@@ -37,7 +37,7 @@ tomographicModels::~tomographicModels()
 	reset();
 }
 
-bool tomographicModels::printParameters()
+bool tomographicModels::print_parameters()
 {
 	params.printAll();
 	return true;
@@ -731,7 +731,7 @@ float tomographicModels::get_FBPscalar()
 	return FBPscalar(&params);
 }
 
-bool tomographicModels::set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
+bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
 {
 	params.geometry = parameters::CONE;
 	params.detectorType = parameters::FLAT;
@@ -750,7 +750,7 @@ bool tomographicModels::set_coneBeam(int numAngles, int numRows, int numCols, fl
 	return params.geometryDefined();
 }
 
-bool tomographicModels::set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
+bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
 {
 	params.geometry = parameters::FAN;
 	params.detectorType = parameters::FLAT;
@@ -768,7 +768,7 @@ bool tomographicModels::set_fanBeam(int numAngles, int numRows, int numCols, flo
 	return params.geometryDefined();
 }
 
-bool tomographicModels::set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
+bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
 {
 	params.geometry = parameters::PARALLEL;
 	params.pixelWidth = pixelWidth;
@@ -782,7 +782,7 @@ bool tomographicModels::set_parallelBeam(int numAngles, int numRows, int numCols
 	return params.geometryDefined();
 }
 
-bool tomographicModels::set_modularBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
+bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
 {
 	params.geometry = parameters::MODULAR;
 	params.pixelWidth = pixelWidth;
@@ -824,9 +824,9 @@ bool tomographicModels::set_volume(int numX, int numY, int numZ, float voxelWidt
 	return params.volumeDefined();
 }
 
-bool tomographicModels::set_defaultVolume(float scale)
+bool tomographicModels::set_default_volume(float scale)
 {
-	return params.set_defaultVolume(scale);
+	return params.set_default_volume(scale);
 }
 
 bool tomographicModels::set_volumeDimensionOrder(int which)

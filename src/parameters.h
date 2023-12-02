@@ -78,12 +78,12 @@ public:
 	bool volumeDefined();
 
 	/**
-	 * \fn          set_defaultVolume
+	 * \fn          set_default_volume
 	 * \brief       sets the default CT volume parameters
 	 * \param[in]   scale the default voxel size is divided by this number
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_defaultVolume(float scale = 1.0);
+	bool set_default_volume(float scale = 1.0);
 
 	/**
 	 * \fn          set_angles

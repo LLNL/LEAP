@@ -37,16 +37,16 @@ M = N
 # Set the scanner geometry
 #leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_coneBeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
+leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
 #leapct.set_normalizedHelicalPitch(0.2)
 leapct.set_normalizedHelicalPitch(1.0)
 
 # Set the volume parameters
-leapct.set_defaultVolume()
+leapct.set_default_volume()
 
 # Trouble-Shooting Functions
-leapct.printParameters()
-#leapct.sketchSystem()
+leapct.print_parameters()
+#leapct.sketch_system()
 #quit()
 
 # Allocate space for the projections and the volume
@@ -54,23 +54,21 @@ g = leapct.allocateProjections()
 f = leapct.allocateVolume()
 
 # Specify a phantom composed of a 300 mm diameter sphere
-f_true = leapct.allocateVolume()
+f = leapct.allocateVolume()
 x,y,z=leapct.voxelSamples()
-f_true[x**2 + y**2 + (z/1.05)**2 <= 150.0**2] = 1.0
-f_true[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
-#leapct.displayVolume(f_true)
+f[x**2 + y**2 + (z/1.05)**2 <= 150.0**2] = 1.0
+f[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
+#leapct.displayVolume(f)
 
 # "Simulate" projection data
-leapct.project(g,f_true)
+leapct.project(g,f)
+f[:] = 0.0
 g[g<0.0] = 0.0
 g[:] = np.random.poisson(g)
 
-# Reconstruct with FBP
+# Reconstruction
 startTime = time.time()
-#leapct.FBP(g,f)
 #leapct.backproject(g,f)
-
-# Iterative Reconstruction
 leapct.ASDPOCS(g,f,20,5,3,1.0/20.0)
 #leapct.diffuse(f,1.0/20.0,3)
 #leapct.SART(g,f,10,5)

@@ -35,15 +35,15 @@ for n in range(numAngles):
     colVectors[n,0] = -np.sin(phi)
     colVectors[n,1] = np.cos(phi)
 
-leapct.set_modularBeam(numAngles, N, N, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
+leapct.set_modular_beam(numAngles, N, N, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
 
 # Set the volume parameters
 scale = 1.0
 leapct.set_volume(int(N/scale),int(N/scale),int(N/scale),sod/sdd*pixelSize*scale,sod/sdd*pixelSize*scale)
 
 # Trouble-Shooting Functions
-#leapct.printParameters()
-#leapct.sketchSystem(0)
+#leapct.print_parameters()
+#leapct.sketch_system(0)
 #quit()
 
 # Allocate space for the projections and the volume

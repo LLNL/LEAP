@@ -20,9 +20,9 @@
 //#ifdef DEFINE_STATIC_UI
 tomographicModels tomo;
 
-bool printParameters()
+bool print_parameters()
 {
-	return tomo.printParameters();
+	return tomo.print_parameters();
 }
 
 bool reset()
@@ -100,24 +100,24 @@ float get_FBPscalar()
 	return tomo.get_FBPscalar();
 }
 
-bool set_coneBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
+bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
 {
-	return tomo.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch);
+	return tomo.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch);
 }
 
-bool set_fanBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
+bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
 {
-	return tomo.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau);
+	return tomo.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau);
 }
 
-bool set_parallelBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
+bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
 {
-	return tomo.set_parallelBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
+	return tomo.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis);
 }
 
-bool set_modularBeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
+bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
 {
-	return tomo.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
+	return tomo.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
 }
 
 bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -125,9 +125,9 @@ bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeigh
 	return tomo.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool set_defaultVolume(float scale)
+bool set_default_volume(float scale)
 {
-	return tomo.set_defaultVolume(scale);
+	return tomo.set_default_volume(scale);
 }
 
 bool set_volumeDimensionOrder(int which)

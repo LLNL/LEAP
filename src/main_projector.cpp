@@ -163,13 +163,22 @@ bool FBP_gpu(int param_id, torch::Tensor& g_tensor, torch::Tensor& f_tensor)
 
 #endif
 
-bool set_GPU(int param_id, int whichGPU)
+bool set_gpu(int param_id, int whichGPU)
 {
     tomographicModels* p_model = get_model(param_id);
     if (p_model == NULL)
         return false;
     
     return p_model->set_GPU(whichGPU);
+}
+
+bool set_gpus(int param_id, float* whichGPUs)
+{
+    tomographicModels* p_model = get_model(param_id);
+    if (p_model == NULL)
+        return false;
+    
+    return p_model->set_GPUs(whichGPUs);
 }
 
 bool set_projector(int param_id, int which)
@@ -203,13 +212,13 @@ bool set_axisOfSymmetry(int param_id, float axisOfSymmetry)
     return p_model->set_axisOfSymmetry(axisOfSymmetry);
 }
 
-bool printParameters(int param_id)
+bool print_parameters(int param_id)
 {
     tomographicModels* p_model = get_model(param_id);
     if (p_model == NULL)
         return false;
     
-    return p_model->printParameters();
+    return p_model->print_parameters();
 }
 
 bool saveParamsToFile(int param_id, std::string param_fn)
@@ -346,7 +355,7 @@ bool get_volumeDimensionOrder(int param_id, int& which)
     return true;
 }
 
-bool set_coneBeam(int param_id, int numAngles, int numRows, int numCols, 
+bool set_conebeam(int param_id, int numAngles, int numRows, int numCols, 
                        float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
                        torch::Tensor& phis_tensor, float sod, float sdd, float tau, float helicalPitch)
 {
@@ -355,12 +364,12 @@ bool set_coneBeam(int param_id, int numAngles, int numRows, int numCols,
         return false;
     
     float* phis = phis_tensor.data_ptr<float>();
-    return p_model->set_coneBeam(numAngles, numRows, numCols, 
+    return p_model->set_conebeam(numAngles, numRows, numCols, 
                        pixelHeight, pixelWidth, centerRow, centerCol, 
                        phis, sod, sdd, tau, helicalPitch);
 }
 
-bool set_fanBeam(int param_id, int numAngles, int numRows, int numCols, 
+bool set_fanbeam(int param_id, int numAngles, int numRows, int numCols, 
                       float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
                       torch::Tensor& phis_tensor, float sod, float sdd, float tau)
 {
@@ -369,13 +378,13 @@ bool set_fanBeam(int param_id, int numAngles, int numRows, int numCols,
         return false;
     
     float* phis = phis_tensor.data_ptr<float>();
-    return p_model->set_fanBeam(numAngles, numRows, numCols, 
+    return p_model->set_fanbeam(numAngles, numRows, numCols, 
                       pixelHeight, pixelWidth, centerRow, centerCol, 
                       phis, sod, sdd, tau);
     return false;
 }
 
-bool set_parallelBeam(int param_id, int numAngles, int numRows, int numCols, 
+bool set_parallelbeam(int param_id, int numAngles, int numRows, int numCols, 
                            float pixelHeight, float pixelWidth, float centerRow, float centerCol, 
                            torch::Tensor& phis_tensor)
 {
@@ -384,11 +393,11 @@ bool set_parallelBeam(int param_id, int numAngles, int numRows, int numCols,
         return false;
     
     float* phis = phis_tensor.data_ptr<float>();
-    return p_model->set_parallelBeam(numAngles, numRows, numCols, 
+    return p_model->set_parallelbeam(numAngles, numRows, numCols, 
                            pixelHeight, pixelWidth, centerRow, centerCol, phis);
 }
 
-bool set_modularBeam(int param_id, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, 
+bool set_modularbeam(int param_id, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, 
                           torch::Tensor& sourcePositions_in_tensor, torch::Tensor& moduleCenters_in_tensor, 
                           torch::Tensor& rowVectors_in_tensor, torch::Tensor& colVectors_in_tensor)
 {
@@ -400,7 +409,7 @@ bool set_modularBeam(int param_id, int numAngles, int numRows, int numCols, floa
 	float* moduleCenters_in = moduleCenters_in_tensor.data_ptr<float>();
 	float* rowVectors_in = rowVectors_in_tensor.data_ptr<float>();
 	float* colVectors_in = colVectors_in_tensor.data_ptr<float>();
-    return p_model->set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, 
+    return p_model->set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, 
                           sourcePositions_in, moduleCenters_in, 
                           rowVectors_in, colVectors_in);
 }
@@ -414,13 +423,13 @@ bool set_volume(int param_id, int numX, int numY, int numZ, float voxelWidth, fl
     return p_model->set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool set_defaultVolume(int param_id, float scale)
+bool set_default_volume(int param_id, float scale)
 {
     tomographicModels* p_model = get_model(param_id);
     if (p_model == NULL)
         return false;
     
-    return p_model->set_defaultVolume(scale);
+    return p_model->set_default_volume(scale);
 }
 
 int create_param()
@@ -615,18 +624,19 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("filterProjections_gpu", &filterProjections_gpu, "filter projections on GPU");
     m.def("FBP_gpu", &FBP_gpu, "FBP on GPU");
 #endif
-    m.def("print_param", &printParameters, "print current parameters");
+    m.def("print_parameters", &print_parameters, "print current parameters");
     m.def("save_param", &saveParamsToFile, "save current parameters to file");
-    m.def("set_GPU", &set_GPU, "set GPU device (0, 1, ...) ");
+    m.def("set_gpu", &set_gpu, "set GPU device (0, 1, ...) ");
+    m.def("set_gpus", &set_gpus, "set GPU device (0, 1, ...) ");
     m.def("set_projector", &set_projector, "");
     m.def("set_volumeDimensionOrder", &set_volumeDimensionOrder, "");
 	m.def("set_axisOfSymmetry", &set_axisOfSymmetry, "");
-    m.def("set_coneBeam", &set_coneBeam, "");
-    m.def("set_fanBeam", &set_fanBeam, "");
-	m.def("set_parallelBeam", &set_parallelBeam, "");
-    m.def("set_modularBeam", &set_modularBeam, "");
+    m.def("set_conebeam", &set_conebeam, "");
+    m.def("set_fanbeam", &set_fanbeam, "");
+	m.def("set_parallelbeam", &set_parallelbeam, "");
+    m.def("set_modularbeam", &set_modularbeam, "");
 	m.def("set_volume", &set_volume, "");
-    m.def("set_defaultVolume", &set_defaultVolume, "");
+    m.def("set_default_volume", &set_default_volume, "");
     m.def("get_volumeDimensionOrder", &get_volumeDimensionOrder, "");
     m.def("get_projectionDim", &get_projectionDim, "");
     m.def("get_volumeDim", &get_volumeDim, "");

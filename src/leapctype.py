@@ -44,15 +44,18 @@ class tomographicModels:
         return self.libprojectors.reset()
 
     def printParameters(self):
-        self.libprojectors.printParameters.restype = ctypes.c_bool
-        return self.libprojectors.printParameters()
+        return self.print_parameters()
+
+    def print_parameters(self):
+        self.libprojectors.print_parameters.restype = ctypes.c_bool
+        return self.libprojectors.print_parameters()
 
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
     ###################################################################################################################
     ###################################################################################################################
-    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+    def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
         '''
         The origin of the coordinate system is always at the center of rotation
         
@@ -75,35 +78,47 @@ class tomographicModels:
         sod = source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
         sdd = source to detector distance, measured in mm
         '''
-        self.libprojectors.set_coneBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
-        self.libprojectors.set_coneBeam.restype = ctypes.c_bool
+        self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_conebeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.set_coneBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
-            
-    def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
+        return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
+    
+    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+        return self.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
+    
+    def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
         ''' see comments in the setConeBeamParams function '''
-        self.libprojectors.set_fanBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float]
-        self.libprojectors.set_fanBeam.restype = ctypes.c_bool
+        self.libprojectors.set_fanbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_fanbeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.set_fanBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
+        return self.libprojectors.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
+        
+    def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
+        return self.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
+
+    def set_parallelbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
+        ''' see comments in the setConeBeamParams function '''
+        self.libprojectors.set_parallelbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.set_parallelbeam.restype = ctypes.c_bool
+        if type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = self.setAngleArray(numAngles, angularRange)
+        return self.libprojectors.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def set_parallelBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
-        ''' see comments in the setConeBeamParams function '''
-        self.libprojectors.set_parallelBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.set_parallelBeam.restype = ctypes.c_bool
-        if type(phis) is not np.ndarray:
-            angularRange = float(phis)
-            phis = self.setAngleArray(numAngles, angularRange)
-        return self.libprojectors.set_parallelBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
+        return self.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
+    def set_modularbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
+        self.libprojectors.set_modularbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.set_modularbeam.restype = ctypes.c_bool
+        return self.libprojectors.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+    
     def set_modularBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
-        self.libprojectors.set_modularBeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.set_modularBeam.restype = ctypes.c_bool
-        return self.libprojectors.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+        return self.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
     def set_tau(self, tau):
         self.libprojectors.set_tau.argtypes = [ctypes.c_float]
@@ -160,11 +175,14 @@ class tomographicModels:
             offsetZ = 0.0
         return self.libprojectors.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
         
+    def set_default_volume(self,scale=1.0):
+        self.libprojectors.set_default_volume.argtypes = [ctypes.c_float]
+        self.libprojectors.set_default_volume.restype = ctypes.c_bool
+        return self.libprojectors.set_default_volume(scale)
+    
     def set_defaultVolume(self,scale=1.0):
-        self.libprojectors.set_defaultVolume.argtypes = [ctypes.c_float]
-        self.libprojectors.set_defaultVolume.restype = ctypes.c_bool
-        return self.libprojectors.set_defaultVolume(scale)
-        
+        return self.set_default_volume(scale)
+    
     def set_volumeDimensionOrder(self,which):
         '''
         Sets the order of the dimensions of the volume
@@ -736,10 +754,16 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS SET AND GET VARIOUS PARAMETERS, INCLUDING THOSE THAT SET HOW LEAP IS TO BE RUN
     ###################################################################################################################
     ###################################################################################################################
+    def set_gpu(self, which):
+        return self.set_GPU(which)
+    
     def set_GPU(self, which):
         self.libprojectors.set_GPU.argtypes = [ctypes.c_int]
         self.libprojectors.set_GPU.restype = ctypes.c_bool
         return self.libprojectors.set_GPU(which)
+        
+    def set_gpus(self, listOfGPUs):
+        return self.set_GPUs(listOfGPUs)
         
     def set_GPUs(self, listOfGPUs):
         self.libprojectors.set_GPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
@@ -967,6 +991,9 @@ class tomographicModels:
             z,y,x = np.meshgrid(z,y,x, indexing='ij')
         return x,y,z
 
+    def display_volume(self,vol):
+        self.displayVolume(vol)
+
     def displayVolume(self,vol):
         try:
             import napari
@@ -980,6 +1007,9 @@ class tomographicModels:
             print('pip install napari[all]')
             
     def sketchSystem(self,whichView=None):
+        self.sketchSystem(whichView)
+            
+    def sketch_system(self,whichView=None):
     
         if self.get_numAngles() <= 0 or self.get_numRows() <= 0 or self.get_numCols() <= 0:
             print('CT geometry not set!')
