@@ -15,7 +15,111 @@
 
 #ifdef INCLUDE_CUFFT
 #include <cufft.h>
+#endif
 
+__global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis)
+{
+    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int m = threadIdx.y + blockIdx.y * blockDim.y;
+    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    if (l >= N.x || m >= N.y || n >= N.z)
+        return;
+
+    const float v = m * T.y + startVal.y;
+    const float u = n * T.z + startVal.z;
+
+    const float lineLength = (R + tau * u) / (1.0f + u * u);
+
+    const float one_over_T_v = 1.0f / T.y;
+    const float one_over_T_u = 1.0f / T.z;
+    const float u_shift = startVal.z * one_over_T_u - 1.0f;
+    const float v_shift = startVal.y * one_over_T_v - 1.0f;
+
+    const float l0 = (float)l;
+    const int l_prev = max(0, l - 1);
+    const int l_next = min(N.x - 1, l + 1);
+
+    const float phi = phis[l];
+    float T_phi = T.x;
+    if (l == 0)
+        T_phi = phis[1] - phis[0];
+    else if (l == N.x - 1)
+        T_phi = phis[N.x - 1] - phis[N.x - 2];
+    else
+        T_phi = 0.5f * (phis[l] - phis[l - 1] + phis[l + 1] - phis[l]);
+
+    const float cos_T_phi_epsilon = cos(epsilon * T_phi);
+    const float sin_T_phi_epsilon = sin(epsilon * T_phi);
+    const float cos_phi = cos(phi);
+    const float sin_phi = sin(phi);
+    const float cos_phi_prev = cos(phis[l_prev]);
+    const float sin_phi_prev = sin(phis[l_prev]);
+    const float cos_phi_next = cos(phis[l_next]);
+    const float sin_phi_next = cos(phis[l_next]);
+
+    int shiftDirection;
+    float B0, B1, B2;
+    float one_over_neg_B_dot_theta;
+    float cos_phi_epsilon, sin_phi_epsilon;
+    float cos_phi_shift, sin_phi_shift;
+    float u_arg, v_arg;
+
+    shiftDirection = 0;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon + cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi;
+    sin_phi_shift = sin_phi;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau*(sin_phi_epsilon-sin_phi_shift) + lineLength*(-cos_phi - u*sin_phi);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau*(cos_phi_epsilon-cos_phi_shift) + lineLength*(-sin_phi + u*cos_phi);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)*T_phi + lineLength*v;
+    one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
+    u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
+    v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
+    const float term1 = tex3D<float>(g, u_arg, v_arg, l0);
+
+    shiftDirection = l_next-l;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon + cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi_next;
+    sin_phi_shift = sin_phi_next;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau*(sin_phi_epsilon-sin_phi_shift) + lineLength*(-cos_phi - u*sin_phi);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau*(cos_phi_epsilon-cos_phi_shift) + lineLength*(-sin_phi + u*cos_phi);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)*T_phi + lineLength*v;
+    one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
+    u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
+    v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
+    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next);
+
+    shiftDirection = 0;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon - cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi;
+    sin_phi_shift = sin_phi;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau*(sin_phi_epsilon-sin_phi_shift) + lineLength*(-cos_phi - u*sin_phi);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau*(cos_phi_epsilon-cos_phi_shift) + lineLength*(-sin_phi + u*cos_phi);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)*T_phi + lineLength*v;
+    one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
+    u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
+    v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
+    const float term3 = tex3D<float>(g, u_arg, v_arg, l0);
+
+    shiftDirection = l_prev-l;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon - cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi_prev;
+    sin_phi_shift = sin_phi_prev;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau *(sin_phi_epsilon-sin_phi_shift) + lineLength*(-cos_phi - u*sin_phi);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau *(cos_phi_epsilon-cos_phi_shift) + lineLength*(-sin_phi + u*cos_phi);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)*T_phi + lineLength*v;
+    one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
+    u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
+    v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
+    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev);
+
+    Dg[l * N.z * N.y + m * N.z + n] = 0.5f*T_phi*((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon); // ? 1.0f / T_phi
+}
+
+#ifdef INCLUDE_CUFFT
 __global__ void splitLeftAndRight(const float* g, float* g_left, float* g_right, int4 N, float4 T, float4 startVal)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -171,10 +275,22 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
         data_block[k] = data_padded_block[k];
 }
 
-cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar)
+cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar, float sampleShift)
 {
     cudaError_t cudaStatus;
-    double* h_d = HilbertTransformImpulseResponse(N);
+    double* h_d = NULL;
+    if (sampleShift == 0.0)
+        h_d = HilbertTransformImpulseResponse(N, 0);
+    else if (sampleShift > 0.0)
+    {
+        h_d = HilbertTransformImpulseResponse(N, 1);
+        params->colShiftFromFilter -= 0.5;
+    }
+    else
+    {
+        h_d = HilbertTransformImpulseResponse(N, -1);
+        params->colShiftFromFilter += 0.5;
+    }
     float* h = new float[N];
     for (int i = 0; i < N; i++)
         h[i] = h_d[i] * scalar / float(N);
@@ -355,12 +471,12 @@ bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
     return conv1D(g, params, cpu_to_gpu, scalar, 0);
 }
 
-bool Hilbert1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
+bool Hilbert1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift)
 {
-    return conv1D(g, params, cpu_to_gpu, scalar, 1);
+    return conv1D(g, params, cpu_to_gpu, scalar, 1, sampleShift);
 }
 
-bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int which)
+bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int which, float sampleShift)
 {
     bool retVal = true;
     cudaSetDevice(params->whichGPU);
@@ -384,7 +500,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     if (which == 0)
         H_real = rampFilterFrequencyResponseMagnitude(N_H, params);
     else
-        H_comp = HilbertTransformFrequencyResponse(N_H, params, scalar);
+        H_comp = HilbertTransformFrequencyResponse(N_H, params, scalar, sampleShift);
     if (scalar != 1.0)
     {
         for (int i = 0; i < N_H_over2; i++)
@@ -735,3 +851,65 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
     return false;
 }
 #endif
+
+bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
+{
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+
+    float epsilon = std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi())));
+
+    float* dev_g = 0;
+    float* dev_Dg = 0;
+    if (cpu_to_gpu)
+    {
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+        if (cudaSuccess != cudaMalloc((void**)&dev_Dg, N_g.x*N_g.y*N_g.z * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+    }
+    else
+    {
+        dev_Dg = g;
+        if (cudaSuccess != cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+        equal(dev_g, dev_Dg, make_int3(N_g.x, N_g.y, N_g.z), params->whichGPU);
+    }
+
+    cudaTextureObject_t d_data_txt = NULL;
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
+
+    float* dev_phis = copyAngleArrayToGPU(params);
+
+    dim3 dimBlock = setBlockSize(N_g);
+    dim3 dimGrid = setGridSize(N_g, dimBlock);
+    deriv_helical_NHDLH_flat <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis);
+    params->colShiftFromFilter += -0.5;
+    params->rowShiftFromFilter += 0.5;
+
+
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess)
+    {
+        fprintf(stderr, "kernel failed!\n");
+        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+    }
+
+    if (cpu_to_gpu)
+        pullProjectionDataFromGPU(g, params, dev_Dg, params->whichGPU);
+
+    cudaFreeArray(d_data_array);
+    cudaDestroyTextureObject(d_data_txt);
+
+    if (cpu_to_gpu == true && dev_Dg != 0)
+        cudaFree(dev_Dg);
+    if (dev_phis != 0)
+        cudaFree(dev_phis);
+    if (dev_g != 0)
+        cudaFree(dev_g);
+
+    return true;
+}

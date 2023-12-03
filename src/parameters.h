@@ -317,6 +317,7 @@ public:
 	float rFOVspecified;
 	int rampID;
 	float colShiftFromFilter;
+	float rowShiftFromFilter;
 	float axisOfSymmetry;
 	float chunkingMemorySizeThreshold;
     
@@ -474,6 +475,9 @@ public:
 
 	float get_extraMemoryReserved();
 
+	float get_phi_start();
+	float get_phi_end();
+
 private:
 
 	/**
@@ -490,6 +494,8 @@ private:
 	bool clearModularBeamParameters();
 
 	float extraMemoryReserved;
+	float phi_start;
+	float phi_end;
 };
 
 #endif

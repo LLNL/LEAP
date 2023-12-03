@@ -29,7 +29,7 @@ in poor computational performance.
 # Specify the number of detector rows and columns which is used below
 # Scale the number of angles and the detector pixel size with N
 N = 300
-numTurns = 3
+numTurns = 1
 numAngles = int(720*N/1024)*numTurns
 pixelSize = 0.2*2048/N
 M = N
@@ -38,8 +38,8 @@ M = N
 #leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
-#leapct.set_normalizedHelicalPitch(0.2)
-leapct.set_normalizedHelicalPitch(1.0)
+leapct.set_normalizedHelicalPitch(0.2)
+#leapct.set_normalizedHelicalPitch(1.0)
 
 # Set the volume parameters
 leapct.set_default_volume()
@@ -61,15 +61,18 @@ f[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
 #leapct.displayVolume(f)
 
 # "Simulate" projection data
+startTime = time.time()
 leapct.project(g,f)
+print('Elapsed time: ' + str(time.time()-startTime))
 f[:] = 0.0
-g[g<0.0] = 0.0
-g[:] = np.random.poisson(g)
+#g[g<0.0] = 0.0
+#g[:] = np.random.poisson(g)
 
 # Reconstruction
 startTime = time.time()
+leapct.FBP(g,f)
 #leapct.backproject(g,f)
-leapct.ASDPOCS(g,f,20,5,3,1.0/20.0)
+#leapct.ASDPOCS(g,f,20,5,3,1.0/20.0)
 #leapct.diffuse(f,1.0/20.0,3)
 #leapct.SART(g,f,10,5)
 #leapct.MLEM(g,f,5,1)

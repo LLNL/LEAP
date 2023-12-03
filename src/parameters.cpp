@@ -48,6 +48,7 @@ void parameters::initialize()
 	rampID = 2;
 	chunkingMemorySizeThreshold = 0.1;
 	colShiftFromFilter = 0.0;
+	rowShiftFromFilter = 0.0;
 
 	geometry = CONE;
 	detectorType = FLAT;
@@ -83,11 +84,23 @@ void parameters::initialize()
 	offsetZ = 0.0;
 
 	extraMemoryReserved = 0.25;
+	phi_start = 0.0;
+	phi_end = 0.0;
 }
 
 float parameters::get_extraMemoryReserved()
 {
 	return extraMemoryReserved;
+}
+
+float parameters::get_phi_start()
+{
+	return phi_start;
+}
+
+float parameters::get_phi_end()
+{
+	return phi_end;
 }
 
 parameters::parameters(const parameters& other)
@@ -126,6 +139,7 @@ void parameters::assign(const parameters& other)
 	this->rampID = other.rampID;
 	this->chunkingMemorySizeThreshold = other.chunkingMemorySizeThreshold;
 	this->colShiftFromFilter = other.colShiftFromFilter;
+	this->rowShiftFromFilter = other.rowShiftFromFilter;
 	this->mu = other.mu;
 	this->muCoeff = other.muCoeff;
 	this->muRadius = other.muRadius;
@@ -660,6 +674,8 @@ bool parameters::set_angles()
 		phis = new float[numAngles];
 		for (int i = 0; i < numAngles; i++)
 			phis[i] = float(i)*angularRange*(PI / 180.0) / float(numAngles) - 0.5*PI;
+		phi_start = phis[0];
+		phi_end = phis[numAngles - 1];
 		return true;
 	}
 }
@@ -674,7 +690,8 @@ bool parameters::phaseShift(float radians)
 			printf("Warning: phaseShift argument is given in radians\n");
 		for (int i = 0; i < numAngles; i++)
 			phis[i] += radians;
-
+		phi_start = phis[0];
+		phi_end = phis[numAngles - 1];
 		return true;
 	}
 }
@@ -692,6 +709,8 @@ bool parameters::set_angles(float* phis_new, int numAngles_new)
 		phis = new float[numAngles];
 		for (int i = 0; i < numAngles; i++)
 			phis[i] = phis_new[i] * PI / 180.0 - 0.5*PI;
+		phi_start = phis[0];
+		phi_end = phis[numAngles - 1];
 
 		if (numAngles >= 2)
 			angularRange = (fabs(phis_new[numAngles - 1] - phis_new[0]) + 0.5 * fabs(phis_new[numAngles - 1] - phis_new[numAngles - 2]) + 0.5 * fabs(phis_new[1] - phis_new[0]));
@@ -761,7 +780,7 @@ float parameters::u_0()
 
 float parameters::v_0()
 {
-	return -centerRow * pixelHeight;
+	return -(centerRow + rowShiftFromFilter) * pixelHeight;
 }
 
 float parameters::phi_0()
@@ -1156,7 +1175,11 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 	}
 	if (phis_new != NULL)
 	{
+		float phi_start_save = phi_start;
+		float phi_end_save = phi_end;
 		set_angles(phis_new, numAngles_new);
+		phi_start = phi_start_save;
+		phi_end = phi_end_save;
 	}
 	numAngles = numAngles_new;
 	return true;

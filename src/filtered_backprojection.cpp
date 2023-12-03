@@ -31,9 +31,9 @@ filteredBackprojection::~filteredBackprojection()
 
 }
 
-bool filteredBackprojection::HilbertFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar)
+bool filteredBackprojection::HilbertFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift)
 {
-	return conv1D(g, params, cpu_to_gpu, scalar, 1);
+	return conv1D(g, params, cpu_to_gpu, scalar, 1, sampleShift);
 }
 
 bool filteredBackprojection::rampFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar)
@@ -41,7 +41,7 @@ bool filteredBackprojection::rampFilterProjections(float* g, parameters* params,
 	return conv1D(g, params, cpu_to_gpu, scalar, 0);
 }
 
-bool filteredBackprojection::conv1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter)
+bool filteredBackprojection::conv1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter, float sampleShift)
 {
 	if (params->whichGPU < 0)
 	{
@@ -90,7 +90,7 @@ bool filteredBackprojection::conv1D(float* g, parameters* params, bool cpu_to_gp
 			if (whichFilter == 0)
 				return rampFilter1D(g, params, cpu_to_gpu, scalar);
 			else
-				return Hilbert1D(g, params, cpu_to_gpu, scalar);
+				return Hilbert1D(g, params, cpu_to_gpu, scalar, sampleShift);
 		}
 	}
 }
@@ -109,13 +109,21 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 	if (params->whichGPU < 0 || cpu_to_gpu == false)
 	{
 		// no transfers to/from GPU are necessary; just run the code
-		applyPreRampFilterWeights(g, params, cpu_to_gpu);
-		if (params->muCoeff != 0.0)
-			convertARTtoERT(g, params, false, false);
-		rampFilterProjections(g, params, cpu_to_gpu, FBPscalar(params));
-		if (params->muCoeff != 0.0)
-			convertARTtoERT(g, params, false, true);
-		return applyPostRampFilterWeights(g, params, cpu_to_gpu);
+		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
+		{
+			HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
+			return parallelRay_derivative(g, params, false);
+		}
+		else
+		{
+			applyPreRampFilterWeights(g, params, cpu_to_gpu);
+			if (params->muCoeff != 0.0)
+				convertARTtoERT(g, params, false, false);
+			rampFilterProjections(g, params, cpu_to_gpu, FBPscalar(params));
+			if (params->muCoeff != 0.0)
+				convertARTtoERT(g, params, false, true);
+			return applyPostRampFilterWeights(g, params, cpu_to_gpu);
+		}
 	}
 	else
 	{
@@ -150,9 +158,9 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		printf("Error: FBP not implemented for modular geometries\n");
 		return false;
 	}
-	if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
+	if (params->geometry == parameters::CONE && params->helicalPitch != 0.0 && params->whichGPU < 0)
 	{
-		printf("Error: FBP not yet implemented for helical cone-beam geometry\n");
+		printf("Error: CPU-based FBP not yet implemented for helical cone-beam geometry\n");
 		return false;
 	}
 
@@ -181,6 +189,8 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 			retVal = proj.backproject(g, f, params, cpu_to_gpu);
 		params->doWeightedBackprojection = doWeightedBackprojection_save;
 		params->doExtrapolation = doExtrapolation_save;
+		params->colShiftFromFilter = 0.0;
+		params->rowShiftFromFilter = 0.0;
 		return retVal;
 	}
 	else
