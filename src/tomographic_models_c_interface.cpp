@@ -240,6 +240,14 @@ bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles,
 	return tomo.backprojectParallelBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
+bool rowRangeNeededForBackprojection(int* rowsNeeded)
+{
+	if (rowsNeeded == NULL || tomo.params.allDefined() == false)
+		return false;
+	else
+		return tomo.params.rowRangeNeededForBackprojection(0, tomo.params.numZ - 1, rowsNeeded);
+}
+
 int get_geometry()
 {
 	return tomo.params.geometry;

@@ -25,15 +25,31 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     if (l >= N.x || m >= N.y || n >= N.z)
         return;
 
+    //*
     const float v = m * T.y + startVal.y;
     const float u = n * T.z + startVal.z;
 
     const float lineLength = (R + tau * u) / (1.0f + u * u);
+    //const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
 
     const float one_over_T_v = 1.0f / T.y;
     const float one_over_T_u = 1.0f / T.z;
     const float u_shift = startVal.z * one_over_T_u - 1.0f;
     const float v_shift = startVal.y * one_over_T_v - 1.0f;
+    //*/
+
+    /*
+    const float v = m * T.y + startVal.y + 0.5f*T.y;
+    const float u = n * T.z + startVal.z + 0.5f*T.z;
+
+    const float lineLength = (R + tau * u) / (1.0f + u * u);
+    //const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
+
+    const float one_over_T_v = 1.0f / T.y;
+    const float one_over_T_u = 1.0f / T.z;
+    const float u_shift = startVal.z * one_over_T_u - 0.5f;
+    const float v_shift = startVal.y * one_over_T_v - 0.5f;
+    //*/
 
     const float l0 = (float)l;
     const int l_prev = max(0, l - 1);
@@ -116,7 +132,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev);
 
-    Dg[l * N.z * N.y + m * N.z + n] = 0.5f*T_phi*((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon); // ? 1.0f / T_phi
+    Dg[l * N.z * N.y + m * N.z + n] = T_phi*((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon); // ? 1.0f / T_phi
 }
 
 #ifdef INCLUDE_CUFFT

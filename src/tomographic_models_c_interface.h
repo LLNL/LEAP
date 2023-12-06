@@ -60,6 +60,8 @@ extern "C" PROJECTOR_API bool backprojectFanBeam(float* g, float* f, bool cpu_to
 extern "C" PROJECTOR_API bool projectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
+extern "C" PROJECTOR_API bool rowRangeNeededForBackprojection(int* rowsNeeded);
+
 extern "C" PROJECTOR_API bool set_GPU(int whichGPU);
 extern "C" PROJECTOR_API bool set_GPUs(int* whichGPUs, int N);
 extern "C" PROJECTOR_API int get_GPU();

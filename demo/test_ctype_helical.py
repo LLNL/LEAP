@@ -29,7 +29,7 @@ in poor computational performance.
 # Specify the number of detector rows and columns which is used below
 # Scale the number of angles and the detector pixel size with N
 N = 300
-numTurns = 1
+numTurns = 3
 numAngles = int(720*N/1024)*numTurns
 pixelSize = 0.2*2048/N
 M = N
@@ -38,8 +38,8 @@ M = N
 #leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
-leapct.set_normalizedHelicalPitch(0.2)
-#leapct.set_normalizedHelicalPitch(1.0)
+#leapct.set_normalizedHelicalPitch(0.2)
+leapct.set_normalizedHelicalPitch(1.0)
 
 # Set the volume parameters
 leapct.set_default_volume()
@@ -70,7 +70,9 @@ f[:] = 0.0
 
 # Reconstruction
 startTime = time.time()
+#leapct.set_GPU(0)
 leapct.FBP(g,f)
+f[f<0.0] = 0.0
 #leapct.backproject(g,f)
 #leapct.ASDPOCS(g,f,20,5,3,1.0/20.0)
 #leapct.diffuse(f,1.0/20.0,3)

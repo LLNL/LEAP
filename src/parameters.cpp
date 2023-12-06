@@ -170,6 +170,9 @@ void parameters::assign(const parameters& other)
     this->offsetY = other.offsetY;
     this->offsetZ = other.offsetZ;
 
+	this->phi_start = other.phi_start;
+	this->phi_end = other.phi_end;
+
     if (this->phis != NULL)
         delete [] this->phis;
 	if (other.phis != NULL)
@@ -674,8 +677,10 @@ bool parameters::set_angles()
 		phis = new float[numAngles];
 		for (int i = 0; i < numAngles; i++)
 			phis[i] = float(i)*angularRange*(PI / 180.0) / float(numAngles) - 0.5*PI;
-		phi_start = phis[0];
-		phi_end = phis[numAngles - 1];
+		//phi_start = phis[0];
+		//phi_end = phis[numAngles - 1];
+		phi_start = min(phis[0], phis[numAngles - 1]);
+		phi_end = max(phis[0], phis[numAngles - 1]);
 		return true;
 	}
 }
@@ -690,8 +695,8 @@ bool parameters::phaseShift(float radians)
 			printf("Warning: phaseShift argument is given in radians\n");
 		for (int i = 0; i < numAngles; i++)
 			phis[i] += radians;
-		phi_start = phis[0];
-		phi_end = phis[numAngles - 1];
+		phi_start = min(phis[0], phis[numAngles - 1]);
+		phi_end = max(phis[0], phis[numAngles - 1]);
 		return true;
 	}
 }
@@ -709,8 +714,8 @@ bool parameters::set_angles(float* phis_new, int numAngles_new)
 		phis = new float[numAngles];
 		for (int i = 0; i < numAngles; i++)
 			phis[i] = phis_new[i] * PI / 180.0 - 0.5*PI;
-		phi_start = phis[0];
-		phi_end = phis[numAngles - 1];
+		phi_start = min(phis[0], phis[numAngles - 1]);
+		phi_end = max(phis[0], phis[numAngles - 1]);
 
 		if (numAngles >= 2)
 			angularRange = (fabs(phis_new[numAngles - 1] - phis_new[0]) + 0.5 * fabs(phis_new[numAngles - 1] - phis_new[numAngles - 2]) + 0.5 * fabs(phis_new[1] - phis_new[0]));

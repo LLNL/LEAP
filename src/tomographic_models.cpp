@@ -799,19 +799,9 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 bool tomographicModels::set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	if (voxelWidth <= 0.0)
-	{
-		if (params.geometry == parameters::PARALLEL)
-			voxelWidth = params.pixelWidth;
-		else
-			voxelWidth = params.pixelWidth * params.sod / params.sdd;
-	}
+		voxelWidth = params.default_voxelWidth();
 	if (voxelHeight <= 0.0)
-	{
-		if (params.geometry == parameters::PARALLEL || params.geometry == parameters::FAN)
-			voxelHeight = params.pixelHeight;
-		else
-			voxelHeight = params.pixelHeight * params.sod / params.sdd;
-	}
+		voxelHeight = params.default_voxelHeight();
 
 	params.numX = numX;
 	params.numY = numY;

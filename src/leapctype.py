@@ -321,6 +321,13 @@ class tomographicModels:
         self.libprojectors.sensitivity(f,True)
         return f
     
+    def rowRangeNeededForBackprojection(self):
+        rowsNeeded = np.zeros((2,1),dtype=np.float32)
+        rowsNeeded[1] = self.get_numRows()-1
+        self.libprojectors.rowRangeNeededForBackprojection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.rowRangeNeededForBackprojection.restype = ctypes.c_bool
+        self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
+        return rowsNeeded
     
     ###################################################################################################################
     ###################################################################################################################
