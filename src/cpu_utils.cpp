@@ -4,14 +4,27 @@
 
 using namespace std;
 
+float* getSlice(float* f, int i, parameters* params)
+{
+    if (params->volumeDimensionOrder == parameters::XYZ)
+        return &f[uint64(i) * uint64(params->numZ) * uint64(params->numY)];
+    else
+        return &f[uint64(i) * uint64(params->numX) * uint64(params->numY)];
+}
+
+float* getProjection(float* g, int i, parameters* params)
+{
+    return &g[uint64(i) * uint64(params->numRows) * uint64(params->numCols)];
+}
+
 float tex3D(float* f, int iz, int iy, int ix, parameters* params)
 {
 	if (0 <= ix && ix < params->numX && 0 <= iy && iy < params->numY && 0 <= iz && iz < params->numZ)
 	{
 		if (params->volumeDimensionOrder == parameters::XYZ)
-			return f[ix * params->numZ * params->numY + iy * params->numZ + iz];
+			return f[uint64(ix) * uint64(params->numZ * params->numY) + uint64(iy * params->numZ + iz)];
 		else
-			return f[iz * params->numY * params->numX + iy * params->numX + ix];
+			return f[uint64(iz) * uint64(params->numY * params->numX) + uint64(iy * params->numX + ix)];
 	}
 	else
 		return 0.0;
@@ -40,8 +53,8 @@ float tex3D(float* f, float iz, float iy, float ix, parameters* params)
 
         if (params->volumeDimensionOrder == parameters::XYZ)
         {
-            float* xSlice_lo = &f[ix_lo * params->numZ * params->numY];
-            float* xSlice_hi = &f[ix_hi * params->numZ * params->numY];
+            float* xSlice_lo = &f[uint64(ix_lo) * uint64(params->numZ * params->numY)];
+            float* xSlice_hi = &f[uint64(ix_hi) * uint64(params->numZ * params->numY)];
 
             float partA = (1.0 - dy) * ((1.0 - dz) * xSlice_lo[iy_lo * params->numZ + iz_lo] + dz * xSlice_lo[iy_lo * params->numZ + iz_hi]) + dy * ((1.0 - dz) * xSlice_lo[iy_hi * params->numZ + iz_lo] + dz * xSlice_lo[iy_hi * params->numZ + iz_hi]);
             float partB = (1.0 - dy) * ((1.0 - dz) * xSlice_hi[iy_lo * params->numZ + iz_lo] + dz * xSlice_hi[iy_lo * params->numZ + iz_hi]) + dy * ((1.0 - dz) * xSlice_hi[iy_hi * params->numZ + iz_lo] + dz * xSlice_hi[iy_hi * params->numZ + iz_hi]);
@@ -50,8 +63,8 @@ float tex3D(float* f, float iz, float iy, float ix, parameters* params)
         }
         else
         {
-            float* zSlice_lo = &f[iz_lo * params->numY * params->numX];
-            float* zSlice_hi = &f[iz_hi * params->numY * params->numX];
+            float* zSlice_lo = &f[uint64(iz_lo) * uint64(params->numY * params->numX)];
+            float* zSlice_hi = &f[uint64(iz_hi) * uint64(params->numY * params->numX)];
 
             float partA = (1.0 - dy) * ((1.0 - dx) * zSlice_lo[iy_lo * params->numX + ix_lo] + dx * zSlice_lo[iy_lo * params->numX + ix_hi]) + dy * ((1.0 - dx) * zSlice_lo[iy_hi * params->numX + ix_lo] + dx * zSlice_lo[iy_hi * params->numX + ix_hi]);
             float partB = (1.0 - dy) * ((1.0 - dx) * zSlice_hi[iy_lo * params->numX + ix_lo] + dx * zSlice_hi[iy_lo * params->numX + ix_hi]) + dy * ((1.0 - dx) * zSlice_hi[iy_hi * params->numX + ix_lo] + dx * zSlice_hi[iy_hi * params->numX + ix_hi]);
@@ -70,19 +83,19 @@ float* reorder_ZYX_to_XYZ(float* f, parameters* params, int sliceStart, int slic
     if (sliceEnd < 0)
         sliceEnd = params->numZ - 1;
     int numZ_new = (sliceEnd - sliceStart + 1);
-    float* f_XYZ = (float*)malloc(sizeof(float) * params->numX * params->numY * numZ_new);
+    float* f_XYZ = (float*)malloc(sizeof(float) * uint64(params->numX * params->numY) * uint64(numZ_new));
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
     #pragma omp parallel for
     for (int ix = 0; ix < params->numX; ix++)
     {
-        float* xSlice_out = &f_XYZ[ix * numZ_new * params->numY];
+        float* xSlice_out = &f_XYZ[uint64(ix) * uint64(numZ_new * params->numY)];
         for (int iy = 0; iy < params->numY; iy++)
         {
             float* zLine_out = &xSlice_out[iy * numZ_new];
             for (int iz = sliceStart; iz <= sliceEnd; iz++)
             {
-                zLine_out[iz - sliceStart] = f[iz * params->numX * params->numY + iy * params->numX + ix];
+                zLine_out[iz - sliceStart] = f[uint64(iz) * uint64(params->numX * params->numY) + uint64(iy * params->numX + ix)];
             }
         }
     }

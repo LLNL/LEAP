@@ -338,7 +338,7 @@ __global__ void attenuatedWeightedBackprojectorKernel_SF(cudaTextureObject_t g, 
     }
 
     const float K = float(k) + 0.5f;
-    const float D = T_f.x * max(N_f.x, N_f.y);
+    const float D = -T_f.x * max(N_f.x, N_f.y);
 
     float val = 0.0;
     // loop over projection angles
@@ -394,7 +394,7 @@ __global__ void attenuatedWeightedBackprojectorKernel_SF(cudaTextureObject_t g, 
         //*/
     }
 
-    f[ind] = val / (4.0f * x_shift);
+    f[ind] = val * T_f.x / (4.0f * x_shift);
 }
 
 __global__ void attenuatedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, cudaTextureObject_t mu, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
@@ -432,7 +432,7 @@ __global__ void attenuatedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g
     const float s_shift = -startVals_g.z * T_u_inv;
     float cos_phi, sin_phi, C, s_arg, ds;
 
-    const float D = T_f.x * max(N_f.x, N_f.y);
+    const float D = -T_f.x * max(N_f.x, N_f.y);
 
     float val = 0.0;
     // loop over projection angles
@@ -569,6 +569,8 @@ __global__ void attenuatedProjectorKernel_SF(float* g, int4 N_g, float4 T_g, flo
             shiftConstant = (n_minus_half - C) * ds_ind_dj_inv;
         else
             shiftConstant = (n_plus_half + C) * ds_ind_dj_inv;
+
+        float attenExpCoeff_prev = 0.0f;
         for (int ii = 0; ii < N_f.x; ii++)
         {
             int i = ii;
@@ -585,9 +587,10 @@ __global__ void attenuatedProjectorKernel_SF(float* g, int4 N_g, float4 T_g, flo
                 attenExpCoeff_inc = l_phi * tex3D<float>(mu, ix, ((u + x * sin_phi) * cos_phi_inv - startVals_f.y) * Tx_inv + 0.5f, iz);
 
             if (ii == 0)
-                attenExpCoeff = attenExpCoeff_inc;
+                attenExpCoeff = 0.5f * (attenExpCoeff_inc + attenExpCoeff_prev);
             else
-                attenExpCoeff += attenExpCoeff_inc;
+                attenExpCoeff += 0.5f * (attenExpCoeff_inc + attenExpCoeff_prev);
+            attenExpCoeff_prev = attenExpCoeff_inc;
             // End Terms for attenuation factor
 
             const float s_ind_base = (float)i * ds_ind_di + s_ind_offset;
@@ -623,6 +626,7 @@ __global__ void attenuatedProjectorKernel_SF(float* g, int4 N_g, float4 T_g, flo
             shiftConstant = (n_minus_half - C) * ds_ind_di_inv;
         else
             shiftConstant = (n_plus_half + C) * ds_ind_di_inv;
+        float attenExpCoeff_prev = 0.0f;
         for (int jj = 0; jj < N_f.y; jj++)
         {
             int j = jj;
@@ -639,9 +643,10 @@ __global__ void attenuatedProjectorKernel_SF(float* g, int4 N_g, float4 T_g, flo
                 attenExpCoeff_inc = l_phi * tex3D<float>(mu, ((y * cos_phi - u) * sin_phi_inv - startVals_f.x) * Tx_inv + 0.5f, iy, iz);
 
             if (jj == 0)
-                attenExpCoeff = attenExpCoeff_inc;
+                attenExpCoeff = 0.5f * (attenExpCoeff_inc + attenExpCoeff_prev);
             else
-                attenExpCoeff += attenExpCoeff_inc;
+                attenExpCoeff += 0.5f * (attenExpCoeff_inc + attenExpCoeff_prev);
+            attenExpCoeff_prev = attenExpCoeff_inc;
             // End Terms for attenuation factor
 
             const float s_ind_base = (float)j * ds_ind_dj + s_ind_offset;

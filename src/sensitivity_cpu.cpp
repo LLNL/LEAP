@@ -47,7 +47,7 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
         for (int iz = 0; iz < params->numZ; iz++)
         {
             float z = iz * params->voxelHeight + params->z_0();
-            float* zSlice = &s[iz*params->numY*params->numX];
+            float* zSlice = &s[uint64(iz)* uint64(params->numY*params->numX)];
             for (int iy = 0; iy < params->numY; iy++)
             {
                 float y = iy * params->voxelWidth + params->y_0();
@@ -81,7 +81,7 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
         #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
-            float* xSlice = &s[ix * params->numY * params->numZ];
+            float* xSlice = &s[uint64(ix) * uint64(params->numY * params->numZ)];
             float x = ix*params->voxelWidth + params->x_0();
             for (int iy = 0; iy < params->numY; iy++)
             {
@@ -155,7 +155,7 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
         #pragma omp parallel for schedule(dynamic)
         for (int iz = 0; iz < params->numZ; iz++)
         {
-            float* zSlice = &s[iz * params->numY * params->numX];
+            float* zSlice = &s[uint64(iz) * uint64(params->numY * params->numX)];
             for (int iy = 0; iy < params->numY; iy++)
             {
                 float* xLine = &zSlice[iy * params->numX];
@@ -195,7 +195,7 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
         #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
-            float* xSlice = &s[ix * params->numY * params->numZ];
+            float* xSlice = &s[uint64(ix) * uint64(params->numY * params->numZ)];
             float* xLine_in = &sensitivitySlice[ix * params->numY];
             for (int iy = 0; iy < params->numY; iy++)
             {
@@ -250,7 +250,7 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
         #pragma omp parallel for schedule(dynamic)
         for (int iz = 0; iz < params->numZ; iz++)
         {
-            float* zSlice = &s[iz * params->numY * params->numX];
+            float* zSlice = &s[uint64(iz) * uint64(params->numY * params->numX)];
             for (int iy = 0; iy < params->numY; iy++)
             {
                 float* xLine = &zSlice[iy * params->numX];
@@ -289,7 +289,7 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
         #pragma omp parallel for schedule(dynamic)
         for (int ix = 0; ix < params->numX; ix++)
         {
-            float* xSlice = &s[ix * params->numY * params->numZ];
+            float* xSlice = &s[uint64(ix) * uint64(params->numY * params->numZ)];
             float* xLine_in = &sensitivitySlice[ix * params->numY];
             for (int iy = 0; iy < params->numY; iy++)
             {

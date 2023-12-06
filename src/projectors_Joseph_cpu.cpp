@@ -39,7 +39,7 @@ bool project_Joseph_modular_cpu(float* g, float* f, parameters* params)
     #pragma omp parallel for schedule(dynamic)
     for (int iphi = 0; iphi < params->numAngles; iphi++)
     {
-        float* aProj = &g[iphi*params->numRows*params->numCols];
+        float* aProj = &g[uint64(iphi)* uint64(params->numRows*params->numCols)];
         float3 p = make_float3(params->sourcePositions[3 * iphi + 0], params->sourcePositions[3 * iphi + 1], params->sourcePositions[3 * iphi + 2]);
         float* c = &(params->moduleCenters[3 * iphi]);
         float* u_vec = &(params->colVectors[3 * iphi]);
@@ -71,7 +71,7 @@ bool backproject_Joseph_modular_cpu(float* g, float* f, parameters* params)
         for (int iz = 0; iz < params->numZ; iz++)
         {
             float z = iz * params->voxelHeight + params->z_0();
-            float* zSlice = &f[iz*params->numX*params->numY];
+            float* zSlice = &f[uint64(iz)* uint64(params->numX*params->numY)];
             for (int iphi = 0; iphi < params->numAngles; iphi++)
             {
                 float* aProj = &g[iphi*params->numRows*params->numCols];
@@ -103,7 +103,7 @@ bool backproject_Joseph_modular_cpu(float* g, float* f, parameters* params)
         for (int ix = 0; ix < params->numX; ix++)
         {
             float x = ix * params->voxelWidth + params->x_0();
-            float* xSlice = &f[ix * params->numZ * params->numY];
+            float* xSlice = &f[uint64(ix) * uint64(params->numZ * params->numY)];
             for (int iphi = 0; iphi < params->numAngles; iphi++)
             {
                 float* aProj = &g[iphi * params->numRows * params->numCols];

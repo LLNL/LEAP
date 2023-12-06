@@ -95,7 +95,7 @@ bool conv1D_cpu(float*& g, parameters* params, float scalar, int whichFilter)
 
         for (int iRow = 0; iRow < params->numRows; iRow++)
         {
-            float* proj_line = &g[iphi * params->numRows * params->numCols + iRow * params->numCols];
+            float* proj_line = &g[uint64(iphi) * uint64(params->numRows * params->numCols) + uint64(iRow * params->numCols)];
 
             // Put in padded array
             for (int i = 0; i < N_H; i++)
