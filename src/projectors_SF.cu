@@ -1212,7 +1212,7 @@ bool project_SF(float *&g, float *f, parameters* params, bool cpu_to_gpu)
     
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+        if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(projections) failed!\n");
         }
@@ -1304,7 +1304,8 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
 
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
+        //printf("mallocing %.0f elements\n", float(params->volumeData_numberOfElements()));
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
         }
@@ -1359,10 +1360,12 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
         fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
+    //*
     if (cpu_to_gpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
     else
         f = dev_f;
+    //*/
 
     // Clean up
     cudaFreeArray(d_data_array);

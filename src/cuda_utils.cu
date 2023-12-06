@@ -641,7 +641,7 @@ float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
 {
 	cudaSetDevice(whichGPU);
 
-	int N = params->numAngles * params->numRows * params->numCols;
+    uint64 N = params->projectionData_numberOfElements();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Copy volume data to GPU
@@ -665,7 +665,7 @@ bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int w
 	cudaSetDevice(whichGPU);
 	cudaError_t cudaStatus;
 
-	int N = params->numAngles * params->numRows * params->numCols;
+    uint64 N = params->projectionData_numberOfElements();
 
 	cudaStatus = cudaMemcpy(g, dev_g, N * sizeof(float), cudaMemcpyDeviceToHost);
 	if (cudaSuccess != cudaStatus)
@@ -683,7 +683,7 @@ float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU)
 {
 	cudaSetDevice(whichGPU);
 
-	int N = params->numX * params->numY * params->numZ;
+    uint64 N = params->volumeData_numberOfElements();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Copy volume data to GPU
@@ -706,7 +706,7 @@ bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int which
 {
 	cudaSetDevice(whichGPU);
 	cudaError_t cudaStatus;
-	int N = params->numX * params->numY * params->numZ;
+    uint64 N = params->volumeData_numberOfElements();
 	cudaStatus = cudaMemcpy(f, dev_f, N * sizeof(float), cudaMemcpyDeviceToHost);
 	if (cudaSuccess != cudaStatus)
 	{
@@ -723,7 +723,7 @@ float* copy3DdataToGPU(float* g, int3 N, int whichGPU)
 {
 	cudaSetDevice(whichGPU);
 
-	int N_prod = N.x * N.y * N.z;
+	uint64 N_prod = uint64(N.x) * uint64(N.y) * uint64(N.z);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Copy volume data to GPU
@@ -746,7 +746,7 @@ bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 {
 	cudaSetDevice(whichGPU);
 	cudaError_t cudaStatus;
-	int N_prod = N.x * N.y * N.z;
+    uint64 N_prod = uint64(N.x) * uint64(N.y) * uint64(N.z);
 	cudaStatus = cudaMemcpy(g, dev_g, N_prod * sizeof(float), cudaMemcpyDeviceToHost);
 	if (cudaSuccess != cudaStatus)
 	{

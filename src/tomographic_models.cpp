@@ -141,14 +141,14 @@ bool tomographicModels::rampFilterVolume(float* f, bool cpu_to_gpu)
 float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 {
 	int numSlices = lastSlice - firstSlice + 1;
-	float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numSlices);
+	float* g_chunk = (float*)malloc(sizeof(float) * uint64(params.numAngles) * uint64(params.numCols) * uint64(numSlices));
 
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
 	{
-		float* g_proj = &g[iphi * params.numRows * params.numCols];
-		float* g_chunk_proj = &g_chunk[iphi * numSlices * params.numCols];
+		float* g_proj = &g[uint64(iphi) * uint64(params.numRows * params.numCols)];
+		float* g_chunk_proj = &g_chunk[uint64(iphi) * uint64(numSlices * params.numCols)];
 		for (int iRow = firstSlice; iRow <= lastSlice; iRow++)
 		{
 			float* g_line = &g_proj[iRow * params.numCols];
@@ -168,8 +168,8 @@ bool tomographicModels::combineRows(float* g, float* g_chunk, int firstRow, int 
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
 	{
-		float* g_proj = &g[iphi * params.numRows * params.numCols];
-		float* g_chunk_proj = &g_chunk[iphi * numRows * params.numCols];
+		float* g_proj = &g[uint64(iphi) * uint64(params.numRows * params.numCols)];
+		float* g_chunk_proj = &g_chunk[uint64(iphi) * uint64(numRows * params.numCols)];
 		for (int iRow = firstRow; iRow <= lastRow; iRow++)
 		{
 			float* g_line = &g_proj[iRow * params.numCols];
@@ -249,7 +249,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		//printf("row range: %d to %d\n", firstRow, lastRow);
 		//printf("slices range: %d to %d\n", sliceRange[0], sliceRange[1]);
 
-		float* f_chunk = &f[sliceRange[0] * params.numX * params.numY];
+		float* f_chunk = &f[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
 		// make a copy of the relavent rows
 		float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numRows);
@@ -268,7 +268,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
 		if (params.mu != NULL)
-			chunk_params.mu = &params.mu[sliceRange[0] * params.numX * params.numY];
+			chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
 		// Do Computation
 		proj.project(g_chunk, f_chunk, &chunk_params, true);
@@ -376,10 +376,10 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 		params.sliceRangeNeededForProjectionRange(firstView, lastView, sliceRange);
 		int numSlices = sliceRange[1] - sliceRange[0] + 1;
 
-		float* f_chunk = &f[sliceRange[0] * params.numX * params.numY];
+		float* f_chunk = &f[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
 		// make a copy of the relavent rows
-		float* g_chunk = &g[firstView*params.numRows*params.numCols];
+		float* g_chunk = &g[uint64(firstView)* uint64(params.numRows*params.numCols)];
 
 		// make a copy of the params
 		parameters chunk_params;
@@ -399,7 +399,7 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
 		if (params.mu != NULL)
-			chunk_params.mu = &params.mu[sliceRange[0] * params.numX * params.numY];
+			chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
 		//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
 		//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
@@ -459,7 +459,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ-1);
 		int numSlices = lastSlice - firstSlice + 1;
 
-		float* f_chunk = &f[firstSlice * params.numX * params.numY];
+		float* f_chunk = &f[uint64(firstSlice) * uint64(params.numX * params.numY)];
 
 		// make a copy of the relavent rows
 		int rowRange[2];
@@ -480,7 +480,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		//	chunk_params.offsetZ += 0.5*(chunk_params.numZ - params.numZ)* params.voxelHeight;
 		chunk_params.centerRow = params.centerRow - rowRange[0];
 		if (params.mu != NULL)
-			chunk_params.mu = &params.mu[firstSlice * params.numX * params.numY];
+			chunk_params.mu = &params.mu[uint64(firstSlice) * uint64(params.numX * params.numY)];
 
 		// need: chunk_params.z_0() + z_shift = sliceRange[0]*params.voxelHeight + params.z_0()
 		chunk_params.offsetZ += firstSlice * params.voxelHeight + params.z_0() - chunk_params.z_0();
@@ -495,17 +495,19 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		//	magFactor = chunk_params.sod / chunk_params.sdd;
 		//printf("slices: (%f, %f); rows: (%f, %f); GPU = %d...\n", chunk_params.z_samples(0), chunk_params.z_samples(chunk_params.numZ-1), magFactor*chunk_params.v(0), magFactor*chunk_params.v(chunk_params.numRows-1), chunk_params.whichGPU);
 
-		// Do Computation
+		//* Do Computation
 		if (doFBP)
 			FBP.execute(g_chunk, f_chunk, &chunk_params, true);
 		else
 			proj.backproject(g_chunk, f_chunk, &chunk_params, true);
+		//*/
 
 		// clean up
 		if (g_chunk != g)
 			free(g_chunk);
 		
 	}
+	//printf("done\n");
 	return true;
 }
 
@@ -599,12 +601,12 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ - 1);
 		int numSlices = lastSlice - firstSlice + 1;
 
-		float* f_chunk = &f[firstSlice * params.numX * params.numY];
+		float* f_chunk = &f[uint64(firstSlice) * uint64(params.numX * params.numY)];
 
 		// make a copy of the relavent rows
 		int viewRange[2];
 		params.viewRangeNeededForBackprojection(firstSlice, lastSlice, viewRange);
-		float* g_chunk = &g[viewRange[0]*params.numRows*params.numCols];
+		float* g_chunk = &g[uint64(viewRange[0])* uint64(params.numRows*params.numCols)];
 
 		// make a copy of the params
 		parameters chunk_params;
@@ -615,7 +617,7 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 		//if (params.geometry == parameters::MODULAR)
 		//	chunk_params.offsetZ += 0.5*(chunk_params.numZ - params.numZ)* params.voxelHeight;
 		if (params.mu != NULL)
-			chunk_params.mu = &params.mu[firstSlice * params.numX * params.numY];
+			chunk_params.mu = &params.mu[uint64(firstSlice) * uint64(params.numX * params.numY)];
 
 		// need: chunk_params.z_0() + z_shift = sliceRange[0]*params.voxelHeight + params.z_0()
 		chunk_params.offsetZ += firstSlice * params.voxelHeight + params.z_0() - chunk_params.z_0();
@@ -708,7 +710,7 @@ bool tomographicModels::sensitivity(float* f, bool cpu_to_gpu)
 							params.numZ = lastSlice - firstSlice + 1;
 							params.offsetZ = params.offsetZ + (firstSlice - 0) * params.voxelHeight;
 
-							float* f_chunk = &f[firstSlice * params.numX * params.numZ];
+							float* f_chunk = &f[uint64(firstSlice) * uint64(params.numX * params.numZ)];
 							sensitivity_gpu(f_chunk, &params, true);
 
 							params.numZ = numZ_save;

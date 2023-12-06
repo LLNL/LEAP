@@ -310,7 +310,7 @@ bool applyPreRampFilterWeights_CPU(float* g, parameters* params)
 					theWeight *= w[iv * params->numCols + iu];
 				if (w_view != NULL)
 					theWeight *= w_view[iphi * params->numCols + iu];
-				g[iphi * params->numRows * params->numCols + iv * params->numCols + iu] *= theWeight;
+				g[uint64(iphi) * uint64(params->numRows * params->numCols) + uint64(iv * params->numCols + iu)] *= theWeight;
 			}
 		}
 	}
@@ -337,7 +337,7 @@ bool applyPostRampFilterWeights_CPU(float* g, parameters* params)
 					float theWeight = 1.0;
 					if (w != NULL)
 						theWeight *= w[iv * params->numCols + iu];
-					g[iphi * params->numRows * params->numCols + iv * params->numCols + iu] *= theWeight;
+					g[uint64(iphi) * uint64(params->numRows * params->numCols) + uint64(iv * params->numCols + iu)] *= theWeight;
 				}
 			}
 		}
@@ -554,7 +554,7 @@ bool convertARTtoERT_CPU(float* g, parameters* params, bool doInverse)
 				float u = params->u(iu);
 
 				if (fabs(u) < params->muRadius)
-					g[iphi * params->numRows * params->numCols + iv * params->numCols + iu] *= exp(muCoeff * sqrt(params->muRadius * params->muRadius - u * u));
+					g[uint64(iphi) * uint64(params->numRows * params->numCols) + uint64(iv * params->numCols + iu)] *= exp(muCoeff * sqrt(params->muRadius * params->muRadius - u * u));
 			}
 		}
 	}

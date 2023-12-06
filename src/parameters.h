@@ -388,6 +388,20 @@ public:
 	bool voxelSizeWorksForFastSF();
 
 	/**
+	 * \fn          projectionData_numberOfElements
+	 * \brief       returns the total number of elements in the projection data
+	 * \return      returns the total number of elements in the projection data
+	 */
+	uint64 projectionData_numberOfElements();
+
+	/**
+	 * \fn          volumeData_numberOfElements
+	 * \brief       returns the total number of voxels in the volume data
+	 * \return      returns the total number of voxels in the volume data
+	 */
+	uint64 volumeData_numberOfElements();
+
+	/**
 	 * \fn          projectionDataSize
 	 * \brief       returns the number of GB of memory required for the projection data
 	 * \return      returns the number of GB of memory required for the projection data

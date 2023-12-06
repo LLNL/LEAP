@@ -24,7 +24,7 @@ using namespace std;
 //########################################################################################################################################################################
 bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
 {
-    params->setToZero(g, params->numAngles * params->numRows * params->numCols);
+    params->setToZero(g, params->projectionData_numberOfElements());
     int numZ_save = params->numZ;
     float offsetZ_save = params->offsetZ;
 
@@ -100,13 +100,13 @@ bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
         for (int iz = sliceStart; iz <= sliceEnd; iz++)
         {
             //float* xSlice_out = &f_XYZ[ix * params->numZ * params->numY];
-            float* zSlice_out = &f[iz * params->numX * params->numY]; // ZYX
+            float* zSlice_out = &f[uint64(iz) * uint64(params->numX * params->numY)]; // ZYX
             for (int iy = 0; iy < params->numY; iy++)
             {
                 float* xLine_out = &zSlice_out[iy * params->numX];
                 for (int ix = 0; ix < params->numX; ix++)
                 {
-                    xLine_out[ix] = f_XYZ[ix * numZ_new * params->numY + iy * numZ_new + iz-sliceStart];
+                    xLine_out[ix] = f_XYZ[uint64(ix) * uint64(numZ_new * params->numY) + uint64(iy * numZ_new + iz-sliceStart)];
                 }
             }
         }
@@ -126,7 +126,7 @@ bool CPUproject_SF_fan(float* g, float* f, parameters* params, bool setToZero)
     if (g == NULL || f == NULL || params == NULL)
         return false;
     if (setToZero)
-        params->setToZero(g, params->numAngles * params->numRows * params->numCols);
+        params->setToZero(g, params->projectionData_numberOfElements());
     if (params->volumeDimensionOrder == parameters::ZYX)
         return CPUproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
@@ -134,11 +134,11 @@ bool CPUproject_SF_fan(float* g, float* f, parameters* params, bool setToZero)
     #pragma omp parallel for schedule(dynamic)
     for (int iphi = 0; iphi < params->numAngles; iphi++)
     {
-        float* aProj = &g[iphi * params->numCols * params->numRows];
+        float* aProj = &g[uint64(iphi) * uint64(params->numCols * params->numRows)];
 
         for (int ix = 0; ix < params->numX; ix++)
         {
-            float* xSlice = &f[ix * params->numY * params->numZ];
+            float* xSlice = &f[uint64(ix) * uint64(params->numY * params->numZ)];
             CPUproject_SF_fan_kernel(aProj, xSlice, params, ix, iphi);
         }
     }
@@ -158,10 +158,10 @@ bool CPUbackproject_SF_fan(float* g, float* f, parameters* params, bool setToZer
     #pragma omp parallel for schedule(dynamic)
     for (int ix = 0; ix < params->numX; ix++)
     {
-        float* xSlice = &f[ix * params->numY * params->numZ];
+        float* xSlice = &f[uint64(ix) * uint64(params->numY * params->numZ)];
         for (int iphi = 0; iphi < params->numAngles; iphi++)
         {
-            float* aProj = &g[iphi * params->numCols * params->numRows];
+            float* aProj = &g[uint64(iphi) * uint64(params->numCols * params->numRows)];
             CPUbackproject_SF_fan_kernel(aProj, xSlice, params, ix, iphi);
         }
     }
@@ -713,7 +713,7 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
         return false;
     
     if (setToZero)
-	    params->setToZero(g, params->numAngles*params->numRows*params->numCols);
+	    params->setToZero(g, params->projectionData_numberOfElements());
     if (params->volumeDimensionOrder == parameters::ZYX)
         return CPUproject_SF_ZYX(g, f, params);
     double u_0 = params->u_0();
@@ -727,7 +727,7 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
     #pragma omp parallel for schedule(dynamic)
     for (int iphi = 0; iphi < params->numAngles; iphi++)
     {
-        float* aProj = &g[iphi*params->numCols*params->numRows];
+        float* aProj = &g[uint64(iphi)* uint64(params->numCols*params->numRows)];
         const float cos_phi = cos(params->phis[iphi]);
         const float sin_phi = sin(params->phis[iphi]);
         
@@ -750,7 +750,7 @@ bool CPUproject_SF_parallel(float* g, float* f, parameters* params, bool setToZe
         for (int ix = 0; ix < params->numX; ix++)
         {
             const float x = ix * params->voxelWidth + params->x_0();
-            float* xSlice = &f[ix*params->numY*params->numZ];
+            float* xSlice = &f[uint64(ix)* uint64(params->numY*params->numZ)];
         
             s_arg = params->y_0()*cos_phi_over_T_s - x*sin_phi_over_T_s - s_0_over_T_s;
             for (int iy = 0; iy < params->numY; iy++)
@@ -821,7 +821,7 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
     if (g == NULL || f == NULL || params == NULL)
         return false;
     if (setToZero)
-    	params->setToZero(f, params->numX*params->numY*params->numZ);
+    	params->setToZero(f, params->volumeData_numberOfElements());
     if (params->volumeDimensionOrder == parameters::ZYX)
         return CPUbackproject_SF_ZYX(g, f, params);
     float u_0 = params->u_0();
@@ -836,11 +836,11 @@ bool CPUbackproject_SF_parallel(float* g , float* f, parameters* params, bool se
     for (int ix = 0; ix < params->numX; ix++)
     {
         const float x = ix * params->voxelWidth + params->x_0();
-        float* xSlice = &f[ix*params->numY*params->numZ];
+        float* xSlice = &f[uint64(ix)* uint64(params->numY*params->numZ)];
 
         for (int iphi = 0; iphi < params->numAngles; iphi++)
         {
-            float* aProj = &g[iphi*params->numCols*params->numRows];
+            float* aProj = &g[uint64(iphi)* uint64(params->numCols*params->numRows)];
             const float cos_phi = cos(params->phis[iphi]);
             const float sin_phi = sin(params->phis[iphi]);
             
@@ -927,7 +927,7 @@ bool CPUproject_SF_cone(float* g, float* f, parameters* params, bool setToZero)
     if (g == NULL || f == NULL || params == NULL)
         return false;
     if (setToZero)
-    	params->setToZero(g, params->numAngles*params->numRows*params->numCols);
+    	params->setToZero(g, params->projectionData_numberOfElements());
     if (params->volumeDimensionOrder == parameters::ZYX)
         return CPUproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
@@ -935,11 +935,11 @@ bool CPUproject_SF_cone(float* g, float* f, parameters* params, bool setToZero)
     #pragma omp parallel for schedule(dynamic)
     for (int iphi = 0; iphi < params->numAngles; iphi++)
     {
-        float* aProj = &g[iphi*params->numCols*params->numRows];
+        float* aProj = &g[uint64(iphi)* uint64(params->numCols*params->numRows)];
         
         for (int ix = 0; ix < params->numX; ix++)
         {
-            float* xSlice = &f[ix*params->numY*params->numZ];
+            float* xSlice = &f[uint64(ix)* uint64(params->numY*params->numZ)];
             CPUproject_SF_cone_kernel(aProj, xSlice, params, ix, iphi);
         }
     }
@@ -954,7 +954,7 @@ bool CPUbackproject_SF_cone(float* g, float* f, parameters* params, bool setToZe
         return false;
 	applyInversePolarWeight(g, params);
     if (setToZero)
-    	params->setToZero(f, params->numX*params->numY*params->numZ);
+    	params->setToZero(f, params->volumeData_numberOfElements());
     if (params->volumeDimensionOrder == parameters::ZYX)
         return CPUbackproject_SF_ZYX(g, f, params);
     int num_threads = omp_get_num_procs();
@@ -962,10 +962,10 @@ bool CPUbackproject_SF_cone(float* g, float* f, parameters* params, bool setToZe
     #pragma omp parallel for schedule(dynamic)
     for (int ix = 0; ix < params->numX; ix++)
     {
-        float* xSlice = &f[ix*params->numY*params->numZ];
+        float* xSlice = &f[uint64(ix)* uint64(params->numY*params->numZ)];
         for (int iphi = 0; iphi < params->numAngles; iphi++)
         {
-            float* aProj = &g[iphi*params->numCols*params->numRows];
+            float* aProj = &g[uint64(iphi)* uint64(params->numCols*params->numRows)];
             CPUbackproject_SF_cone_kernel(aProj, xSlice, params, ix, iphi);
         }
     }
@@ -1670,7 +1670,7 @@ bool applyPolarWeight(float* g, parameters* params)
 	#pragma omp parallel for
 	for (int i = 0; i < params->numAngles; i++)
 	{
-		float* aProj = &g[i*params->numRows*params->numCols];
+		float* aProj = &g[uint64(i)* uint64(params->numRows*params->numCols)];
 		for (int j = 0; j < params->numRows; j++)
 		{
 			float v = (j*params->pixelHeight + params->v_0()) / params->sdd;
@@ -1689,7 +1689,7 @@ bool applyInversePolarWeight(float* g, parameters* params)
     #pragma omp parallel for
 	for (int i = 0; i < params->numAngles; i++)
 	{
-		float* aProj = &g[i*params->numRows*params->numCols];
+		float* aProj = &g[uint64(i)* uint64(params->numRows*params->numCols)];
 		for (int j = 0; j < params->numRows; j++)
 		{
 			float v = (j*params->pixelHeight + params->v_0()) / params->sdd;

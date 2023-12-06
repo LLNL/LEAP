@@ -630,17 +630,37 @@ bool parameters::windowFOV(float* f)
 	else
 	{
 		float rFOVsq = rFOV()*rFOV();
-		for (int ix = 0; ix < numX; ix++)
+		if (volumeDimensionOrder == XYZ)
 		{
-			float x = ix * voxelWidth + x_0();
-			for (int iy = 0; iy < numY; iy++)
+			for (int ix = 0; ix < numX; ix++)
 			{
-				float y = iy * voxelWidth + y_0();
-				if (x*x + y * y > rFOVsq)
+				float x = ix * voxelWidth + x_0();
+				for (int iy = 0; iy < numY; iy++)
 				{
-					float* zLine = &f[ix*numY*numZ + iy*numZ];
-					for (int iz = 0; iz < numZ; iz++)
-						zLine[iz] = 0.0;
+					float y = iy * voxelWidth + y_0();
+					if (x * x + y * y > rFOVsq)
+					{
+						float* zLine = &f[uint64(ix) * uint64(numY * numZ) + uint64(iy * numZ)];
+						for (int iz = 0; iz < numZ; iz++)
+							zLine[iz] = 0.0;
+					}
+				}
+			}
+		}
+		else // ZYX
+		{
+			for (int iz = 0; iz < numZ; iz++)
+			{
+				float* zSlice = &f[uint64(iz) * uint64(numX * numY)];
+				for (int iy = 0; iy < numY; iy++)
+				{
+					float y = iy * voxelWidth + y_0();
+					for (int ix = 0; ix < numX; ix++)
+					{
+						float x = ix * voxelWidth + x_0();
+						if (x * x + y * y > rFOVsq)
+							zSlice[iy * numX + ix] = 0.0;
+					}
 				}
 			}
 		}
@@ -902,6 +922,16 @@ bool parameters::anglesAreEquispaced()
 		}
 		return true;
 	}
+}
+
+uint64 parameters::projectionData_numberOfElements()
+{
+	return uint64(numAngles) * uint64(numRows) * uint64(numCols);
+}
+
+uint64 parameters::volumeData_numberOfElements()
+{
+	return uint64(numX) * uint64(numY) * uint64(numZ);
 }
 
 float parameters::projectionDataSize()
