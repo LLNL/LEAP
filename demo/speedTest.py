@@ -6,8 +6,8 @@ from leapctype import *
 leapct = tomographicModels()
 
 # Specify the number of detector rows and columns which is used below
-N = 1024*2
-N = 1300
+N = 1024
+#N = 1300
 M = N
 #M = 1024
 #M = 512+128
@@ -19,9 +19,9 @@ numAngles = int(720*N/1024)
 pixelSize = 0.2*2048/N
 
 # Set the scanner geometry
-leapct.set_parallelbeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
+#leapct.set_parallelbeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-#leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
 # Set the volume parameters
 leapct.set_default_volume()
