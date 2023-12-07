@@ -31,6 +31,7 @@ in poor computational performance.
 N = 300
 numTurns = 3
 numAngles = int(720*N/1024)*numTurns
+#numAngles = 2*numTurns
 pixelSize = 0.2*2048/N
 M = N
 
@@ -70,7 +71,7 @@ f[:] = 0.0
 
 # Reconstruction
 startTime = time.time()
-#leapct.set_GPU(0)
+leapct.set_GPU(0)
 leapct.FBP(g,f)
 f[f<0.0] = 0.0
 #leapct.backproject(g,f)
