@@ -29,13 +29,16 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     const float v = m * T.y + startVal.y;
     const float u = n * T.z + startVal.z;
 
-    const float lineLength = (R + tau * u) / (1.0f + u * u);
-    //const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
+    //const float lineLength = (R + tau * u) / (1.0f + u * u);
+    const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
+    //const float lineLength = (R + tau * (u + 0.5f * T.z)) * rsqrt(1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
 
     const float one_over_T_v = 1.0f / T.y;
     const float one_over_T_u = 1.0f / T.z;
-    const float u_shift = startVal.z * one_over_T_u - 1.0f;
-    const float v_shift = startVal.y * one_over_T_v - 1.0f;
+    //const float u_shift = startVal.z * one_over_T_u - 1.0f;
+    //const float v_shift = startVal.y * one_over_T_v - 1.0f;
+    const float u_shift = startVal.z * one_over_T_u - 0.5f;
+    const float v_shift = startVal.y * one_over_T_v - 0.5f;
     //*/
 
     /*
@@ -225,7 +228,7 @@ __global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3
     }
 }
 
-__global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, int numExtrapolate)
+__global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, int numExtrapolate, const float4 T, const float4 startVals, const float R, const float helicalPitch)
 {
     int j = threadIdx.x;
     int i = blockIdx.x + startView;
@@ -233,8 +236,42 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
         return;
     float* data_padded_block = &data_padded[(i - startView) * N_pad * N.y + j * N_pad];
     float* data_block = &data[i * N.z * N.y + j * N.z];
-    for (int k = 0; k < N.z; k++)
-        data_padded_block[k] = data_block[k];
+
+    if (helicalPitch == 0.0f)
+    {
+        for (int k = 0; k < N.z; k++)
+            data_padded_block[k] = data_block[k];
+    }
+    else
+    {
+        // Do helical forward height rebinning while copying data to padded array
+        const float last_v_sample = float(N.y - 1);
+        float* aProj = &data[i * N.z * N.y];
+        for (int k = 0; k < N.z; k++)
+        {
+            const float theShift = helicalPitch / R * (k * T.z + startVals.z);
+            const float v_new = j*T.y + startVals.y;
+            const float v_old = v_new - theShift;
+
+            const float v_ind = (v_old - startVals.y)/T.y;
+            const int v_closest = int(0.5f + v_ind);
+            if (v_ind <= 0.0f)
+            {
+                data_padded_block[k] = aProj[0 * N.z + k];
+            }
+            else if (v_ind >= last_v_sample)
+            {
+                data_padded_block[k] = aProj[(N.y - 1)*N.z + k];
+            }
+            else
+            {
+                const int v_low = int(v_ind);
+                const int v_high = v_low + 1;
+                const float dv = v_ind - float(v_low);
+                data_padded_block[k] = (1.0f - dv) * aProj[v_low * N.z + k] + dv * aProj[v_high * N.z + k];
+            }
+        }
+    }
 
     for (int k = N.z; k < N_pad; k++)
         data_padded_block[k] = 0.0;
@@ -279,7 +316,7 @@ __global__ void multiplyComplexFilterKernel(cufftComplex* G, const cufftComplex*
     }
 }
 
-__global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView)
+__global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, const float4 T, const float4 startVals, const float R, const float helicalPitch)
 {
     int j = threadIdx.x;
     int i = blockIdx.x + startView;
@@ -287,8 +324,42 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
         return;
     float* data_padded_block = &data_padded[(i - startView) * N_pad * N.y + j * N_pad];
     float* data_block = &data[i * N.z * N.y + j * N.z];
-    for (int k = 0; k < N.z; k++)
-        data_block[k] = data_padded_block[k];
+
+    if (helicalPitch == 0.0f)
+    {
+        for (int k = 0; k < N.z; k++)
+            data_block[k] = data_padded_block[k];
+    }
+    else
+    {
+        // Do helical backward height rebinning while copying data to padded array
+        const float last_v_sample = float(N.y - 1);
+        float* aProj = &data_padded[(i - startView) * N_pad * N.y];
+        for (int k = 0; k < N.z; k++)
+        {
+            const float theShift = helicalPitch / R * (k * T.z + startVals.z);
+            const float v_new = j * T.y + startVals.y;
+            const float v_old = v_new + theShift;
+
+            const float v_ind = (v_old - startVals.y) / T.y;
+            const int v_closest = int(0.5f + v_ind);
+            if (v_ind <= 0.0f)
+            {
+                data_block[k] = aProj[0 * N_pad + k];
+            }
+            else if (v_ind >= last_v_sample)
+            {
+                data_block[k] = aProj[(N.y - 1) * N_pad + k];
+            }
+            else
+            {
+                const int v_low = int(v_ind);
+                const int v_high = v_low + 1;
+                const float dv = v_ind - float(v_low);
+                data_block[k] = (1.0f - dv) * aProj[v_low * N_pad + k] + dv * aProj[v_high * N_pad + k];
+            }
+        }
+    }
 }
 
 cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar, float sampleShift)
@@ -529,6 +600,16 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     //if (H_comp != NULL)
     //    printf("doing Hilbert filter\n");
 
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+    float helicalPitch = params->helicalPitch;
+    if (H_comp == NULL || params->numRows == 1)
+        helicalPitch = 0.0;
+    helicalPitch = 0.0;
+    //printf("max shift = %f\n", params->helicalPitch/params->sod*(startVal_g.z));
+    //printf("pitch/R = %f\n", params->helicalPitch / params->sod);
+    //printf("T_v = %f\n", T_g.y);
+
     //int N_viewChunk = params->numAngles;
     int N_viewChunk = max(1, params->numAngles / 40); // number of views in a chunk (needs to be optimized)
     int numChunks = int(ceil(double(params->numAngles) / double(N_viewChunk)));
@@ -605,7 +686,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
             int startView = iChunk * N_viewChunk;
             int endView = min(params->numAngles - 1, startView + N_viewChunk - 1);
 
-            setPaddedDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate);
+            setPaddedDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
             cudaDeviceSynchronize();
 
             // FFT
@@ -621,7 +702,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
             // IFFT
             result = cufftExecC2R(backward_plan, (cufftComplex*)dev_G, (cufftReal*)dev_g_pad);
 
-            setFilteredDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView);
+            setFilteredDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, T_g, startVal_g, params->sod, helicalPitch);
             cudaDeviceSynchronize();
         }
 
@@ -895,7 +976,7 @@ bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
     }
 
     cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, true, true);
 
     float* dev_phis = copyAngleArrayToGPU(params);
 

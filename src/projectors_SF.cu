@@ -898,10 +898,10 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
             const float v_weight_two = max(0.0f, min(z_high_A, 1.0f));
             const float v_oneAndTwo = v_weight_two / (v_weight_one + v_weight_two);
             const float row_high_plus_two_A = row_high_A + 2.0f;
-            val += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+            val += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
                 + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
                 + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
-                    + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * max(0.0f, z_high_A - 1.0f) * centralWeight / (centralWeight + sumWeights);
+                    + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * max(0.0f, z_high_A - 1.0f)) * centralWeight / (centralWeight + sumWeights);
             //*/
             //val += centralWeight / (centralWeight + sumWeights);
         }

@@ -29,7 +29,7 @@ public:
     bool execute(float* g, float* f, parameters* params, bool cpu_to_gpu);
 
 private:
-    bool conv1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter, float sampleShift = 0.0);
+    bool convolve1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter, float sampleShift = 0.0);
     bool filterProjections_Novikov(float* g, parameters* ctParams, bool cpu_to_gpu);
 
     bool execute_attenuated(float* g, float* f, parameters* params, bool cpu_to_gpu);

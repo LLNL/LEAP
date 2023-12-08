@@ -33,15 +33,15 @@ filteredBackprojection::~filteredBackprojection()
 
 bool filteredBackprojection::HilbertFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift)
 {
-	return conv1D(g, params, cpu_to_gpu, scalar, 1, sampleShift);
+	return convolve1D(g, params, cpu_to_gpu, scalar, 1, sampleShift);
 }
 
 bool filteredBackprojection::rampFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar)
 {
-	return conv1D(g, params, cpu_to_gpu, scalar, 0);
+	return convolve1D(g, params, cpu_to_gpu, scalar, 0);
 }
 
-bool filteredBackprojection::conv1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter, float sampleShift)
+bool filteredBackprojection::convolve1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter, float sampleShift)
 {
 	if (params->whichGPU < 0)
 	{
@@ -114,7 +114,7 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			printf("Warning: helical FBP is not quite working\n");
 			parallelRay_derivative(g, params, false);
 			applyPostRampFilterWeights(g, params, false);
-			return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0*0.0);
+			return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
 		}
 		else
 		{
