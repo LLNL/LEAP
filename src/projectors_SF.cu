@@ -20,8 +20,8 @@
 #include "projectors_extendedSF.cuh"
 
 __constant__ float d_q_helical;
-__constant__ float d_v_min;
-__constant__ float d_v_max;
+__constant__ float d_v_min_inv;
+__constant__ float d_v_max_inv;
 __constant__ float d_weightFcnTransition;
 __constant__ float d_weightFcnParameter;
 __constant__ float d_phi_start;
@@ -29,7 +29,7 @@ __constant__ float d_phi_end;
 
 __device__ float helicalConeWeight(float v)
 {
-    const float abs_v_hat = (v >= 0.0f) ? v / d_v_max : v / d_v_min;
+    const float abs_v_hat = (v >= 0.0f) ? v * d_v_max_inv : v * d_v_min_inv;
     /*
     float abs_v_hat;
     if (v >= 0.0f)
@@ -222,21 +222,6 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
                 g_output += (weight_0 + weight_1) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(m) + 0.5f)
                     + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(m)+0.5f);
             }
-
-            /*
-            if (volumeDimensionOrder == 0)
-            {
-                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, m, j_min_A, i)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C)) * tex3D<float>(f, m, j_min_A + 1, i)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, m, j_min_A + 2, i);
-            }
-            else
-            {
-                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, i, j_min_A, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C)) * tex3D<float>(f, i, j_min_A + 1, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, i, j_min_A + 2, m);
-            }
-            //*/
         }
     }
     else
@@ -268,20 +253,6 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
                 g_output += (weight_0 + weight_1) * tex3D<float>(f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(j) + 0.5f, float(m) + 0.5f)
                     + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(m) + 0.5f);
             }
-            /*
-            if (volumeDimensionOrder == 0)
-            {
-                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, m, j, i_min_A)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C)) * tex3D<float>(f, m, j, i_min_A + 1)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, m, j, i_min_A + 2);
-            }
-            else
-            {
-                g_output += max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, i_min_A, j, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C)) * tex3D<float>(f, i_min_A + 1, j, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, i_min_A + 2, j, m);
-            }
-            //*/
         }
     }
     g[l * N_g.z * N_g.y + m * N_g.z + n] = l_phi * g_output;
@@ -654,20 +625,6 @@ __global__ void fanBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4
                 g_output += tex3D<float>(f, float(i) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1), float(j) + 0.5f, float(iz) + 0.5f) * (hWeight_0 + hWeight_1)
                     + tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(iz) + 0.5f) * hWeight_2;
             }
-            /*
-            if (volumeDimensionOrder == 0)
-            {
-                g_output += tex3D<float>(f, iz, j, i) * hWeight_0
-                    + tex3D<float>(f, iz, j, i + 1) * hWeight_1
-                    + tex3D<float>(f, iz, j, i + 2) * hWeight_2;
-            }
-            else
-            {
-                g_output += tex3D<float>(f, i, j, iz) * hWeight_0
-                    + tex3D<float>(f, i + 1, j, iz) * hWeight_1
-                    + tex3D<float>(f, i + 2, j, iz) * hWeight_2;
-            }
-            //*/
         }
         g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
     }
@@ -719,20 +676,6 @@ __global__ void fanBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4
                 g_output += tex3D<float>(f, float(i) + 0.5f, float(j) + 0.5f+hWeight_1 / (hWeight_0 + hWeight_1), float(iz) + 0.5f) * (hWeight_0 + hWeight_1)
                     + tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(iz)+0.5f) * hWeight_2;
             }
-            /*
-            if (volumeDimensionOrder == 0)
-            {
-                g_output += tex3D<float>(f, iz, j, i) * hWeight_0
-                    + tex3D<float>(f, iz, j + 1, i) * hWeight_1
-                    + tex3D<float>(f, iz, j + 2, i) * hWeight_2;
-            }
-            else
-            {
-                g_output += tex3D<float>(f, i, j, iz) * hWeight_0
-                    + tex3D<float>(f, i, j + 1, iz) * hWeight_1
-                    + tex3D<float>(f, i, j + 2, iz) * hWeight_2;
-            }
-            //*/
         }
         g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
     }
@@ -796,7 +739,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
     float val = 0.0;
 
     const float atan_term = atan(2.0f * tau * R / (R * R - tau * tau));
-    const int maxTurns = int(ceil((d_v_max - d_v_min) * (R + sqrt(x * x + y * y)) / fabs(PI * T_g.w)));
+    const int maxTurns = int(ceil((1.0f/d_v_max_inv - 1.0f/d_v_min_inv) * (R + sqrt(x * x + y * y)) / fabs(PI * T_g.w)));
 
     for (int l = 0; l < N_g.x; l++)
     {
@@ -813,7 +756,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
         const float v_arg = (z - z_source) * R_minus_x_dot_theta_inv;
         const float centralWeight = helicalConeWeight(v_arg);
         if (centralWeight > 0.0f)
-        {
+        {   
             float B_x = (sin_phi < 0.0f) ? -cos_phi * T_x_over_2 : cos_phi * T_x_over_2;
             const float B_y = (cos_phi < 0.0f) ? sin_phi * T_x_over_2 : -sin_phi * T_x_over_2;
 
@@ -851,45 +794,42 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
             const float R_minus_x_dot_theta_inv_conj = 1.0f / (R - x * cos(phi_cur + phi_conj_shift + PI) - y * sin(phi_cur + phi_conj_shift + PI));
             float sumWeights = 0.0f;
 
-            const int N_turns_below = min(maxTurns, int(ceil((phi_cur - d_phi_start) / PI))) + 1;
-            const int N_turns_above = min(maxTurns, int(ceil((d_phi_end - phi_cur) / PI))) + 1;
+            const int N_turns_below = min(maxTurns, int(ceil((phi_cur - d_phi_start) * PIINV))) + 1;
+            const int N_turns_above = min(maxTurns, int(ceil((d_phi_end - phi_cur) * PIINV))) + 1;
 
             for (int iturn = -1; iturn >= -N_turns_below; iturn--)
             {
-                float phi_turn;
-                float v_arg_turn;
                 if (int(-iturn) % 2 == 0)
                 {
-                    phi_turn = phi_cur + iturn * PI;
-                    v_arg_turn = (z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv;
+                    const float phi_turn = phi_cur + iturn * PI;
+                    if (phi_turn < d_phi_start)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv);
                 }
                 else
                 {
-                    phi_turn = phi_cur + phi_conj_shift + iturn * PI;
-                    v_arg_turn = (z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv_conj;
+                    const float phi_turn = phi_cur + phi_conj_shift + iturn * PI;
+                    if (phi_turn < d_phi_start)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv_conj);
                 }
-
-                if (phi_turn < d_phi_start)
-                    break;
-                sumWeights += helicalConeWeight(v_arg_turn);
             }
             for (int iturn = 1; iturn <= N_turns_above; iturn++)
             {
-                float phi_turn;
-                float v_arg_turn;
                 if (int(iturn) % 2 == 0)
                 {
-                    phi_turn = phi_cur + iturn * PI;
-                    v_arg_turn = (z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv;
+                    const float phi_turn = phi_cur + iturn * PI;
+                    if (phi_turn > d_phi_end)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv);
                 }
                 else
                 {
-                    phi_turn = phi_cur + phi_conj_shift + iturn * PI;
-                    v_arg_turn = (z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv_conj;
+                    const float phi_turn = phi_cur + phi_conj_shift + iturn * PI;
+                    if (phi_turn > d_phi_end)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv_conj);
                 }
-                if (phi_turn > d_phi_end)
-                    break;
-                sumWeights += helicalConeWeight(v_arg_turn);
             }
             // End-Calculate the View Redundancy Weight
 
@@ -990,13 +930,6 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
         //const float row_high_plus_one_A = row_high_A + 1.0f;
         const float row_high_plus_two_A = row_high_A + 2.0f;
 
-        /*
-        val += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-        + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
-        + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
-         + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A)* max(0.0f, z_high_A - 1.0f);
-        //*/
-        //*
         if (z_high_A > 1.0f)
         {
             val += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
@@ -1009,7 +942,6 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
             val += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
                 + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two);
         }
-        //*/
     }
 
     f[ind] = val;
@@ -1111,17 +1043,6 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
              const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
              if (volumeDimensionOrder == 0)
              {
-                 /*
-                 g_output += (tex3D<float>(f, k, j, i) * hWeight_0
-                     + tex3D<float>(f, k, j, i + 1) * hWeight_1
-                     + tex3D<float>(f, k, j, i + 2) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, k + 1, j, i) * hWeight_0
-                         + tex3D<float>(f, k + 1, j, i + 1) * hWeight_1
-                         + tex3D<float>(f, k + 1, j, i + 2) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, k + 2, j, i) * hWeight_0
-                         + tex3D<float>(f, k + 2, j, i + 1) * hWeight_1
-                         + tex3D<float>(f, k + 2, j, i + 2) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
-                 //*/
                  g_output += (tex3D<float>(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
                      + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
                      + (tex3D<float>(f, z_12, float(j) + 0.5f, float(i + 2) + 0.5f) * (vWeight_0 + vWeight_1)
@@ -1129,18 +1050,6 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
              }
              else
              {
-                 /*
-                 g_output += (tex3D<float>(f, i, j, k) * hWeight_0
-                     + tex3D<float>(f, i+1, j, k) * hWeight_1
-                     + tex3D<float>(f, i+2, j, k) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, i, j, k + 1) * hWeight_0
-                         + tex3D<float>(f, i + 1, j, k+1) * hWeight_1
-                         + tex3D<float>(f, i + 2, j, k+1) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, i, j, k+2) * hWeight_0
-                         + tex3D<float>(f, i + 1, j, k + 2) * hWeight_1
-                         + tex3D<float>(f, i + 2, j, k + 2) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
-                 //*/
-
                  g_output += (tex3D<float>(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
                  + tex3D<float>(f, x_12, float(j) + 0.5f, float(k+2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
                  + (tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
@@ -1214,17 +1123,6 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
              const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
              if (volumeDimensionOrder == 0)
              {
-                 /*
-                 g_output += (tex3D<float>(f, k, j, i) * hWeight_0
-                     + tex3D<float>(f, k, j + 1, i) * hWeight_1
-                     + tex3D<float>(f, k, j + 2, i) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, k + 1, j, i) * hWeight_0
-                         + tex3D<float>(f, k + 1, j + 1, i) * hWeight_1
-                         + tex3D<float>(f, k + 1, j + 2, i) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, k + 2, j, i) * hWeight_0
-                         + tex3D<float>(f, k + 2, j + 1, i) * hWeight_1
-                         + tex3D<float>(f, k + 2, j + 2, i) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
-                 //*/
                  g_output += (tex3D<float>(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
                      + tex3D<float>(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
                      + (tex3D<float>(f, z_12, float(j + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
@@ -1232,17 +1130,6 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
              }
              else
              {
-                 /*
-                 g_output += (tex3D<float>(f, i, j, k) * hWeight_0
-                     + tex3D<float>(f, i, j + 1, k) * hWeight_1
-                     + tex3D<float>(f, i, j + 2, k) * hWeight_2) * (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, i, j, k+1) * hWeight_0
-                         + tex3D<float>(f, i, j + 1, k+1) * hWeight_1
-                         + tex3D<float>(f, i, j + 2, k+1) * hWeight_2) * max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f)
-                     + (tex3D<float>(f, i, j, k+2) * hWeight_0
-                         + tex3D<float>(f, i, j + 1, k+2) * hWeight_1
-                         + tex3D<float>(f, i, j + 2, k+2) * hWeight_2) * max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
-                 //*/
                  g_output += (tex3D<float>(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
                      + tex3D<float>(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
                      + (tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
@@ -1455,8 +1342,10 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
             float q_helical = 0.7;
             float weightFcnParameter = -2.0 / ((1.0 - q_helical) * (1.0 - q_helical));
             float weightFcnTransition = (q_helical + 1.0) / 2.0;
-            float v_min = (params->v(0) - 0.5*params->pixelHeight) / params->sdd;
-            float v_max = (params->v(params->numRows-1) + 0.5 * params->pixelHeight) / params->sdd;
+            float v_min_inv = (params->v(0) - 0.5*params->pixelHeight) / params->sdd;
+            v_min_inv = 1.0 / v_min_inv;
+            float v_max_inv = (params->v(params->numRows-1) + 0.5 * params->pixelHeight) / params->sdd;
+            v_max_inv = 1.0 / v_max_inv;
             float phi_start = params->get_phi_start();
             float phi_end = params->get_phi_end();
 
@@ -1464,8 +1353,8 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
             //printf("weight params: %f, %f\n", weightFcnParameter, weightFcnTransition);
 
             cudaMemcpyToSymbol(d_q_helical, &q_helical, sizeof(float));
-            cudaMemcpyToSymbol(d_v_min, &v_min, sizeof(float));
-            cudaMemcpyToSymbol(d_v_max, &v_max, sizeof(float));
+            cudaMemcpyToSymbol(d_v_min_inv, &v_min_inv, sizeof(float));
+            cudaMemcpyToSymbol(d_v_max_inv, &v_max_inv, sizeof(float));
             cudaMemcpyToSymbol(d_weightFcnTransition, &weightFcnTransition, sizeof(float));
             cudaMemcpyToSymbol(d_weightFcnParameter, &weightFcnParameter, sizeof(float));
             cudaMemcpyToSymbol(d_phi_start, &phi_start, sizeof(float));

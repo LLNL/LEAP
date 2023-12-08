@@ -44,18 +44,19 @@
 
 This document serves as a technical description of the algorithms in LivermorE AI Projector (LEAP) library.  LEAP is a C/C++/CUDA library of tomographic projectors (forward and back projection) implemented for both multi-GPU and multi-core CPU. We provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
-Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam with axial or helical source trajectory. These geometry types accommodate shifts of the detectors and non-uniform angular spacing. Cartoonized sketches of these CT geometry types is shown in Figure \ref{fig:geometrySketches}. Projectors for these CT geometries use the Separable Footprint method \cite{Long_TMI_2010} which provides a matched projector pair that models the finite size of the voxel and detector pixel. These matched projectors ensure convergence and provide accurate, smooth results. Unmatched projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations \cite{DeManBasu_PMB_2004}.
+Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam with axial or helical source trajectory. These geometry types accommodate shifts of the detectors and non-uniform angular spacing. Cartoonized sketches of these CT geometry types is shown in Figure \ref{fig:geometrySketches}. Projectors for these CT geometries use a method very similar to the Separable Footprint method \cite{Long_TMI_2010} that provides a matched projector pair that models the finite size of the voxel and detector pixel. These matched projectors ensure convergence and provide accurate, smooth results. Unmatched projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations \cite{DeManBasu_PMB_2004}.
 
 For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair.  For this geometry we use a matched Joseph projector \cite{Joseph_TMI_1982}.
 
 \begin{figure}[h]
-\begin{tabular}{ccc}
-parallel-beam & fan-beam & cone-beam \\
-\includegraphics[scale=0.33]{parallelBeam}
-& \includegraphics[scale=0.35]{fanBeam}
-& \includegraphics[scale=0.35]{coneBeam}
+\begin{tabular}{cccc}
+parallel-beam & fan-beam & cone-beam & modular-beam \\
+\includegraphics[scale=0.26]{parallelBeam}
+& \includegraphics[scale=0.28]{fanBeam}
+& \includegraphics[scale=0.28]{coneBeam}
+& \includegraphics[scale=0.2]{modularBeam_cartoon}
 \end{tabular}
-\caption{Cartoon sketches of the parallel-, fan-, and cone-beam geometries.} \label{fig:geometrySketches}
+\caption{Cartoon sketches of the parallel-, fan-, and cone-, and modular-beam geometries.} \label{fig:geometrySketches}
 \end{figure}
 
 We also provide projectors and analytic inversion algorithms, i.e., FBP, for a few specialized x-ray/Radon transforms:
@@ -68,7 +69,7 @@ In addition to the projectors, we also provide a few other algorithms for tomogr
 \begin{enumerate}
 \item Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
 \item A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction \cite{Yu_MIC_2006}.
-\item Python implementations of some iterative reconstruction algorithms: OSEM, SART, ASD-POCS \cite{ASDPOCS_PMB_2008}, and RWLS \cite{Hager_Zhang_CG_2005, Fessler_TIP_1999, Yu_MIC_2006}.
+\item Python implementations of some iterative reconstruction algorithms: MLEM, OSEM, OS-SART, ASD-POCS \cite{ASDPOCS_PMB_2008}, and RWLS \cite{Hager_Zhang_CG_2005, Fessler_TIP_1999, Yu_MIC_2006}.
 \end{enumerate}
 
 The CPU- and GPU-based projectors are nearly identical (32-bit floating point precision) and are quantitatively accurate and thus can be used in conjuction with physics-based corrections, such as, scatter and beam hardening correction. If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT \cite{ChampleyLTT}.
@@ -96,6 +97,8 @@ There are two different interfaces to \textit{tomographicModels} class.  The fir
 \caption{Overview of LEAP software architecture.  The gray boxes are Python and the white boxes are C/C++/CUDA.} \label{fig:LEAParchitecture}
 \end{figure}
 
+The forward projection, backprojection, FBP, and imaging denoising algorithms are completely contained in the C/C++/CUDA code.  The iterative reconstruction algorithms are written in Python.  These can be found in the leapctypes file (which is a Python class that is also called tomographicModels).
+
 \section{Troubleshooting Tools}
 
 LEAP has a fair amount of parameters to specify and its algorithms are complex.  To assist users in troubleshooting, we have developed several tools.  The first tool simply prints all the parameter settings to the screen.  The function is given by
@@ -114,6 +117,12 @@ Example of the output of this function with a helical cone-beam geometry is show
 \end{center}
 \vspace{-20pt}\caption{Sketch of a helical cone-beam geometry generated with the \textit{sketch\_system()} Python function.  The  magenta box is the reconstruction volume, the gray rectangle is the detector panel, the green dots are the source positions, and the red lines trace from the source to each of the four corners of the detector.} \label{fig:helicalSketch}
 \end{figure}
+
+The voxel locations of the specified volume can be retrieved by the x\_samples(), y\_samples(), and z\_samples() functions.  One can also use
+\begin{itemize}
+    \item[] x,y,z = voxel\_samples()
+\end{itemize}
+to get a 3D meshgrid of the samples.
 
 \section{LEAP Parameters and General Syntax}
 
@@ -257,7 +266,7 @@ Thus, we define detector coordinates as digital image coordinates with the origi
 
 \section{CT Geometries} \label{sec:CTGeometries}
 
-In this section we discuss the parameterization of the four LEAP scanner geometry types: parallel-, fan-, cone-, and modular-beam.  Cartoon sketches of the parallel-, fan-, and cone-beam geometries is shown in Figure \ref{fig:geometrySketches} and a detailed sketch of the cone-beam coordinates in Figure \ref{fig:coneBeamSketch}.  Except for the modular beam data set, we also give the mathematical expressions that link sets of parameterizations, state conjugate ray expressions, and the adjoint of the forward projection operators which are often refered to as backprojection operators.  Unless otherwise stated, all LEAP algorithms can be applied to any scanner geometry type.  This feature is made possible by the fact that data for all geometry types can be stored in contiguous 3D arrays (view number, detector row, detector column) and that most of the differences can be encapsulated in the implementation of the forward and back projectors.  Two-dimensional geometries can be achieved by setting the number of detector rows and number of z-slices to one.
+In this section we discuss the parameterization of the four LEAP scanner geometry types: parallel-, fan-, cone-, and modular-beam.  Cartoon sketches of the parallel-, fan-, cone-, and modular-beam geometries is shown in Figure \ref{fig:geometrySketches} and a detailed sketch of the cone-beam coordinates in Figure \ref{fig:coneBeamSketch}.  Except for the modular beam data set, we also give the mathematical expressions that link sets of parameterizations, state conjugate ray expressions, and the adjoint of the forward projection operators which are often refered to as backprojection operators.  Unless otherwise stated, all LEAP algorithms can be applied to any scanner geometry type.  This feature is made possible by the fact that data for all geometry types can be stored in contiguous 3D arrays (view number, detector row, detector column) and that most of the differences can be encapsulated in the implementation of the forward and back projectors.  Two-dimensional geometries can be achieved by setting the number of detector rows and number of z-slices to one.
 
 \subsection{Detector Coordinates} \label{sec:DetectorCoordinates}
 
@@ -274,9 +283,19 @@ The location of the 3D voxels are specified by seven parameters as follows
 \begin{eqnarray*}
 x[i] &=& \text{voxelWidth}*(i - 0.5*(\text{numX}-1)) + \text{offsetX}, \text{ for } i = 0, \dots, \text{numX}-1, \\
 y[j] &=& \text{voxelWidth}*(j - 0.5*(\text{numY}-1)) + \text{offsetY}, \text{ for } j = 0, \dots, \text{numY}-1, \\
-z[k] &=& \text{voxelHeight}*(k - 0.5*(\text{numZ}-1)) + \text{offsetZ}, \text{ for } k = 0, \dots, \text{numZ}-1,
+z[k] &=& \text{voxelHeight}*(k - 0.5*(\text{numZ}-1)) + \text{offsetZ} + z_s, \text{ for } k = 0, \dots, \text{numZ}-1,
 \end{eqnarray*}
-where voxelWidth, voxelHeight, offsetX, offsetY, and offsetZ are assumed to be in length units, e.g., mm or cm.  Make sure that whatever units of length you choose that you stay consistent across all parameters.  The units of the voxelized volume (i.e., the reconstruction volume) are assumed to be in inverse length, e.g., mm$^{-1}$ or cm$^{-1}$.  We make this distinction because LEAP is fairly unique in it's quantitatively-accurate algorithms which we believe is very useful.
+where
+\begin{eqnarray*}
+z_s &=& -\text{centerRow} * \text{pixelHeight}
+\end{eqnarray*}
+for parallel- and fan-beam geometries and
+\begin{eqnarray*}
+z_s &=& -\text{centerRow} * \frac{\text{sod}}{\text{sdd}} * \text{pixelHeight}.
+\end{eqnarray*}
+for cone-beam geometries.  This is specified to place the origin of the coordinate system with the centerRow of the detector.  Here, voxelWidth, voxelHeight, offsetX, offsetY, and offsetZ are assumed to be in length units, e.g., mm or cm.  Make sure that whatever units of length you choose that you stay consistent across all parameters.  The units of the voxelized volume (i.e., the reconstruction volume) are assumed to be in inverse length, e.g., mm$^{-1}$ or cm$^{-1}$.  We make this distinction because LEAP is fairly unique in it's quantitatively-accurate algorithms which we believe is very useful.
+
+As a reminder, one can be the x\_samples(), y\_samples(), and z\_samples() functions to retrieve numpy arrays of the volume coordinate loctions.
 
 We note that there are some restrictions in the above volume parameters based on the CT geometry one is using.  These restrictions are listed below.
 \begin{itemize}
@@ -339,7 +358,7 @@ The X-ray Transform of $f \in L^1(\mathbb{R}^3)$ is a linear operator given by
 \begin{eqnarray*}
     Pf(\B{y}, \Theta) = \int_\mathbb{R} f(\B{y} + l\Theta) \, dl,
 \end{eqnarray*}
-where in general $y, \Theta \in \mathbb{R}^3$, but the exact specification of these parameters depends on the geometry of the CT system.  The X-ray Transform is often referred to as a \texit{projection} or \textit{forward projection} of a function.  While the adjoint of the X-ray Transform is commonly referred to as the \textit{backprojection} operator.  The backprojection operator usually takes the form of an integral over the various measured angles of the X-ray transform, but its exact form depends on the parameterization of the line integrals in the forward projection.
+where in general $y, \Theta \in \mathbb{R}^3$, but the exact specification of these parameters depends on the geometry of the CT system.  The X-ray Transform is often referred to as a \textit{projection} or \textit{forward projection} of a function.  While the adjoint of the X-ray Transform is commonly referred to as the \textit{backprojection} operator.  The backprojection operator usually takes the form of an integral over the various measured angles of the X-ray transform, but its exact form depends on the parameterization of the line integrals in the forward projection.
 
 In the following, we shall make use of the following definitions
 \begin{eqnarray*}
@@ -433,20 +452,22 @@ s &=& \frac{Ru-\tau}{\sqrt{1+u^2}}, \\
 
 \subsection{Cone-Beam}
 
-The X-ray transform and its adjoint in cone-beam coordinates (with planar detector) with center of rotation offset of $\tau$ and source trajectory radius $R$ are given by
+The X-ray transform and its adjoint in cone-beam coordinates (with planar detector) with center of rotation offset of $\tau$, source trajectory radius $R$, and helical pitch $\Delta$ are given by
 \begin{eqnarray*}
-Pf(u,\beta,v) &:=& \int_\mathbb{R} f\left(R\bm{\theta}(\beta) - \tau\bm{\theta}^\perp(\beta) + \frac{l}{\sqrt{1+u^2+v^2}}\left[-\bm{\theta}(\beta)+u\bm{\theta}^\perp(\beta) + v\widehat{\bm{z}} \right] \right) \, dl \\
+Pf(u,\beta,v) &:=& \int_\mathbb{R} f\left(R\bm{\theta}(\beta) - \tau\bm{\theta}^\perp(\beta) + \Delta\varphi\widehat{\bm{z}}  + \frac{l}{\sqrt{1+u^2+v^2}}\left[-\bm{\theta}(\beta)+u\bm{\theta}^\perp(\beta) + v\widehat{\bm{z}} \right] \right) \, dl \\
 P^*g(\bm{x}) &=& \int \frac{\sqrt{1+ u^2(\bm{x},\beta) +v^2(\bm{x},\beta)}}{(R-\bm{x}\cdot\bm{\theta}(\beta))^2} g\left( u(\bm{x},\beta), \beta, v(\bm{x},\beta)\right) \, d\beta \\
 u(\bm{x},\beta) &:=& \frac{\bm{x}\cdot \bm{\theta}^\perp(\beta) + \tau}{R - \bm{x}\cdot\bm{\theta}(\beta)} \\
-v(\bm{x},\beta) &:=& \frac{x_3}{R - \bm{x}\cdot\bm{\theta}(\beta)}
+v(\bm{x},\beta) &:=& \frac{x_3 - \Delta\varphi}{R - \bm{x}\cdot\bm{\theta}(\beta)}
 \end{eqnarray*}
 The parameter $v$ is the detector row coordinate divided by sdd and can be viewed as the slope of the ray.
 
-The object, $f$, can be (approximately) reconstructed by the following Filtered Backprojection (FBP) algorithm
+When $\Delta = 0$ (axial scan), the object, $f$, can be (approximately) reconstructed with the Feldkamp, Davis, and Kress (FDK) algorithm \cite{FDK} which is a type of Filtered Backprojection (FBP) algorithm
 \begin{eqnarray*}
 f(\bm{x}) &\approx& \frac{R}{2\pi} \int \frac{1}{(R-\bm{x}\cdot\bm{\theta}(\beta))^2} \\ &\times& \int_\mathbb{R} h(u(\bm{x},\beta) - u) g(u,\beta, v(\bm{x},\beta)) m(\tan^{-1}u,\beta) \frac{1+\frac{\tau}{R}u}{\sqrt{1+u^2+v^2(\bm{x},\beta)}} \, du \, d\beta.
 \end{eqnarray*}
 The function $h$ is referred to as the ramp filter and is described in Section \ref{sec:rampFilter}.
+
+Although theoretically-exact reconstruction of helical cone-beam data can be acheived with the Katsevich algorithm \cite{Katsevich_SIAM_2002}, this algorithm is not able to use all the measured data and produces artifacts when the number of contributions to portions of the frequency-space of the reconstruction has an abrupt transition.  For this reason we chose to implement a variation of the WFBP \cite{WFBP} algorithm.  This algorithm was derived in \textit{cone-parallel} coordinates, so we re-derived this algorithm for the native cone-beam coordinates.  The view derivative step of the algorithm was implemented by the NHDLH \cite{NHDLH_PMB_2007} method which provides good resolution across the imaging field of view.
 
 We would like to take a special note in the exact form of the adjoint of the cone-beam X-ray Transform.  Notice that
 \begin{eqnarray*}
@@ -514,6 +535,22 @@ where $h := \frac{1}{2}\left(I + iH\right) P\mu$, $I$ is the identify operator, 
 
 The X-ray Transform for cylindrically-symmetric objects is the same as those X-ray Transforms for standard objects, but the volume is assumed to be cylindrically antisymmetric (the left and right sides can be different).  This object model causes the adjoint transform to take a very different form where there is a singularity along the axis of symmetry.  The FBP reconstruction algorithms are the same as those stated in the previous sections.  This is achieved by leveraging the fact that the object is symmetric and thus projections from all angles are the same.
 
+\section{Anisotropic Total Variation}
+
+LEAP has implementations of functions enabling anisotropic Total Variation (aTV) regularization.  The aTV functional is given by
+\begin{eqnarray*}
+R_\delta(f) &:=& \sum_i \sum_{j \in N(i)} \|i-j\| h_\delta(f_i-f_j),
+\end{eqnarray*}
+where $\|i-j\|$ is the distance between voxels $i$ and $j$, $N(i)$ is the neighborhood of voxel $i$ (in 3D, these are the 26 voxel neighbors), and $h_\delta$ is a Huber-like loss function given by
+\begin{eqnarray*}
+h_\delta(t) &:=& \begin{cases} \frac{1}{2}t^2, & |t| \leq \delta, \\ \frac{\delta^2}{6}\left[5\left|\frac{t}{\delta}\right|^{1.2}-2\right], & |t| > \delta \end{cases}.
+\end{eqnarray*}
+LEAP provides implementations of $R_\delta(f)$, $R_{\delta}'(f)$, and $<d, R_{\delta}''(f)d>$.  The inner product $<d, R_{\delta}''(f)d>$ is referred to as the \textit{quadratic form} of $R_\delta$ and is used to estimate the step size in gradient-based minimization algorithms of this functional.  The $\delta$ parameter is chosen by the user and should be approximately one-tenth of the difference between the two material types that one wishes to resolve.
+
+\section{Matched Projector Models}
+
+The projectors for parallel-, fan-, and cone-beam geometries in LEAP are implemented by a method similar to the Separable Footprint (SF) method \cite{Long_TMI_2010}.  These projectors are matched, meaning that the backprojection operation is an exact transpose of the forward projection and they model the finite size of the voxel and detector pixels.  Our models are slightly faster than the original rectangle-rectangle SF method because they utilize the bilinear interpolation capabilities of texture memory, but are very, very slightly less accurate.
+
 \input{rampFilter.tex}
 
 % BIBLIOGRAPHY
@@ -542,6 +579,16 @@ Optimization,'' \emph{IEEE Nuclear Science Symposium Conference Record}, 2006
 1982
 
 \bibitem{Natterer_IP_2001} Frank Natterer, ``Inversion of the attenuated radon transform'', \emph{Inverse Problems} 17 (2001), 113–119
+
+\bibitem{FDK} Feldkamp, Lee A., Lloyd C. Davis, and James W. Kress. ``Practical cone-beam algorithm.'' Josa a 1, no. 6 (1984): 612-619.
+
+\bibitem{Katsevich_SIAM_2002} Katsevich, Alexander. ``Theoretically exact filtered backprojection-type inversion algorithm for spiral CT.'' SIAM Journal on Applied Mathematics 62, no. 6 (2002): 2012-2026.
+
+\bibitem{WFBP} Stierstorfer, Karl, Annabella Rauscher, Jan Boese, Herbert Bruder, Stefan Schaller, and Thomas Flohr. ``Weighted FBP—a simple approximate 3D FBP algorithm for multislice spiral CT with good dose usage for arbitrary pitch.'' Physics in Medicine \& Biology 49, no. 11 (2004): 2209.
+
+\bibitem{NHDLH_PMB_2007} Noo, Frederic, Stefan Hoppe, Frank Dennerlein, Günter Lauritsch, and Joachim Hornegger. ``A new scheme for view-dependent data differentiation in fan-beam and cone-beam computed tomography.'' Physics in Medicine \& Biology 52, no. 17 (2007): 5393.
+
+\bibitem{Crawford_TMI_1991} Crawford, Carl R. ``CT filtration aliasing artifacts.'' IEEE transactions on medical imaging 10, no. 1 (1991): 99-102.
 
 \end{thebibliography}
 \end{document}

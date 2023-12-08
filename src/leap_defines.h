@@ -17,6 +17,10 @@
 	#define PI 3.1415926535897932385
 #endif
 
+#ifndef PIINV
+    #define PIINV 0.3183098861837907
+#endif
+
 //#ifndef NAN
 //	#define NAN sqrt(-1)
 //#endif

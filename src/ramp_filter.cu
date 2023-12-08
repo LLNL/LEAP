@@ -27,10 +27,10 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
 
     //*
     const float v = m * T.y + startVal.y;
-    const float u = n * T.z + startVal.z;
+    const float u = n * T.z + startVal.z + 0.5f*T.z;
 
-    //const float lineLength = (R + tau * u) / (1.0f + u * u);
-    const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
+    const float lineLength = (R + tau * u) / (1.0f + u * u);
+    //const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
     //const float lineLength = (R + tau * (u + 0.5f * T.z)) * rsqrt(1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
 
     const float one_over_T_v = 1.0f / T.y;
@@ -74,7 +74,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     const float cos_phi_prev = cos(phis[l_prev]);
     const float sin_phi_prev = sin(phis[l_prev]);
     const float cos_phi_next = cos(phis[l_next]);
-    const float sin_phi_next = cos(phis[l_next]);
+    const float sin_phi_next = sin(phis[l_next]);
 
     int shiftDirection;
     float B0, B1, B2;
@@ -94,7 +94,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term1 = tex3D<float>(g, u_arg, v_arg, l0);
+    const float term1 = tex3D<float>(g, u_arg, v_arg, l0+0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -107,7 +107,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next);
+    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -120,7 +120,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term3 = tex3D<float>(g, u_arg, v_arg, l0);
+    const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -133,7 +133,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev);
+    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[l * N.z * N.y + m * N.z + n] = T_phi*((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon); // ? 1.0f / T_phi
 }
@@ -983,8 +983,8 @@ bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
     deriv_helical_NHDLH_flat <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis);
-    params->colShiftFromFilter += -0.5;
-    params->rowShiftFromFilter += 0.5;
+    params->colShiftFromFilter += -0.5; // opposite sign as LTT
+    //params->rowShiftFromFilter += -0.5;
 
 
     cudaStatus = cudaDeviceSynchronize();

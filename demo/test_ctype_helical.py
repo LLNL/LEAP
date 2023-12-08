@@ -29,7 +29,7 @@ in poor computational performance.
 # Specify the number of detector rows and columns which is used below
 # Scale the number of angles and the detector pixel size with N
 N = 300
-numTurns = 5
+numTurns = 3
 numAngles = int(720*N/1024)*numTurns
 #numAngles = 2*numTurns
 pixelSize = 0.2*2048/N
@@ -71,7 +71,7 @@ f[:] = 0.0
 
 # Reconstruction
 startTime = time.time()
-leapct.set_GPU(0)
+#leapct.set_GPU(0)
 leapct.FBP(g,f)
 print(np.min(f))
 print(np.max(f))

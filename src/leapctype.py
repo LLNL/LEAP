@@ -980,23 +980,39 @@ class tomographicModels:
     # UTILITY FUNCTIONS
     ###################################################################################################################
     ###################################################################################################################
-    def voxelSamples(self,centerCoords=True):
+    def x_samples(self,centerCoords=False):
         if centerCoords:
             x_0 = -0.5*(self.get_numX()-1)*self.get_voxelWidth()
-            y_0 = -0.5*(self.get_numY()-1)*self.get_voxelWidth()
-            z_0 = -0.5*(self.get_numZ()-1)*self.get_voxelHeight()
         else:
             x_0 = self.get_offsetX() - 0.5*(self.get_numX()-1)*self.get_voxelWidth()
+        return np.array(range(self.get_numX()))*self.get_voxelWidth() + x_0
+        
+    def y_samples(self,centerCoords=False):
+        if centerCoords:
+            y_0 = -0.5*(self.get_numY()-1)*self.get_voxelWidth()
+        else:
             y_0 = self.get_offsetY() - 0.5*(self.get_numY()-1)*self.get_voxelWidth()
+        return np.array(range(self.get_numY()))*self.get_voxelWidth() + y_0
+        
+    def z_samples(self,centerCoords=False):
+        if centerCoords:
+            z_0 = -0.5*(self.get_numZ()-1)*self.get_voxelHeight()
+        else:
             z_0 = self.get_z0()
-        x = np.array(range(self.get_numX()))*self.get_voxelWidth() + x_0
-        y = np.array(range(self.get_numY()))*self.get_voxelWidth() + y_0
-        z = np.array(range(self.get_numZ()))*self.get_voxelHeight() + z_0
+        return np.array(range(self.get_numZ()))*self.get_voxelHeight() + z_0
+    
+    def voxelSamples(self,centerCoords=False):
+        x = self.x_samples(centerCoords)
+        y = self.y_samples(centerCoords)
+        z = self.z_samples(centerCoords)
         if self.get_volumeDimensionOrder() == 0:
             x,y,z = np.meshgrid(x,y,z, indexing='ij')
         else:
             z,y,x = np.meshgrid(z,y,x, indexing='ij')
         return x,y,z
+
+    def display(self,vol):
+        self.displayVolume(vol)
 
     def display_volume(self,vol):
         self.displayVolume(vol)

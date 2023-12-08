@@ -111,7 +111,6 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 		// no transfers to/from GPU are necessary; just run the code
 		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
 		{
-			printf("Warning: helical FBP is not quite working\n");
 			parallelRay_derivative(g, params, false);
 			applyPostRampFilterWeights(g, params, false);
 			return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
