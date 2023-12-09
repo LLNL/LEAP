@@ -101,3 +101,45 @@ float* reorder_ZYX_to_XYZ(float* f, parameters* params, int sliceStart, int slic
     }
     return f_XYZ;
 }
+
+float innerProduct_cpu(float* x, float* y, int N_1, int N_2, int N_3)
+{
+    float* accums = new float[N_1];
+
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        double accum_local = 0.0;
+        float* x_slice = &x[uint64(i) * uint64(N_2 * N_3)];
+        float* y_slice = &y[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+                accum_local += x_slice[j * N_3 + k] * y_slice[j * N_3 + k];
+        }
+        accums[i] = accum_local;
+    }
+    float accum = 0.0;
+    for (int i = 0; i < N_1; i++)
+        accum += accums[i];
+    delete[] accums;
+    return accum;
+}
+
+bool scalarAdd_cpu(float* x, float c, float* y, int N_1, int N_2, int N_3)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        float* x_slice = &x[uint64(i) * uint64(N_2 * N_3)];
+        float* y_slice = &y[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+                x_slice[j * N_3 + k] += c * y_slice[j * N_3 + k];
+        }
+    }
+    return true;
+}

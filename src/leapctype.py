@@ -728,7 +728,7 @@ class tomographicModels:
         self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVgradient.restype = ctypes.c_bool
         
-        Df = np.ascontiguousarray(np.zeros(f.shape).astype(np.float32), dtype=np.float32)
+        Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
         self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         return Df
     

@@ -17,6 +17,7 @@
 #include "parameters.h"
 #include "projectors.h"
 #include "filtered_backprojection.h"
+#include "cpu_utils.h"
 
 /**
  *  tomographicModels class

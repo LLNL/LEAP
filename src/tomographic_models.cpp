@@ -1237,12 +1237,18 @@ float tomographicModels::get_voxelHeight()
 
 bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)
 {
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
 	float numVol = 1.0;
 	if (cpu_to_gpu)
 		numVol = 2.0;
 	else
 		numVol = 1.0;
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	double dataSize = 4.0 * double(N_1) * double(N_2) * double(N_3) / pow(2.0, 30.0);
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize)
 	{
 		printf("Error: Insufficient GPU memory for this operation!\n");
 		return false;
@@ -1253,12 +1259,18 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 
 bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu)
 {
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
 	float numVol = 1.0;
 	if (cpu_to_gpu)
 		numVol = 2.0;
 	else
 		numVol = 1.0;
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	double dataSize = 4.0 * double(N_1) * double(N_2) * double(N_3) / pow(2.0, 30.0);
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize)
 	{
 		printf("Error: Insufficient GPU memory for this operation!\n");
 		return false;
@@ -1269,15 +1281,72 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 
 float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return 0.0;
+	}
 	float numVol = 1.0;
 	if (cpu_to_gpu)
 		numVol = 2.0;
 	else
 		numVol = 1.0;
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
 	{
-		printf("Error: Insufficient GPU memory for this operation!\n");
-		return false;
+		if (cpu_to_gpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return 0.0;
+		}
+		else
+		{
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices)/double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			float* costs = (float*)calloc(size_t(numChunks), sizeof(float));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1-1, sliceStart + numSlices - 1);
+
+				int sliceStart_pad = std::max(0, sliceStart - 1);
+				int sliceEnd_pad = std::min(N_1 - 1, sliceEnd + 1);
+				int numSlices_pad = sliceEnd_pad - sliceStart_pad + 1;
+
+				int sliceStart_relative = sliceStart - sliceStart_pad;
+				int sliceEnd_relative = sliceStart_relative + (sliceEnd - sliceStart);
+
+				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2*N_3)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				costs[ichunk] = anisotropicTotalVariation_cost(f_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative);
+			}
+
+			float retVal = 0.0;
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+				retVal += costs[ichunk];
+
+			free(costs);
+			return retVal;
+		}
 	}
 	else
 		return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
@@ -1285,15 +1354,74 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 
 bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
 	float numVol = 1.0;
 	if (cpu_to_gpu)
 		numVol = 2.0;
 	else
 		numVol = 1.0;
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
 	{
-		printf("Error: Insufficient GPU memory for this operation!\n");
-		return false;
+		if (cpu_to_gpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else if (Df == f)
+		{
+			printf("Error: Insufficient GPU memory for this operation when doing in-place processing!\n");
+			return false;
+		}
+		else
+		{
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* Df_chunk = &Df[uint64(sliceStart) * uint64(N_2 * N_3)]; // not padded
+
+				int sliceStart_pad = std::max(0, sliceStart - 1);
+				int sliceEnd_pad = std::min(N_1 - 1, sliceEnd + 1);
+				int numSlices_pad = sliceEnd_pad - sliceStart_pad + 1;
+
+				int sliceStart_relative = sliceStart - sliceStart_pad;
+				int sliceEnd_relative = sliceStart_relative + (sliceEnd - sliceStart);
+
+				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative);
+			}
+
+			return true;
+		}
 	}
 	else
 		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
@@ -1301,15 +1429,72 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 
 float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
 {
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return 0.0;
+	}
 	float numVol = 1.0;
 	if (cpu_to_gpu)
 		numVol = 3.0;
 	else
 		numVol = 1.0;
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
 	{
-		printf("Error: Insufficient GPU memory for this operation!\n");
-		return 0.0;
+		if (cpu_to_gpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			float* costs = (float*)calloc(size_t(numChunks), sizeof(float));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				int sliceStart_pad = std::max(0, sliceStart - 1);
+				int sliceEnd_pad = std::min(N_1 - 1, sliceEnd + 1);
+				int numSlices_pad = sliceEnd_pad - sliceStart_pad + 1;
+
+				int sliceStart_relative = sliceStart - sliceStart_pad;
+				int sliceEnd_relative = sliceStart_relative + (sliceEnd - sliceStart);
+
+				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
+				float* d_chunk = &d[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				costs[ichunk] = anisotropicTotalVariation_quadraticForm(f_chunk, d_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative);
+			}
+
+			float retVal = 0.0;
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+				retVal += costs[ichunk];
+
+			free(costs);
+			return retVal;
+		}
 	}
 	else
 		return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, cpu_to_gpu, params.whichGPU);
@@ -1317,15 +1502,45 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 
 bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu)
 {
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
 	float numVol = 1.0;
 	if (cpu_to_gpu)
 		numVol = 3.0;
 	else
 		numVol = 1.0;
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * params.volumeDataSize())
+	
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
 	{
-		printf("Error: Insufficient GPU memory for this operation!\n");
-		return false;
+		if (cpu_to_gpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			//printf("diffuse: processing in chunks...\n");
+			// will process in chunks
+			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
+			for (int iter = 0; iter < numIter; iter++)
+			{
+				TVgradient(f, d, N_1, N_2, N_3, delta, 1.0, true);
+				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
+				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, 1.0, true);
+				if (denom <= 1.0e-16)
+					break;
+				float stepSize = num / denom;
+				scalarAdd_cpu(f, -stepSize, d, N_1, N_2, N_3);
+			}
+			free(d);
+		}
 	}
 	else
 		return diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu, params.whichGPU);

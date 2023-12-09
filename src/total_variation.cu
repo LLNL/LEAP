@@ -102,12 +102,17 @@ __device__ float aTV_Huber_costTerm(float* f, const int i, const int j, const in
         dist_3;
 }
 
-__global__ void aTV_Huber_cost(float* f, float* d, int3 N, float delta, float beta)
+__global__ void aTV_Huber_cost(float* f, float* d, int3 N, float delta, float beta, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        d[i * N.y * N.z + j * N.z + k] = 0.0f;
+        return;
+    }
 
     d[i * N.y * N.z + j * N.z + k] = aTV_Huber_costTerm(f, i, j, k, N, delta, beta);
 }
@@ -186,22 +191,32 @@ __device__ float aTV_Huber_quadFormTerm(float* f, float* d, const int i, const i
         dist_3;
 }
 
-__global__ void aTV_Huber_quadForm(float* f, float* d, float* quad, int3 N, float delta, float beta)
+__global__ void aTV_Huber_quadForm(float* f, float* d, float* quad, int3 N, float delta, float beta, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        quad[i * N.y * N.z + j * N.z + k] = 0.0f;
+        return;
+    }
 
     quad[i * N.y * N.z + j * N.z + k] = aTV_Huber_quadFormTerm(f, d, i, j, k, N, delta, beta);
 }
 
-__global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, float beta)
+__global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, float beta, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        Df[i * N.y * N.z + j * N.z + k] = 0.0f;
+        return;
+    }
 
     const int i_minus = max(0, i - 1);
     const int i_plus = min(N.x - 1, i + 1);
@@ -250,13 +265,22 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
         dist_3;
 }
 
-bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU)
+bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
 {
     if (f == NULL) return false;
     if (beta <= 0.0)
         beta = 1.0;
     if (delta < 1.0e-8)
         delta = 1.0e-8;
+
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = N_1 - 1;
+    sliceStart = max(0, min(N_1 - 1, sliceStart));
+    sliceEnd = max(0, min(N_1 - 1, sliceEnd));
+    if (sliceStart > sliceEnd)
+        return false;
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
@@ -269,7 +293,7 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     {
         dev_f = copy3DdataToGPU(f, N, whichGPU);
         
-        if (cudaMalloc((void**)&dev_Df, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+        if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
             return false;
@@ -285,12 +309,16 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    aTV_Huber_gradient <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, delta, beta);
+    aTV_Huber_gradient <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, delta, beta, sliceStart, sliceEnd);
     cudaDeviceSynchronize();
 
     // pull result off GPU
     if (cpu_to_gpu)
-        pull3DdataFromGPU(Df, N, dev_Df, whichGPU);
+    {
+        float* dev_Df_shift = &dev_Df[uint64(sliceStart) * uint64(N.y) * uint64(N.z)];
+        int3 N_crop = make_int3(sliceEnd-sliceStart+1, N_2, N_3);
+        pull3DdataFromGPU(Df, N_crop, dev_Df_shift, whichGPU);
+    }
 
     // Clean up
     if (cpu_to_gpu && dev_f != 0)
@@ -304,13 +332,22 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     return true;
 }
 
-float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU)
+float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
 {
     if (f == NULL || d == NULL) return -1.0;
     if (beta <= 0.0)
         beta = 1.0;
     if (delta < 1.0e-8)
         delta = 1.0e-8;
+
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = N_1 - 1;
+    sliceStart = max(0, min(N_1 - 1, sliceStart));
+    sliceEnd = max(0, min(N_1 - 1, sliceEnd));
+    if (sliceStart > sliceEnd)
+        return false;
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
@@ -332,7 +369,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
 
     // Allocate space on GPU for the un-collapsed quadratic form
     float* dev_quad = 0;
-    if (cudaMalloc((void**)&dev_quad, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    if (cudaMalloc((void**)&dev_quad, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(volume) failed!\n");
         return -1.0;
@@ -342,7 +379,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    aTV_Huber_quadForm <<< dimGrid, dimBlock >>> (dev_f, dev_d, dev_quad, N, delta, beta);
+    aTV_Huber_quadForm <<< dimGrid, dimBlock >>> (dev_f, dev_d, dev_quad, N, delta, beta, sliceStart, sliceEnd);
     cudaDeviceSynchronize();
 
     float retVal = sum(dev_quad, N, whichGPU);
@@ -377,13 +414,22 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     return retVal;
 }
 
-float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU)
+float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
 {
     if (f == NULL) return -1.0;
     if (beta <= 0.0)
         beta = 1.0;
     if (delta < 1.0e-8)
         delta = 1.0e-8;
+
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = N_1 - 1;
+    sliceStart = max(0, min(N_1 - 1, sliceStart));
+    sliceEnd = max(0, min(N_1 - 1, sliceEnd));
+    if (sliceStart > sliceEnd)
+        return false;
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
@@ -398,7 +444,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
 
     // Allocate space on GPU for the un-collapsed quadratic form
     float* dev_d = 0;
-    if (cudaMalloc((void**)&dev_d, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    if (cudaMalloc((void**)&dev_d, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(volume) failed!\n");
         return -1.0;
@@ -408,23 +454,10 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    aTV_Huber_cost <<< dimGrid, dimBlock >>> (dev_f, dev_d, N, delta, beta);
+    aTV_Huber_cost <<< dimGrid, dimBlock >>> (dev_f, dev_d, N, delta, beta, sliceStart, sliceEnd);
     cudaDeviceSynchronize();
 
     float retVal = sum(dev_d, N, whichGPU);
-    /* pull result off GPU
-    float* costTerms = (float*)malloc(sizeof(float) * N.x * N.y * N.z);
-    pull3DdataFromGPU(costTerms, N, dev_d, whichGPU);
-    float retVal = 0.0;
-    for (int i = 0; i < N.x; i++)
-    {
-        for (int j = 0; j < N.y; j++)
-        {
-            for (int k = 0; k < N.z; k++) retVal += costTerms[i * N.y * N.z + j * N.z + k];
-        }
-    }
-    free(costTerms);
-    //*/
 
     // Clean up
     if (cpu_to_gpu && dev_f != 0)
@@ -458,7 +491,7 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
         dev_f = f;
 
     float* dev_d = 0;
-    if (cudaMalloc((void**)&dev_d, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    if (cudaMalloc((void**)&dev_d, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc failed!\n");
         return false;

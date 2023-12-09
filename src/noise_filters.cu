@@ -6,12 +6,17 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
-__global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold)
+__global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        f_filtered[i * N.y * N.z + j * N.z + k] = 0.0f;
+        return;
+    }
 
     float v[27];
     int ind = 0;
@@ -223,9 +228,18 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     return true;
 }
 
-bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu, int whichGPU)
+bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
 {
     if (f == NULL) return false;
+
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = N_1 - 1;
+    sliceStart = max(0, min(N_1 - 1, sliceStart));
+    sliceEnd = max(0, min(N_1 - 1, sliceEnd));
+    if (sliceStart > sliceEnd)
+        return false;
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
@@ -250,7 +264,7 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
                  int(ceil(double(N.z) / double(dimBlock.z))));
-    medianFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, threshold);
+    medianFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, threshold, sliceStart, sliceEnd);
     // medianFilterKernel(float* f, float* f_filtered, int4 N, float threshold)
 
     // wait for GPU to finish
