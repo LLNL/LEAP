@@ -43,6 +43,7 @@ set(HEADER
   total_variation.cuh
   cuda_utils.h
   cpu_utils.h
+  phantom.h
   leap_defines.h
 )
 
@@ -59,6 +60,7 @@ set(SRC_CPP
   sensitivity_cpu.cpp
   ramp_filter_cpu.cpp
   cpu_utils.cpp
+  phantom.cpp
 )
 
 set(SRC_CU

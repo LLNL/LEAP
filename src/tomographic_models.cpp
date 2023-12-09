@@ -412,6 +412,7 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 
 bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 {
+	//return false;
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
 	if ((params.geometry == parameters::CONE && params.helicalPitch != 0.0) || params.geometry == parameters::MODULAR)

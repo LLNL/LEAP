@@ -985,21 +985,21 @@ class tomographicModels:
             x_0 = -0.5*(self.get_numX()-1)*self.get_voxelWidth()
         else:
             x_0 = self.get_offsetX() - 0.5*(self.get_numX()-1)*self.get_voxelWidth()
-        return np.array(range(self.get_numX()))*self.get_voxelWidth() + x_0
+        return np.array(range(self.get_numX()),dtype=np.float32)*self.get_voxelWidth() + x_0
         
     def y_samples(self,centerCoords=False):
         if centerCoords:
             y_0 = -0.5*(self.get_numY()-1)*self.get_voxelWidth()
         else:
             y_0 = self.get_offsetY() - 0.5*(self.get_numY()-1)*self.get_voxelWidth()
-        return np.array(range(self.get_numY()))*self.get_voxelWidth() + y_0
+        return np.array(range(self.get_numY()),dtype=np.float32)*self.get_voxelWidth() + y_0
         
     def z_samples(self,centerCoords=False):
         if centerCoords:
             z_0 = -0.5*(self.get_numZ()-1)*self.get_voxelHeight()
         else:
             z_0 = self.get_z0()
-        return np.array(range(self.get_numZ()))*self.get_voxelHeight() + z_0
+        return np.array(range(self.get_numZ()),dtype=np.float32)*self.get_voxelHeight() + z_0
     
     def voxelSamples(self,centerCoords=False):
         x = self.x_samples(centerCoords)
@@ -1258,3 +1258,10 @@ class tomographicModels:
             [Z[0],Z[1],Z[6],Z[7]],
             [Z[2],Z[3],Z[4],Z[5]]]
             ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
+            
+    def addObject(self, f, type, c, r, val):
+        self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float]
+        self.libprojectors.addObject.restype = ctypes.c_bool
+        return self.libprojectors.addObject(f, type, c.astype(np.float32), r.astype(np.float32), val)
+        
+        

@@ -19,7 +19,7 @@ __global__ void convertARTtoERTkernel(float* g, const float muCoeff, const float
 	//weight = np.exp(muCoeff * weight)
 	const float u = T_u * k + u_0;
 	if (fabs(u) < muRadius)
-		g[i * N.y * N.z + j * N.z + k] *= expf(muCoeff * sqrt(muRadius*muRadius - u*u));
+		g[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] *= expf(muCoeff * sqrt(muRadius*muRadius - u*u));
 }
 
 __global__ void applyWeightsKernel(float* g, const float* w_view, const float* w_ray, int3 N)
@@ -35,7 +35,7 @@ __global__ void applyWeightsKernel(float* g, const float* w_view, const float* w
 		theWeight *= w_ray[j * N.z + k];
 	if (w_view != NULL)
 		theWeight *= w_view[i * N.z + k];
-	g[i * N.y * N.z + j * N.z + k] *= theWeight;
+	g[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] *= theWeight;
 }
 
 float FBPscalar(parameters* params)

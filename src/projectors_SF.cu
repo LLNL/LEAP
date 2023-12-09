@@ -30,13 +30,6 @@ __constant__ float d_phi_end;
 __device__ float helicalConeWeight(float v)
 {
     const float abs_v_hat = (v >= 0.0f) ? v * d_v_max_inv : v * d_v_min_inv;
-    /*
-    float abs_v_hat;
-    if (v >= 0.0f)
-        abs_v_hat = fabs(v / d_v_max);
-    else
-        abs_v_hat = fabs(v / d_v_min);
-    //*/
 
     if (abs_v_hat <= d_q_helical)
         return 1.0f;
@@ -60,11 +53,11 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
     
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     if (x*x + y*y > rFOVsq)
     {
@@ -255,7 +248,7 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
             }
         }
     }
-    g[l * N_g.z * N_g.y + m * N_g.z + n] = l_phi * g_output;
+    g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = l_phi * g_output;
 }
 
 
@@ -268,11 +261,11 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
@@ -626,7 +619,7 @@ __global__ void fanBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4
                     + tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(iz) + 0.5f) * hWeight_2;
             }
         }
-        g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
     }
     else
     {
@@ -677,7 +670,7 @@ __global__ void fanBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4
                     + tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(iz)+0.5f) * hWeight_2;
             }
         }
-        g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
     }
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -691,7 +684,7 @@ __global__ void applyPolarWeight(float* g, int4 N_g, float4 T_g, float4 startVal
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[i * N_g.z * N_g.y + j * N_g.z + k] *= rsqrt(1.0f + v*v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrt(1.0f + v*v);
 }
 
 __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 startVals_g)
@@ -703,7 +696,7 @@ __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 s
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[i * N_g.z * N_g.y + j * N_g.z + k] *= sqrt(1.0f + v * v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrt(1.0f + v * v);
 }
 
 __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
@@ -714,11 +707,11 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k; // XYZ
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i; // ZYX
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
@@ -858,11 +851,11 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k; // XYZ
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i; // ZYX
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
@@ -1056,7 +1049,7 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
                  + tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
              }
          }
-         g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f+u*u) / fabs(u*cos_phi-sin_phi) * g_output;
+         g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f+u*u) / fabs(u*cos_phi-sin_phi) * g_output;
      }
      else
      {
@@ -1136,7 +1129,7 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
                      + tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
              }
          }
-         g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f+u*u) / fabs(u*sin_phi+cos_phi) * g_output;
+         g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f+u*u) / fabs(u*sin_phi+cos_phi) * g_output;
      }
 }
 
@@ -1157,6 +1150,7 @@ bool project_SF_parallel(float*& g, float* f, parameters* params, bool cpu_to_gp
 {
     return project_SF(g, f, params, cpu_to_gpu);
 }
+
 
 bool backproject_SF_parallel(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 {

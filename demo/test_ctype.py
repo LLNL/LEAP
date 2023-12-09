@@ -49,10 +49,11 @@ leapct.print_parameters()
 g = leapct.allocateProjections()
 f = leapct.allocateVolume()
 
-# Specify a phantom composed of a 300 mm diameter sphere
-x,y,z=leapct.voxelSamples()
-f[x**2 + y**2 + (z/1.05)**2 <= 150.0**2] = 1.0
-f[x**2 + (y-20)**2 + z**2 <= 10.0**2] = 0.0
+# Specify a phantom composed of a 300 mm diameter sphere with a 20 mm hole in it
+# One could easily do this in Python, but Python is soooooo slow for these types of operations,
+# so we implemented this feature with multi-threaded C++
+leapct.addObject(f, 0, np.array([0.0, 0.0, 0.0]), np.array([150.0, 150.0, 150.0*1.05]), 1.0)
+leapct.addObject(f, 0, np.array([0.0, 20.0, 0.0]), np.array([10.0, 10.0, 10.0]), 0.0)
 #leapct.displayVolume(f)
 
 # "Simulate" projection data

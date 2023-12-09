@@ -286,11 +286,11 @@ __global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
@@ -418,9 +418,9 @@ __global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g,
     dst.z = moduleCenters[3 * i + 2] + v * rowVectors[3 * i + 2] + u * colVectors[3 * i + 2];
 
     if (volumeDimensionOrder == 0)
-        g[i * N_g.y * N_g.z + j * N_g.z + k] = lineIntegral_Joseph_XYZ(f, N_f, T_f, startVals_f, sourcePos, dst);
+        g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_XYZ(f, N_f, T_f, startVals_f, sourcePos, dst);
     else
-        g[i * N_g.y * N_g.z + j * N_g.z + k] = lineIntegral_Joseph_ZYX(f, N_f, T_f, startVals_f, sourcePos, dst);
+        g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_ZYX(f, N_f, T_f, startVals_f, sourcePos, dst);
 }
 
 bool project_Joseph(float*& g, float* f, parameters* params, bool cpu_to_gpu)
@@ -456,7 +456,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool cpu_to
 
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+        if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(projections) failed!\n");
         }
@@ -554,7 +554,7 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool cp
 
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
         }

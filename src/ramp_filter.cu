@@ -135,7 +135,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
-    Dg[l * N.z * N.y + m * N.z + n] = T_phi*((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon); // ? 1.0f / T_phi
+    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = T_phi*((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon); // ? 1.0f / T_phi
 }
 
 #ifdef INCLUDE_CUFFT
@@ -215,15 +215,16 @@ __global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3
 {
     // int k = threadIdx.x;
     int k = blockIdx.x * blockDim.x + threadIdx.x;
-    if (k > 0) return;
-    // if (k > N.z - 1)
-    //	return;
+    //if (k > 0) return;
+    if (k > N.z - 1)
+    	return;
+    cufftComplex* F_slice = &F[uint64(k) * uint64(N.x * N.y)];
     for (int j = 0; j < N.y; j++)
     {
         for (int i = 0; i < N.x; i++)
         {
-            F[k * N.x * N.y + j * N.x + i].x *= H[j * N.x + i];
-            F[k * N.x * N.y + j * N.x + i].y *= H[j * N.x + i];
+            F_slice[j * N.x + i].x *= H[j * N.x + i];
+            F_slice[j * N.x + i].y *= H[j * N.x + i];
         }
     }
 }
@@ -234,8 +235,8 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
     int i = blockIdx.x + startView;
     if (i > endView || j > N.y - 1)
         return;
-    float* data_padded_block = &data_padded[(i - startView) * N_pad * N.y + j * N_pad];
-    float* data_block = &data[i * N.z * N.y + j * N.z];
+    float* data_padded_block = &data_padded[uint64(i - startView) * uint64(N_pad * N.y) + uint64(j * N_pad)];
+    float* data_block = &data[uint64(i) * uint64(N.z * N.y) + uint64(j * N.z)];
 
     if (helicalPitch == 0.0f)
     {
@@ -246,7 +247,7 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
     {
         // Do helical forward height rebinning while copying data to padded array
         const float last_v_sample = float(N.y - 1);
-        float* aProj = &data[i * N.z * N.y];
+        float* aProj = &data[uint64(i) * uint64(N.z * N.y)];
         for (int k = 0; k < N.z; k++)
         {
             const float theShift = helicalPitch / R * (k * T.z + startVals.z);
@@ -293,10 +294,11 @@ __global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N
     int i = blockIdx.x;
     if (i > N.x - 1 || j > N.y - 1)
         return;
+    cufftComplex* aProj = &G[uint64(i) * uint64(N.y * N.z)];
     for (int k = 0; k < N.z; k++)
     {
-        G[i * N.y * N.z + j * N.z + k].x *= H[k];
-        G[i * N.y * N.z + j * N.z + k].y *= H[k];
+        aProj[j * N.z + k].x *= H[k];
+        aProj[j * N.z + k].y *= H[k];
     }
 }
 
@@ -306,7 +308,7 @@ __global__ void multiplyComplexFilterKernel(cufftComplex* G, const cufftComplex*
     int i = blockIdx.x;
     if (i > N.x - 1 || j > N.y - 1)
         return;
-    cufftComplex* G_row = &G[i * N.y * N.z + j * N.z];
+    cufftComplex* G_row = &G[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z)];
     for (int k = 0; k < N.z; k++)
     {
         const float realPart = G_row[k].x * H[k].x - G_row[k].y * H[k].y;
@@ -322,8 +324,8 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
     int i = blockIdx.x + startView;
     if (i > endView || j > N.y - 1)
         return;
-    float* data_padded_block = &data_padded[(i - startView) * N_pad * N.y + j * N_pad];
-    float* data_block = &data[i * N.z * N.y + j * N.z];
+    float* data_padded_block = &data_padded[uint64(i - startView) * uint64(N_pad * N.y) + uint64(j * N_pad)];
+    float* data_block = &data[uint64(i) * uint64(N.z * N.y) + uint64(j * N.z)];
 
     if (helicalPitch == 0.0f)
     {
@@ -334,7 +336,7 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
     {
         // Do helical backward height rebinning while copying data to padded array
         const float last_v_sample = float(N.y - 1);
-        float* aProj = &data_padded[(i - startView) * N_pad * N.y];
+        float* aProj = &data_padded[uint64(i - startView) * uint64(N_pad * N.y)];
         for (int k = 0; k < N.z; k++)
         {
             const float theShift = helicalPitch / R * (k * T.z + startVals.z);
@@ -831,13 +833,13 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
                         else
                             i_source = 0;
                     }
-                    paddedSlice[j * N_H2 + i] = f[i_source * N_y * N_z + j_source*N_z + k];
+                    paddedSlice[j * N_H2 + i] = f[uint64(i_source) * uint64(N_y * N_z) + uint64(j_source*N_z + k)];
                 }
             }
         }
         else //if (params->volumeDimensionOrder == parameters::ZYX)
         {
-            float* f_slice = &f[k * N_x * N_y];
+            float* f_slice = &f[uint64(k) * uint64(N_x * N_y)];
             for (int j = 0; j < N_H1; j++)
             {
                 int j_source = j;
@@ -898,13 +900,13 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
                 {
                     for (int i = 0; i < N_x; i++)
                     {
-                        f[i * N_y * N_z + j * N_z + k] = paddedSlice[j * N_H2 + i] / float(N_H1 * N_H2);
+                        f[uint64(i) * uint64(N_y * N_z) + uint64(j * N_z + k)] = paddedSlice[j * N_H2 + i] / float(N_H1 * N_H2);
                     }
                 }
             }
             else
             {
-                float* f_slice = &f[k * N_x * N_y];
+                float* f_slice = &f[uint64(k) * uint64(N_x * N_y)];
                 for (int j = 0; j < N_y; j++)
                 {
                     for (int i = 0; i < N_x; i++)
@@ -964,13 +966,13 @@ bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
     if (cpu_to_gpu)
     {
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
-        if (cudaSuccess != cudaMalloc((void**)&dev_Dg, N_g.x*N_g.y*N_g.z * sizeof(float)))
+        if (cudaSuccess != cudaMalloc((void**)&dev_Dg, params->projectionData_numberOfElements() * sizeof(float)))
             fprintf(stderr, "cudaMalloc failed!\n");
     }
     else
     {
         dev_Dg = g;
-        if (cudaSuccess != cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float)))
+        if (cudaSuccess != cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float)))
             fprintf(stderr, "cudaMalloc failed!\n");
         equal(dev_g, dev_Dg, make_int3(N_g.x, N_g.y, N_g.z), params->whichGPU);
     }

@@ -290,11 +290,11 @@ __global__ void attenuatedWeightedBackprojectorKernel_SF(cudaTextureObject_t g, 
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x_shift = 0.5f * T_f.x;
     //const float x_shift = T_f.x;
@@ -409,11 +409,11 @@ __global__ void attenuatedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     if (x * x + y * y > rFOVsq)
     {
@@ -672,7 +672,7 @@ __global__ void attenuatedProjectorKernel_SF(float* g, int4 N_g, float4 T_g, flo
             }
         }
     }
-    g[l * N_g.z * N_g.y + m * N_g.z + n] = l_phi * g_output;
+    g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = l_phi * g_output;
 }
 
 __global__ void cylindricalAttenuatedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, const float muCoeff, const float muRadius, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
@@ -687,11 +687,11 @@ __global__ void cylindricalAttenuatedBackprojectorKernel_SF(cudaTextureObject_t 
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     if (x * x + y * y > rFOVsq)
     {
@@ -893,7 +893,7 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
             }
         }
     }
-    g[l * N_g.z * N_g.y + m * N_g.z + n] = l_phi * g_output;
+    g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = l_phi * g_output;
 }
 
 bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu)
@@ -928,7 +928,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu
 
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+        if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(projections) failed!\n");
         }
@@ -1036,7 +1036,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to
 
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
         }

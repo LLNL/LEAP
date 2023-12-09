@@ -17,11 +17,11 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
@@ -76,11 +76,11 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
@@ -163,11 +163,11 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
     if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
         return;
 
-    int ind;
+    uint64 ind;
     if (volumeDimensionOrder == 0)
-        ind = i * N_f.y * N_f.z + j * N_f.z + k;
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
-        ind = k * N_f.y * N_f.x + j * N_f.x + i;
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
@@ -372,7 +372,7 @@ __global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
             }
         }
     }
-    g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * l_phi * g_output;
+    g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * l_phi * g_output;
 }
 
 __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
@@ -446,7 +446,7 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
                     g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
             }
         }
-        g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
     }
     else
     {
@@ -489,7 +489,7 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
             }
         }
 
-        g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
     }
 }
 
@@ -580,7 +580,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
                 }
             }
         }
-        g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * sqrt(1.0f + v * v) * g_output;
     }
     else
     {
@@ -637,7 +637,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
             }
         }
 
-        g[l * N_g.z * N_g.y + m * N_g.z + n] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * sqrt(1.0f + v * v) * g_output;
     }
 }
 
@@ -693,7 +693,7 @@ bool project_eSF(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+        if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(projections) failed!\n");
         }
@@ -771,7 +771,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 
     if (cpu_to_gpu)
     {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
         }

@@ -9,6 +9,7 @@
 
 #include "tomographic_models_c_interface.h"
 #include "tomographic_models.h"
+#include "phantom.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -416,4 +417,10 @@ float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, flo
 bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu)
 {
 	return tomo.Diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu);
+}
+
+bool addObject(float* f, int type, float* c, float* r, float val)
+{
+	phantom testObject;
+	return testObject.addObject(f, &(tomo.params), type, c, r, val);
 }
