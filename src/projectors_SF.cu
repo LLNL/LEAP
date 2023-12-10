@@ -1024,7 +1024,7 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
 
              const float hWeight_0 = max(0.0f, min( num_high/denom_high, n_plus_half ) - max( num_low/denom_low, n_minus_half ) );
              const float hWeight_1 = max(0.0f, min( (num_high-Tx_sin)/(denom_high-Tx_cos), n_plus_half ) - max( (num_low-Tx_sin)/(denom_low-Tx_cos), n_minus_half ) );
-             const float hWeight_2 = 1.0f - hWeight_1 - hWeight_0;
+             const float hWeight_2 = max(0.0f, 1.0f - hWeight_1 - hWeight_0);
 
              const float v_phi_x_step = T_f.z / (T_g.y*R_minus_x_dot_theta);
              const float xi_high = ((float)k - z_ind_offset) * v_phi_x_step - v0_over_Tv;
@@ -1104,7 +1104,7 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
 
              const float hWeight_0 = max(0.0f, min( num_high/denom_high, n_plus_half ) - max( num_low/denom_low, n_minus_half ) );
              const float hWeight_1 = max(0.0f, min( (num_high+Ty_cos)/(denom_high-Ty_sin), n_plus_half ) - max( (num_low+Ty_cos)/(denom_low-Ty_sin), n_minus_half ) );
-             const float hWeight_2 = 1.0f - hWeight_1 - hWeight_0;
+             const float hWeight_2 = max(0.0f, 1.0f - hWeight_1 - hWeight_0);
 
              const float v_phi_x_step = T_f.z / (T_g.y*R_minus_x_dot_theta);
              const float xi_high = ((float)k - z_ind_offset) * v_phi_x_step - v0_over_Tv;

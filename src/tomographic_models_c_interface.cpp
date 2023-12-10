@@ -419,8 +419,8 @@ bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
 	return tomo.Diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu);
 }
 
-bool addObject(float* f, int type, float* c, float* r, float val)
+bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip)
 {
 	phantom testObject;
-	return testObject.addObject(f, &(tomo.params), type, c, r, val);
+	return testObject.addObject(f, &(tomo.params), type, c, r, val, A, clip);
 }

@@ -15,32 +15,33 @@ Once these are set, one simply provides the numpy arrays of the projection data 
 LEAP will perform the various operations.
 
 Each of the four geometry types: parallel-, fan-, cone-, and modular-beam has its own function
-for which to set its parameters, for example use setConeBeamParams to set a cone-beam geometry
+for which to set its parameters, for example use set_conebeam to set a cone-beam geometry
 with certain specifications.
 
 Then one may specify the reconstruction volume specifications such as the number of voxels in each
-dimension and the voxel size.  We suggest using the "setDefaultVolume" function which sets the volume
+dimension and the voxel size.  We suggest using the "set_default_volume" function which sets the volume
 parameters such that the volume fills the field of view of the CT system and uses the nominal voxel sizes.
-Using voxel sizes that are significantly smaller and significantly bigger than this default size may result
+Using voxel sizes that are significantly smaller or significantly bigger than this default size may result
 in poor computational performance.
 '''
 
 
-# Specify the number of detector rows and columns which is used below
+# Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
-N = 300
+numCols = 512
 numTurns = 3
-numAngles = int(720*N/1024)*numTurns
-#numAngles = 2*numTurns
-pixelSize = 0.2*2048/N
-M = N
+numAngles = 2*int(360*numCols/1024)*numTurns
+pixelSize = 0.65*512/numCols
+
+# Set the number of detector rows
+numRows = numCols
 
 # Set the scanner geometry
-#leapct.set_parallelBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
-#leapct.set_fanBeam(numAngles, N, N, pixelSize, pixelSize, 0.5*(N-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
-#leapct.set_normalizedHelicalPitch(0.2)
-leapct.set_normalizedHelicalPitch(1.0)
+leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
+
+# Set the helical pitch.
+leapct.set_normalizedHelicalPitch(0.5)
+#leapct.set_normalizedHelicalPitch(1.0)
 
 # Set the volume parameters
 leapct.set_default_volume()
@@ -48,40 +49,48 @@ leapct.set_default_volume()
 # Trouble-Shooting Functions
 leapct.print_parameters()
 #leapct.sketch_system()
-#quit()
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()
 f = leapct.allocateVolume()
 
-# Specify a phantom composed of a 300 mm diameter sphere with a 20 mm hole in it
+# Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
 # so we implemented this feature with multi-threaded C++
-leapct.addObject(f, 0, np.array([0.0, 0.0, 0.0]), np.array([150.0, 150.0, 150.0*1.05]), 1.0)
-leapct.addObject(f, 0, np.array([0.0, 20.0, 0.0]), np.array([10.0, 10.0, 10.0]), 0.0)
-#leapct.displayVolume(f)
+leapct.set_FORBILD(f,True)
+#leapct.display(f)
+
 
 # "Simulate" projection data
 startTime = time.time()
 leapct.project(g,f)
-print('Elapsed time: ' + str(time.time()-startTime))
+print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
+#leapct.display(g)
+
+# Add noise to the data (just for demonstration purposes)
+I_0 = 50000.0
+g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+
+# Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
+# with the true result which is cheating
 f[:] = 0.0
-#g[g<0.0] = 0.0
-#g[:] = np.random.poisson(g)
 
-# Reconstruction
+# Reconstruct the data
 startTime = time.time()
-#leapct.set_GPU(0)
 leapct.FBP(g,f)
-print(np.min(f))
-print(np.max(f))
-f[f<0.0] = 0.0
-#leapct.backproject(g,f)
-#leapct.ASDPOCS(g,f,20,5,3,1.0/20.0)
-#leapct.diffuse(f,1.0/20.0,3)
-#leapct.SART(g,f,10,5)
+#leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
+#leapct.SART(g,f,10,10)
 #leapct.MLEM(g,f,5,1)
-#leapct.LS(g,f,10)
-print('Elapsed time: ' + str(time.time()-startTime))
+#leapct.LS(g,f,10,True)
+print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-leapct.displayVolume(f)
+
+# Post Reconstruction Smoothing (optional)
+#startTime = time.time()
+#leapct.diffuse(f,0.02/20.0,4)
+#leapct.MedianFilter(f)
+#leapct.BlurFilter(f,2.0)
+#print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
+
+# Display the result with napari
+leapct.display(f)

@@ -119,4 +119,4 @@ extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, 
 extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
 extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu);
 
-extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val);
+extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip);

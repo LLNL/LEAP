@@ -631,6 +631,7 @@ class tomographicModels:
             self.project(Pu,Q)
             Pu *= W
             self.backproject(Pu,Q)
+            Q[Q==0.0] = 1.0
             Q = 1.0 / Q
         else:
             Q = 1.0
@@ -1259,9 +1260,63 @@ class tomographicModels:
             [Z[2],Z[3],Z[4],Z[5]]]
             ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
             
-    def addObject(self, f, type, c, r, val):
-        self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float]
+    def addObject(self, f, type, c, r, val, A=None, clip=None):
+        self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.addObject.restype = ctypes.c_bool
-        return self.libprojectors.addObject(f, type, c.astype(np.float32), r.astype(np.float32), val)
+        if A is None:
+            A = np.zeros((3,3),dtype=np.float32)
+            A[0,0] = 1.0
+            A[1,1] = 1.0
+            A[2,2] = 1.0
+        if clip is None:
+            clip = np.zeros(3,dtype=np.float32)
         
+        c = np.ascontiguousarray(c, dtype=np.float32)
+        r = np.ascontiguousarray(r, dtype=np.float32)
+        A = np.ascontiguousarray(A, dtype=np.float32)
+        clip = np.ascontiguousarray(clip, dtype=np.float32)
+        return self.libprojectors.addObject(f, int(type), c, r, float(val), A, clip)
+        
+    def set_FORBILD(self, f, includeEar=False):
+        has_scipy = False
+        try:
+            from scipy.spatial.transform import Rotation as R
+            has_scipy = True
+        except:
+            print('Warning: scipy package cannot be found, so not included rotated objects')
+            has_scipy = False
+        self.addObject(f, 0, 10.0*np.array([0.0, 0.0, 0.0]), 10.0*np.array([9.6, 12.0, 12.5]), 1.800*0.02)
+        self.addObject(f, 0, 10.0*np.array([0.0, 0.0, 0.0]), 10.0*np.array([9.0, 11.4, 11.9]), 1.050*0.02)
+        self.addObject(f, 0, 10.0*np.array([-4.7, 4.3, 0.872]), 10.0*np.array([2.0, 2.0, 2.0]), 1.060*0.02)
+        self.addObject(f, 0, 10.0*np.array([4.7, 4.3, 0.872]), 10.0*np.array([2.0, 2.0, 2.0]), 1.060*0.02)
+        self.addObject(f, 0, 10.0*np.array([-1.08, -9, 0.0]), 10.0*np.array([0.4, 0.4, 0.4]), 1.0525*0.02)
+        self.addObject(f, 0, 10.0*np.array([1.08, -9, 0.0]), 10.0*np.array([0.4, 0.4, 0.4]), 1.0475*0.02)
+        self.addObject(f, 0, 10.0*np.array([0.0, 8.4, 0.0]), 10.0*np.array([1.8, 3.0, 3.0]), 0.0)
+        if has_scipy:
+            self.addObject(f, 0, 10.0*np.array([-1.9, 5.4, 0.0]), 10.0*np.array([1.206483*np.cos(15*np.pi/180.0), 0.420276*np.cos(15*np.pi/180.0), 3.0]), 1.800*0.02, R.from_euler("xyz", [0, 0, -120], degrees=True).as_matrix())
+            self.addObject(f, 0, 10.0*np.array([1.9, 5.4, 0.0]), 10.0*np.array([1.2*np.cos(15*np.pi/180.0), 0.42*np.cos(15*np.pi/180.0), 3.0]), 1.800*0.02, R.from_euler("xyz", [0, 0, 120], degrees=True).as_matrix())
+            self.addObject(f, 4, 10.0*np.array([-4.3, 6.8, -1.0]), 10.0*np.array([1.8, 0.24, 2.0]), 1.800*0.02, R.from_euler("xyz", [0, 0, -150], degrees=True).as_matrix())
+            self.addObject(f, 4, 10.0*np.array([4.3, 6.8, -1.0]), 10.0*np.array([1.8, 0.24, 2.0]), 1.800*0.02, R.from_euler("xyz", [0, 0, -30], degrees=True).as_matrix())
+        self.addObject(f, 0, 10.0*np.array([0.0, -3.6, 0.0]), 10.0*np.array([1.8, 3.6, 3.6]), 1.045*0.02)
+        if has_scipy:
+            self.addObject(f, 0, 10.0*np.array([6.393945, -6.393945, 0.0]), 10.0*np.array([1.2, 0.42, 1.2]), 1.055*0.02, R.from_euler("xyz", [0, 0, -58.1], degrees=True).as_matrix())
+            self.addObject(f, 4, 10.0*np.array([0.0, 3.6, 0.0]), 10.0*np.array([1.2, 4.0, 0.25*np.cos(15*np.pi/180.0)]), 1.800*0.02, R.from_euler("xyz", [60, 0, 0], degrees=True).as_matrix())
+            self.addObject(f, 2, 10.0*np.array([0.0, 9.6, 0.0]), 10.0*np.array([0.525561/2.0, 2.0, 0.4]), 1.800*0.02, R.from_euler("xyz", [-60, 0, 0], degrees=True).as_matrix())
+        self.addObject(f, 6, 10.0*np.array([0.0, -11.15, -0.2]), 10.0*np.array([0.5, 0.75, 0.2]), 1.800*0.02)
+        self.addObject(f, 6, 10.0*np.array([0.0, -11.15, 0.2]), 10.0*np.array([0.5, 0.75, 0.2]), 1.800*0.02)
+        if self.get_numAngles() == 1 and self.get_numX() == 1:
+            pass
+        else:
+            self.addObject(f, 0, 10.0*np.array([9.1, 0.0, 0.0]), 10.0*np.array([4.2, 1.8, 1.8]), 1.800*0.02, None, np.array([1.0, 0.0, 0.0]))
+
+        '''
+        if includeEar:
+            xys = np.array([8.8, -1.0392, 8.4, -1.0392, 8.0, -1.0392, 7.6, -1.0392, 8.6, -0.6928, 8.2, -0.6928, 7.8, -0.6928, 7.4, -0.6928, 7.0, -0.6928, 8.8, -0.3464, 8.4, -0.3464, 8.0, -0.3464, 7.6, -0.3464, 7.2, -0.3464, 6.8, -0.3464, 8.8, 1.0392, 8.4, 1.0392, 8.0, 1.0392, 7.6, 1.0392, 8.6, 0.6928, 8.2, 0.6928, 7.8, 0.6928, 7.4, 0.6928, 7.0, 0.6928, 8.8, 0.3464, 8.4, 0.3464, 8.0, 0.3464, 7.6, 0.3464, 7.2, 0.3464, 6.8, 0.3464, 8.6, 0.0, 8.2, 0.0, 7.8, 0.0, 7.4, 0.0, 7.0, 0.0, 6.6, 0.0])
+            zs = np.array([-1.0392, 1.0392, -0.6928, 0.6928, -0.3464, 0.3464, 0.0])
+            for m in range(xys.size//2):
+                x = xys[m*2]
+                y = xys[m*2+1]
+                for n in range(zs.size):
+                    self.addObject(f, 0, 10.0*np.array([x, y, zs[n]]), 10.0*np.array([0.15, 0.15, 0.15]), 0.0)
+        '''
         
