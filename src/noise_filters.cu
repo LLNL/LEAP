@@ -56,12 +56,17 @@ __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float th
         f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
 }
 
-__global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM)
+__global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        f_filtered[i * N.y * N.z + j * N.z + k] = 0.0f;
+        return;
+    }
 
     const int pixelRadius = int(floor(FWHM));
     const float denom = 1.0f / FWHM;
@@ -169,9 +174,18 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
     f_filtered[i * N.y * N.z + j * N.z + k] = val / sum;
 }
 
-bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool cpu_to_gpu, int whichGPU)
+bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
+
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = N_1 - 1;
+    sliceStart = max(0, min(N_1 - 1, sliceStart));
+    sliceEnd = max(0, min(N_1 - 1, sliceEnd));
+    if (sliceStart > sliceEnd)
+        return false;
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
@@ -201,7 +215,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     else if (numDims == 2)
         BlurFilter2DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM);
     else
-        BlurFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM);
+        BlurFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM, sliceStart, sliceEnd);
 
     // wait for GPU to finish
     cudaDeviceSynchronize();
@@ -210,7 +224,14 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     if (cpu_to_gpu)
     {
         // pull result off GPU
-        pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+        if (f_out != NULL)
+        {
+            float* dev_Df_shift = &dev_Df[uint64(sliceStart) * uint64(N.y) * uint64(N.z)];
+            int3 N_crop = make_int3(sliceEnd - sliceStart + 1, N_2, N_3);
+            pull3DdataFromGPU(f_out, N_crop, dev_Df_shift, whichGPU);
+        }
+        else
+            pull3DdataFromGPU(f, N, dev_Df, whichGPU);
 
         if (dev_f != 0)
             cudaFree(dev_f);
@@ -228,7 +249,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     return true;
 }
 
-bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
+bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
 
@@ -274,7 +295,14 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu
     if (cpu_to_gpu)
     {
         // pull result off GPU
-        pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+        if (f_out != NULL)
+        {
+            float* dev_Df_shift = &dev_Df[uint64(sliceStart) * uint64(N.y) * uint64(N.z)];
+            int3 N_crop = make_int3(sliceEnd - sliceStart + 1, N_2, N_3);
+            pull3DdataFromGPU(f_out, N_crop, dev_Df_shift, whichGPU);
+        }
+        else
+            pull3DdataFromGPU(f, N, dev_Df, whichGPU);
 
         if (dev_f != 0)
             cudaFree(dev_f);

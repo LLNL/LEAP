@@ -28,7 +28,7 @@ in poor computational performance.
 
 # Specify the number of detector rows and columns which is used below
 # Scale the number of angles and the detector pixel size with N
-N = 300
+N = 1300
 numAngles = int(720*N/1024)
 pixelSize = 0.2*2048/N
 M = N
@@ -69,10 +69,15 @@ g[:] = np.random.poisson(g)
 startTime = time.time()
 leapct.FBP(g,f)
 #leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
-#leapct.diffuse(f,1.0/20.0,10)
 #leapct.SART(g,f,10,10)
 #leapct.MLEM(g,f,5,1)
 #leapct.LS(g,f,10)
 print('Elapsed time: ' + str(time.time()-startTime))
+
+
+# Post Reconstruction Smoothing
+#leapct.MedianFilter(f)
+#leapct.BlurFilter(f,2.0)
+#leapct.diffuse(f,1.0/20.0,10)
 
 leapct.displayVolume(f)

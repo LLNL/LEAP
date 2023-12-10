@@ -143,3 +143,20 @@ bool scalarAdd_cpu(float* x, float c, float* y, int N_1, int N_2, int N_3)
     }
     return true;
 }
+
+bool equal_cpu(float* f_out, float* f_in, int N_1, int N_2, int N_3)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        float* f_out_slice = &f_out[uint64(i) * uint64(N_2 * N_3)];
+        float* f_in_slice = &f_in[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+                f_out_slice[j * N_3 + k] = f_in_slice[j * N_3 + k];
+        }
+    }
+    return true;
+}
