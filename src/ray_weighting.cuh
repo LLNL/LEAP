@@ -22,6 +22,8 @@ float* setRedundantAndNonEquispacedViewWeights(parameters*, float* w = NULL);
 float* setInverseConeWeight(parameters*);
 float* setPreRampFilterWeights(parameters*);
 
+float* setOffsetScanWeights(parameters*);
+
 bool applyPreRampFilterWeights(float* g, parameters*, bool cpu_to_gpu);
 bool applyPostRampFilterWeights(float* g, parameters*, bool cpu_to_gpu);
 

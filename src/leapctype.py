@@ -787,6 +787,16 @@ class tomographicModels:
         self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
         self.libprojectors.set_rFOV.restype = ctypes.c_bool
         return self.libprojectors.set_rFOV(0.5*d)
+        
+    def set_truncatedScan(self, aFlag):
+        self.libprojectors.set_truncatedScan.argtypes = [ctypes.c_bool]
+        self.libprojectors.set_truncatedScan.restype = ctypes.c_bool
+        return self.libprojectors.set_truncatedScan(aFlag)
+        
+    def set_offsetScan(self, aFlag):
+        self.libprojectors.set_offsetScan.argtypes = [ctypes.c_bool]
+        self.libprojectors.set_offsetScan.restype = ctypes.c_bool
+        return self.libprojectors.set_offsetScan(aFlag)
     
     def set_axisOfSymmetry(self,val):
         self.libprojectors.set_axisOfSymmetry.argtypes = [ctypes.c_float]

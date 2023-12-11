@@ -87,6 +87,10 @@ bool conv1D_cpu(float*& g, parameters* params, float scalar, int whichFilter)
     //for (int i = 0; i < N_H; i++)
     //    printf("%f, %f\n", real(H_comp[i])*float(N_H), imag(H_comp[i]) * float(N_H));
 
+    int numExtrapolate = 0;
+    if (params->truncatedScan)
+        numExtrapolate = std::min(N_H-params->numCols-1, 100);
+
     omp_set_num_threads(omp_get_num_procs());
     #pragma omp parallel for
     for (int iphi = 0; iphi < params->numAngles; iphi++)
@@ -97,6 +101,9 @@ bool conv1D_cpu(float*& g, parameters* params, float scalar, int whichFilter)
         {
             float* proj_line = &g[uint64(iphi) * uint64(params->numRows * params->numCols) + uint64(iRow * params->numCols)];
 
+            float leftVal = proj_line[0];
+            float rightVal = proj_line[params->numCols - 1];
+
             // Put in padded array
             for (int i = 0; i < N_H; i++)
             {
@@ -105,6 +112,17 @@ bool conv1D_cpu(float*& g, parameters* params, float scalar, int whichFilter)
                 else
                     paddedArray[i] = 0.0;
             }
+
+            if (numExtrapolate > 0)
+            {
+                float leftVal = proj_line[0];
+                float rightVal = proj_line[params->numCols - 1];
+                for (int i = params->numCols; i < params->numCols + numExtrapolate; i++)
+                    paddedArray[i] = rightVal;
+                for (int i = N_H - numExtrapolate; i < N_H; i++)
+                    paddedArray[i] = leftVal;
+            }
+
             CArray data(paddedArray, N_H);
 
             // Do FFT
@@ -435,6 +453,48 @@ bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* para
             else
                 g_line[j] = g_left_line[j];
         }
+    }
+    return true;
+}
+
+bool ray_derivative_cpu(float* g, parameters* params, float sampleShift, float scalar)
+{
+    float c = scalar / params->pixelWidth;
+    if (sampleShift == 0.0)
+        c *= 0.5;
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < params->numAngles; i++)
+    {
+        float* temp = (float*)malloc(sizeof(float) * params->numCols);
+        float* aProj = &g[uint64(i) * uint64(params->numRows * params->numCols)];
+        for (int j = 0; j < params->numRows; j++)
+        {
+            float* aLine = &aProj[j * params->numCols];
+            for (int k = 0; k < params->numCols; k++)
+                temp[k] = aLine[k];
+
+            if (sampleShift == 0.0)
+            {
+                aLine[0] = (temp[1] - temp[0]) * c;
+                aLine[params->numCols - 1] = (temp[params->numCols - 1] - temp[params->numCols - 2]) * c;
+                for (int k = 1; k < params->numCols - 1; k++)
+                    aLine[k] = (temp[k + 1] - temp[k - 1]) * c;
+            }
+            else if (sampleShift > 0.0)
+            {
+                aLine[params->numCols - 1] = 0.0;
+                for (int k = 0; k < params->numCols - 1; k++)
+                    aLine[k] = (temp[k + 1] - temp[k]) * c;
+            }
+            else
+            {
+                aLine[0] = 0.0;
+                for (int k = 1; k < params->numCols; k++)
+                    aLine[k] = (temp[k] - temp[k - 1]) * c;
+            }
+        }
+        free(temp);
     }
     return true;
 }

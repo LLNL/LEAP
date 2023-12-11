@@ -17,6 +17,45 @@
 #include <cufft.h>
 #endif
 
+__global__ void ray_derivative_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float scalar, const float sampleShift)
+{
+    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int m = threadIdx.y + blockIdx.y * blockDim.y;
+    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    if (l >= N.x || m >= N.y || n >= N.z)
+        return;
+
+    float diff = 0.0f;
+    float* aLine = &g[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z)];
+    if (sampleShift == 0.0f)
+    {
+        // central difference
+        if (n == 0)
+            diff = (aLine[n+1] - aLine[n])*scalar * 0.5f / T.z;
+        else if (n == N.z-1)
+            diff = (aLine[n] - aLine[n-1]) * scalar * 0.5f / T.z;
+        else
+            diff = (aLine[n + 1] - aLine[n - 1]) * scalar * 0.5f / T.z;
+    }
+    else if (sampleShift > 0.0f)
+    {
+        // forward difference
+        if (n == N.z - 1)
+            diff = 0.0f;
+        else
+            diff = (aLine[n + 1] - aLine[n]) * scalar / T.z;
+    }
+    else
+    {
+        // backward difference
+        if (n == 0)
+            diff = 0.0f;
+        else
+            diff = (aLine[n] - aLine[n-1]) * scalar / T.z;
+    }
+    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = diff;
+}
+
 __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
@@ -680,6 +719,8 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     int3 origSize; origSize.x = params->numAngles; origSize.y = params->numRows; origSize.z = params->numCols;
 
     int numExtrapolate = 0;
+    if (params->truncatedScan)
+        numExtrapolate = min(N_H - params->numCols - 1, 100);
 
     if (retVal == true)
     {
@@ -950,6 +991,54 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
     return false;
 }
 #endif
+
+bool ray_derivative(float*& g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift)
+{
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+
+    float* dev_g = 0;
+    float* dev_Dg = 0;
+    if (cpu_to_gpu)
+    {
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+        if (cudaSuccess != cudaMalloc((void**)&dev_Dg, params->projectionData_numberOfElements() * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+    }
+    else
+    {
+        dev_Dg = g;
+        if (cudaSuccess != cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+        equal(dev_g, dev_Dg, make_int3(N_g.x, N_g.y, N_g.z), params->whichGPU);
+    }
+
+    dim3 dimBlock = setBlockSize(N_g);
+    dim3 dimGrid = setGridSize(N_g, dimBlock);
+    ray_derivative_kernel <<< dimGrid, dimBlock >>> (dev_g, dev_Dg, N_g, T_g, startVal_g, scalar, sampleShift);
+    params->colShiftFromFilter += -0.5*sampleShift; // opposite sign as LTT
+
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess)
+    {
+        fprintf(stderr, "kernel failed!\n");
+        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+    }
+
+    if (cpu_to_gpu)
+        pullProjectionDataFromGPU(g, params, dev_Dg, params->whichGPU);
+
+    if (cpu_to_gpu == true && dev_Dg != 0)
+        cudaFree(dev_Dg);
+    if (dev_g != 0)
+        cudaFree(dev_g);
+
+    return true;
+}
 
 bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
 {

@@ -69,6 +69,8 @@ extern "C" PROJECTOR_API bool set_axisOfSymmetry(float axisOfSymmetry);
 extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool set_projector(int which);
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);
+extern "C" PROJECTOR_API bool set_offsetScan(bool);
+extern "C" PROJECTOR_API bool set_truncatedScan(bool);
 extern "C" PROJECTOR_API bool set_rampID(int whichRampFilter);
 extern "C" PROJECTOR_API bool set_tau(float tau);
 extern "C" PROJECTOR_API bool set_helicalPitch(float h);

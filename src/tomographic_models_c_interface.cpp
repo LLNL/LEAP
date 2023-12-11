@@ -176,6 +176,16 @@ bool set_rFOV(float rFOV_in)
 	return tomo.set_rFOV(rFOV_in);
 }
 
+bool set_offsetScan(bool aFlag)
+{
+	return tomo.params.set_offsetScan(aFlag);
+}
+
+bool set_truncatedScan(bool aFlag)
+{
+	return tomo.params.set_truncatedScan(aFlag);
+}
+
 bool set_rampID(int whichRampFilter)
 {
 	return tomo.set_rampID(whichRampFilter);

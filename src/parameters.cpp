@@ -49,6 +49,8 @@ void parameters::initialize()
 	chunkingMemorySizeThreshold = 0.1;
 	colShiftFromFilter = 0.0;
 	rowShiftFromFilter = 0.0;
+	offsetScan = false;
+	truncatedScan = false;
 
 	geometry = CONE;
 	detectorType = FLAT;
@@ -140,6 +142,8 @@ void parameters::assign(const parameters& other)
 	this->chunkingMemorySizeThreshold = other.chunkingMemorySizeThreshold;
 	this->colShiftFromFilter = other.colShiftFromFilter;
 	this->rowShiftFromFilter = other.rowShiftFromFilter;
+	this->offsetScan = other.offsetScan;
+	this->truncatedScan = other.truncatedScan;
 	this->mu = other.mu;
 	this->muCoeff = other.muCoeff;
 	this->muRadius = other.muRadius;
@@ -255,7 +259,12 @@ float parameters::rFOV()
 	else if (geometry == MODULAR)
 		return 1.0e16;
 	else if (geometry == PARALLEL)
-		return min(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0()));
+	{
+		if (offsetScan)
+			return max(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0()));
+		else
+			return min(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0()));
+	}
 	else if (geometry == FAN || geometry == CONE)
 	{
 		/*
@@ -281,7 +290,10 @@ float parameters::rFOV()
 		float alpha_left = pixelWidth * float(numCols - 1) + u_0();
 		alpha_right = atan(alpha_right / sdd);
 		alpha_left = atan(alpha_left / sdd);
-		return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left-float(atan(tau / sod)))));
+		if (offsetScan)
+			return sod * sin(max(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
+		else
+			return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left-float(atan(tau / sod)))));
 	}
 	else
 		return 1.0e16;
@@ -490,6 +502,7 @@ bool parameters::set_default_volume(float scale)
 	//volumeDimensionOrder = ZYX;
 	numX = int(ceil(float(numCols) / scale));
 	numY = numX;
+
 	voxelWidth = default_voxelWidth() * scale;
 	voxelHeight = default_voxelHeight() * scale;
 
@@ -516,6 +529,12 @@ bool parameters::set_default_volume(float scale)
 			numZ = fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight;
 			numZ = max(minSlices, numZ);
 		}
+	}
+
+	if (offsetScan)
+	{
+		numX = 2 * int(ceil(rFOV() / voxelWidth));
+		numY = numX;
 	}
 
 	if (isSymmetric())
@@ -796,6 +815,37 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 
 		return true;
 	}
+}
+
+bool parameters::set_offsetScan(bool aFlag)
+{
+	if (aFlag == false)
+		offsetScan = aFlag;
+	else
+	{
+		if (numAngles < 1 || angularRange < 360.0 - T_phi())
+		{
+			printf("Error: offsetScan requires at least 360 degrees of projections!\n");
+			offsetScan = false;
+			return false;
+		}
+		printf("Warning: offsetScan not working yet!\n");
+		offsetScan = aFlag;
+		truncatedScan = false;
+	}
+	return true;
+}
+
+bool parameters::set_truncatedScan(bool aFlag)
+{
+	if (aFlag == false)
+		truncatedScan = aFlag;
+	else
+	{
+		truncatedScan = aFlag;
+		offsetScan = false;
+	}
+	return true;
 }
 
 float parameters::u_0()

@@ -298,6 +298,9 @@ public:
 	 */
 	bool set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs);
 
+	bool set_offsetScan(bool aFlag);
+	bool set_truncatedScan(bool aFlag);
+
 	// Attenuated Radon Transform
 	float* mu;
 	float muCoeff;
@@ -320,6 +323,8 @@ public:
 	float rowShiftFromFilter;
 	float axisOfSymmetry;
 	float chunkingMemorySizeThreshold;
+	bool offsetScan;
+	bool truncatedScan;
     
 	/**
 	 * \fn          T_phi

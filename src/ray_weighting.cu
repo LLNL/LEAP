@@ -57,7 +57,11 @@ float* setViewWeights(parameters* params)
 
 float* setParkerWeights(parameters* params)
 {
-	if (params->angularRange >= 359.9999 || params->numAngles == 1)
+	if (params->numAngles == 1)
+		return NULL;
+	else if (params->offsetScan)
+		return setOffsetScanWeights(params);
+	else if (params->angularRange >= 359.9999)
 		return NULL;
 
 	if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
@@ -78,7 +82,7 @@ float* setParkerWeights(parameters* params)
 		double shortScanThreshold = PI + 2.0 * alpha_max;
 
 		if (beta_max < shortScanThreshold)
-			printf("FDK::calcParkerWeights: Not enough data!\n");
+			printf("setParkerWeights: Not enough data!\n");
 
 		double thres = (beta_max - PI) / 2.0;
 		if (thres < 0.0)
@@ -157,6 +161,107 @@ float* setParkerWeights(parameters* params)
 	}
 	else
 		return NULL;
+}
+
+float* setOffsetScanWeights(parameters* params)
+{
+	if (params->offsetScan == false)
+		return NULL;
+	else if (params->angularRange < 360.0 - params->T_phi()*180.0/PI)
+	{
+		printf("Error: offsetScan requires at least 360 degree scan!\n");
+		return NULL;
+	}
+	else
+	{
+		//printf("applying offsetScan weights\n");
+		if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
+		{
+			bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+			params->normalizeConeAndFanCoordinateFunctions = true;
+
+			float alpha_min = params->u(0);
+			float alpha_max = params->u(params->numCols - 1);
+
+			if (params->detectorType == parameters::FLAT)
+			{
+				alpha_min = atan(alpha_min);
+				alpha_max = atan(alpha_max);
+			}
+			float abs_minVal = fabs(params->sod * sin(alpha_min) - params->tau * cos(alpha_min));
+			float abs_maxVal = fabs(params->sod * sin(alpha_max) - params->tau * cos(alpha_max));
+
+			float delta = min(abs_minVal, abs_maxVal);
+			float s_arg;
+
+			float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
+			for (int j = 0; j < params->numCols; j++)
+			{
+				s_arg = params->u(j);
+				if (params->detectorType == parameters::FLAT)
+					s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
+				else
+					s_arg = params->sod * sin(s_arg) - params->tau * cos(s_arg);
+
+				float theWeight = 1.0;
+				if (fabs(s_arg) <= delta)
+				{
+					theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
+					theWeight = theWeight * theWeight;
+				}
+				else if (s_arg < -delta)
+					theWeight = 0.0;
+				else
+					theWeight = 1.0;
+
+				if (abs_maxVal < abs_minVal)
+					theWeight = 1.0 - theWeight;
+
+				if (theWeight < 1e-12)
+					theWeight = 1e-12;
+
+				for (int i = 0; i < params->numAngles; i++)
+					retVal[i * params->numCols + j] = theWeight;
+			}
+			params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+			return retVal;
+		}
+		else if (params->geometry == parameters::PARALLEL)
+		{
+			float abs_minVal = fabs(params->u(0));
+			float abs_maxVal = fabs(params->u(params->numCols - 1));
+			float delta = min(abs_minVal, abs_maxVal);
+
+			float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
+			for (int j = 0; j < params->numCols; j++)
+			{
+				float theWeight = 1.0;
+				if (fabs(params->u(j)) <= delta)
+				{
+					theWeight = cos(PI / 4.0 * (params->u(j) - delta) / delta);
+					theWeight = theWeight * theWeight;
+				}
+				else if (params->u(j) < -delta)
+					theWeight = 0.0;
+				else
+					theWeight = 1.0;
+
+				if (abs_maxVal < abs_minVal)
+					theWeight = 1.0 - theWeight;
+
+				if (theWeight < 1e-12)
+					theWeight = 1e-12;
+
+				for (int i = 0; i < params->numAngles; i++)
+					retVal[i * params->numCols + j] = theWeight;
+			}
+			return retVal;
+		}
+		else
+		{
+			return NULL;
+		}
+	}
 }
 
 float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
