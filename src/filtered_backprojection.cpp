@@ -170,6 +170,24 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 
 	if (params->whichGPU < 0 || cpu_to_gpu == false)
 	{
+		float* g_pad = NULL;
+		float* g_save = g;
+		if (params->offsetScan)
+		{
+			/*
+			if (params->whichGPU >= 0 && cpu_to_gpu == false)
+			{
+				printf("Error: currently offsetScan reconstruction only works on CPU or on GPU and the data resided on the CPU\n");
+				printf("In other words, you did something we did not expect.  Please submit a new feature request\n");
+				return false;
+			}
+			//*/
+			g_pad = zeroPadForOffsetScan(g, params);
+			params->offsetScan = false;
+			if (g_pad != NULL)
+				g = g_pad;
+		}
+
 		// no transfers to/from GPU are necessary; just run the code
 		filterProjections(g, params, false);
 
@@ -192,6 +210,10 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		params->doExtrapolation = doExtrapolation_save;
 		params->colShiftFromFilter = 0.0;
 		params->rowShiftFromFilter = 0.0;
+
+		if (g_pad != NULL)
+			free(g_pad);
+
 		return retVal;
 	}
 	else
@@ -206,8 +228,19 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 
 		cudaSetDevice(params->whichGPU);
 		cudaError_t cudaStatus;
+		float* dev_g = 0;
 
-		float* dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		float* g_pad = zeroPadForOffsetScan(g, params);
+		if (g_pad != NULL)
+		{
+			dev_g = copyProjectionDataToGPU(g_pad, params, params->whichGPU);
+			params->offsetScan = false;
+			free(g_pad);
+		}
+		else
+		{
+			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		}
 		if (dev_g == 0)
 			return false;
 

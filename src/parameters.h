@@ -203,6 +203,14 @@ public:
 	float u(int i);
 
 	/**
+	 * \fn          u_inv
+	 * \brief       returns the index of the u samples at the given position
+	 * \param       val the u position
+	 * \return      returns the index of the u samples at the given position
+	 */
+	float u_inv(float val);
+
+	/**
 	 * \fn          v
 	 * \brief       returns the position of the i-th detector row (mm)
 	 * \param       i the index of the i-th detector row

@@ -40,4 +40,8 @@ bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* para
 
 bool ray_derivative_cpu(float* g, parameters* params, float sampleShift = 0.0, float scalar = 1.0);
 
+int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params);
+int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft);
+float* zeroPadForOffsetScan(float* g, parameters* params);
+
 #endif

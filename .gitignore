@@ -1,6 +1,5 @@
 # specific files
 test_ART_save.py
-test_offsetScan.py
 
 # data files
 *.dat

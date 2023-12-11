@@ -59,8 +59,6 @@ float* setParkerWeights(parameters* params)
 {
 	if (params->numAngles == 1)
 		return NULL;
-	else if (params->offsetScan)
-		return setOffsetScanWeights(params);
 	else if (params->angularRange >= 359.9999)
 		return NULL;
 
@@ -170,6 +168,11 @@ float* setOffsetScanWeights(parameters* params)
 	else if (params->angularRange < 360.0 - params->T_phi()*180.0/PI)
 	{
 		printf("Error: offsetScan requires at least 360 degree scan!\n");
+		return NULL;
+	}
+	else if (params->geometry == parameters::MODULAR)
+	{
+		printf("Error: FBP not defined for modular-beam data!\n");
 		return NULL;
 	}
 	else

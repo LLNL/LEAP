@@ -1,4 +1,5 @@
 #include "ramp_filter_cpu.h"
+#include "ray_weighting.cuh"
 #include <math.h>
 #include <stdlib.h>
 #include <algorithm>
@@ -497,4 +498,142 @@ bool ray_derivative_cpu(float* g, parameters* params, float sampleShift, float s
         free(temp);
     }
     return true;
+}
+
+int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params)
+{
+    bool padOnLeft;
+    return zeroPadForOffsetScan_numberOfColsToAdd(params, padOnLeft);
+}
+
+int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
+{
+    if (params == NULL)
+        return 0;
+    else if (params->geometry == parameters::MODULAR || params->offsetScan == false || params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+        return 0;
+
+    int N_add = 0;
+    float abs_minVal = 0.0;
+    float abs_maxVal = 0.0;
+    if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
+    {
+        bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+        params->normalizeConeAndFanCoordinateFunctions = true;
+
+        float alpha_min = params->u(0);
+        float alpha_max = params->u(params->numCols - 1);
+
+        if (params->detectorType == parameters::FLAT)
+        {
+            alpha_min = atan(alpha_min);
+            alpha_max = atan(alpha_max);
+        }
+        abs_minVal = fabs(params->sod * sin(alpha_min) - params->tau * cos(alpha_min));
+        abs_maxVal = fabs(params->sod * sin(alpha_max) - params->tau * cos(alpha_max));
+
+        float delta = std::min(abs_minVal, abs_maxVal);
+
+        if (abs_minVal < abs_maxVal)
+        {
+            // zero pad on left
+            float alpha_0 = asin(-params->rFOV() / params->sod) + asin(params->tau / params->sod);
+            if (params->detectorType == parameters::FLAT)
+                N_add = int(ceil(fabs(params->u_inv(tan(alpha_0)))));
+            else
+                N_add = int(ceil(fabs(params->u_inv(alpha_0))));
+        }
+        else
+        {
+            // zero pad on right
+            float alpha_end = asin(params->rFOV() / params->sod) + asin(params->tau / params->sod);
+            float lateral_end;
+            if (params->detectorType == parameters::FLAT)
+                N_add = int(ceil(params->u_inv(tan(alpha_end)))) - params->numCols;
+            else
+                N_add = int(ceil(params->u_inv(alpha_end))) - params->numCols;
+        }
+
+        params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+    }
+    else //if (params->geometry == parameters::PARALLEL)
+    {
+        abs_minVal = fabs(params->u(0));
+        abs_maxVal = fabs(params->u(params->numCols - 1));
+
+        double delta = std::min(abs_minVal, abs_maxVal);
+
+        if (abs_minVal < abs_maxVal)
+            N_add = int(ceil(fabs(params->u_inv(-params->rFOV()))));
+        else
+            N_add = int(ceil(params->u_inv(params->rFOV()))) - params->numCols;
+    }
+    if (abs_minVal < abs_maxVal)
+        padOnLeft = true;
+    else
+        padOnLeft = false;
+    return N_add;
+}
+
+float* zeroPadForOffsetScan(float* g, parameters* params)
+{
+    if (g == NULL || params == NULL)
+        return NULL;
+    else if (params->geometry == parameters::MODULAR || params->offsetScan == false)
+        return NULL;
+
+    bool padOnLeft;
+    int N_add = zeroPadForOffsetScan_numberOfColsToAdd(params, padOnLeft);
+
+    float* offsetScanWeights = setOffsetScanWeights(params);
+    if (N_add > 0 && offsetScanWeights != NULL)
+    {
+        float* g_pad = (float*)calloc(size_t(uint64(params->numAngles)* uint64(params->numRows)* uint64(params->numCols+N_add)), sizeof(float));
+        if (padOnLeft)
+        {
+            // zero pad on the left
+            omp_set_num_threads(omp_get_num_procs());
+            #pragma omp parallel for
+            for (int i = 0; i < params->numAngles; i++)
+            {
+                float* aProj = &g[uint64(i) * uint64(params->numRows) * uint64(params->numCols)];
+                float* aProj_pad = &g_pad[uint64(i) * uint64(params->numRows) * uint64(params->numCols+ N_add)];
+                for (int j = 0; j < params->numRows; j++)
+                {
+                    float* aLine = &aProj[j*params->numCols];
+                    float* aLine_pad = &aProj_pad[j * (params->numCols+N_add)];
+                    for (int k = 0; k < params->numCols; k++)
+                        aLine_pad[k + N_add] = aLine[k] * 2.0 * offsetScanWeights[i * params->numCols + k];
+                }
+            }
+            params->centerCol += N_add;
+        }
+        else
+        {
+            // zero pad on the right
+            omp_set_num_threads(omp_get_num_procs());
+            #pragma omp parallel for
+            for (int i = 0; i < params->numAngles; i++)
+            {
+                float* aProj = &g[uint64(i) * uint64(params->numRows) * uint64(params->numCols)];
+                float* aProj_pad = &g_pad[uint64(i) * uint64(params->numRows) * uint64(params->numCols + N_add)];
+                for (int j = 0; j < params->numRows; j++)
+                {
+                    float* aLine = &aProj[j * params->numCols];
+                    float* aLine_pad = &aProj_pad[j * (params->numCols + N_add)];
+                    for (int k = 0; k < params->numCols; k++)
+                        aLine_pad[k] = aLine[k] * 2.0 * offsetScanWeights[i * params->numCols + k];
+                }
+            }
+        }
+        free(offsetScanWeights);
+        params->numCols += N_add;
+        return g_pad;
+    }
+    else
+    {
+        if (offsetScanWeights != NULL)
+            free(offsetScanWeights);
+        return NULL;
+    }
 }

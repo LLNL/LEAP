@@ -643,7 +643,11 @@ bool tomographicModels::doFBP(float* g, float* f, bool cpu_to_gpu)
 	if (cpu_to_gpu == true && FBP_multiGPU(g, f) == true)
 		return true;
 	else
-		return FBP.execute(g, f, &params, cpu_to_gpu);
+	{
+		parameters params_local = params;
+		return FBP.execute(g, f, &params_local, cpu_to_gpu);
+		//return FBP.execute(g, f, &params, cpu_to_gpu);
+	}
 }
 
 bool tomographicModels::sensitivity(float* f, bool cpu_to_gpu)

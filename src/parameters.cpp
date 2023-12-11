@@ -823,9 +823,15 @@ bool parameters::set_offsetScan(bool aFlag)
 		offsetScan = aFlag;
 	else
 	{
-		if (numAngles < 1 || angularRange < 360.0 - T_phi())
+		if (numAngles <= 1 || angularRange < 360.0 - T_phi())
 		{
 			printf("Error: offsetScan requires at least 360 degrees of projections!\n");
+			offsetScan = false;
+			return false;
+		}
+		if (geometry == MODULAR)
+		{
+			printf("Error: offsetScan only applies to parallel-, fan-, or cone-beam data!\n");
 			offsetScan = false;
 			return false;
 		}
@@ -872,6 +878,16 @@ float parameters::u(int i)
 		return (i * pixelWidth + u_0()) / sdd;
 	else
 		return i * pixelWidth + u_0();
+}
+
+float parameters::u_inv(float val)
+{
+	if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+	{
+		return (sdd*val - u_0()) / pixelWidth;
+	}
+	else
+		return (val - u_0()) / pixelWidth;
 }
 
 float parameters::v(int i)
