@@ -38,23 +38,22 @@ numRows = numCols
 # Reduce the number of columns so that the phantom extends past either the
 # right or left side of the projections (but not both)
 # Note that we translate the centerCol parameter so that only one side is truncated
-numCols = 300
-centerCol = 0.5*(numCols-1)+100
+numCols_notTruncated = numCols
+numCols = numCols - int(80.0*numCols/512.0)
+centerCol = 0.5*(numCols-1)
 
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
-# Set the offsetScan flag to True
-# This needs to be done after the geometry is set
-# If you plan on setting the volume with the set_default_volume command, please set this flag first
-# Setting this flag will automatically enlarge the circular field of view window
-leapct.set_offsetScan(True)
-
-# Set the volume parameters.
-# It is best to do this after the CT geometry is set
-leapct.set_default_volume()
+# Set the volume parameters
+# You should expand the diameter of the field of view, so that it covers the whole object
+# Try commenting out the set_truncatedScan command to see how bad the artifacts get
+# if not accounted for in the reconstruction
+leapct.set_volume(numCols_notTruncated,numCols_notTruncated,numRows)
+leapct.set_diameterFOV(262.0)
+leapct.set_truncatedScan(True)
 
 # Trouble-Shooting Functions
 leapct.print_parameters()
@@ -87,6 +86,8 @@ startTime = time.time()
 leapct.FBP(g,f)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
+# For truncated scans, there are a lot of negative values, so we'll remove them
+f[f<0.0] = 0.0
 
 # Post Reconstruction Smoothing (optional)
 #startTime = time.time()

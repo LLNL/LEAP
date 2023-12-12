@@ -7,6 +7,7 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 #include "cuda_utils.h"
+#include "cpu_utils.h"
 
 #define INCLUDE_CUFFT
 #ifndef PI
@@ -621,7 +622,9 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     }
 
     // PUT CODE HERE
-    int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
+    //int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
+    int N_H = optimalFFTsize(2 * params->numCols);
+    //printf("FFT size = %d\n", N_H);
     int N_H_over2 = N_H / 2 + 1;
     float* H_real = NULL;
     cufftComplex* H_comp = NULL;
@@ -730,7 +733,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
             int endView = min(params->numAngles - 1, startView + N_viewChunk - 1);
 
             setPaddedDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
-            cudaDeviceSynchronize();
+            //cudaDeviceSynchronize();
 
             // FFT
             result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);
@@ -740,14 +743,15 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
                 multiplyRampFilterKernel <<< N_viewChunk, params->numRows >>> (dev_G, dev_H, dataSize);
             else if (dev_cH != 0)
                 multiplyComplexFilterKernel <<< N_viewChunk, params->numRows >>> (dev_G, dev_cH, dataSize);
-            cudaDeviceSynchronize();
+            //cudaDeviceSynchronize();
 
             // IFFT
             result = cufftExecC2R(backward_plan, (cufftComplex*)dev_G, (cufftReal*)dev_g_pad);
 
             setFilteredDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, T_g, startVal_g, params->sod, helicalPitch);
-            cudaDeviceSynchronize();
+            //cudaDeviceSynchronize();
         }
+        cudaDeviceSynchronize();
 
         if (cpu_to_gpu)
         {

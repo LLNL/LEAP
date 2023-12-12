@@ -51,15 +51,21 @@ g = leapct.allocateProjections()
 f = leapct.allocateVolume()
 mu = leapct.allocateVolume()
 
-# Specify a phantom composed of a 300 mm diameter sphere
-leapct.addObject(f, 4, np.array([0.0, 0.0, 0.0]), np.array([150.0, 150.0, 150.0]), 1.0)
-leapct.addObject(f, 0, np.array([0.0, 20.0, 0.0]), np.array([20.0, 20.0, 20.0]), 10.0)
+# Specify the attenuation map parameters
+# In this demo, one can specify a voxelized attenuation or a cylindrical attenuation volume
 muCoeff = 0.01
 muRadius = 150.0
 
-leapct.addObject(mu, 4, np.array([0.0, 0.0, 0.0]), np.array([150.0, 150.0, 150.0]), muCoeff)
-leapct.addObject(mu, 0, np.array([0.0, -30.0, 0.0]), np.array([20.0, 20.0, 20.0]), 0.0)
+# Specify a phantom composed of a 300 mm diameter sphere
+leapct.addObject(f, 4, np.array([0.0, 0.0, 0.0]), np.array([muRadius, muRadius, muRadius]), 1.0)
+leapct.addObject(f, 0, np.array([0.0, 20.0, 0.0]), np.array([20.0, 20.0, 20.0]), 10.0)
 
+# Specify a voxelized attenuation volume
+leapct.addObject(mu, 4, np.array([0.0, 0.0, 0.0]), np.array([muRadius, muRadius, muRadius]), muCoeff)
+leapct.addObject(mu, 0, np.array([0.0, -30.0, 0.0]), np.array([20.0, 20.0, 20.0]), 0.0)
+leapct.BlurFilter(mu, 2.0)
+
+# Here is whether you choose the voxelized or cylindrical attenuation map
 leapct.set_attenuationMap(mu)
 #leapct.set_cylindircalAttenuationMap(muCoeff, muRadius)
 
@@ -83,7 +89,7 @@ leapct.FBP(g,f)
 #leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
 #leapct.SART(g,f,10,10)
 #leapct.MLEM(g,f,5,1)
-#leapct.LS(g,f,20,True)
+#leapct.LS(g,f,100,True)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 

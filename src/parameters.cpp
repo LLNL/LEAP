@@ -1024,9 +1024,9 @@ uint64 parameters::volumeData_numberOfElements()
 	return uint64(numX) * uint64(numY) * uint64(numZ);
 }
 
-float parameters::projectionDataSize()
+float parameters::projectionDataSize(int extraCols)
 {
-	return float(4.0 * double(numAngles) * double(numRows) * double(numCols) / pow(2.0, 30.0));
+	return float(4.0 * double(numAngles) * double(numRows) * double(numCols + extraCols) / pow(2.0, 30.0));
 }
 
 float parameters::volumeDataSize()
@@ -1202,26 +1202,26 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 	return true;
 }
 
-float parameters::requiredGPUmemory()
+float parameters::requiredGPUmemory(int extraCols)
 {
 	if (mu != NULL)
-		return projectionDataSize() + 2.0*volumeDataSize() + extraMemoryReserved;
+		return projectionDataSize(extraCols) + 2.0*volumeDataSize() + extraMemoryReserved;
 	else
-		return projectionDataSize() + volumeDataSize() + extraMemoryReserved;
+		return projectionDataSize(extraCols) + volumeDataSize() + extraMemoryReserved;
 }
 
-bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory)
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns)
 {
 	if (useLeastGPUmemory)
 	{
-		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory())
+		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns))
 			return false;
 		else
 			return true;
 	}
 	else
 	{
-		if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory())
+		if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory(extraColumns))
 			return false;
 		else
 			return true;

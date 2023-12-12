@@ -16,6 +16,7 @@
 #include "cuda_utils.h"
 #include "sensitivity_cpu.h"
 #include "sensitivity.cuh"
+#include "ramp_filter_cpu.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -149,12 +150,14 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 	{
 		float* g_proj = &g[uint64(iphi) * uint64(params.numRows * params.numCols)];
 		float* g_chunk_proj = &g_chunk[uint64(iphi) * uint64(numSlices * params.numCols)];
+
 		for (int iRow = firstSlice; iRow <= lastSlice; iRow++)
 		{
 			float* g_line = &g_proj[iRow * params.numCols];
 			float* g_chunk_line = &g_chunk_proj[(iRow - firstSlice) * params.numCols];
-			for (int iCol = 0; iCol < params.numCols; iCol++)
-				g_chunk_line[iCol] = g_line[iCol];
+			memcpy(g_chunk_line, g_line, sizeof(float)*params.numCols);
+			//for (int iCol = 0; iCol < params.numCols; iCol++)
+			//	g_chunk_line[iCol] = g_line[iCol];
 		}
 	}
 	return g_chunk;
@@ -174,8 +177,9 @@ bool tomographicModels::combineRows(float* g, float* g_chunk, int firstRow, int 
 		{
 			float* g_line = &g_proj[iRow * params.numCols];
 			float* g_chunk_line = &g_chunk_proj[(iRow - firstRow) * params.numCols];
-			for (int iCol = 0; iCol < params.numCols; iCol++)
-				g_line[iCol] = g_chunk_line[iCol];
+			memcpy(g_line, g_chunk_line, sizeof(float) * params.numCols);
+			//for (int iCol = 0; iCol < params.numCols; iCol++)
+			//	g_line[iCol] = g_chunk_line[iCol];
 		}
 	}
 	return true;
@@ -418,22 +422,26 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	if ((params.geometry == parameters::CONE && params.helicalPitch != 0.0) || params.geometry == parameters::MODULAR)
 		return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
 
+	int extraCols = 0;
+	if (doFBP)
+		extraCols = zeroPadForOffsetScan_numberOfColsToAdd(&params);
+
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numSlicesPerChunk = std::min(64, params.numZ);
 	int numSlicesPerChunk = std::max(1, int(ceil(float(params.numZ) / std::max(2.0, double(params.whichGPUs.size())))));
 	numSlicesPerChunk = std::min(numSlicesPerChunk, maxSlicesForChunking);
 	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
-	if (params.hasSufficientGPUmemory(true) == false)
+	if (params.hasSufficientGPUmemory(true, extraCols) == false)
 	{
 		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
-		float memNeeded = backproject_memoryRequired(numSlicesPerChunk);
+		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols);
 
 		while (memAvailable < memNeeded)
 		{
 			numSlicesPerChunk = numSlicesPerChunk / 2;
 			if (numSlicesPerChunk <= 1)
 				return false;
-			memNeeded = backproject_memoryRequired(numSlicesPerChunk);
+			memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols);
 		}
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
@@ -512,7 +520,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	return true;
 }
 
-float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk)
+float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols)
 {
 	float maxMemory = 0.0;
 
@@ -527,7 +535,7 @@ float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk)
 		params.rowRangeNeededForBackprojection(firstSlice, lastSlice, rowRange);
 		int numRows = rowRange[1] - rowRange[0] + 1;
 
-		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize();
+		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
 		maxMemory = std::max(maxMemory, memoryNeeded);
 	}
 	return maxMemory + params.get_extraMemoryReserved();

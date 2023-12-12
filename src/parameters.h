@@ -418,9 +418,10 @@ public:
 	/**
 	 * \fn          projectionDataSize
 	 * \brief       returns the number of GB of memory required for the projection data
+	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns the number of GB of memory required for the projection data
 	 */
-	float projectionDataSize();
+	float projectionDataSize(int extraCols = 0);
 
 	/**
 	 * \fn          volumeDataSize
@@ -432,16 +433,19 @@ public:
 	/**
 	 * \fn          requiredGPUmemory
 	 * \brief       returns projectionDataSize() + volumeDataSize()
+	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns projectionDataSize() + volumeDataSize()
 	 */
-	float requiredGPUmemory();
+	float requiredGPUmemory(int extraCols = 0);
 
 	/**
 	 * \fn          hasSufficientGPUmemory
 	 * \brief       returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
+	 * \param[in]   useLeastGPUmemory whether or not to use the GPU with the least amount of memory
+	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 */
-	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false);
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0);
 
 	/**
 	 * \fn          rowRangeNeededForBackprojection

@@ -510,7 +510,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
 {
     if (params == NULL)
         return 0;
-    else if (params->geometry == parameters::MODULAR || params->offsetScan == false || params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+    else if (params->geometry == parameters::MODULAR || params->helicalPitch != 0.0 || params->offsetScan == false || params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
         return 0;
 
     int N_add = 0;
@@ -579,7 +579,7 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
 {
     if (g == NULL || params == NULL)
         return NULL;
-    else if (params->geometry == parameters::MODULAR || params->offsetScan == false)
+    else if (params->geometry == parameters::MODULAR || params->helicalPitch != 0.0 || params->offsetScan == false)
         return NULL;
 
     bool padOnLeft;

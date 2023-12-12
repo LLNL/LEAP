@@ -88,7 +88,13 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool cpu_t
 		else
 		{
 			if (whichFilter == 0)
+			{
+				/*
+				ray_derivative(g, params, cpu_to_gpu, scalar, 1.0);
+				return Hilbert1D(g, params, cpu_to_gpu, 1.0, -1.0);
+				//*/
 				return rampFilter1D(g, params, cpu_to_gpu, scalar);
+			}
 			else
 				return Hilbert1D(g, params, cpu_to_gpu, scalar, sampleShift);
 		}

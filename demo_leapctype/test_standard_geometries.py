@@ -29,7 +29,7 @@ in poor computational performance.
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
-numAngles = 2*int(360*numCols/1024)
+numAngles = 2*2*int(360*numCols/1024)
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
@@ -43,6 +43,9 @@ leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numR
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
 leapct.set_default_volume()
+
+# If you want to specify the volume yourself, use this function:
+#leapct.set_volume(numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
 
 # Trouble-Shooting Functions
 leapct.print_parameters()
@@ -67,7 +70,7 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
-g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating

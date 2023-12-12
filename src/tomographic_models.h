@@ -681,9 +681,10 @@ private:
 	 * \fn          backproject_memoryRequired
 	 * \brief       calculates the memory required to run a backprojection using a subset of z-slices
 	 * \param[in]   numSlicesPerChunk the number of z-slice to calculate the backprojection
+	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      the number of GB of memory required
 	 */
-	float backproject_memoryRequired(int numSlicesPerChunk);
+	float backproject_memoryRequired(int numSlicesPerChunk, int extraCols = 0);
 
 	/**
 	 * \fn          backproject_memoryRequired

@@ -74,10 +74,28 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
     const float x_mult = x * T_u_inv;
     const float y_mult = y * T_u_inv;
     const float s_shift = -startVals_g.z * T_u_inv;
-    float cos_phi, sin_phi, C, s_arg, ds;
 
+    /*
     float val = 0.0;
-    // loop over projection angles
+    for (int l = 0; l < N_g.x; l++)
+    {
+        //float sin_phi, cos_phi;
+        //sincosf(phis[l], &sin_phi, &cos_phi);
+        const float sin_phi = sinf(phis[l]);
+        const float cos_phi = cosf(phis[l]);
+        const float C = C_num * max(fabs(cos_phi), fabs(sin_phi));
+        float s_arg = s_shift - sin_phi * x_mult + cos_phi * y_mult;
+        const float ds = modf(s_arg, &s_arg);
+        const float s_ind_A = s_arg - (C_num_T_x / C * max(0.0f, (min(0.5f, C + ds) + min(0.5f, C - ds)))) * maxWeight_inv + 1.5f;
+
+        val += tex3D<float>(g, s_ind_A, float(k) + 0.5f, float(l) + 0.5f);
+    }
+    //*/
+
+    //*
+    float cos_phi, sin_phi, C, s_arg, ds;
+    
+    float val = 0.0;
     int l = 0;
     while (l < N_g.x)
     {
@@ -157,6 +175,7 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
             l += 1;
         }
     }
+    //*/
 
     f[ind] = val * maxWeight;
 }

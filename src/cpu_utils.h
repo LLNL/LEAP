@@ -16,6 +16,11 @@
 
 #include "parameters.h"
 
+int optimalFFTsize(int N);
+
+//double getAvailableGBofMemory();
+//size_t getPhysicalMemorySize();
+
 float* getSlice(float*, int, parameters*);
 float* getProjection(float*, int, parameters*);
 

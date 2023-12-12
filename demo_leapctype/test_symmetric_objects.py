@@ -69,7 +69,7 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
-g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
