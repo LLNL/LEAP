@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
+#include <cstring>
 #include <omp.h>
 
 #ifndef PI

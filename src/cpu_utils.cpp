@@ -8,6 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include <omp.h>
 #include <stdlib.h>
+#include <cstring>
+#include <math.h>
 #include "cpu_utils.h"
 
 /*
