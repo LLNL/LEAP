@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// cuda header for ray weighting
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef __RAY_WEIGHTING_CUH
 #define __RAY_WEIGHTING_CUH

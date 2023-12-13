@@ -1,8 +1,10 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
 // LEAP project developers. See the LICENSE file for details.
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
-// c++ header for SF cpu projector
+// c++ header for the primary CPU projectors models in LEAP
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef __PROJECTORS_SF_CPU_H
 #define __PROJECTORS_SF_CPU_H

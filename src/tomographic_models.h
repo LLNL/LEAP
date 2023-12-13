@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// header for LEAP API
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef __TOMOGRAPHIC_MODELS_H
 #define __TOMOGRAPHIC_MODELS_H

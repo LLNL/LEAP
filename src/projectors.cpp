@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
-// main c++ module for ctype binding
+// projectors class which selects the appropriate projector to use based on the
+// CT geometry and CT volume specification, and some other parameters such as
+// whether the calculation should happen on the CPU or GPU
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "projectors.h"

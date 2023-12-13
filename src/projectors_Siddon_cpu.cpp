@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
-// c++ module for cpu projector
+// C++ module for CPU Siddon projector (deprecated)
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <stdlib.h>

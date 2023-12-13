@@ -1,3 +1,12 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
+// LEAP project developers. See the LICENSE file for details.
+// SPDX-License-Identifier: MIT
+//
+// LivermorE AI Projector for Computed Tomography (LEAP)
+// Class for performing analytic inversion, i.e., Filtered Backprojection (FBP)
+// algorithms.
+////////////////////////////////////////////////////////////////////////////////
 #ifndef __FILTERED_BACKPROJECTION_H
 #define __FILTERED_BACKPROJECTION_H
 

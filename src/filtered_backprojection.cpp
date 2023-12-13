@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// Class for performing analytic inversion, i.e., Filtered Backprojection (FBP)
+// algorithms.
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "filtered_backprojection.h"

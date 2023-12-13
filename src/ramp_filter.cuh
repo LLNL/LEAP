@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// cuda header for GPU-based ramp and Hilbert filters
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef __RAMP_FILTER_H
 #define __RAMP_FILTER_H

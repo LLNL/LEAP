@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// cuda module for projectors of the Attenuated Radon Transform
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifndef __PROJECTORS_ATTENUATED_H

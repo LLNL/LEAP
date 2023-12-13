@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
-// parameters c++ header
+// parameters c++ header which defines all the CT geometry and CT volume parameters
+// it also has functions that help enable splitting data into chunks
+// for sequential or parallel processing
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifndef __PARAMETERS_H

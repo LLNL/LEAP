@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// CUDA-based thresholded median filter and 3D low pass filter calculations
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef __NOISE_FILTERS_H
 #define __NOISE_FILTERS_H

@@ -1,3 +1,11 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
+// LEAP project developers. See the LICENSE file for details.
+// SPDX-License-Identifier: MIT
+//
+// LivermorE AI Projector for Computed Tomography (LEAP)
+// c++ module for CPU-based ramp and Hilbert filters
+////////////////////////////////////////////////////////////////////////////////
 #include "ramp_filter_cpu.h"
 #include "ray_weighting.cuh"
 #include <math.h>

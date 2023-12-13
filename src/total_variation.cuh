@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// cuda header for anisotropic Total Variation (TV)
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef __TOTAL_VARIATION_H
 #define __TOTAL_VARIATION_H

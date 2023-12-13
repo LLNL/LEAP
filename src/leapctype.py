@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 #
 # LivermorE AI Projector for Computed Tomography (LEAP)
-# ctype projector class
+# ctype tomographicModels class
 ################################################################################
 
 import ctypes

@@ -1,3 +1,11 @@
+////////////////////////////////////////////////////////////////////////////////
+// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
+// LEAP project developers. See the LICENSE file for details.
+// SPDX-License-Identifier: MIT
+//
+// LivermorE AI Projector for Computed Tomography (LEAP)
+// basic CUDA operations
+////////////////////////////////////////////////////////////////////////////////
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
 #include <string.h>

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// global defines, constants, etc
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifndef __LEAP_DEFINES_H
@@ -18,7 +19,7 @@
 #endif
 
 #ifndef PIINV
-    #define PIINV 0.3183098861837907
+    #define PIINV 0.3183098861837907 // 1.0 / PI
 #endif
 
 //#ifndef NAN

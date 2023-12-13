@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// cuda header for gpu-based sensitivity calculation (P*1)
 ////////////////////////////////////////////////////////////////////////////////
 
 #ifndef __SENSITIVITY_H

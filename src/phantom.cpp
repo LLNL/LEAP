@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
+// sets voxelized phantoms of 3D geometric shapes to assist in algorithm
+// development and testing
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "phantom.h"
