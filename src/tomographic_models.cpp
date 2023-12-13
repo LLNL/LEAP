@@ -8,7 +8,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "tomographic_models.h"
-#include "ray_weighting.cuh"
+//#include "ray_weighting.cuh"
+#include "ray_weighting_cpu.h"
 #include "ramp_filter_cpu.h"
 #include "ramp_filter.cuh"
 #include "noise_filters.cuh"

@@ -39,6 +39,7 @@ set(HEADER
   ramp_filter.cuh
   ramp_filter_cpu.h
   ray_weighting.cuh
+  ray_weighting_cpu.h
   noise_filters.cuh
   total_variation.cuh
   cuda_utils.h
@@ -59,6 +60,7 @@ set(SRC_CPP
   projectors_Siddon_cpu.cpp
   sensitivity_cpu.cpp
   ramp_filter_cpu.cpp
+  ray_weighting_cpu.cpp
   cpu_utils.cpp
   phantom.cpp
 )

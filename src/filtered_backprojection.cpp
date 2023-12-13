@@ -11,6 +11,7 @@
 #include "filtered_backprojection.h"
 #include "projectors.h"
 #include "ramp_filter.cuh"
+#include "ray_weighting_cpu.h"
 #include "ray_weighting.cuh"
 #include "cuda_utils.h"
 #include "projectors_symmetric.cuh"

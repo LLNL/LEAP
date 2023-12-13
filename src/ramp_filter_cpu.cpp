@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "ramp_filter_cpu.h"
 #include "ray_weighting.cuh"
+#include "ray_weighting_cpu.h"
 #include <math.h>
 #include <stdlib.h>
 #include <algorithm>
