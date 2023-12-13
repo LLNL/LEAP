@@ -35,12 +35,14 @@ pixelSize = 0.65*512/numCols
 # Set the number of detector rows
 numRows = numCols
 
+#leapct.set_GPU(-1)
+
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
 # Set the rotation angle for the axis of symmetry
-leapct.set_axisOfSymmetry(10.0)
+leapct.set_axisOfSymmetry(0.0)
 
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
@@ -57,7 +59,7 @@ f = leapct.allocateVolume()
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
 # so we implemented this feature with multi-threaded C++
-leapct.set_FORBILD(f,True)
+leapct.set_FORBILD(f,False)
 #leapct.display(f)
 
 

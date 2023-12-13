@@ -42,20 +42,20 @@ class tomographicModels:
             self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libLEAP.dll'))
 
     def reset(self):
-        """!reset
-        @brief resets and clears all parameters
+        """reset
+        Resets and clears all parameters
         """
         return self.libprojectors.reset()
 
     def printParameters(self):
-        """!printParameters
-        @brief prints all CT geometry and CT volume parameters to the screen
+        """printParameters
+        prints all CT geometry and CT volume parameters to the screen
         """
         return self.print_parameters()
 
     def print_parameters(self):
-        """!print_parameters
-        @brief prints all CT geometry and CT volume parameters to the screen
+        """print_parameters
+        prints all CT geometry and CT volume parameters to the screen
         """
         self.libprojectors.print_parameters.restype = ctypes.c_bool
         return self.libprojectors.print_parameters()
@@ -66,28 +66,36 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
-        '''
+        """Sets the parameters for a cone-beam CT geometry
+        
         The origin of the coordinate system is always at the center of rotation
         
-        The first three parameters specify the projection data array size
-        numAngles = number of projection angles
-        numRows = number of rows in the x-ray detector
-        numCols = number of columns in the x-ray detector
+        Args:
+            The first three parameters specify the projection data array size
+            numAngles (int): number of projection angles
+            numRows (int): number of rows in the x-ray detector
+            numCols (int): number of columns in the x-ray detector
         
-        The next two parameters specify the detector pixel size in mm
-        pixelHeight = the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
-        pixelWidth = the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
+            The next two parameters specify the detector pixel size in mm
+            pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+            pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
         
-        The next two parameters specify the placement of the detector, i.e.,
-        changing these parameters causes shifts in the detector location relative to the source
-        centerRow = the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
-        centerCol = the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
+            The next two parameters specify the placement of the detector, i.e.,
+            changing these parameters causes shifts in the detector location relative to the source
+            centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
+            centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
         
-        phis = a numpy array for specifying the angles of each projection, measured in degrees
+            phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
         
-        sod = source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
-        sdd = source to detector distance, measured in mm
-        '''
+            sod (float): source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
+            sdd (float): source to detector distance, measured in mm
+            
+            tau (float): center of rotation offset
+            helicalPitch (float): the helical pitch (mm/radians)
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_conebeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
@@ -96,10 +104,40 @@ class tomographicModels:
         return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
     def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+        """Alias for set_conebeam
+        """
         return self.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
     def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
-        ''' see comments in the setConeBeamParams function '''
+        """Sets the parameters for a fan-beam CT geometry
+        
+        The origin of the coordinate system is always at the center of rotation
+        
+        Args:
+            The first three parameters specify the projection data array size
+            numAngles (int): number of projection angles
+            numRows (int): number of rows in the x-ray detector
+            numCols (int): number of columns in the x-ray detector
+        
+            The next two parameters specify the detector pixel size in mm
+            pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+            pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
+        
+            The next two parameters specify the placement of the detector, i.e.,
+            changing these parameters causes shifts in the detector location relative to the source
+            centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
+            centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
+        
+            phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
+        
+            sod (float): source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
+            sdd (float): source to detector distance, measured in mm
+            
+            tau (float): center of rotation offset
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_fanbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_fanbeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
@@ -108,10 +146,35 @@ class tomographicModels:
         return self.libprojectors.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
         
     def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
+        """Alias for set_fanbeam
+        """
         return self.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
 
     def set_parallelbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
-        ''' see comments in the setConeBeamParams function '''
+        """Sets the parameters for a parallel-beam CT geometry
+        
+        The origin of the coordinate system is always at the center of rotation
+        
+        Args:
+            The first three parameters specify the projection data array size
+            numAngles (int): number of projection angles
+            numRows (int): number of rows in the x-ray detector
+            numCols (int): number of columns in the x-ray detector
+        
+            The next two parameters specify the detector pixel size in mm
+            pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+            pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
+        
+            The next two parameters specify the placement of the detector, i.e.,
+            changing these parameters causes shifts in the detector location relative to the source
+            centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
+            centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
+        
+            phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_parallelbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_parallelbeam.restype = ctypes.c_bool
         if type(phis) is not np.ndarray:
@@ -120,27 +183,80 @@ class tomographicModels:
         return self.libprojectors.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def set_parallelBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
+        """Alias for set_parallelbeam
+        """
         return self.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def set_modularbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
+        """Sets the parameters for a modular-beam CT geometry
+        
+        The origin of the coordinate system is always at the center of rotation
+        
+        Args:
+            The first three parameters specify the projection data array size
+            numAngles (int): number of projection angles
+            numRows (int): number of rows in the x-ray detector
+            numCols (int): number of columns in the x-ray detector
+        
+            The next two parameters specify the detector pixel size in mm
+            pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+            pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
+        
+            The next two parameters specify the placement of the source and detector pairs
+            sourcePositions ((numAngles X 3) numpy array): the (x,y,z) position of each x-ray source
+            moduleCenters ((numAngles X 3) numpy array): the (x,y,z) position of the center of the front face of the detectors
+        
+            The next two parameters specify the orientation of the detectors
+            rowVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector row direction
+            colVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector column direction
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_modularbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_modularbeam.restype = ctypes.c_bool
         return self.libprojectors.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
     def set_modularBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
+        """Alias for set_modularbeam
+        """
         return self.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
     def set_tau(self, tau):
+        """Set the tau parameter
+        
+        Args:
+            tau (float): center of rotation offset in mm (fan- and cone-beam data only)
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_tau.argtypes = [ctypes.c_float]
         self.libprojectors.set_tau.restype = ctypes.c_bool
         return self.libprojectors.set_tau(tau)
     
-    def set_helicalPitch(self, h):
+    def set_helicalPitch(self, helicalPitch):
+        """Set the helicalPitch parameter
+        
+        Args:
+            helicalPitch (float): the helical pitch (mm/radians) (cone-beam data only)
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_helicalPitch.argtypes = [ctypes.c_float]
         self.libprojectors.set_helicalPitch.restype = ctypes.c_bool
         return self.libprojectors.set_helicalPitch(h)
         
-    def set_normalizedHelicalPitch(self, h_normalized):
+    def set_normalizedHelicalPitch(self, normalizedHelicalPitch):
+        """Set the helicalPitch parameter
+        
+        Args:
+            normalizedHelicalPitch (float): the normalized helical pitch (unitless) (cone-beam data only)
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_normalizedHelicalPitch.argtypes = [ctypes.c_float]
         self.libprojectors.set_normalizedHelicalPitch.restype = ctypes.c_bool
         return self.libprojectors.set_normalizedHelicalPitch(h_normalized)
@@ -151,26 +267,31 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def set_volume(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
-        '''
-        The first three parameters specify the volume array size
-        For parallel- and fan-beam data, it is required that numRows=numZ
-        numX = number of voxels in the x-dimension
-        numY = number of voxels in the y-dimension
-        numZ = number of voxels in the z-dimension
+        """Set the CT volume parameters
         
-        The next two parameters specify the size of the voxels in mm
-        For parallel- and fan-beam data, it is required that pixelHeight=voxelHeigh
-        voxelWidth = voxel pitch (size) in the x and y dimensions
-        voxelHeight = voxel pitch (size) in the z dimension
+        Args:
+            The first three parameters specify the volume array size
+            For parallel- and fan-beam data, it is required that numRows=numZ
+            numX (int): number of voxels in the x-dimension
+            numY (int): number of voxels in the y-dimension
+            numZ (int): number of voxels in the z-dimension
         
-        The final three parameters specify the location of the voxel array
-        The default position is that the voxels are centered around the origin
-        and these parameters allow one to shift the volume around
-        For parallel- and fan-beam data, it is required that offsetZ=0.0
-        offsetX = shift the volume in the x-dimension, measured in mm
-        offsetY = shift the volume in the y-dimension, measured in mm
-        offsetZ = shift the volume in the z-dimension, measured in mm
-        '''
+            The next two parameters specify the size of the voxels in mm
+            For parallel- and fan-beam data, it is required that pixelHeight=voxelHeigh
+            voxelWidth (float): voxel pitch (size) in the x and y dimensions
+            voxelHeight (float): voxel pitch (size) in the z dimension
+        
+            The final three parameters specify the location of the voxel array
+            The default position is that the voxels are centered around the origin
+            and these parameters allow one to shift the volume around
+            For parallel- and fan-beam data, it is required that offsetZ=0.0
+            offsetX (float): shift the volume in the x-dimension, measured in mm
+            offsetY (float): shift the volume in the y-dimension, measured in mm
+            offsetZ (float): shift the volume in the z-dimension, measured in mm
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
         self.libprojectors.set_volume.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_volume.restype = ctypes.c_bool
         if voxelWidth is None:
@@ -186,24 +307,40 @@ class tomographicModels:
         return self.libprojectors.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
         
     def set_default_volume(self,scale=1.0):
+        """Sets the default volume parameters
+        
+        The default volume parameters are those that fill the field of view of the CT system and use the native voxel sizes
+        
+        Args:
+            scale (float): this value scales the voxel size by this value to create denser or sparser voxel representations (not recommended for fast reconstruction)
+        
+        Returns:
+            True if the operation was successful, false otherwise (this usually happens if the CT geometry has not yet been set)
+        """
         self.libprojectors.set_default_volume.argtypes = [ctypes.c_float]
         self.libprojectors.set_default_volume.restype = ctypes.c_bool
         return self.libprojectors.set_default_volume(scale)
     
     def set_defaultVolume(self,scale=1.0):
+        """Alias for set_default_volume
+        """
         return self.set_default_volume(scale)
     
     def set_volumeDimensionOrder(self,which):
-        '''
-        Sets the order of the dimensions of the volume
-        setVolumeDimensionOrder(0) set the order to XYZ
-        setVolumeDimensionOrder(1) set the order to ZYX (this is the default value)
-        '''
+        """Sets the order of the dimensions of the volume
+        Args:
+            setVolumeDimensionOrder (int): 0 sets the order to XYZ, 1 sets the order to ZYX (this is the default value)
+            
+        Returns:
+            True if the operation was successful, false otherwise
+        """
         self.libprojectors.set_volumeDimensionOrder.argtypes = [ctypes.c_int]
         self.libprojectors.set_volumeDimensionOrder.restype = ctypes.c_bool
         return self.libprojectors.set_volumeDimensionOrder(which)
         
     def get_volumeDimensionOrder(self):
+        """Alias for set_volumeDimensionOrder
+        """
         return self.libprojectors.get_volumeDimensionOrder()
         
     ###################################################################################################################
@@ -212,6 +349,16 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def allocateProjections(self,val=0.0):
+        """Allocates projection data
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Args:
+            val (float): value to fill the array with
+            
+        Returns:
+            numpy array is numAngles, numRows, and numCols are all positive, None otherwise
+        """
         N_phis = self.get_numAngles()
         N_rows = self.get_numRows()
         N_cols = self.get_numCols()
@@ -224,6 +371,16 @@ class tomographicModels:
             return None
         
     def allocateVolume(self,val=0.0):
+        """Allocates reconstruction volume data
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Args:
+            val (float): value to fill the array with
+            
+        Returns:
+            numpy array is numAngles, numRows, and numCols are all positive, None otherwise
+        """
         N_x = self.get_numX()
         N_y = self.get_numY()
         N_z = self.get_numZ()
@@ -242,6 +399,16 @@ class tomographicModels:
             return None
             
     def setAngleArray(self,numAngles,angularRange):
+        """Sets the angle array, i.e., phis which specifies the projection angles for parallel-, fan-, and cone-beam data
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Args:
+            val (float): value to fill the array with
+            
+        Returns:
+            numpy array is numAngles, numRows, and numCols are all positive, None otherwise
+        """
         return np.array(range(numAngles)).astype(np.float32) * angularRange/float(numAngles)
     
     ###################################################################################################################
@@ -250,62 +417,154 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def project(self,g,f):
-        ''' Calculate the forward projection of f and stores the result in g '''
+        """Calculate the forward projection of f and stores the result in g
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
         self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.project.restype = ctypes.c_bool
         self.libprojectors.project(g,f,True)
         return g
         
     def filterProjections(self, g):
-        ''' Filters the projection data, g, so that its backprojection results in an FBP reconstruction '''
+        """Filters the projection data, g, so that its backprojection results in an FBP reconstruction
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
         self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.filterProjections.restype = ctypes.c_bool
         self.libprojectors.filterProjections(g, True)
         return g
         
     def rampFilterProjections(self, g):
-        ''' Applies the ramp filter to the projection data which is a subset of the operations in the filterProjections function '''
+        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
         self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
         self.libprojectors.rampFilterProjections(g,True,1.0)
         return g
         
     def HilbertFilterProjections(self, g):
-        ''' Applies the Hilbert filter to the projection data which is a subset of the operations in the filterProjections function '''
+        """Applies the Hilbert filter to the projection data, g, which is a subset of the operations in some reconstruction algorithms
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
         self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.HilbertFilterProjections.restype = ctypes.c_bool
         self.libprojectors.HilbertFilterProjections(g,True,1.0)
         return g
     
     def backproject(self,g,f):
-        ''' Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f '''
+        """Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
         self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.backproject.restype = ctypes.c_bool
         self.libprojectors.backproject(g,f,True)
         return f
         
     def weightedBackproject(self,g,f):
-        ''' Calculate the weighted backprojection (adjoint of the forward projection) of g and stores the result in f '''
+        """Calculate the weighted backprojection of g and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Some geometries require a weighted backprojection for FBP reconstruction,
+        such as fan-beam, helical cone-beam, Attenuated Radon Transform, and symmetric objects
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
         self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.weightedBackproject.restype = ctypes.c_bool
         self.libprojectors.weightedBackproject(g,f,True)
         return f
         
     def rampFilterVolume(self, f):
-        ''' Applies the 2D ramp filter to the volume data, f, for each z-slice '''
+        """Applies the 2D ramp filter to the volume data, f, for each z-slice
+        
+        Args:
+            f (C contiguous float32 numpy array): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
         self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.rampFilterVolume.restype = ctypes.c_bool
         self.libprojectors.rampFilterVolume(f,True)
         return f
 
     def get_FBPscalar(self):
-        ''' Returns the scalar necessary for quantitative reconstruction when using the filterProjections and backproject functions '''
+        """Returns the scalar necessary for quantitative reconstruction when using the filterProjections and backproject functions
+        """
         self.libprojectors.get_FBPscalar.argtypes = []
         self.libprojectors.get_FBPscalar.restype = ctypes.c_float
         return self.libprojectors.get_FBPscalar()
 
     def FBP(self, g, f, inplace=False):
-        ''' Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f '''
+        """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
         self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.FBP.restype = ctypes.c_bool
         if inplace == False and self.get_GPU() < 0:
@@ -316,13 +575,43 @@ class tomographicModels:
         return f
         
     def BPF(self, g, f):
-        ''' Performs a Backprojection Filtration (BPF) reconstruction of the projection data, g, and stores the result in f '''
-        self.backproject(g,f)
-        self.rampFilterVolume(f)
-        f *= self.get_FBPscalar()
-        return f
+        """Performs a Backprojection Filtration (BPF) reconstruction of the projection data, g, and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        This reconstruction only works for parallel-beam data
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        if self.get_geometry() == 'PARALLEL':
+            self.backproject(g,f)
+            self.rampFilterVolume(f)
+            f *= self.get_FBPscalar()
+            return f
+        else:
+            return None
         
     def sensitivity(self, f=None):
+        """Performs a calculation of the sensitivity of a CT geometry, i.e., the backprojection of data that is all ones
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        One can get the same result by backprojecting an array of projection data with all entries equal to one.
+        The benefit of this function is that it is faster and uses less memory.
+        
+        In a volume is provided, the result will be stored there, otherwise a new volume will be allocated
+        
+        Args:
+            f (C contiguous float32 numpy array): (optional argument) volume data to store the result
+            
+        Returns:
+            f
+        """
         if f is None:
             f = self.allocateVolume()
         #bool sensitivity(float* f, bool cpu_to_gpu);
@@ -332,6 +621,18 @@ class tomographicModels:
         return f
     
     def rowRangeNeededForBackprojection(self):
+        """Calculates the detector rows necessary to reconstruct the current volume specification
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        For anything but cone-beam data this function will return np.array([0, numRows-1]).
+        For cone-beam data, the function can be used to inform the user of the only detector rows that
+        are necessary to reconstruct the volume.  This can be used to reduce the input data size which can
+        be important to speed up calculations or reduce the CPU and/or GPU memory necessary to perform reconstruction.
+        
+        Returns:
+            rowsNeeded, a 2X1 numpy array where the values are the first and last detector row index needed to reconstruct the volume.
+        
+        """
         rowsNeeded = np.zeros((2,1),dtype=np.float32)
         rowsNeeded[1] = self.get_numRows()-1
         self.libprojectors.rowRangeNeededForBackprojection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
@@ -345,6 +646,21 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def MLEM(self, g, f, numIter):
+        """Maximum Likelihood-Expectation Maximization reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This reconstruction algorithms assumes the projection data, g, is Poisson distributed which is the
+        correct model for SPECT data.
+        CT projection data is not Poisson distributed because of the application of the -log
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         if not np.any(f):
             f[:] = 1.0
         else:
@@ -365,6 +681,22 @@ class tomographicModels:
         return f
     
     def OSEM(self, g, f, numIter, numSubsets=1):
+        """Ordered Subsets-Expectation Maximization reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This reconstruction algorithms assumes the projection data, g, is Poisson distributed which is the
+        correct model for SPECT data.
+        CT projection data is not Poisson distributed because of the application of the -log
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            numSubsets (int): number of subsets
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         if not np.any(f):
             f[:] = 1.0
         else:
@@ -410,6 +742,19 @@ class tomographicModels:
             return f
         
     def SART(self, g, f, numIter, numSubsets=1):
+        """Simultaneous Algebraic Reconstruction Technique reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            numSubsets (int): number of subsets
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         numSubsets = min(numSubsets, self.get_numAngles())
         if self.get_geometry() == 'MODULAR' and numSubsets > 1:
             print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
@@ -474,6 +819,28 @@ class tomographicModels:
             return f
             
     def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0):
+        """Adaptive Steepest Descent-Projection onto Convex Subsets reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function actually implements the iTV reconstruction method which is a slight varition to ASDPOCS
+        which we find works slightly better.
+        
+        Here is the reference
+        Ritschl, Ludwig, and Marc Kachelriess.
+        "Improved total variation regularized image reconstruction (iTV) applied to clinical CT data."
+        In Medical Imaging 2011: Physics of Medical Imaging, vol. 7961, pp. 786-798. SPIE, 2011.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            numSubsets (int): number of subsets
+            numTV (int): number of TV diffusion steps
+            delta (float): parameter for the Huber-like loss function used in TV
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         if numTV <= 0:
             return self.SART(g,f,numIter,numSubsets)
         numSubsets = min(numSubsets, self.get_numAngles())
@@ -592,15 +959,85 @@ class tomographicModels:
         
         
     def LS(self, g, f, numIter, SQS=False):
+        """Least Squares reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function minimizes the Least Squares cost function using Preconditioned Conjugate Gradient.
+        The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
+        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            SQS (bool): specifies whether or not to use the SQS preconditioner
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, SQS)
         
     def WLS(self, g, f, numIter, W=None, SQS=False):
+        """Weighted Least Squares reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function minimizes the Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
+        The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
+        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=np.exp(-g)
+            SQS (bool): specifies whether or not to use the SQS preconditioner
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         return self.RWLS(g, f, numIter, 0.0, 0.0, W, SQS)
         
     def RLS(self, g, f, numIter, delta=0.0, beta=0.0, SQS=False):
+        """Regularized Least Squares reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function minimizes the Regularized Least Squares cost function using Preconditioned Conjugate Gradient.
+        The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
+        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+            SQS (bool): specifies whether or not to use the SQS preconditioner
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         return self.RWLS(g, f, numIter, delta, beta, 1.0, SQS)
         
     def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, SQS=False):
+        """Regularized Weighted Least Squares reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function minimizes the Regularized Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
+        The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
+        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=np.exp(-g)
+            SQS (bool): specifies whether or not to use the SQS preconditioner
+        
+        Returns:
+            f, the same as the input with the same name
+        """
         conjGradRestart = 50
         if W is None:
             W = g.copy()
@@ -692,6 +1129,20 @@ class tomographicModels:
         return f
 
     def RWLSstepSize(self, f, grad, d, Pd, W, delta, beta):
+        """Calculates the step size for an RWLS iteration
+
+        Args:
+            f (C contiguous float32 numpy array): volume data
+            grad (C contiguous float32 numpy array): gradient of the RWLS cost function
+            d (C contiguous float32 numpy array): descent direction of the RWLS cost function
+            Pd (C contiguous float32 numpy array): forward projection of d
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=np.exp(-g)
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+        
+        Returns:
+            step size (float)
+        """
         num = np.sum(d*grad)
         if W is not None:
             denomA = np.sum(Pd*Pd*W)
@@ -716,18 +1167,57 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def BlurFilter(self, f, FWHM=2.0):
+        """Applies a blurring filter to the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
+        This filter is very simular to a Gaussian filter, but is a FIR
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            FWHM (float): the full width at half maximum (in number of pixels) of the filter
+        
+        Returns:
+            f, the same as the input
+        """
         #bool BlurFilter(float* f, int, int, int, float FWHM);
         self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.BlurFilter.restype = ctypes.c_bool
         return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
     
     def MedianFilter(self, f, threshold=0.0):
+        """Applies a thresholded 3D median filter (3x3x3) to the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This algorithm performs a 3D (3x3x3) median around each data value and then replaces this value only if
+        |original value - median value| >= threshold*|median value|
+        Note that if threshold is zero, then this is simply a median filter
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            threshold (float): the threshold of whether to use the filtered value or not
+        
+        Returns:
+            f, the same as the input
+        """
         #bool MedianFilter(float* f, int, int, int, float threshold);
         self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.MedianFilter.restype = ctypes.c_bool
         return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, True)
     
     def TVcost(self, f, delta, beta=0.0):
+        """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        
+        Args:
+            f (C contiguous float32 numpy array): 3D numpy array
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): TV multiplier (sometimes called the regularizaion strength)
+        
+        Returns:
+            TV functional value
+        """
         #float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta);
         self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVcost.restype = ctypes.c_float
@@ -735,6 +1225,18 @@ class tomographicModels:
         return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         
     def TVgradient(self, f, delta, beta=0.0):
+        """Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        
+        Args:
+            f (C contiguous float32 numpy array): 3D numpy array
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): TV multiplier (sometimes called the regularizaion strength)
+        
+        Returns:
+            Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
+        """
         #bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
         self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVgradient.restype = ctypes.c_bool
@@ -744,6 +1246,23 @@ class tomographicModels:
         return Df
     
     def TVquadForm(self, f, d, delta, beta=0.0):
+        """Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays
+        
+        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This function calculates the following inner product <d, R''(f)d>, where R'' is the Hessian of the TV functional
+        The quadraitc surrogate is used here, so this function can be used to calculate the step size of a cost function
+        that includes a TV regularization term.
+        See the same  cost in the diffuse function below for an example of its usage
+        
+        Args:
+            f (C contiguous float32 numpy array): 3D numpy array
+            d (C contiguous float32 numpy array): 3D numpy array
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): TV multiplier (sometimes called the regularizaion strength)
+        
+        Returns:
+            Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
+        """
         #float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta);
         self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVquadForm.restype = ctypes.c_float
@@ -751,11 +1270,24 @@ class tomographicModels:
         return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         
     def diffuse(self, f, delta, numIter):
+        """Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
+        
+        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This function performs a specifies number of iterations of minimizing the aTV functional using gradient descent
+        
+        Args:
+            f (C contiguous float32 numpy array): 3D numpy array
+            delta (float): parameter for the Huber-like loss function used in TV
+            numIter (int): number of iterations
+        
+        Returns:
+            f, the same array as the input denoised
+        """
         self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
         self.libprojectors.Diffuse.restype = ctypes.c_bool
         self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, True)
         return f
-        '''
+        ''' Here is equivalent code to run this algorithm using the TV functions above
         for n in range(N):
             d = self.TVgradient(f, delta)
             num = np.sum(d**2)
@@ -773,76 +1305,92 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def set_gpu(self, which):
+        """Set which GPU to use, use -1 to do CPU calculations"""
         return self.set_GPU(which)
     
     def set_GPU(self, which):
+        """Set which GPU to use, use -1 to do CPU calculations"""
         self.libprojectors.set_GPU.argtypes = [ctypes.c_int]
         self.libprojectors.set_GPU.restype = ctypes.c_bool
         return self.libprojectors.set_GPU(which)
         
     def set_gpus(self, listOfGPUs):
+        """Set which GPUs to use when doing multi-GPU calculations"""
         return self.set_GPUs(listOfGPUs)
         
     def set_GPUs(self, listOfGPUs):
+        """Set which GPUs to use when doing multi-GPU calculations"""
         self.libprojectors.set_GPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
         self.libprojectors.set_GPUs.restype = ctypes.c_bool
         listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
         return self.libprojectors.set_GPUs(listOfGPUs, int(listOfGPUs.size))
         
     def get_GPU(self):
+        """Get the index of the primary GPU that is being used"""
         self.libprojectors.get_GPU.restype = ctypes.c_int
         return self.libprojectors.get_GPU()
         
     def set_diameterFOV(self, d):
+        """Set the diameterFOV parameter"""
         self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
         self.libprojectors.set_rFOV.restype = ctypes.c_bool
         return self.libprojectors.set_rFOV(0.5*d)
         
     def set_truncatedScan(self, aFlag):
+        """Set the truncatedScan parameter"""
         self.libprojectors.set_truncatedScan.argtypes = [ctypes.c_bool]
         self.libprojectors.set_truncatedScan.restype = ctypes.c_bool
         return self.libprojectors.set_truncatedScan(aFlag)
         
     def set_offsetScan(self, aFlag):
+        """Set the offsetScan parameter"""
         self.libprojectors.set_offsetScan.argtypes = [ctypes.c_bool]
         self.libprojectors.set_offsetScan.restype = ctypes.c_bool
         return self.libprojectors.set_offsetScan(aFlag)
     
     def set_axisOfSymmetry(self,val):
+        """Set the axisOfSymmetry parameter"""
         self.libprojectors.set_axisOfSymmetry.argtypes = [ctypes.c_float]
         self.libprojectors.set_axisOfSymmetry.restype = ctypes.c_bool
         return self.libprojectors.set_axisOfSymmetry(val)
         
     def clear_axisOfSymmetry(self):
+        """Clears the axisOfSymmetry parameter (revert back to voxelized volume models)"""
         self.libprojectors.clear_axisOfSymmetry.argtypes = []
         self.libprojectors.clear_axisOfSymmetry.restype = ctypes.c_bool
         return self.libprojectors.clear_axisOfSymmetry()
         
     def set_projector(self,which):
+        """Set which projector model to use (deprecated)"""
         self.libprojectors.set_projector.argtypes = [ctypes.c_int]
         self.libprojectors.set_projector.restype = ctypes.c_bool
         return self.libprojectors.set_projector(which)
         
     def set_rampFilter(self,which):
+        """Set the ramp filter to use: 0, 2, 4, 6, 8, or 10"""
         self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
         self.libprojectors.set_rampID.restype = ctypes.c_bool
         return self.libprojectors.set_rampID(which)
         
     def set_attenuationMap(self, mu):
+        """Set the voxelized attenuation map for Attenuated Radon Transform calculations"""
         self.libprojectors.set_attenuationMap.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_attenuationMap.restype = ctypes.c_bool
         return self.libprojectors.set_attenuationMap(mu)
         
     def set_cylindircalAttenuationMap(self, c, R):
+        """Set the parameters for a cylindrical attenuation map for Attenuated Radon Transform calculations"""
         self.libprojectors.set_cylindircalAttenuationMap.argtypes = [ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_cylindircalAttenuationMap.restype = ctypes.c_bool
         return self.libprojectors.set_cylindircalAttenuationMap(c, R)
         
     def clear_attenuationMap(self):
+        """Clears the attenuation map parameters and reverts back to using the X-ray Transform"""
         self.libprojectors.clear_attenuationMap.restype = ctypes.c_bool
         return self.libprojectors.clear_attenuationMap()
         
     def get_angles(self):
+        """Get a numpy array of the projection angles"""
         phis = np.ascontiguousarray(np.zeros(self.get_numAngles()).astype(np.float32), dtype=np.float32)
         self.libprojectors.get_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.get_angles.restype = ctypes.c_bool
@@ -850,6 +1398,7 @@ class tomographicModels:
         return phis
         
     def set_angles(self,phis):
+        """Set the projection angles"""
         self.libprojectors.set_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
         self.libprojectors.set_angles.restype = ctypes.c_bool
         return self.libprojectors.set_angles(phis, int(phis.size))
@@ -860,6 +1409,7 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def get_geometry(self):
+        """Get the CT geometry type"""
         self.libprojectors.get_geometry.restype = ctypes.c_int
         geometryType = self.libprojectors.get_geometry()
         if geometryType == 0:
@@ -874,51 +1424,64 @@ class tomographicModels:
             return 'UNKNOWN'
             
     def get_sod(self):
+        """Get the sod parameter"""
         self.libprojectors.get_sod.restype = ctypes.c_float
         return self.libprojectors.get_sod()
         
     def get_sdd(self):
+        """Get the sdd parameter"""
         self.libprojectors.get_sdd.restype = ctypes.c_float
         return self.libprojectors.get_sdd()
         
     def get_helicalPitch(self):
+        """Get the helicalPitch parameter"""
         self.libprojectors.get_helicalPitch.restype = ctypes.c_float
         return self.libprojectors.get_helicalPitch()
         
     def get_z_source_offset(self):
+        """Get the source position z-coordinate for the first projection"""
         self.libprojectors.get_z_source_offset.restype = ctypes.c_float
         return self.libprojectors.get_z_source_offset()
     
     def get_numAngles(self):
+        """Get the numAngles parameter"""
         return self.libprojectors.get_numAngles()
         
     def get_numRows(self):
+        """Get the numRows parameter"""
         return self.libprojectors.get_numRows()
         
     def get_numCols(self):
+        """Get the numCols parameter"""
         return self.libprojectors.get_numCols()
         
     def get_pixelHeight(self):
+        """Get the pixelHeight parameter"""
         self.libprojectors.get_pixelHeight.restype = ctypes.c_float
         return self.libprojectors.get_pixelHeight()
         
     def get_pixelWidth(self):
+        """Get the pixelWidth parameter"""
         self.libprojectors.get_pixelWidth.restype = ctypes.c_float
         return self.libprojectors.get_pixelWidth()
         
     def get_centerRow(self):
+        """Get the centerRow parameter"""
         self.libprojectors.get_centerRow.restype = ctypes.c_float
         return self.libprojectors.get_centerRow()
         
     def get_centerCol(self):
+        """Get the centerCol parameter"""
         self.libprojectors.get_centerCol.restype = ctypes.c_float
         return self.libprojectors.get_centerCol()
         
     def get_tau(self):
+        """Get the tau parameter"""
         self.libprojectors.get_tau.restype = ctypes.c_float
         return self.libprojectors.get_tau()
         
     def get_sourcePositions(self):
+        """Get the sourcePositions parameter (modular-beam only)"""
         #bool get_sourcePositions(float*);
         if self.get_numAngles() <= 0:
             return None
@@ -930,6 +1493,7 @@ class tomographicModels:
             return x
         
     def get_moduleCenters(self):
+        """Get the moduleCenters parameter (modular-beam only)"""
 	    #bool get_moduleCenters(float*);
         if self.get_numAngles() <= 0:
             return None
@@ -941,6 +1505,7 @@ class tomographicModels:
             return x
         
     def get_rowVectors(self):
+        """Get the rowVectors parameter (modular-beam only)"""
 	    #bool get_rowVectors(float*);
         if self.get_numAngles() <= 0:
             return None
@@ -952,6 +1517,7 @@ class tomographicModels:
             return x
         
     def get_colVectors(self):
+        """Get the colVectors parameter (modular-beam only)"""
 	    #bool get_colVectors(float*);
         if self.get_numAngles() <= 0:
             return None
@@ -963,35 +1529,44 @@ class tomographicModels:
             return x
         
     def get_numX(self):
+        """Get the numX parameter"""
         return self.libprojectors.get_numX()
     
     def get_numY(self):
+        """Get the numY parameter"""
         return self.libprojectors.get_numY()
     
     def get_numZ(self):
+        """Get the numZ parameter"""
         return self.libprojectors.get_numZ()
         
     def get_voxelHeight(self):
+        """Get the voxelHeight parameter"""
         self.libprojectors.get_voxelHeight.restype = ctypes.c_float
         return self.libprojectors.get_voxelHeight()
         
     def get_voxelWidth(self):
+        """Get the voxelWidth parameter"""
         self.libprojectors.get_voxelWidth.restype = ctypes.c_float
         return self.libprojectors.get_voxelWidth()
         
     def get_offsetX(self):
+        """Get the offsetX parameter"""
         self.libprojectors.get_offsetX.restype = ctypes.c_float
         return self.libprojectors.get_offsetX()
         
     def get_offsetY(self):
+        """Get the offsetY parameter"""
         self.libprojectors.get_offsetY.restype = ctypes.c_float
         return self.libprojectors.get_offsetY()
         
     def get_offsetZ(self):
+        """Get the offsetZ parameter"""
         self.libprojectors.get_offsetZ.restype = ctypes.c_float
         return self.libprojectors.get_offsetZ()
         
     def get_z0(self):
+        """Get the z-coordinate of the first voxel"""
         self.libprojectors.get_z0.restype = ctypes.c_float
         return self.libprojectors.get_z0()
 
@@ -1033,12 +1608,18 @@ class tomographicModels:
         return x,y,z
 
     def display(self,vol):
+        """Uses napari to display the provided 3D data
+        """
         self.displayVolume(vol)
 
     def display_volume(self,vol):
+        """Uses napari to display the provided 3D data
+        """
         self.displayVolume(vol)
 
     def displayVolume(self,vol):
+        """Uses napari to display the provided 3D data
+        """
         try:
             import napari
             if len(vol.shape) == 3 and (vol.shape[0] == 1 or vol.shape[1] == 1 or vol.shape[2] == 1):
@@ -1051,10 +1632,18 @@ class tomographicModels:
             print('pip install napari[all]')
             
     def sketchSystem(self,whichView=None):
+        """Alias for sketch_system
+        """
         self.sketchSystem(whichView)
             
     def sketch_system(self,whichView=None):
-    
+        """ Uses matplot lib to sketch the CT geometry and CT volume
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        
+        Args:
+            whichView (int): if provided displays the source and detector at the specified view index
+        """
         if self.get_numAngles() <= 0 or self.get_numRows() <= 0 or self.get_numCols() <= 0:
             print('CT geometry not set!')
             return False
@@ -1281,6 +1870,19 @@ class tomographicModels:
             ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
             
     def addObject(self, f, type, c, r, val, A=None, clip=None):
+        """Adds a geometric object to the volume
+        
+        The CT volume parameters must be specified prior to running this functions
+        
+        Args:
+            f (C contiguous float32 numpy array): CT volume
+            type (int): ELLIPSOID=0, PARALLELEPIPED=1, CYLINDER_X=2, CYLINDER_Y=3, CYLINDER_Z=4, CONE_X=5, CONE_Y=6, CONE_Z=7
+            c (3X1 numpy array): x,y,z coordinates of the center of the object
+            r (3X1 numpy array): radii in the x,y,z directions of the object
+            val (float): the values to ascribe inside this object
+            A (3x3 numpy array): rotation matrix to rotate the object about its center
+            clip (3X1 numpy array): specifies the clipping planes, if any
+        """
         self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.addObject.restype = ctypes.c_bool
         if A is None:
@@ -1298,6 +1900,11 @@ class tomographicModels:
         return self.libprojectors.addObject(f, int(type), c, r, float(val), A, clip)
         
     def set_FORBILD(self, f, includeEar=False):
+        """Sets the FORBILD head phantom
+        
+        Note that the values of the FORBILD head phantom are all scaled by 0.02
+        which is the LAC of water at around 60 keV
+        """
         has_scipy = False
         try:
             from scipy.spatial.transform import Rotation as R

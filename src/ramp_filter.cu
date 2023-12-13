@@ -654,20 +654,28 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     //printf("pitch/R = %f\n", params->helicalPitch / params->sod);
     //printf("T_v = %f\n", T_g.y);
 
+    int numRows = params->numRows;
+    int numAngles = params->numAngles;
+    if (numAngles == 1)
+    {
+        numRows = 1;
+        numAngles = params->numRows;
+    }
+
     //int N_viewChunk = params->numAngles;
-    int N_viewChunk = max(1, params->numAngles / 40); // number of views in a chunk (needs to be optimized)
-    int numChunks = int(ceil(double(params->numAngles) / double(N_viewChunk)));
+    int N_viewChunk = max(1, numAngles / 40); // number of views in a chunk (needs to be optimized)
+    int numChunks = int(ceil(double(numAngles) / double(N_viewChunk)));
 
     // Make cuFFT Plans
     cufftResult result;
     cufftHandle forward_plan;
-    if (CUFFT_SUCCESS != cufftPlan1d(&forward_plan, N_H, CUFFT_R2C, N_viewChunk * params->numRows))
+    if (CUFFT_SUCCESS != cufftPlan1d(&forward_plan, N_H, CUFFT_R2C, uint64(N_viewChunk) * uint64(numRows)))
     {
         fprintf(stderr, "Failed to plan 1d r2c fft (size %d)\n", N_H);
         return false;
     }
     cufftHandle backward_plan;
-    if (CUFFT_SUCCESS != cufftPlan1d(&backward_plan, N_H, CUFFT_C2R, N_viewChunk * params->numRows)) // do I use N_H_over2?
+    if (CUFFT_SUCCESS != cufftPlan1d(&backward_plan, N_H, CUFFT_C2R, uint64(N_viewChunk) * uint64(numRows))) // do I use N_H_over2?
     {
         fprintf(stderr, "Failed to plan 1d c2r ifft\n");
         return false;
@@ -675,7 +683,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     //return true;
 
     float* dev_g_pad = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_g_pad, N_viewChunk * params->numRows * N_H * sizeof(float)))
+    if (cudaStatus = cudaMalloc((void**)&dev_g_pad, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H) * sizeof(float)))
     {
         fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
         retVal = false;
@@ -683,7 +691,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
 
     // Make data for the result of the FFT
     cufftComplex* dev_G = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_G, N_viewChunk * params->numRows * N_H_over2 * sizeof(cufftComplex)))
+    if (cudaStatus = cudaMalloc((void**)&dev_G, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H_over2) * sizeof(cufftComplex)))
     {
         fprintf(stderr, "cudaMalloc(Fourier transform of padded projection data) failed!\n");
         retVal = false;
@@ -718,8 +726,8 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
             retVal = false;
         }
     }
-    int3 dataSize; dataSize.x = N_viewChunk; dataSize.y = params->numRows; dataSize.z = N_H_over2;
-    int3 origSize; origSize.x = params->numAngles; origSize.y = params->numRows; origSize.z = params->numCols;
+    int3 dataSize; dataSize.x = N_viewChunk; dataSize.y = numRows; dataSize.z = N_H_over2;
+    int3 origSize; origSize.x = numAngles; origSize.y = numRows; origSize.z = params->numCols;
 
     int numExtrapolate = 0;
     if (params->truncatedScan)
@@ -730,9 +738,10 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
         for (int iChunk = 0; iChunk < numChunks; iChunk++)
         {
             int startView = iChunk * N_viewChunk;
-            int endView = min(params->numAngles - 1, startView + N_viewChunk - 1);
+            int endView = min(numAngles - 1, startView + N_viewChunk - 1);
+            //printf("filtering %d to %d\n", startView, endView);
 
-            setPaddedDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
+            setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
             //cudaDeviceSynchronize();
 
             // FFT
@@ -740,15 +749,15 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
 
             // Multiply Filter
             if (dev_H != 0)
-                multiplyRampFilterKernel <<< N_viewChunk, params->numRows >>> (dev_G, dev_H, dataSize);
+                multiplyRampFilterKernel <<< N_viewChunk, numRows >>> (dev_G, dev_H, dataSize);
             else if (dev_cH != 0)
-                multiplyComplexFilterKernel <<< N_viewChunk, params->numRows >>> (dev_G, dev_cH, dataSize);
+                multiplyComplexFilterKernel <<< N_viewChunk, numRows >>> (dev_G, dev_cH, dataSize);
             //cudaDeviceSynchronize();
 
             // IFFT
             result = cufftExecC2R(backward_plan, (cufftComplex*)dev_G, (cufftReal*)dev_g_pad);
 
-            setFilteredDataKernel <<< endView - startView + 1, params->numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, T_g, startVal_g, params->sod, helicalPitch);
+            setFilteredDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, T_g, startVal_g, params->sod, helicalPitch);
             //cudaDeviceSynchronize();
         }
         cudaDeviceSynchronize();
@@ -756,7 +765,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
         if (cpu_to_gpu)
         {
             // Copy result back to host
-            cudaStatus = cudaMemcpy(g, dev_g, params->numAngles * params->numRows * params->numCols * sizeof(float), cudaMemcpyDeviceToHost);
+            cudaStatus = cudaMemcpy(g, dev_g, uint64(numAngles) * uint64(numRows) * uint64(params->numCols) * sizeof(float), cudaMemcpyDeviceToHost);
             if (cudaSuccess != cudaStatus)
             {
                 fprintf(stderr, "failed to copy result back to host!\n");

@@ -77,6 +77,7 @@ f[:] = 0.0
 
 # Reconstruct the data
 startTime = time.time()
+#leapct.backproject(g,f)
 leapct.FBP(g,f)
 #leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
 #leapct.SART(g,f,10,10)
