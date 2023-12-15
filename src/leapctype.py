@@ -1158,11 +1158,24 @@ class tomographicModels:
         return stepSize
 
     def MLTR(self, g, f, numIter, numSubsets=1, delta=0.0, beta=0.0):
-    
-        beta = max(0.0, beta)
-        #if beta > 0:
-        #    print('Error: regularization not yet implemented for ML-TR')
-        #    return f
+        """Maximum Likelihood Transmission reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function maximizes the Maximum Likelihood function of CT transmission data which assumes a Poisson noise model.
+        This algorithm best models the noise for very low transmission/ low count rate data.
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            numSubsets (int): number of subsets
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+        
+        Returns:
+            f, the same as the input with the same name
+        """
+        beta = max(0.0, beta/float(numSubsets))
     
         t = np.exp(-g)
         if np.any(f):
