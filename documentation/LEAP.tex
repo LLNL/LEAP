@@ -80,7 +80,7 @@ In addition to the projectors, we also provide a few other algorithms for tomogr
 \begin{enumerate}
 \item Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
 \item A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction \cite{Yu_MIC_2006}.
-\item Python implementations of some iterative reconstruction algorithms: MLEM, OSEM, OS-SART, ASD-POCS \cite{ASDPOCS_PMB_2008}, and RWLS \cite{Hager_Zhang_CG_2005, Fessler_TIP_1999, Yu_MIC_2006}.
+\item Python implementations of some iterative reconstruction algorithms: MLEM, OSEM, OS-SART, ASD-POCS \cite{ASDPOCS_PMB_2008}, RWLS \cite{Hager_Zhang_CG_2005, Fessler_TIP_1999, Yu_MIC_2006}, and ML-TR \cite{IMPACT_TMI_2001}.
 \end{enumerate}
 
 The CPU- and GPU-based projectors are nearly identical (32-bit floating point precision) and are quantitatively accurate and thus can be used in conjuction with physics-based corrections, such as, scatter and beam hardening correction. If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT \cite{ChampleyLTT}.
@@ -606,6 +606,8 @@ function name & usage \\
 
 \bibitem{Yu_MIC_2006} Zhou Yu, Jean-Baptiste Thibault, Ken Sauer, Charles Bouman, and Jiang Hsieh, ``Accelerated Line Search for Coordinate Descent
 Optimization,'' \emph{IEEE Nuclear Science Symposium Conference Record}, 2006
+
+\bibitem{IMPACT_TMI_2001} De Man, Bruno, Johan Nuyts, Patrick Dupont, Guy Marchal, and Paul Suetens. ``An iterative maximum-likelihood polychromatic algorithm for CT.'' IEEE transactions on medical imaging 20, no. 10 (2001): 999-1008.
 
 \bibitem{Joseph_TMI_1982} Joseph, Peter M. ``An improved algorithm for reprojecting rays through pixel images.'' \emph{IEEE transactions on medical imaging} 1, no. 3 (1982): 192-196.
 
