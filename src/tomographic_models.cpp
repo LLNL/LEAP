@@ -668,6 +668,7 @@ bool tomographicModels::sensitivity(float* f, bool cpu_to_gpu)
 		{
 			float* g = params.setToConstant(NULL, uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols), 1.0);
 			bool retVal = backproject(g, f, cpu_to_gpu);
+			replaceZeros_cpu(f, params.numX, params.numY, params.numZ, 1.0);
 			free(g);
 			return retVal;
 		}
@@ -681,6 +682,7 @@ bool tomographicModels::sensitivity(float* f, bool cpu_to_gpu)
 			}
 			setToConstant(dev_g, 1.0, make_int3(params.numAngles, params.numRows, params.numCols), params.whichGPU);
 			bool retVal = backproject(dev_g, f, false);
+			replaceZeros(f, make_int3(params.numX, params.numY, params.numZ), params.whichGPU, 1.0);
 			cudaFree(dev_g);
 			return retVal;
 		}

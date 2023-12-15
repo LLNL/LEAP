@@ -14,6 +14,105 @@ from sys import platform as _platform
 from numpy.ctypeslib import ndpointer
 import numpy as np
 
+class subsetParameters:
+    def __init__(self, ctModel, numSubsets):
+        self.numSubsets = numSubsets
+        self.ctModel = ctModel
+        
+        self.phis_subsets = []
+        self.sourcePositions_subsets = []
+        self.moduleCenters_subsets = []
+        self.rowVectors_subsets = []
+        self.colVectors_subsets = []
+        
+        self.phis = None
+        self.sourcePositions = None
+        self.moduleCenters = None
+        self.rowVectors = None
+        self.colVectors = None
+
+        # First set parameters for all angles
+        if self.ctModel.get_geometry() == 'MODULAR':
+            self.sourcePositions = self.ctModel.get_sourcePositions()
+            self.moduleCenters = self.ctModel.get_moduleCenters()
+            self.rowVectors = self.ctModel.get_rowVectors()
+            self.colVectors = self.ctModel.get_colVectors()
+        else:
+            self.phis = self.ctModel.get_angles()
+            
+        # Now set parameters for each subset
+        if self.ctModel.get_geometry() == 'MODULAR':
+            for m in range(self.numSubsets):
+                if m == self.sourcePositions.shape[0]-1:
+                    sourcePositions_subset = np.zeros((1,3),dtype=np.float32)
+                    sourcePositions_subset[0,:] = self.sourcePositions[m,:]
+                    self.sourcePositions_subsets.append(sourcePositions_subset)
+                    
+                    moduleCenters_subset = np.zeros((1,3),dtype=np.float32)
+                    moduleCenters_subset[0,:] = self.moduleCenters[m,:]
+                    self.moduleCenters_subsets.append(moduleCenters_subset)
+
+                    rowVectors_subset = np.zeros((1,3),dtype=np.float32)
+                    rowVectors_subset[0,:] = self.rowVectors[m,:]
+                    self.rowVectors_subsets.append(rowVectors_subset)
+                    
+                    colVectors_subset = np.zeros((1,3),dtype=np.float32)
+                    colVectors_subset[0,:] = self.colVectors[m,:]
+                    self.colVectors_subsets.append(colVectors_subset)
+
+                else:
+                    sourcePositions_subset = np.ascontiguousarray(self.sourcePositions[m:-1:self.numSubsets,:], np.float32)
+                    self.sourcePositions_subsets.append(sourcePositions_subset)
+                    
+                    moduleCenters_subset = np.ascontiguousarray(self.moduleCenters[m:-1:self.numSubsets,:], np.float32)
+                    self.moduleCenters_subsets.append(moduleCenters_subset)
+                    
+                    rowVectors_subset = np.ascontiguousarray(self.rowVectors[m:-1:self.numSubsets,:], np.float32)
+                    self.rowVectors_subsets.append(rowVectors_subset)
+                    
+                    colVectors_subset = np.ascontiguousarray(self.colVectors[m:-1:self.numSubsets,:], np.float32)
+                    self.colVectors_subsets.append(colVectors_subset)
+        else:
+            phis_subsets = []
+            for m in range(self.numSubsets):
+                if m == self.phis.size-1:
+                    phis_subset = np.zeros((1,1),dtype=np.float32)
+                    phis_subset[0,0] = self.phis[m]
+                    self.phis_subsets.append(phis_subset)
+                else:
+                    phis_subset = np.ascontiguousarray(self.phis[m:-1:self.numSubsets], np.float32)
+                    self.phis_subsets.append(phis_subset)
+        
+    def setSubset(self, isubset):
+        if 0 <= isubset and isubset < self.numSubsets:
+            if self.ctModel.get_geometry() == 'MODULAR':
+                numAngles = self.sourcePositions_subsets[isubset].shape[0]
+                numRows = self.ctModel.get_numRows()
+                numCols = self.ctModel.get_numCols()
+                pixelHeight = self.ctModel.get_pixelHeight()
+                pixelWidth = self.ctModel.get_pixelWidth()
+                sourcePositions = self.sourcePositions_subsets[isubset]
+                moduleCenters = self.moduleCenters_subsets[isubset]
+                rowVectors = self.rowVectors_subsets[isubset]
+                colVectors = self.colVectors_subsets[isubset]
+                self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+                #print(sourcePositions)
+            else:
+                self.ctModel.set_angles(self.phis_subsets[isubset])
+        else:
+            if self.ctModel.get_geometry() == 'MODULAR':
+                numAngles = self.sourcePositions.shape[0]
+                numRows = self.ctModel.get_numRows()
+                numCols = self.ctModel.get_numCols()
+                pixelHeight = self.ctModel.get_pixelHeight()
+                pixelWidth = self.ctModel.get_pixelWidth()
+                sourcePositions = self.sourcePositions
+                moduleCenters = self.moduleCenters
+                rowVectors = self.rowVectors
+                colVectors = self.colVectors
+                self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+            else:
+                self.ctModel.set_angles(self.phis)
 
 class tomographicModels:
     ''' Python class for tomographicModels bindings
@@ -645,6 +744,21 @@ class tomographicModels:
     # THIS SECTION PROVIDES ITERATIVE RECONSTRUCTION ALGORITHM THAT USE THE LEAP FORWARD AND BACKPROJECTION OPERATIONS
     ###################################################################################################################
     ###################################################################################################################
+    def breakIntoSubsets(self, g, numSubsets):
+        if numSubsets <= 0 or len(g.shape) != 3:
+            return None
+        else:
+            g_subsets = []
+            for m in range(numSubsets):
+                if m == g.shape[0]-1:
+                    g_subset = np.zeros((1,g.shape[1],g.shape[2]),dtype=np.float32)
+                    g_subset[0,:,:] = g[m,:,:]
+                    g_subsets.append(g_subset)
+                else:
+                    g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
+                    g_subsets.append(g_subset)
+            return g_subsets
+    
     def MLEM(self, g, f, numIter):
         """Maximum Likelihood-Expectation Maximization reconstruction
         
@@ -703,35 +817,28 @@ class tomographicModels:
             f[f<0.0] = 0.0
  
         numSubsets = min(numSubsets, self.get_numAngles())
-        if self.get_geometry() == 'MODULAR' and numSubsets > 1:
-            print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
-            numSubsets = 1
+        #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
+        #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
+        #    numSubsets = 1
         if numSubsets <= 1:
             return self.MLEM(g,f,numIter)
         else:
         
-            phis = self.get_angles()
-            
             # divide g and phis
-            phis_subsets = []
-            g_subsets = []
-            for m in range(numSubsets):
-                phis_subset = np.ascontiguousarray(phis[m:-1:numSubsets], np.float32)
-                phis_subsets.append(phis_subset)
-                
-                g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
-                g_subsets.append(g_subset)
+            subsetParams = subsetParameters(self, numSubsets)
+            g_subsets = self.breakIntoSubsets(g, numSubsets)
                 
             d = self.allocateVolume()
             for n in range(numIter):
-                print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
+                print('OSEM iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
                 
                     # set angle array
-                    self.set_angles(phis_subsets[m])
+                    #self.set_angles(phis_subsets[m])
+                    subsetParams.setSubset(m)
                     
                     Pstar1 = self.sensitivity()
-                    #Pstar1[Pstar1=0.0] = 1.0
+                    #Pstar1[Pstar1==0.0] = 1.0
 
                     Pd = self.allocateProjections()
                     self.project(Pd,f)
@@ -739,6 +846,7 @@ class tomographicModels:
                     Pd[ind] = g_subsets[m][ind]/Pd[ind]
                     self.backproject(Pd,d)
                     f *= d/Pstar1
+            subsetParams.setSubset(-1)
             return f
         
     def SART(self, g, f, numIter, numSubsets=1):
@@ -756,16 +864,16 @@ class tomographicModels:
             f, the same as the input with the same name
         """
         numSubsets = min(numSubsets, self.get_numAngles())
-        if self.get_geometry() == 'MODULAR' and numSubsets > 1:
-            print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
-            numSubsets = 1
+        #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
+        #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
+        #    numSubsets = 1
         if numSubsets <= 1:
             P1 = self.allocateProjections()
             self.project(P1,self.allocateVolume(1.0))
-            P1[P1==0.0] = 1.0
+            P1[P1<=0.0] = 1.0
             
             Pstar1 = self.sensitivity()
-            Pstar1[Pstar1==0.0] = 1.0
+            Pstar1[Pstar1<=0.0] = 1.0
             
             Pd = self.allocateProjections()
             d = self.allocateVolume()
@@ -781,23 +889,12 @@ class tomographicModels:
         else:
             P1 = self.allocateProjections()
             self.project(P1,self.allocateVolume(1.0))
-            P1[P1==0.0] = 1.0
-            
-            phis = self.get_angles()
+            P1[P1<=0.0] = 1.0
             
             # divide g, P1, and phis
-            phis_subsets = []
-            g_subsets = []
-            P1_subsets = []
-            for m in range(numSubsets):
-                phis_subset = np.ascontiguousarray(phis[m:-1:numSubsets], np.float32)
-                phis_subsets.append(phis_subset)
-                
-                g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
-                g_subsets.append(g_subset)
-                
-                P1_subset = np.ascontiguousarray(P1[m:-1:numSubsets,:,:], np.float32)
-                P1_subsets.append(P1_subset)
+            subsetParams = subsetParameters(self, numSubsets)
+            g_subsets = self.breakIntoSubsets(g, numSubsets)
+            P1_subsets = self.breakIntoSubsets(P1, numSubsets)
             
             d = self.allocateVolume()
             for n in range(numIter):
@@ -805,17 +902,25 @@ class tomographicModels:
                 for m in range(numSubsets):
                 
                     # set angle array
-                    self.set_angles(phis_subsets[m])
+                    #self.set_angles(phis_subsets[m])
+                    subsetParams.setSubset(m)
+                    #self.print_parameters()
                     
                     Pstar1 = self.sensitivity()
-                    #Pstar1[Pstar1==0.0] = 1.0
+                    #Pstar1[Pstar1<=0.0] = 1.0
 
                     Pd = self.allocateProjections()
+                    #print(self.get_numAngles())
+                    #print(Pd.shape)
                     self.project(Pd,f)
+                    
                     Pd = (g_subsets[m]-Pd) / P1_subsets[m]
                     self.backproject(Pd,d)
+                    #print('P1 range: ' + str(np.min(P1_subsets[m])) + ' to ' + str(np.max(P1_subsets[m])))
+                    #print('d range: ' + str(np.min(d)) + ' to ' + str(np.max(d)))
                     f += 0.9*d / Pstar1
                     f[f<0.0] = 0.0
+            subsetParams.setSubset(-1)
             return f
             
     def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0):
@@ -844,29 +949,20 @@ class tomographicModels:
         if numTV <= 0:
             return self.SART(g,f,numIter,numSubsets)
         numSubsets = min(numSubsets, self.get_numAngles())
-        if self.get_geometry() == 'MODULAR' and numSubsets > 1:
-            print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
-            numSubsets = 1
+        #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
+        #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
+        #    numSubsets = 1
         omega = 0.8
         P1 = self.allocateProjections()
         self.project(P1,self.allocateVolume(1.0))
         P1[P1==0.0] = 1.0
 
-        phis_subsets = []
+        subsetParams = subsetParameters(self, numSubsets)
         g_subsets = []
         P1_subsets = []
-        phis = self.get_angles()
         if numSubsets > 1:
-            # divide g, P1, and phis
-            for m in range(numSubsets):
-                phis_subset = np.ascontiguousarray(phis[m:-1:numSubsets], np.float32)
-                phis_subsets.append(phis_subset)
-                
-                g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
-                g_subsets.append(g_subset)
-                
-                P1_subset = np.ascontiguousarray(P1[m:-1:numSubsets,:,:], np.float32)
-                P1_subsets.append(P1_subset)
+            g_subsets = self.breakIntoSubsets(g, numSubsets)
+            P1_subsets = self.breakIntoSubsets(P1, numSubsets)
         else:
             Pstar1 = self.sensitivity()
             Pstar1[Pstar1==0.0] = 1.0
@@ -893,7 +989,8 @@ class tomographicModels:
                 f[f<0.0] = 0.0
             else:
                 for m in range(numSubsets):
-                    self.set_angles(phis_subsets[m])
+                    #self.set_angles(phis_subsets[m])
+                    subsetParams.setSubset(m)
                     Pstar1 = self.sensitivity()
                     #Pstar1[Pstar1==0.0] = 1.0
 
@@ -903,7 +1000,7 @@ class tomographicModels:
                     self.backproject(Pd,d)
                     f += 0.9*d / Pstar1
                     f[f<0.0] = 0.0
-                self.set_angles(phis)
+                subsetParams.setSubset(-1)
 
             # Calculate SART error sinogram and calculate cost            
             self.project(Pf_minus_g, f)
@@ -1634,7 +1731,7 @@ class tomographicModels:
     def sketchSystem(self,whichView=None):
         """Alias for sketch_system
         """
-        self.sketchSystem(whichView)
+        self.sketch_system(whichView)
             
     def sketch_system(self,whichView=None):
         """ Uses matplot lib to sketch the CT geometry and CT volume

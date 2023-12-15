@@ -13,6 +13,7 @@ pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
 numRows = numCols
+numRows = 1
 
 # Make this modular-beam geometry just like a cone-beam dataset
 # so let's define sod and sdd when defining our geometry
@@ -47,8 +48,7 @@ for n in range(numAngles):
 leapct.set_modularbeam(numAngles, numRows, numCols, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
 
 # Set the volume parameters
-scale = 1.0
-leapct.set_volume(int(numCols/scale),int(numCols/scale),int(numCols/scale),sod/sdd*pixelSize*scale,sod/sdd*pixelSize*scale)
+leapct.set_default_volume()
 
 # Trouble-Shooting Functions
 leapct.print_parameters()
@@ -65,11 +65,14 @@ f = leapct.allocateVolume()
 leapct.set_FORBILD(f,True)
 #leapct.display(f)
 
+leapct.set_gpu(0)
+
 # "Simulate" projection data
 startTime = time.time()
 leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
+#quit()
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
@@ -82,10 +85,10 @@ f[:] = 0.0
 # Reconstruct the data
 startTime = time.time()
 #leapct.backproject(g,f)
-#leapct.ASDPOCS(g,f,10,1,4,1.0/20.0)
-#leapct.SART(g,f,10)
-#leapct.MLEM(g,f,10)
-leapct.LS(g,f,20,True)
+#leapct.ASDPOCS(g,f,50,10,1,1.0/20.0)
+leapct.SART(g,f,10,10)
+#leapct.OSEM(g,f,10,10)
+#leapct.LS(g,f,10,True)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 

@@ -10,6 +10,34 @@
 #include "cuda_runtime.h"
 #include <string.h>
 
+__global__ void replaceZerosKernel(float* lhs, const int3 dim, const float newVal)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    if (lhs[ind] == 0.0f)
+        lhs[ind] = newVal;
+}
+
+__global__ void clipKernel(float* lhs, const int3 dim, const float clipVal)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    if (lhs[ind] < clipVal)
+        lhs[ind] = clipVal;
+}
+
 __global__ void cosKernel(float* lhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
@@ -19,7 +47,8 @@ __global__ void cosKernel(float* lhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = cos(lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] = cos(lhs[ind]);
 }
 
 __global__ void sinKernel(float* lhs, const int3 dim)
@@ -31,7 +60,8 @@ __global__ void sinKernel(float* lhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = sin(lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] = sin(lhs[ind]);
 }
 
 __global__ void expKernel(float* lhs, const int3 dim)
@@ -43,7 +73,8 @@ __global__ void expKernel(float* lhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = expf(lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] = expf(lhs[ind]);
 }
 
 __global__ void negExpKernel(float* lhs, const int3 dim)
@@ -55,7 +86,8 @@ __global__ void negExpKernel(float* lhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = expf(-lhs[iz * dim.x * dim.y + iy * dim.x + ix]);
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] = expf(-lhs[ind]);
 }
 
 __global__ void setToConstantKernel(float* lhs, const float c, const int3 dim)
@@ -67,7 +99,8 @@ __global__ void setToConstantKernel(float* lhs, const float c, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = c;
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] = c;
 }
 
 __global__ void equalKernel(float* lhs, const float* rhs, const int3 dim)
@@ -79,7 +112,8 @@ __global__ void equalKernel(float* lhs, const float* rhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] = rhs[iz * dim.x * dim.y + iy * dim.x + ix];
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] = rhs[ind];
 }
 
 __global__ void multiplyKernel(float* lhs, const float* rhs, const int3 dim)
@@ -91,7 +125,8 @@ __global__ void multiplyKernel(float* lhs, const float* rhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] *= rhs[iz * dim.x * dim.y + iy * dim.x + ix];
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] *= rhs[ind];
 }
 
 __global__ void divideKernel(float* lhs, const float* rhs, const int3 dim)
@@ -102,12 +137,13 @@ __global__ void divideKernel(float* lhs, const float* rhs, const int3 dim)
 
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
-    const float rhs_val = rhs[iz * dim.x * dim.y + iy * dim.x + ix];
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    const float rhs_val = rhs[ind];
 
     if (rhs_val == 0.0f)
-        lhs[iz * dim.x * dim.y + iy * dim.x + ix] = 1.0f;
+        lhs[ind] = 1.0f;
     else
-        lhs[iz * dim.x * dim.y + iy * dim.x + ix] *= rhs_val;
+        lhs[ind] /= rhs_val;
 }
 
 __global__ void addKernel(float* lhs, const float* rhs, const int3 dim)
@@ -119,7 +155,8 @@ __global__ void addKernel(float* lhs, const float* rhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] += rhs[iz * dim.x * dim.y + iy * dim.x + ix];
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] += rhs[ind];
 }
 
 __global__ void addKernel(float* lhs, const float rhs, const int3 dim)
@@ -131,7 +168,8 @@ __global__ void addKernel(float* lhs, const float rhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] += rhs;
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] += rhs;
 }
 
 __global__ void subKernel(float* lhs, const float* rhs, const int3 dim)
@@ -143,7 +181,8 @@ __global__ void subKernel(float* lhs, const float* rhs, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] -= rhs[iz * dim.x * dim.y + iy * dim.x + ix];
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] -= rhs[ind];
 }
 
 __global__ void scaleKernel(float* lhs, const float c, const int3 dim)
@@ -155,7 +194,8 @@ __global__ void scaleKernel(float* lhs, const float c, const int3 dim)
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] *= c;
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] *= c;
 }
 
 __global__ void scalarAddKernel(float* lhs, const float c, const float* rhs, const int3 dim)
@@ -167,7 +207,8 @@ __global__ void scalarAddKernel(float* lhs, const float c, const float* rhs, con
     if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
         return;
 
-    lhs[iz * dim.x * dim.y + iy * dim.x + ix] += c*rhs[iz * dim.x * dim.y + iy * dim.x + ix];
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    lhs[ind] += c*rhs[ind];
 }
 
 __global__ void sumKernel(const float* x, float* sum_x, const int3 N)
@@ -178,9 +219,10 @@ __global__ void sumKernel(const float* x, float* sum_x, const int3 N)
     *sum_x = 0.0f;
     for (int i = 0; i < N.x; i++)
     {
+        const float* x_slice = &x[uint64(i) * uint64(N.y * N.z)];
         for (int j = 0; j < N.y; j++)
         {
-            for (int k = 0; k < N.z; k++) *sum_x += x[i * N.y * N.z + j * N.z + k];
+            for (int k = 0; k < N.z; k++) *sum_x += x_slice[uint64(j * N.z + k)];
         }
     }
 }
@@ -193,9 +235,11 @@ __global__ void innerProductKernel(const float* x, const float* y, float* sum_x,
     *sum_x = 0.0f;
     for (int i = 0; i < N.x; i++)
     {
+        const float* x_slice = &x[uint64(i) * uint64(N.y * N.z)];
+        const float* y_slice = &y[uint64(i) * uint64(N.y * N.z)];
         for (int j = 0; j < N.y; j++)
         {
-            for (int k = 0; k < N.z; k++) *sum_x += x[i * N.y * N.z + j * N.z + k] * y[i * N.y * N.z + j * N.z + k];
+            for (int k = 0; k < N.z; k++) *sum_x += x_slice[uint64(j * N.z + k)] * y_slice[uint64(j * N.z + k)];
         }
     }
 }
@@ -206,7 +250,7 @@ __global__ void sum_2D(const float* x, float* sum_x, int3 N)
     if (i >= N.x)
         return;
 
-    const float* x_slice = &x[i * N.y * N.z];
+    const float* x_slice = &x[uint64(i) * uint64(N.y * N.z)];
     float accum = 0.0f;
     for (int j = 0; j < N.y; j++)
     {
@@ -222,8 +266,8 @@ __global__ void innerProductKernel_2D(const float* x, const float* y, float* sum
     if (i >= N.x)
         return;
 
-    const float* x_slice = &x[i * N.y * N.z];
-    const float* y_slice = &y[i * N.y * N.z];
+    const float* x_slice = &x[uint64(i) * uint64(N.y * N.z)];
+    const float* y_slice = &y[uint64(i) * uint64(N.y * N.z)];
     float accum = 0.0f;
     for (int j = 0; j < N.y; j++)
     {
@@ -251,9 +295,12 @@ __global__ void weightedInnerProductKernel(const float* x, const float* w, const
     *sum_x = 0.0f;
     for (int i = 0; i < N.x; i++)
     {
+        const float* x_slice = &x[uint64(i) * uint64(N.y * N.z)];
+        const float* y_slice = &y[uint64(i) * uint64(N.y * N.z)];
+        const float* w_slice = &w[uint64(i) * uint64(N.y * N.z)];
         for (int j = 0; j < N.y; j++)
         {
-            for (int k = 0; k < N.z; k++) *sum_x += x[i * N.y * N.z + j * N.z + k] * y[i * N.y * N.z + j * N.z + k] * w[i * N.y * N.z + j * N.z + k];
+            for (int k = 0; k < N.z; k++) *sum_x += x_slice[j * N.z + k] * y_slice[j * N.z + k] * w_slice[j * N.z + k];
         }
     }
 }
@@ -384,6 +431,26 @@ cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
     scalarAddKernel <<< dimGrid, dimBlock >>> (dev_lhs, c, dev_rhs, N);
+    return cudaPeekAtLastError();
+}
+
+extern cudaError_t replaceZeros(float* dev_lhs, const int3 N, int whichGPU, float newVal)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    replaceZerosKernel <<< dimGrid, dimBlock >>> (dev_lhs, N, newVal);
+    return cudaPeekAtLastError();
+}
+
+extern cudaError_t clip(float* dev_lhs, const int3 N, int whichGPU, float clipVal)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    clipKernel <<< dimGrid, dimBlock >>> (dev_lhs, N, clipVal);
     return cudaPeekAtLastError();
 }
 

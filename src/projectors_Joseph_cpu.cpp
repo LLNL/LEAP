@@ -302,7 +302,10 @@ float projectLine_Joseph(float* mu, parameters* params, float3 p, float3 dst)
             const float ix_offset = ix_start - ir.x * float(iy_start);
             const float iz_offset = iz_start - ir.z * float(iy_start);
             for (int iy = iy_start; iy <= iy_max; iy++)
+            {
+                //printf("iy = %d: indices = %f, %f, %f; update: %f\n", iy, ix_offset + ir.x * float(iy), float(iy), iz_offset + ir.z * float(iy), tex3D_rev(mu, ix_offset + ir.x * float(iy), float(iy), iz_offset + ir.z * float(iy), params));
                 val += tex3D_rev(mu, ix_offset + ir.x * float(iy), float(iy), iz_offset + ir.z * float(iy), params);
+            }
         }
         else
         {

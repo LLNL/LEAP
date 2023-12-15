@@ -54,6 +54,9 @@ extern cudaError_t sub(float* dev_lhs, const float* dev_rhs, const int3 N, int w
 extern cudaError_t scale(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const int3 N, int whichGPU = 0);
 
+extern cudaError_t replaceZeros(float* dev_lhs, const int3 N, int whichGPU = 0, float newVal = 1.0);
+
+extern cudaError_t clip(float* dev_lhs, const int3 N, int whichGPU = 0, float clipVal = 0.0);
 extern cudaError_t cosFcn(float* dev_lhs, const int3 N, int whichGPU = 0);
 extern cudaError_t sinFcn(float* dev_lhs, const int3 N, int whichGPU = 0);
 extern cudaError_t expFcn(float* dev_lhs, const int3 N, int whichGPU = 0);

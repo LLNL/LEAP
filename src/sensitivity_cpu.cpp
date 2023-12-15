@@ -147,6 +147,8 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
                     if (u_min <= u_arg && u_arg <= u_max)
                         curVal += scalar * sqrt(1.0 + u_arg * u_arg) * v_denom_inv;
                 }
+                if (curVal == 0.0)
+                    curVal = 1.0;
                 xLine[ix] = float(curVal);
             }
         }
@@ -187,6 +189,8 @@ bool sensitivity_fan_CPU(float*& s, parameters* params)
                     if (u_min <= u_arg && u_arg <= u_max)
                         curVal += scalar * sqrt(1.0 + u_arg * u_arg) * v_denom_inv;
                 }
+                if (curVal == 0.0)
+                    curVal = 1.0;
                 xLine[iy] = float(curVal);
             }
         }
@@ -242,6 +246,8 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
                     if (u_min <= u_arg && u_arg <= u_max)
                         curVal += scalar;
                 }
+                if (curVal == 0.0)
+                    curVal = 1.0;
                 xLine[ix] = float(curVal);
             }
         }
@@ -281,6 +287,8 @@ bool sensitivity_parallel_CPU(float*& s, parameters* params)
                     if (u_min <= u_arg && u_arg <= u_max)
                         curVal += scalar;
                 }
+                if (curVal == 0.0)
+                    curVal = 1.0;
                 xLine[iy] = float(curVal);
             }
         }

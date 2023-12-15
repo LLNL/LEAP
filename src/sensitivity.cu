@@ -49,6 +49,8 @@ __global__ void parallelBeamSensitivityKernel(int4 N_g, float4 T_g, float4 start
         if (u_min <= u_arg && u_arg <= u_max)
             val += 1.0f;
     }
+    if (val == 0.0f)
+        val = 1.0f / scalar;
     f[ind] = val * scalar;
 }
 
@@ -85,6 +87,8 @@ __global__ void fanBeamSensitivityKernel(int4 N_g, float4 T_g, float4 startVals_
         if (u_min <= u_arg && u_arg <= u_max)
             val += sqrt(1.0f + u_arg * u_arg) * v_denom_inv;
     }
+    if (val == 0.0f)
+        val = 1.0f / scalar;
     f[ind] = val * scalar;
 }
 

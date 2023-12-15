@@ -283,3 +283,41 @@ bool equal_cpu(float* f_out, float* f_in, int N_1, int N_2, int N_3)
     }
     return true;
 }
+
+bool clip_cpu(float* f, int N_1, int N_2, int N_3, float clipVal)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        float* aSlice = &f[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+            {
+                if (aSlice[j * N_3 + k] < clipVal)
+                    aSlice[j * N_3 + k] = clipVal;
+            }
+        }
+    }
+    return true;
+}
+
+bool replaceZeros_cpu(float* f, int N_1, int N_2, int N_3, float newVal)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        float* aSlice = &f[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+            {
+                if (aSlice[j * N_3 + k] == 0.0)
+                    aSlice[j * N_3 + k] = newVal;
+            }
+        }
+    }
+    return true;
+}

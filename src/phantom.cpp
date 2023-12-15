@@ -30,11 +30,13 @@ bool phantom::addObject(float* f, parameters* params_in, int type, float* c, flo
 	if (f == NULL || params_in == NULL || c == NULL || r == NULL)
 		return false;
 	params = params_in;
+	/*
 	if (params->volumeDimensionOrder == parameters::XYZ)
 	{
 		printf("Error: phantom class not yet defined for XYZ volume order!\n");
 		return false;
 	}
+	//*/
 	x_0 = params->x_0();
 	y_0 = params->y_0();
 	z_0 = params->z_0();
@@ -138,35 +140,75 @@ bool phantom::addObject(float* f, parameters* params_in, int type, float* c, flo
 	minZ = max(0, min(numZ - 1, minZ));
 	maxZ = max(0, min(numZ - 1, maxZ));
 
-	omp_set_num_threads(omp_get_num_procs());
-	#pragma omp parallel for
-	for (int iz = minZ; iz <= maxZ; iz++)
+	if (params->volumeDimensionOrder == parameters::ZYX)
 	{
-		float z = iz * T_z + z_0;
-		float z_hat = (z - c[2]) / r[2];
-		float* zSlice = &f[uint64(iz)*uint64(numY*numX)];
-		for (int iy = minY; iy <= maxY; iy++)
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
+		for (int iz = minZ; iz <= maxZ; iz++)
 		{
-			float y = iy * T_y + y_0;
-			float y_hat = (y - c[1]) / r[1];
-			float* xLine = &zSlice[iy*numX];
-			for (int ix = minX; ix <= maxX; ix++)
+			float z = iz * T_z + z_0;
+			float z_hat = (z - c[2]) / r[2];
+			float* zSlice = &f[uint64(iz) * uint64(numY * numX)];
+			for (int iy = minY; iy <= maxY; iy++)
 			{
-				float x = ix * T_x + x_0;
-				float x_hat = (x - c[0]) / r[0];
+				float y = iy * T_y + y_0;
+				float y_hat = (y - c[1]) / r[1];
+				float* xLine = &zSlice[iy * numX];
+				for (int ix = minX; ix <= maxX; ix++)
+				{
+					float x = ix * T_x + x_0;
+					float x_hat = (x - c[0]) / r[0];
 
-				if (isRotated)
-				{
-					float x_r = (A[0] * (x - c[0]) + A[1] * (y - c[1]) + A[2] * (z - c[2])) / r[0];
-					float y_r = (A[3] * (x - c[0]) + A[4] * (y - c[1]) + A[5] * (z - c[2])) / r[1];
-					float z_r = (A[6] * (x - c[0]) + A[7] * (y - c[1]) + A[8] * (z - c[2])) / r[2];
-					if (isInside(x_r, y_r, z_r, type, clip))
-						xLine[ix] = val;
+					if (isRotated)
+					{
+						float x_r = (A[0] * (x - c[0]) + A[1] * (y - c[1]) + A[2] * (z - c[2])) / r[0];
+						float y_r = (A[3] * (x - c[0]) + A[4] * (y - c[1]) + A[5] * (z - c[2])) / r[1];
+						float z_r = (A[6] * (x - c[0]) + A[7] * (y - c[1]) + A[8] * (z - c[2])) / r[2];
+						if (isInside(x_r, y_r, z_r, type, clip))
+							xLine[ix] = val;
+					}
+					else
+					{
+						if (isInside(x_hat, y_hat, z_hat, type, clip))
+							xLine[ix] = val;
+					}
 				}
-				else
+			}
+		}
+	}
+	else
+	{
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
+		for (int ix = minX; ix <= maxX; ix++)
+		{
+			float x = ix * T_x + x_0;
+			float x_hat = (x - c[0]) / r[0];
+			
+			float* xSlice = &f[uint64(ix) * uint64(numY * numZ)];
+			for (int iy = minY; iy <= maxY; iy++)
+			{
+				float y = iy * T_y + y_0;
+				float y_hat = (y - c[1]) / r[1];
+				float* zLine = &xSlice[iy * numZ];
+				for (int iz = minZ; iz <= maxZ; iz++)
 				{
-					if (isInside(x_hat, y_hat, z_hat, type, clip))
-						xLine[ix] = val;
+					float z = iz * T_z + z_0;
+					float z_hat = (z - c[2]) / r[2];
+
+					if (isRotated)
+					{
+						float x_r = (A[0] * (x - c[0]) + A[1] * (y - c[1]) + A[2] * (z - c[2])) / r[0];
+						float y_r = (A[3] * (x - c[0]) + A[4] * (y - c[1]) + A[5] * (z - c[2])) / r[1];
+						float z_r = (A[6] * (x - c[0]) + A[7] * (y - c[1]) + A[8] * (z - c[2])) / r[2];
+						if (isInside(x_r, y_r, z_r, type, clip))
+							zLine[iz] = val;
+					}
+					else
+					{
+						if (isInside(x_hat, y_hat, z_hat, type, clip))
+							zLine[iz] = val;
+					}
 				}
 			}
 		}

@@ -640,6 +640,20 @@ void parameters::printAll()
 		printf("GPU with least amount of memory: %f GB\n", getAvailableGPUmemory(whichGPUs));
 	}
 
+	/*
+	if (geometry == MODULAR)
+	{
+		for (int i = 0; i < numAngles; i++)
+		{
+			printf("projection %d\n", i);
+			printf("  sourcePosition = (%f, %f, %f)\n", sourcePositions[i*3+0], sourcePositions[i * 3 + 1], sourcePositions[i * 3 + 2]);
+			printf("  moduleCenter = (%f, %f, %f)\n", moduleCenters[i * 3 + 0], moduleCenters[i * 3 + 1], moduleCenters[i * 3 + 2]);
+			printf("  rowVector = (%f, %f, %f)\n", rowVectors[i * 3 + 0], rowVectors[i * 3 + 1], rowVectors[i * 3 + 2]);
+			printf("  colVector = (%f, %f, %f)\n", colVectors[i * 3 + 0], colVectors[i * 3 + 1], colVectors[i * 3 + 2]);
+		}
+	}
+	//*/
+
 	printf("\n");
 }
 
