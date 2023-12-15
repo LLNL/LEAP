@@ -80,10 +80,11 @@ f[:] = 0.0
 startTime = time.time()
 #leapct.backproject(g,f)
 leapct.FBP(g,f)
-#leapct.ASDPOCS(g,f,50,10,1,1.0/20.0)
+#leapct.ASDPOCS(g,f,50,10,1,0.02/20.0)
 #leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
 #leapct.LS(g,f,10,True)
+#leapct.MLTR(g,f,50,10,0.02/20.0,0.1)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 

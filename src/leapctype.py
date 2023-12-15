@@ -14,106 +14,6 @@ from sys import platform as _platform
 from numpy.ctypeslib import ndpointer
 import numpy as np
 
-class subsetParameters:
-    def __init__(self, ctModel, numSubsets):
-        self.numSubsets = numSubsets
-        self.ctModel = ctModel
-        
-        self.phis_subsets = []
-        self.sourcePositions_subsets = []
-        self.moduleCenters_subsets = []
-        self.rowVectors_subsets = []
-        self.colVectors_subsets = []
-        
-        self.phis = None
-        self.sourcePositions = None
-        self.moduleCenters = None
-        self.rowVectors = None
-        self.colVectors = None
-
-        # First set parameters for all angles
-        if self.ctModel.get_geometry() == 'MODULAR':
-            self.sourcePositions = self.ctModel.get_sourcePositions()
-            self.moduleCenters = self.ctModel.get_moduleCenters()
-            self.rowVectors = self.ctModel.get_rowVectors()
-            self.colVectors = self.ctModel.get_colVectors()
-        else:
-            self.phis = self.ctModel.get_angles()
-            
-        # Now set parameters for each subset
-        if self.ctModel.get_geometry() == 'MODULAR':
-            for m in range(self.numSubsets):
-                if m == self.sourcePositions.shape[0]-1:
-                    sourcePositions_subset = np.zeros((1,3),dtype=np.float32)
-                    sourcePositions_subset[0,:] = self.sourcePositions[m,:]
-                    self.sourcePositions_subsets.append(sourcePositions_subset)
-                    
-                    moduleCenters_subset = np.zeros((1,3),dtype=np.float32)
-                    moduleCenters_subset[0,:] = self.moduleCenters[m,:]
-                    self.moduleCenters_subsets.append(moduleCenters_subset)
-
-                    rowVectors_subset = np.zeros((1,3),dtype=np.float32)
-                    rowVectors_subset[0,:] = self.rowVectors[m,:]
-                    self.rowVectors_subsets.append(rowVectors_subset)
-                    
-                    colVectors_subset = np.zeros((1,3),dtype=np.float32)
-                    colVectors_subset[0,:] = self.colVectors[m,:]
-                    self.colVectors_subsets.append(colVectors_subset)
-
-                else:
-                    sourcePositions_subset = np.ascontiguousarray(self.sourcePositions[m:-1:self.numSubsets,:], np.float32)
-                    self.sourcePositions_subsets.append(sourcePositions_subset)
-                    
-                    moduleCenters_subset = np.ascontiguousarray(self.moduleCenters[m:-1:self.numSubsets,:], np.float32)
-                    self.moduleCenters_subsets.append(moduleCenters_subset)
-                    
-                    rowVectors_subset = np.ascontiguousarray(self.rowVectors[m:-1:self.numSubsets,:], np.float32)
-                    self.rowVectors_subsets.append(rowVectors_subset)
-                    
-                    colVectors_subset = np.ascontiguousarray(self.colVectors[m:-1:self.numSubsets,:], np.float32)
-                    self.colVectors_subsets.append(colVectors_subset)
-        else:
-            phis_subsets = []
-            for m in range(self.numSubsets):
-                if m == self.phis.size-1:
-                    phis_subset = np.zeros((1,1),dtype=np.float32)
-                    phis_subset[0,0] = self.phis[m]
-                    self.phis_subsets.append(phis_subset)
-                else:
-                    phis_subset = np.ascontiguousarray(self.phis[m:-1:self.numSubsets], np.float32)
-                    self.phis_subsets.append(phis_subset)
-        
-    def setSubset(self, isubset):
-        if 0 <= isubset and isubset < self.numSubsets:
-            if self.ctModel.get_geometry() == 'MODULAR':
-                numAngles = self.sourcePositions_subsets[isubset].shape[0]
-                numRows = self.ctModel.get_numRows()
-                numCols = self.ctModel.get_numCols()
-                pixelHeight = self.ctModel.get_pixelHeight()
-                pixelWidth = self.ctModel.get_pixelWidth()
-                sourcePositions = self.sourcePositions_subsets[isubset]
-                moduleCenters = self.moduleCenters_subsets[isubset]
-                rowVectors = self.rowVectors_subsets[isubset]
-                colVectors = self.colVectors_subsets[isubset]
-                self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
-                #print(sourcePositions)
-            else:
-                self.ctModel.set_angles(self.phis_subsets[isubset])
-        else:
-            if self.ctModel.get_geometry() == 'MODULAR':
-                numAngles = self.sourcePositions.shape[0]
-                numRows = self.ctModel.get_numRows()
-                numCols = self.ctModel.get_numCols()
-                pixelHeight = self.ctModel.get_pixelHeight()
-                pixelWidth = self.ctModel.get_pixelWidth()
-                sourcePositions = self.sourcePositions
-                moduleCenters = self.moduleCenters
-                rowVectors = self.rowVectors
-                colVectors = self.colVectors
-                self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
-            else:
-                self.ctModel.set_angles(self.phis)
-
 class tomographicModels:
     ''' Python class for tomographicModels bindings
     Usage Example:
@@ -1257,6 +1157,98 @@ class tomographicModels:
         print('\tlambda = ' + str(stepSize))
         return stepSize
 
+    def MLTR(self, g, f, numIter, numSubsets=1, delta=0.0, beta=0.0):
+    
+        beta = max(0.0, beta)
+        #if beta > 0:
+        #    print('Error: regularization not yet implemented for ML-TR')
+        #    return f
+    
+        t = np.exp(-g)
+        if np.any(f):
+            f[f<=0.0] = 0.0
+        
+        d = self.allocateVolume()
+        
+        d[:] = 1.0
+        P1 = self.allocateProjections()
+        self.project(P1,d)
+        P1[P1<=0.0] = 1.0
+
+        SQS = self.allocateVolume()
+        if numSubsets <= 1:
+            Pf = self.allocateProjections()
+            
+            transDiff = self.allocateProjections()
+            for n in range(numIter):
+                print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
+                self.project(Pf,f)
+                transDiff[:] = np.exp(-Pf[:])
+                
+                transDiff[:] = transDiff[:] * P1[:]
+                self.backproject(transDiff, SQS)
+                SQS[SQS<=0.0] = 1.0
+                
+                transDiff[:] = transDiff[:]/P1[:] - t[:]
+                self.backproject(transDiff, d)
+                
+                # Regularizer and divide by SQS
+                stepMultiplier = 1.0
+                if beta > 0.0:
+                    Sf1 = self.TVgradient(f, delta, beta)
+                    d[:] -= Sf1[:]
+                    grad_dot_descent = np.sum(d*d/SQS)
+                
+                    d[:] = d[:] / SQS[:]
+                
+                    stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
+                else:
+                    d[:] = d[:] / SQS[:]
+                
+                f[:] = f[:] + stepMultiplier*d[:]
+                f[f<0.0] = 0.0
+                
+        else:
+            subsetParams = subsetParameters(self, numSubsets)
+            t_subsets = self.breakIntoSubsets(t, numSubsets)
+            P1_subsets = self.breakIntoSubsets(P1, numSubsets)
+            for n in range(numIter):
+                print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
+                for m in range(numSubsets):
+                    subsetParams.setSubset(m)
+                    transDiff = self.allocateProjections()
+                    Pf = self.allocateProjections()
+                    
+                    self.project(Pf,f)
+                    transDiff[:] = np.exp(-Pf[:])
+                    
+                    transDiff[:] = transDiff[:] * P1_subsets[m][:]
+                    self.backproject(transDiff, SQS)
+                    SQS[SQS<=0.0] = 1.0
+                    
+                    transDiff[:] = transDiff[:]/P1_subsets[m][:] - t_subsets[m][:]
+                    self.backproject(transDiff, d)
+                    
+                    # Regularizer and divide by SQS
+                    stepMultiplier = 1.0
+                    if beta > 0.0:
+                        Sf1 = self.TVgradient(f, delta, beta)
+                        d[:] -= Sf1[:]
+                        grad_dot_descent = np.sum(d*d/SQS)
+                    
+                        d[:] = d[:] / SQS[:]
+                    
+                        stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
+                    else:
+                        d[:] = d[:] / SQS[:]
+                    
+                    f[:] = f[:] + stepMultiplier*d[:]
+                    f[f<0.0] = 0.0
+        
+            subsetParams.setSubset(-1)
+        g = -np.log(t)
+        return f
+            
 
     ###################################################################################################################
     ###################################################################################################################
@@ -2043,3 +2035,102 @@ class tomographicModels:
                 self.addObject(f, 0, 10.0*np.array([x, y, z]), 10.0*np.array([0.15, 0.15, 0.15]), 0.0)
         #'''
         
+class subsetParameters:
+    def __init__(self, ctModel, numSubsets):
+        self.numSubsets = numSubsets
+        self.ctModel = ctModel
+        
+        self.phis_subsets = []
+        self.sourcePositions_subsets = []
+        self.moduleCenters_subsets = []
+        self.rowVectors_subsets = []
+        self.colVectors_subsets = []
+        
+        self.phis = None
+        self.sourcePositions = None
+        self.moduleCenters = None
+        self.rowVectors = None
+        self.colVectors = None
+
+        # First set parameters for all angles
+        if self.ctModel.get_geometry() == 'MODULAR':
+            self.sourcePositions = self.ctModel.get_sourcePositions()
+            self.moduleCenters = self.ctModel.get_moduleCenters()
+            self.rowVectors = self.ctModel.get_rowVectors()
+            self.colVectors = self.ctModel.get_colVectors()
+        else:
+            self.phis = self.ctModel.get_angles()
+            
+        # Now set parameters for each subset
+        if self.ctModel.get_geometry() == 'MODULAR':
+            for m in range(self.numSubsets):
+                if m == self.sourcePositions.shape[0]-1:
+                    sourcePositions_subset = np.zeros((1,3),dtype=np.float32)
+                    sourcePositions_subset[0,:] = self.sourcePositions[m,:]
+                    self.sourcePositions_subsets.append(sourcePositions_subset)
+                    
+                    moduleCenters_subset = np.zeros((1,3),dtype=np.float32)
+                    moduleCenters_subset[0,:] = self.moduleCenters[m,:]
+                    self.moduleCenters_subsets.append(moduleCenters_subset)
+
+                    rowVectors_subset = np.zeros((1,3),dtype=np.float32)
+                    rowVectors_subset[0,:] = self.rowVectors[m,:]
+                    self.rowVectors_subsets.append(rowVectors_subset)
+                    
+                    colVectors_subset = np.zeros((1,3),dtype=np.float32)
+                    colVectors_subset[0,:] = self.colVectors[m,:]
+                    self.colVectors_subsets.append(colVectors_subset)
+
+                else:
+                    sourcePositions_subset = np.ascontiguousarray(self.sourcePositions[m:-1:self.numSubsets,:], np.float32)
+                    self.sourcePositions_subsets.append(sourcePositions_subset)
+                    
+                    moduleCenters_subset = np.ascontiguousarray(self.moduleCenters[m:-1:self.numSubsets,:], np.float32)
+                    self.moduleCenters_subsets.append(moduleCenters_subset)
+                    
+                    rowVectors_subset = np.ascontiguousarray(self.rowVectors[m:-1:self.numSubsets,:], np.float32)
+                    self.rowVectors_subsets.append(rowVectors_subset)
+                    
+                    colVectors_subset = np.ascontiguousarray(self.colVectors[m:-1:self.numSubsets,:], np.float32)
+                    self.colVectors_subsets.append(colVectors_subset)
+        else:
+            phis_subsets = []
+            for m in range(self.numSubsets):
+                if m == self.phis.size-1:
+                    phis_subset = np.zeros((1,1),dtype=np.float32)
+                    phis_subset[0,0] = self.phis[m]
+                    self.phis_subsets.append(phis_subset)
+                else:
+                    phis_subset = np.ascontiguousarray(self.phis[m:-1:self.numSubsets], np.float32)
+                    self.phis_subsets.append(phis_subset)
+        
+    def setSubset(self, isubset):
+        if 0 <= isubset and isubset < self.numSubsets:
+            if self.ctModel.get_geometry() == 'MODULAR':
+                numAngles = self.sourcePositions_subsets[isubset].shape[0]
+                numRows = self.ctModel.get_numRows()
+                numCols = self.ctModel.get_numCols()
+                pixelHeight = self.ctModel.get_pixelHeight()
+                pixelWidth = self.ctModel.get_pixelWidth()
+                sourcePositions = self.sourcePositions_subsets[isubset]
+                moduleCenters = self.moduleCenters_subsets[isubset]
+                rowVectors = self.rowVectors_subsets[isubset]
+                colVectors = self.colVectors_subsets[isubset]
+                self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+                #print(sourcePositions)
+            else:
+                self.ctModel.set_angles(self.phis_subsets[isubset])
+        else:
+            if self.ctModel.get_geometry() == 'MODULAR':
+                numAngles = self.sourcePositions.shape[0]
+                numRows = self.ctModel.get_numRows()
+                numCols = self.ctModel.get_numCols()
+                pixelHeight = self.ctModel.get_pixelHeight()
+                pixelWidth = self.ctModel.get_pixelWidth()
+                sourcePositions = self.sourcePositions
+                moduleCenters = self.moduleCenters
+                rowVectors = self.rowVectors
+                colVectors = self.colVectors
+                self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+            else:
+                self.ctModel.set_angles(self.phis)
