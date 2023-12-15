@@ -605,6 +605,11 @@ void parameters::printAll()
 		if (tau != 0.0)
 			printf("tau = %f mm\n", tau);
 	}
+	else if (geometry == MODULAR)
+	{
+		printf("mean sod = %f mm\n", sod);
+		printf("mean sdd = %f mm\n", sdd);
+	}
 	if (geometry == CONE && helicalPitch != 0.0)
 	{
 		printf("helicalPitch = %f (mm/radian)\n", helicalPitch);

@@ -291,6 +291,143 @@ __device__ float lineIntegral_Joseph_XYZ(cudaTextureObject_t mu, const int4 N, c
     }
 }
 
+__global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+        return;
+
+    uint64 ind;
+    if (volumeDimensionOrder == 0)
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
+    else
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
+
+    const float x = float(i) * T_f.x + startVals_f.x;
+    const float y = float(j) * T_f.y + startVals_f.y;
+    const float z = float(k) * T_f.z + startVals_f.z;
+
+    const float T_x_inv = 1.0f / T_f.x;
+
+    float val = 0.0f;
+    for (int iphi = 0; iphi < N_g.x; iphi++)
+    {
+        float* sourcePosition = &sourcePositions[3 * iphi];
+        float* moduleCenter = &moduleCenters[3 * iphi];
+        float* v_vec = &rowVectors[3 * iphi];
+        float* u_vec = &colVectors[3 * iphi];
+        const float3 detNormal = make_float3(u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1],
+            u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
+            u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
+
+        float3 r = make_float3(moduleCenter[0] - sourcePosition[0], moduleCenter[1] - sourcePosition[1], moduleCenter[2] - sourcePosition[2]);
+        const float D = sqrt(r.x * r.x + r.y * r.y + r.z * r.z);
+
+        const float odd = ((moduleCenter[0] - x) * detNormal.x + (moduleCenter[1] - y) * detNormal.y + (moduleCenter[2] - z) * detNormal.z) / (r.x * detNormal.x + r.y * detNormal.y + r.z * detNormal.z);
+        const float u_arg = (x + odd * r.x - moduleCenter[0]) * u_vec[0] + (y + odd * r.y - moduleCenter[1]) * u_vec[1] + (z + odd * r.z - moduleCenter[2]) * u_vec[2];
+        const float v_arg = (x + odd * r.x - moduleCenter[0]) * v_vec[0] + (y + odd * r.y - moduleCenter[1]) * v_vec[1] + (z + odd * r.z - moduleCenter[2]) * v_vec[2];
+
+        const int u_ind = int(floor(0.5f + (u_arg - startVals_g.z) / T_g.z));
+        const int v_ind = int(floor(0.5f + (v_arg - startVals_g.y) / T_g.y));
+
+        const int searchWidth_u = 1 + int(ceil(0.5f * T_f.x / T_g.z));
+        const int searchWidth_v = 1 + int(ceil(0.5f * T_f.z / T_g.y));
+
+        bool doPrint = false;
+        //if (i == N_f.x / 2 && j == N_f.y / 2 && k == N_f.z / 2)
+        //    doPrint = true;
+
+        if (doPrint)
+        {
+            printf("x = (%f,%f,%f), D = %f, r = (%f,%f,%f)\n", x, y, z, D, r.x, r.y, r.z);
+        }
+
+        if (fabs(r.x) >= max(fabs(r.y), fabs(r.z)))
+        {
+            const float r_x_inv = 1.0f / r.x;
+            const float rayWeight = D * fabs(r_x_inv);
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
+            {
+                const float v = iv * T_g.y + startVals_g.y;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
+                {
+                    const float u = iu * T_g.z + startVals_g.z;
+
+                    const float dx = (moduleCenter[0] - x + u * u_vec[0] + v * v_vec[0]) * r_x_inv;
+                    const float yy = moduleCenter[1] + u * u_vec[1] + v * v_vec[1] - dx * r.y;
+                    const float zz = moduleCenter[2] + u * u_vec[2] + v * v_vec[2] - dx * r.z;
+                    if (doPrint)
+                        printf("yy = %f, zz = %f\n", yy, zz);
+
+                    const float dy = max(0.0f, 1.0f - fabs(y - yy) * T_x_inv);
+                    const float dz = max(0.0f, 1.0f - fabs(z - zz) * T_x_inv);
+
+                    if (dy > 0.0f && dz > 0.0f)
+                    {
+                        val += rayWeight * dy * dz * tex3D<float>(g, iu, iv, iphi);
+                        //val += dy * dz * tex3D<float>(g, iu, iv, iphi);
+                    }
+                }
+            }
+        }
+        else if (fabs(r.y) >= fabs(r.z))
+        {
+            const float r_y_inv = 1.0f / r.y;
+            const float rayWeight = D * fabs(r_y_inv);
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
+            {
+                const float v = iv * T_g.y + startVals_g.y;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
+                {
+                    const float u = iu * T_g.z + startVals_g.z;
+
+                    const float dy = (moduleCenter[1] - y + u * u_vec[1] + v * v_vec[1]) * r_y_inv;
+                    const float xx = moduleCenter[0] + u * u_vec[0] + v * v_vec[0] - dy * r.x;
+                    const float zz = moduleCenter[2] + u * u_vec[2] + v * v_vec[2] - dy * r.z;
+
+                    const float dx = max(0.0f, 1.0f - fabs(x - xx) * T_x_inv);
+                    const float dz = max(0.0f, 1.0f - fabs(z - zz) * T_x_inv);
+
+                    if (dx > 0.0f && dz > 0.0f)
+                    {
+                        val += rayWeight * dx * dz * tex3D<float>(g, iu, iv, iphi);
+                        //val += dx * dz * tex3D<float>(g, iu, iv, iphi);
+                    }
+                }
+            }
+        }
+        else
+        {
+            const float r_z_inv = 1.0f / r.z;
+            const float rayWeight = D * fabs(r_z_inv);
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
+            {
+                const float v = iv * T_g.y + startVals_g.y;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
+                {
+                    const float u = iu * T_g.z + startVals_g.z;
+
+                    const float dz = (moduleCenter[2] - z + u * u_vec[2] + v * v_vec[2]) * r_z_inv;
+                    const float xx = moduleCenter[0] + u * u_vec[0] + v * v_vec[0] - dz * r.x;
+                    const float yy = moduleCenter[1] + u * u_vec[1] + v * v_vec[1] - dz * r.y;
+
+                    const float dx = max(0.0f, 1.0f - fabs(x - xx) * T_x_inv);
+                    const float dy = max(0.0f, 1.0f - fabs(y - yy) * T_x_inv);
+
+                    if (dx > 0.0f && dy > 0.0f)
+                    {
+                        val += rayWeight * dx * dy * tex3D<float>(g, iu, iv, iphi);
+                        //val += dx * dy * tex3D<float>(g, iu, iv, iphi);
+                    }
+                }
+            }
+        }
+    }
+    f[ind] = val * T_f.x;
+}
+
 __global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -350,68 +487,101 @@ __global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4
         const int searchWidth_u = 1 + int(ceil(0.5f * T_f.x / T_g.z * fabs(D)));
         const int searchWidth_v = 1 + int(ceil(0.5f * T_f.z / T_g.y * fabs(D)));
 
-        //if (i == N_f.x / 2 && j == N_f.y / 2 && k == N_f.z / 2)
-        //    printf("searchWidth_u = %d, searchWidth_v = %d\n", searchWidth_u, searchWidth_v);
-
-        //const double3 rd = make_double3((double(x) - double(sourcePosition[0])) * double(T_x_inv), (double(y) - double(sourcePosition[1])) * double(T_x_inv), (double(z) - double(sourcePosition[2])) * double(T_x_inv));
-        const double3 rd = make_double3(double(r.x) * double(T_x_inv), double(r.y) * double(T_x_inv), double(r.z) * double(T_x_inv));
-
         //*
+        r.x *= T_x_inv;
+        r.y *= T_x_inv;
+        r.z *= T_x_inv;
         if (fabs(r.x) >= max(fabs(r.y), fabs(r.z)))
         {
-            for (int iv = v_ind - searchWidth_v; iv <= v_ind + searchWidth_v; iv++)
+            const float rayWeight = R / fabs(r.x) * T_x_inv;
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
             {
-                const double v = iv * T_g.y + startVals_g.y;
-                //const float v = iv * T_v + v_0;
-                for (int iu = u_ind - searchWidth_u; iu <= u_ind + searchWidth_u; iu++)
+                const float v = iv * T_g.y + startVals_g.y;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
                 {
-                    const double u = iu * T_g.z + startVals_g.z;
-                    //const float u = iu * T_u + u_0;
+                    const float u = iu * T_g.z + startVals_g.z;
 
-                    const double trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
-                    const double trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
-                    const double trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
-                    const double trueRay_x_inv = 1.0f / trueRay_x;
+                    const float trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
+                    const float trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
+                    const float trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
+                    const float trueRay_x_inv = 1.0f / trueRay_x;
 
-                    const float dy = max(0.0f, 1.0f - fabs(rd.y - rd.x * trueRay_y * trueRay_x_inv));
-                    const float dz = max(0.0f, 1.0f - fabs(rd.z - rd.x * trueRay_z * trueRay_x_inv));
+                    const float dy = max(0.0f, 1.0f - fabs(r.y - r.x * trueRay_y * trueRay_x_inv));
+                    const float dz = max(0.0f, 1.0f - fabs(r.z - r.x * trueRay_z * trueRay_x_inv));
 
                     if (dy > 0.0f && dz > 0.0f)
-                        val += sqrtf(trueRay_x * trueRay_x + trueRay_y * trueRay_y + trueRay_z * trueRay_z) * fabs(trueRay_x_inv) * dy * dz *tex3D<float>(g, iu, iv, iphi);
+                    {
+                        val += rayWeight * dy * dz * tex3D<float>(g, iu, iv, iphi);
+                        //val += sqrtf(trueRay_x * trueRay_x + trueRay_y * trueRay_y + trueRay_z * trueRay_z) * fabs(trueRay_x_inv) * dy * dz * tex3D<float>(g, iu, iv, iphi);
+                    }
                 }
             }
         }
         else if (fabs(r.y) >= fabs(r.z))
         {
-            for (int iv = v_ind - searchWidth_v; iv <= v_ind + searchWidth_v; iv++)
+            const float rayWeight = R / fabs(r.y) * T_x_inv;
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
             {
-                const double v = iv * T_g.y + startVals_g.y;
-                //const float v = iv * T_v + v_0;
-                for (int iu = u_ind - searchWidth_u; iu <= u_ind + searchWidth_u; iu++)
+                const float v = iv * T_g.y + startVals_g.y;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
                 {
-                    const double u = iu * T_g.z + startVals_g.z;
-                    //const float u = iu * T_u + u_0;
+                    const float u = iu * T_g.z + startVals_g.z;
 
-                    const double trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
-                    const double trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
-                    const double trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
-                    const double trueRay_y_inv = 1.0f / trueRay_y;
+                    const float trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
+                    const float trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
+                    const float trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
+                    const float trueRay_y_inv = 1.0f / trueRay_y;
 
-                    const float dx = max(0.0f, 1.0f - fabs(rd.x - rd.y * trueRay_x * trueRay_y_inv));
-                    const float dz = max(0.0f, 1.0f - fabs(rd.z - rd.y * trueRay_z * trueRay_y_inv));
+                    const float dx = max(0.0f, 1.0f - fabs(r.x - r.y * trueRay_x * trueRay_y_inv));
+                    const float dz = max(0.0f, 1.0f - fabs(r.z - r.y * trueRay_z * trueRay_y_inv));
 
                     if (dx > 0.0f && dz > 0.0f)
-                        val += sqrtf(trueRay_y* trueRay_y + trueRay_x * trueRay_x + trueRay_z * trueRay_z) * fabs(trueRay_y_inv) * dx * dz * tex3D<float>(g, iu, iv, iphi);
+                    {
+                        val += rayWeight * dx * dz * tex3D<float>(g, iu, iv, iphi);
+                        //val += sqrtf(trueRay_y * trueRay_y + trueRay_x * trueRay_x + trueRay_z * trueRay_z) * fabs(trueRay_y_inv) * dx * dz * tex3D<float>(g, iu, iv, iphi);
+                    }
                 }
             }
         }
         else
         {
-            for (int iv = v_ind - searchWidth_v; iv <= v_ind + searchWidth_v; iv++)
+            const float rayWeight = R / fabs(r.z) * T_x_inv;
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
+            {
+                const float v = iv * T_g.y + startVals_g.y;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
+                {
+                    const float u = iu * T_g.z + startVals_g.z;
+
+                    const float trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
+                    const float trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
+                    const float trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
+                    const float trueRay_z_inv = 1.0f / trueRay_z;
+
+                    const float dy = max(0.0f, 1.0f - fabs(r.y - r.z * trueRay_y * trueRay_z_inv));
+                    const float dx = max(0.0f, 1.0f - fabs(r.x - r.z * trueRay_x * trueRay_z_inv));
+
+                    if (dx > 0.0f && dy > 0.0f)
+                    {
+                        val += rayWeight * dx * dy * tex3D<float>(g, iu, iv, iphi);
+                        //val += sqrtf(trueRay_z * trueRay_z + trueRay_x * trueRay_x + trueRay_y * trueRay_y) * fabs(trueRay_z_inv) * dx * dy * tex3D<float>(g, iu, iv, iphi);
+                    }
+                }
+            }
+        }
+        //*/
+
+        /*
+        //const double3 rd = make_double3((double(x) - double(sourcePosition[0])) * double(T_x_inv), (double(y) - double(sourcePosition[1])) * double(T_x_inv), (double(z) - double(sourcePosition[2])) * double(T_x_inv));
+        const double3 rd = make_double3(double(r.x) * double(T_x_inv), double(r.y) * double(T_x_inv), double(r.z) * double(T_x_inv));
+        if (fabs(r.x) >= max(fabs(r.y), fabs(r.z)))
+        {
+            const float rayWeight = R / fabs(r.x);
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
             {
                 const double v = iv * T_g.y + startVals_g.y;
                 //const float v = iv * T_v + v_0;
-                for (int iu = u_ind - searchWidth_u; iu <= u_ind + searchWidth_u; iu++)
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
                 {
                     const double u = iu * T_g.z + startVals_g.z;
                     //const float u = iu * T_u + u_0;
@@ -419,16 +589,79 @@ __global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4
                     const double trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
                     const double trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
                     const double trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
-                    const double trueRay_z_inv = 1.0f / trueRay_z;
+                    const double trueRay_x_inv = 1.0 / trueRay_x;
+
+                    const float dy = max(0.0f, 1.0f - fabs(rd.y - rd.x * trueRay_y * trueRay_x_inv));
+                    const float dz = max(0.0f, 1.0f - fabs(rd.z - rd.x * trueRay_z * trueRay_x_inv));
+
+                    if (dy > 0.0f && dz > 0.0f)
+                    {
+                        //val += sqrtf(trueRay_x * trueRay_x + trueRay_y * trueRay_y + trueRay_z * trueRay_z) * fabs(trueRay_x_inv) * dy * dz * tex3D<float>(g, iu, iv, iphi);
+                        val += rayWeight * dy * dz * tex3D<float>(g, iu, iv, iphi);
+                        //val += dy * dz * tex3D<float>(g, iu, iv, iphi);
+                    }
+                }
+            }
+        }
+        else if (fabs(r.y) >= fabs(r.z))
+        {
+            const float rayWeight = R / fabs(r.y);
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
+            {
+                const double v = iv * T_g.y + startVals_g.y;
+                //const float v = iv * T_v + v_0;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
+                {
+                    const double u = iu * T_g.z + startVals_g.z;
+                    //const float u = iu * T_u + u_0;
+
+                    const double trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
+                    const double trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
+                    const double trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
+                    const double trueRay_y_inv = 1.0 / trueRay_y;
+
+                    const float dx = max(0.0f, 1.0f - fabs(rd.x - rd.y * trueRay_x * trueRay_y_inv));
+                    const float dz = max(0.0f, 1.0f - fabs(rd.z - rd.y * trueRay_z * trueRay_y_inv));
+
+                    if (dx > 0.0f && dz > 0.0f)
+                    {
+                        //val += sqrtf(trueRay_y * trueRay_y + trueRay_x * trueRay_x + trueRay_z * trueRay_z) * fabs(trueRay_y_inv) * dx * dz * tex3D<float>(g, iu, iv, iphi);
+                        val += rayWeight * dx * dz * tex3D<float>(g, iu, iv, iphi);
+                        //val += dx * dz * tex3D<float>(g, iu, iv, iphi);
+                    }
+                }
+            }
+        }
+        else
+        {
+            const float rayWeight = R / fabs(r.z);
+            for (int iv = max(0, v_ind - searchWidth_v); iv <= v_ind + searchWidth_v; iv++)
+            {
+                const double v = iv * T_g.y + startVals_g.y;
+                //const float v = iv * T_v + v_0;
+                for (int iu = max(0, u_ind - searchWidth_u); iu <= u_ind + searchWidth_u; iu++)
+                {
+                    const double u = iu * T_g.z + startVals_g.z;
+                    //const float u = iu * T_u + u_0;
+
+                    const double trueRay_x = u * u_vec[0] + v * v_vec[0] - p_minus_c.x;
+                    const double trueRay_y = u * u_vec[1] + v * v_vec[1] - p_minus_c.y;
+                    const double trueRay_z = u * u_vec[2] + v * v_vec[2] - p_minus_c.z;
+                    const double trueRay_z_inv = 1.0 / trueRay_z;
 
                     const float dy = max(0.0f, 1.0f - fabs(rd.y - rd.z * trueRay_y * trueRay_z_inv));
                     const float dx = max(0.0f, 1.0f - fabs(rd.x - rd.z * trueRay_x * trueRay_z_inv));
 
                     if (dx > 0.0f && dy > 0.0f)
-                        val += sqrtf(trueRay_z* trueRay_z + trueRay_x * trueRay_x + trueRay_y * trueRay_y) * fabs(trueRay_z_inv) * dx * dy * tex3D<float>(g, iu, iv, iphi);
+                    {
+                        //val += sqrtf(trueRay_z * trueRay_z + trueRay_x * trueRay_x + trueRay_y * trueRay_y) * fabs(trueRay_z_inv) * dx * dy * tex3D<float>(g, iu, iv, iphi);
+                        val += rayWeight * dx * dy * tex3D<float>(g, iu, iv, iphi);
+                        //val += dx * dy * tex3D<float>(g, iu, iv, iphi);
+                    }
                 }
             }
         }
+        //*/
     }
     f[ind] = val * T_f.x;
 }
@@ -454,23 +687,6 @@ __global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g,
     dst.y = float(double(moduleCenters[3 * i + 1]) + v * double(rowVectors[3 * i + 1]) + u * double(colVectors[3 * i + 1]));
     dst.z = float(double(moduleCenters[3 * i + 2]) + v * double(rowVectors[3 * i + 2]) + u * double(colVectors[3 * i + 2]));
 
-    /*
-    if (i == 0 && j == 0 && k == 0)
-    {
-        for (int ir = 0; ir < N_g.y; ir++)
-        {
-            float ut = ir * T_g.z + startVals_g.z;
-            float vt = ir * T_g.y + startVals_g.y;
-            vt = 0.0f;
-            float3 temp;
-            temp.x = moduleCenters[3 * i + 0] + vt * rowVectors[3 * i + 0] + ut * colVectors[3 * i + 0];
-            temp.y = moduleCenters[3 * i + 1] + vt * rowVectors[3 * i + 1] + ut * colVectors[3 * i + 1];
-            temp.z = moduleCenters[3 * i + 2] + vt * rowVectors[3 * i + 2] + ut * colVectors[3 * i + 2];
-            printf("%f %f %f\n", temp.x, temp.y, temp.z);
-        }
-    }
-    //*/
-
     const double3 r = make_double3(double(dst.x) - double(sourcePos.x), double(dst.y) - double(sourcePos.y), double(dst.z) - double(sourcePos.z));
     double t = 0.0f;
     if (fabs(r.x) > max(fabs(r.y), fabs(r.z)))
@@ -492,7 +708,7 @@ __global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g,
         if (r.z < 0.0f)
             t = (double(N_f.z - 1) * double(T_f.z) + double(startVals_f.z) - double(sourcePos.z)) / r.z;
         else
-            t = (double(startVals_f.z) - double(sourcePos.y)) / r.z;
+            t = (double(startVals_f.z) - double(sourcePos.z)) / r.z;
     }
     const float3 edgePos = make_float3(float(double(sourcePos.x) + t * r.x), float(double(sourcePos.y) + t * r.y), float(double(sourcePos.z) + t * r.z));
 
@@ -676,10 +892,26 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool cp
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, false);
 
+    double alpha = max(atan(0.5 * (params->numCols - 1) * params->pixelWidth / params->sdd), atan(0.5 * (params->numRows - 1) * params->pixelHeight / params->sdd));
+    double rFOV = max(params->furthestFromCenter(), max(fabs(params->z_0()), fabs(params->z_samples(params->numZ - 1))));
+    double maxDivergence = tan(alpha) * (params->sdd + rFOV) - tan(alpha) * (params->sdd - rFOV);
+    //double maxTravel = maxDivergence / min(params->pixelWidth, params->pixelHeight);
+    double maxTravel = maxDivergence / params->voxelWidth;
+    //printf("maxTravel = %f\n", maxTravel);
+
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);
     dim3 dimGrid = setGridSize(N_f, dimBlock);
-    modularBeamJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
+    if (maxTravel < 0.25 && params->truncatedScan == false)
+    {
+        //printf("executing parallel Joseph backprojector\n");
+        modularBeamParallelJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
+    }
+    else
+    {
+        //printf("executing cone Joseph backprojector\n");
+        modularBeamJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
+    }
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();

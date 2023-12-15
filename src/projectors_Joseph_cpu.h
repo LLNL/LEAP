@@ -25,5 +25,6 @@ bool backproject_Joseph_modular_cpu(float*, float*, parameters*);
 
 float projectLine_Joseph(float* f, parameters* params, float3 pos, float3 traj);
 float backproject_Joseph_modular_kernel(float* aProj, parameters* params, float* sourcePosition, float* moduleCenter, float* u_vec, float* v_vec, float x, float y, float z);
+float backproject_Joseph_modular_parallel_kernel(float* aProj, parameters* params, float* sourcePosition, float* moduleCenter, float* u_vec, float* v_vec, float x, float y, float z);
 
 #endif
