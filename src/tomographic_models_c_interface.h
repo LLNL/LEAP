@@ -31,6 +31,9 @@ extern "C" PROJECTOR_API bool backproject_gpu(float* g, float* f);
 extern "C" PROJECTOR_API bool project_cpu(float* g, float* f);
 extern "C" PROJECTOR_API bool backproject_cpu(float* g, float* f);
 
+extern "C" PROJECTOR_API bool FBP_cpu(float* g, float* f);
+extern "C" PROJECTOR_API bool FBP_gpu(float* g, float* f);
+
 extern "C" PROJECTOR_API bool project(float* g, float* f, bool cpu_to_gpu);
 extern "C" PROJECTOR_API bool backproject(float* g, float* f, bool cpu_to_gpu);
 extern "C" PROJECTOR_API bool weightedBackproject(float* g, float* f, bool cpu_to_gpu);
@@ -125,3 +128,5 @@ extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, 
 extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu);
 
 extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip);
+
+extern "C" PROJECTOR_API bool saveParamsToFile(const char* param_fn);

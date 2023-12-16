@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <iostream>
+#include <fstream>
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -78,6 +80,16 @@ bool project(float* g, float* f, bool cpu_to_gpu)
 bool backproject(float* g, float* f, bool cpu_to_gpu)
 {
 	return tomo()->backproject(g, f, cpu_to_gpu);
+}
+
+bool FBP_cpu(float* g, float* f)
+{
+	return tomo()->FBP_cpu(g, f);
+}
+
+bool FBP_gpu(float* g, float* f)
+{
+	return tomo()->FBP_gpu(g, f);
 }
 
 bool weightedBackproject(float* g, float* f, bool cpu_to_gpu)
@@ -452,4 +464,89 @@ bool addObject(float* f, int type, float* c, float* r, float val, float* A, floa
 {
 	phantom testObject;
 	return testObject.addObject(f, &(tomo()->params), type, c, r, val, A, clip);
+}
+
+bool saveParamsToFile(const char* param_fn)
+{
+	tomographicModels* p_model = tomo();
+	if (p_model == NULL)
+		return false;
+
+	parameters* params = &(p_model->params);
+
+	std::string phis_strs;
+	for (int i = 0; i < params->numAngles; i++) {
+		float phis = (params->phis[i] + 0.5 * PI) * 180.0 / PI;
+		char phis_str[64];
+		sprintf(phis_str, " %f", phis);
+		phis_strs += phis_str;
+		if (i != params->numAngles - 1)
+			phis_strs += ",";
+	}
+
+	std::ofstream param_file;
+	param_file.open(param_fn);
+	//*
+	param_file << "img_dimx = " << params->numX << std::endl;
+	param_file << "img_dimy = " << params->numY << std::endl;
+	param_file << "img_dimz = " << params->numZ << std::endl;
+	param_file << "img_pwidth = " << params->voxelWidth << std::endl;
+	param_file << "img_pheight = " << params->voxelHeight << std::endl;
+	param_file << "img_offsetx = " << params->offsetX << std::endl;
+	param_file << "img_offsety = " << params->offsetY << std::endl;
+	param_file << "img_offsetz = " << params->offsetZ << std::endl;
+
+	if (params->geometry == parameters::CONE)
+		param_file << "proj_geometry = " << "cone" << std::endl;
+	else if (params->geometry == parameters::PARALLEL)
+		param_file << "proj_geometry = " << "parallel" << std::endl;
+	else if (params->geometry == parameters::FAN)
+		param_file << "proj_geometry = " << "fan" << std::endl;
+	else if (params->geometry == parameters::MODULAR)
+		param_file << "proj_geometry = " << "modular" << std::endl;
+	param_file << "proj_arange = " << params->angularRange << std::endl;
+	param_file << "proj_nangles = " << params->numAngles << std::endl;
+	param_file << "proj_nrows = " << params->numRows << std::endl;
+	param_file << "proj_ncols = " << params->numCols << std::endl;
+	param_file << "proj_pheight = " << params->pixelHeight << std::endl;
+	param_file << "proj_pwidth = " << params->pixelWidth << std::endl;
+	param_file << "proj_crow = " << params->centerRow << std::endl;
+	param_file << "proj_ccol = " << params->centerCol << std::endl;
+	param_file << "proj_phis = " << phis_strs << std::endl;
+	param_file << "proj_sod = " << params->sod << std::endl;
+	param_file << "proj_sdd = " << params->sdd << std::endl;
+	//*/
+	/*
+	param_file << "numX = " << params->numX << std::endl;
+	param_file << "numY = " << params->numY << std::endl;
+	param_file << "numZ = " << params->numZ << std::endl;
+	param_file << "voxelWidth = " << params->voxelWidth << std::endl;
+	param_file << "voxelHeight = " << params->voxelHeight << std::endl;
+	param_file << "offsetX = " << params->offsetX << std::endl;
+	param_file << "offsetY = " << params->offsetY << std::endl;
+	param_file << "offsetZ = " << params->offsetZ << std::endl;
+
+	if (params->geometry == parameters::CONE)
+		param_file << "geometry = " << "CONE" << std::endl;
+	else if (params->geometry == parameters::PARALLEL)
+		param_file << "geometry = " << "PARALLEL" << std::endl;
+	else if (params->geometry == parameters::FAN)
+		param_file << "geometry = " << "FAN" << std::endl;
+	else if (params->geometry == parameters::MODULAR)
+		param_file << "geometry = " << "MODULAR" << std::endl;
+	param_file << "angularRange = " << params->angularRange << std::endl;
+	param_file << "numAngles = " << params->numAngles << std::endl;
+	param_file << "numRows = " << params->numRows << std::endl;
+	param_file << "numCols = " << params->numCols << std::endl;
+	param_file << "pixelHeight = " << params->pixelHeight << std::endl;
+	param_file << "pixelWidth = " << params->pixelWidth << std::endl;
+	param_file << "centerRow = " << params->centerRow << std::endl;
+	param_file << "centerCol = " << params->centerCol << std::endl;
+	param_file << "phis = " << phis_strs << std::endl;
+	param_file << "sod = " << params->sod << std::endl;
+	param_file << "sdd = " << params->sdd << std::endl;
+	//*/
+	param_file.close();
+
+	return true;
 }

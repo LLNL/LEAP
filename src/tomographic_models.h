@@ -109,6 +109,24 @@ public:
 	bool weightedBackproject(float* g, float* f, bool cpu_to_gpu);
 
 	/**
+	 * \fn          FBP_cpu
+	 * \brief       performs an FBP reconstruction on CPU
+	 * \param[in]   g pointer to the projection data (input) on the CPU
+	 * \param[in]   f pointer to the volume data (output) on the CPU
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool FBP_cpu(float* g, float* f);
+
+	/**
+	 * \fn          FBP_gpu
+	 * \brief       performs an FBP reconstruction on GPU
+	 * \param[in]   g pointer to the projection data (input) on the GPU
+	 * \param[in]   f pointer to the volume data (output) on the GPU
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool FBP_gpu(float* g, float* f);
+
+	/**
 	 * \fn          doFBP
 	 * \brief       performs an FBP reconstruction
 	 * \param[in]   g pointer to the projection data (input)

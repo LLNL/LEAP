@@ -504,7 +504,7 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS EXECUTE THE MAIN CPU/GPU ROUTINES IN LEAP
     ###################################################################################################################
     ###################################################################################################################
-    def project(self,g,f):
+    def project(self, g, f, param_id=None):
         """Calculate the forward projection of f and stores the result in g
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -512,20 +512,74 @@ class tomographicModels:
         Returning g is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
             
         Returns:
             g, the same as the input with the same name
         """
         self.libprojectors.project.restype = ctypes.c_bool
-        self.set_model()
+        self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.project.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
             self.libprojectors.project(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
         else:
             self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.project(g, f, self.data_on_cpu)
+        return g
+        
+    def project_cpu(self, g, f, param_id=None):
+        """Calculate the forward projection of f and stores the result in g
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
+        if self.data_on_cpu:
+            print('Error: project_cpu requires that the data be on the CPU')
+            return g
+        self.libprojectors.project_cpu.restype = ctypes.c_bool
+        self.set_model(param_id)
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.project_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.libprojectors.project_cpu(g.data_ptr(), f.data_ptr())
+        else:
+            self.libprojectors.project_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.project_cpu(g, f)
+        return g
+        
+    def project_gpu(self, g, f, param_id=None):
+        """Calculate the forward projection of f and stores the result in g
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
+        if self.data_on_cpu:
+            print('Error: project_cpu requires that the data be on the CPU')
+            return g
+        self.libprojectors.project_gpu.restype = ctypes.c_bool
+        self.set_model(param_id)
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.project_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.libprojectors.project_gpu(g.data_ptr(), f.data_ptr())
+        else:
+            self.libprojectors.project_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.project_gpu(g, f)
         return g
         
     def filterProjections(self, g):
@@ -536,7 +590,7 @@ class tomographicModels:
         Returning g is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
+            g (C contiguous float32 numpy array or torch tensor): projection data
             
         Returns:
             g, the same as the input with the same name
@@ -559,7 +613,7 @@ class tomographicModels:
         Returning g is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
+            g (C contiguous float32 numpy array or torch tensor): projection data
             
         Returns:
             g, the same as the input with the same name
@@ -582,7 +636,7 @@ class tomographicModels:
         Returning g is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
+            g (C contiguous float32 numpy array or torch tensor): projection data
             
         Returns:
             g, the same as the input with the same name
@@ -597,7 +651,7 @@ class tomographicModels:
             self.libprojectors.HilbertFilterProjections(g, self.data_on_cpu, 1.0)
         return g
     
-    def backproject(self,g,f):
+    def backproject(self, g, f, param_id=None):
         """Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -605,20 +659,68 @@ class tomographicModels:
         Returning f is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
             
         Returns:
             f, the same as the input with the same name
         """
         self.libprojectors.backproject.restype = ctypes.c_bool
-        self.set_model()
+        self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.backproject.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
             self.libprojectors.backproject(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
         else:
             self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.backproject(g, f, self.data_on_cpu)
+        return f
+        
+    def backproject_cpu(self, g, f, param_id=None):
+        """Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        self.libprojectors.backproject_cpu.restype = ctypes.c_bool
+        self.set_model(param_id)
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.backproject_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.libprojectors.backproject_cpu(g.data_ptr(), f.data_ptr())
+        else:
+            self.libprojectors.backproject_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.backproject_cpu(g, f)
+        return f
+        
+    def backproject_gpu(self, g, f, param_id=None):
+        """Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        self.libprojectors.backproject_gpu.restype = ctypes.c_bool
+        self.set_model(param_id)
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.backproject_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.libprojectors.backproject_gpu(g.data_ptr(), f.data_ptr())
+        else:
+            self.libprojectors.backproject_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.backproject_gpu(g, f)
         return f
         
     def weightedBackproject(self,g,f):
@@ -632,8 +734,8 @@ class tomographicModels:
         such as fan-beam, helical cone-beam, Attenuated Radon Transform, and symmetric objects
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
             
         Returns:
             f, the same as the input with the same name
@@ -652,7 +754,7 @@ class tomographicModels:
         """Applies the 2D ramp filter to the volume data, f, for each z-slice
         
         Args:
-            f (C contiguous float32 numpy array): volume data
+            f (C contiguous float32 numpy array or torch tensor): volume data
             
         Returns:
             f, the same as the input with the same name
@@ -683,8 +785,8 @@ class tomographicModels:
         Returning f is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
             
         Returns:
             f, the same as the input with the same name
@@ -711,6 +813,78 @@ class tomographicModels:
                 self.libprojectors.FBP(g, f, self.data_on_cpu)
         return f
         
+    def FBP_cpu(self, g, f, inplace=False):
+        """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        self.libprojectors.FBP_cpu.restype = ctypes.c_bool
+        if inplace == False and self.get_GPU() < 0:
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                q  = g.clone()
+                self.set_model()
+                self.libprojectors.FBP_cpu(q.data_ptr(), f.data_ptr())
+            else:
+                self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                q  = g.copy()
+                self.set_model()
+                self.libprojectors.FBP_cpu(q, f)
+        else:
+            self.set_model()
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                self.libprojectors.FBP_cpu(g.data_ptr(), f.data_ptr())
+            else:
+                self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                self.libprojectors.FBP_cpu(g, f)
+        return f
+        
+    def FBP_gpu(self, g, f, inplace=False):
+        """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        self.libprojectors.FBP_gpu.restype = ctypes.c_bool
+        if inplace == False and self.get_GPU() < 0:
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                q  = g.clone()
+                self.set_model()
+                self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
+            else:
+                self.libprojectors.FBP_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                q  = g.copy()
+                self.set_model()
+                self.libprojectors.FBP_gpu(q, f)
+        else:
+            self.set_model()
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                self.libprojectors.FBP_gpu(g.data_ptr(), f.data_ptr())
+            else:
+                self.libprojectors.FBP_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                self.libprojectors.FBP_gpu(g, f)
+        return f
+        
     def BPF(self, g, f):
         """Performs a Backprojection Filtration (BPF) reconstruction of the projection data, g, and stores the result in f
         
@@ -720,8 +894,8 @@ class tomographicModels:
         This reconstruction only works for parallel-beam data
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
             
         Returns:
             f, the same as the input with the same name
@@ -744,7 +918,7 @@ class tomographicModels:
         In a volume is provided, the result will be stored there, otherwise a new volume will be allocated
         
         Args:
-            f (C contiguous float32 numpy array): (optional argument) volume data to store the result
+            f (C contiguous float32 numpy array or torch tensor): (optional argument) volume data to store the result
             
         Returns:
             f
@@ -1627,6 +1801,10 @@ class tomographicModels:
         listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
         self.set_model()
         return self.libprojectors.set_GPUs(listOfGPUs, int(listOfGPUs.size))
+        
+    def get_gpu(self):
+        """Get the index of the primary GPU that is being used"""
+        return self.get_GPU()
         
     def get_GPU(self):
         """Get the index of the primary GPU that is being used"""

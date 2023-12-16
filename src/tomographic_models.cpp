@@ -73,6 +73,16 @@ bool tomographicModels::backproject_gpu(float* g, float* f)
 	return retVal;
 }
 
+bool tomographicModels::FBP_gpu(float* g, float* f)
+{
+	int whichGPU_save = params.whichGPU;
+	if (params.whichGPU < 0)
+		params.whichGPU = 0;
+	bool retVal = doFBP(g, f, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
 bool tomographicModels::project_cpu(float* g, float* f)
 {
 	int whichGPU_save = params.whichGPU;
@@ -87,6 +97,15 @@ bool tomographicModels::backproject_cpu(float* g, float* f)
 	int whichGPU_save = params.whichGPU;
 	params.whichGPU = -1;
 	bool retVal = backproject(g, f, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
+bool tomographicModels::FBP_cpu(float* g, float* f)
+{
+	int whichGPU_save = params.whichGPU;
+	params.whichGPU = -1;
+	bool retVal = doFBP(g, f, false);
 	params.whichGPU = whichGPU_save;
 	return retVal;
 }
