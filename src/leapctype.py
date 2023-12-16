@@ -13,9 +13,14 @@ import sys
 from sys import platform as _platform
 from numpy.ctypeslib import ndpointer
 import numpy as np
+try:
+    import torch
+    has_torch = True
+except:
+    has_torch = False
 
 class tomographicModels:
-    ''' Python class for tomographicModels bindings
+    """ Python class for tomographicModels bindings
     Usage Example:
     from leapctype import *
     leapct = tomographicModels()
@@ -23,10 +28,53 @@ class tomographicModels:
     leapct.setDefaultVolume(...)
     ...
     leapct.project(g,f)
-    '''
+    """
 
-    def __init__(self, lib_dir=""):
-    ##Constructor
+    def __init__(self, data_on_cpu=True, whichModel=None, lib_dir=""):
+        """Constructor
+
+        The functions in this class can take as input and output data that is either on the CPU or the GPU.
+        This is set with the data_on_cpu constructor argument.  Note that all input and ouput data
+        for all functions must lie either on a specific GPU or on the CPU.
+        You cannot have some data on the CPU and some on a GPU.
+        
+        If the data is on the CPU:
+            1) and one wishes the computations to take place on the CPU, then run the following
+               command: set_gpu(-1).
+            2) and one wishes the computations to take place on one of more GPUs, then run
+               the following command: set_gpus(list_of_gpu_indices), e.g., set_gpus([0,1])
+               The default setting is for LEAP to use all GPUs, so if this is what you want
+               there is no need to run the set_gpus function
+        If the data is on the GPU:
+            then the computations must also take place on this particular GPU and
+            you must run the following command: set_gpu(index), where index is GPU index
+            of where the data resides
+            
+        Providing data that is already on a GPU is best for small data sets, where data
+        transfers to and from the GPU are more time consuming than the computations
+        for the actual data processing.
+        
+        Providing data that is on the CPU is best for medium to large data sets because this
+        allows for multi-GPU processing and LEAP will automatically divide up the data
+        into small enough chunks so that is does not exceed the GPU memory.
+        
+        The LEAP library has the ability to generate and track several parameter sets.
+        By default every new object instance will create a new parameter set.
+        Otherwise one can use the whichModel parameter so that the object will utilize a parameter set
+        that is also shared by another object of this class.  See the whichModel argument description below.
+        
+        Args:
+            data_on_cpu (bool): This flag specifies whether the data (CT projections and CT volume) provided is on the CPU
+            whichModel (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use
+            lib_dir (string): Path to the LEAP dynamic library
+        
+        """
+        if has_torch == False and data_on_cpu == False:
+            print('ERROR: One must have pytorch installed to enable this option!')
+            print('Setting data_on_cpu to True')
+            self.data_on_cpu = True
+        else:
+            self.data_on_cpu = data_on_cpu
         if len(lib_dir) > 0:
             current_dir = lib_dir
         else:
@@ -39,11 +87,27 @@ class tomographicModels:
         elif _platform == "win32":
             from ctypes import windll
             self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libLEAP.dll'))
+            
+        if whichModel is not None:
+            self.whichModel = whichModel
+            self.set_model()
+        else:
+            self.libprojectors.create_new_model.restype = ctypes.c_int
+            self.whichModel = self.libprojectors.create_new_model()
+
+    def set_model(self, i=None):
+        self.libprojectors.set_model.restype = ctypes.c_bool
+        self.libprojectors.set_model.argtypes = [ctypes.c_int]
+        if i is None:
+            return self.libprojectors.set_model(self.whichModel)
+        else:
+            return self.libprojectors.set_model(i)
 
     def reset(self):
         """reset
         Resets and clears all parameters
         """
+        self.set_model()
         return self.libprojectors.reset()
 
     def printParameters(self):
@@ -57,6 +121,7 @@ class tomographicModels:
         prints all CT geometry and CT volume parameters to the screen
         """
         self.libprojectors.print_parameters.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.print_parameters()
 
     ###################################################################################################################
@@ -100,6 +165,7 @@ class tomographicModels:
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+        self.set_model()
         return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
     def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
@@ -142,6 +208,7 @@ class tomographicModels:
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+        self.set_model()
         return self.libprojectors.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
         
     def set_fanBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
@@ -179,6 +246,7 @@ class tomographicModels:
         if type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+        self.set_model()
         return self.libprojectors.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def set_parallelBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
@@ -214,6 +282,7 @@ class tomographicModels:
         """
         self.libprojectors.set_modularbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_modularbeam.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
     def set_modularBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
@@ -232,6 +301,7 @@ class tomographicModels:
         """
         self.libprojectors.set_tau.argtypes = [ctypes.c_float]
         self.libprojectors.set_tau.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_tau(tau)
     
     def set_helicalPitch(self, helicalPitch):
@@ -245,6 +315,7 @@ class tomographicModels:
         """
         self.libprojectors.set_helicalPitch.argtypes = [ctypes.c_float]
         self.libprojectors.set_helicalPitch.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_helicalPitch(h)
         
     def set_normalizedHelicalPitch(self, normalizedHelicalPitch):
@@ -258,6 +329,7 @@ class tomographicModels:
         """
         self.libprojectors.set_normalizedHelicalPitch.argtypes = [ctypes.c_float]
         self.libprojectors.set_normalizedHelicalPitch.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_normalizedHelicalPitch(h_normalized)
     
     ###################################################################################################################
@@ -303,6 +375,7 @@ class tomographicModels:
             offsetY = 0.0
         if offsetZ is None:
             offsetZ = 0.0
+        self.set_model()
         return self.libprojectors.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
         
     def set_default_volume(self,scale=1.0):
@@ -318,6 +391,7 @@ class tomographicModels:
         """
         self.libprojectors.set_default_volume.argtypes = [ctypes.c_float]
         self.libprojectors.set_default_volume.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_default_volume(scale)
     
     def set_defaultVolume(self,scale=1.0):
@@ -335,6 +409,7 @@ class tomographicModels:
         """
         self.libprojectors.set_volumeDimensionOrder.argtypes = [ctypes.c_int]
         self.libprojectors.set_volumeDimensionOrder.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_volumeDimensionOrder(which)
         
     def get_volumeDimensionOrder(self):
@@ -347,7 +422,7 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS PROVIDE CONVENIENT ROUTINES TO MAKE THE PROJECTION DATA AND VOLUME DATA NUMPY ARRAYS
     ###################################################################################################################
     ###################################################################################################################
-    def allocateProjections(self,val=0.0):
+    def allocateProjections(self, val=0.0, astensor=False):
         """Allocates projection data
         
         It is not necessary to use this function. It is included simply for convenience.
@@ -363,13 +438,20 @@ class tomographicModels:
         N_cols = self.get_numCols()
         if N_phis > 0 and N_rows > 0 and N_cols > 0:
             if val == 0.0:
-                return np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
+                g = np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
             else:
-                return np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
+                g = np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
+            if has_torch and astensor:
+                if data_on_cpu:
+                    return torch.from_numpy(g)
+                else:
+                    return torch.from_numpy(g).float().to(self.get_gpu())
+            else:
+                return g
         else:
             return None
         
-    def allocateVolume(self,val=0.0):
+    def allocateVolume(self, val=0.0, astensor=False):
         """Allocates reconstruction volume data
         
         It is not necessary to use this function. It is included simply for convenience.
@@ -386,14 +468,21 @@ class tomographicModels:
         if N_x > 0 and N_y > 0 and N_z > 0:
             if self.get_volumeDimensionOrder() == 0:
                 if val == 0.0:
-                    return np.ascontiguousarray(np.zeros((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
+                    f = np.ascontiguousarray(np.zeros((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
                 else:
-                    return np.ascontiguousarray(val*np.ones((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
+                    f = np.ascontiguousarray(val*np.ones((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
             else:
                 if val == 0.0:
-                    return np.ascontiguousarray(np.zeros((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
+                    f = np.ascontiguousarray(np.zeros((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
                 else:
-                    return np.ascontiguousarray(val*np.ones((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
+                    f = np.ascontiguousarray(val*np.ones((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
+            if has_torch and astensor:
+                if data_on_cpu:
+                    return torch.from_numpy(f)
+                else:
+                    return torch.from_numpy(f).float().to(self.get_gpu())
+            else:
+                return f
         else:
             return None
             
@@ -429,9 +518,14 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
-        self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.project.restype = ctypes.c_bool
-        self.libprojectors.project(g,f,True)
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.project.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.project(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
+        else:
+            self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.project(g, f, self.data_on_cpu)
         return g
         
     def filterProjections(self, g):
@@ -447,9 +541,14 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
-        self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.filterProjections.restype = ctypes.c_bool
-        self.libprojectors.filterProjections(g, True)
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.filterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.filterProjections(g.data_ptr(), self.data_on_cpu)
+        else:
+            self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.filterProjections(g, self.data_on_cpu)
         return g
         
     def rampFilterProjections(self, g):
@@ -465,9 +564,14 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
-        self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
-        self.libprojectors.rampFilterProjections(g,True,1.0)
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.rampFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.rampFilterProjections(g.data_ptr(), self.data_on_cpu, 1.0)
+        else:
+            self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.rampFilterProjections(g, self.data_on_cpu, 1.0)
         return g
         
     def HilbertFilterProjections(self, g):
@@ -483,9 +587,14 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
-        self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
         self.libprojectors.HilbertFilterProjections.restype = ctypes.c_bool
-        self.libprojectors.HilbertFilterProjections(g,True,1.0)
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.HilbertFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.HilbertFilterProjections(g.data_ptr(), self.data_on_cpu, 1.0)
+        else:
+            self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.HilbertFilterProjections(g, self.data_on_cpu, 1.0)
         return g
     
     def backproject(self,g,f):
@@ -502,9 +611,14 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.backproject.restype = ctypes.c_bool
-        self.libprojectors.backproject(g,f,True)
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.backproject.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.backproject(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
+        else:
+            self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.backproject(g, f, self.data_on_cpu)
         return f
         
     def weightedBackproject(self,g,f):
@@ -524,9 +638,14 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.weightedBackproject.restype = ctypes.c_bool
-        self.libprojectors.weightedBackproject(g,f,True)
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.weightedBackproject.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.weightedBackproject(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
+        else:
+            self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.weightedBackproject(g, f, self.data_on_cpu)
         return f
         
     def rampFilterVolume(self, f):
@@ -538,9 +657,14 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.rampFilterVolume.restype = ctypes.c_bool
-        self.libprojectors.rampFilterVolume(f,True)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.rampFilterVolume.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.rampFilterVolume(f.data_ptr(), self.data_on_cpu)
+        else:
+            self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.rampFilterVolume(f, self.data_on_cpu)
         return f
 
     def get_FBPscalar(self):
@@ -548,6 +672,7 @@ class tomographicModels:
         """
         self.libprojectors.get_FBPscalar.argtypes = []
         self.libprojectors.get_FBPscalar.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_FBPscalar()
 
     def FBP(self, g, f, inplace=False):
@@ -564,13 +689,26 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.FBP.restype = ctypes.c_bool
         if inplace == False and self.get_GPU() < 0:
-            q  = g.copy()
-            self.libprojectors.FBP(q,f,True)
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+                q  = g.clone()
+                self.set_model()
+                self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), self.data_on_cpu)
+            else:
+                self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+                q  = g.copy()
+                self.set_model()
+                self.libprojectors.FBP(q, f, self.data_on_cpu)
         else:
-            self.libprojectors.FBP(g,f,True)
+            self.set_model()
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+                self.libprojectors.FBP(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
+            else:
+                self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+                self.libprojectors.FBP(g, f, self.data_on_cpu)
         return f
         
     def BPF(self, g, f):
@@ -614,9 +752,14 @@ class tomographicModels:
         if f is None:
             f = self.allocateVolume()
         #bool sensitivity(float* f, bool cpu_to_gpu);
-        self.libprojectors.sensitivity.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
         self.libprojectors.sensitivity.restype = ctypes.c_bool
-        self.libprojectors.sensitivity(f,True)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.sensitivity.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.sensitivity(f.data_ptr(), self.data_on_cpu)
+        else:
+            self.libprojectors.sensitivity.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.sensitivity(f, self.data_on_cpu)
         return f
     
     def rowRangeNeededForBackprojection(self):
@@ -636,6 +779,7 @@ class tomographicModels:
         rowsNeeded[1] = self.get_numRows()-1
         self.libprojectors.rowRangeNeededForBackprojection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.rowRangeNeededForBackprojection.restype = ctypes.c_bool
+        self.set_model()
         self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
         return rowsNeeded
     
@@ -675,6 +819,10 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
+        if has_torch == True and type(f) is torch.Tensor:
+            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+            print('Please convert to numpy array prior to running this algorithm.')
+            return f
         if not np.any(f):
             f[:] = 1.0
         else:
@@ -711,6 +859,10 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
+        if has_torch == True and type(f) is torch.Tensor:
+            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+            print('Please convert to numpy array prior to running this algorithm.')
+            return f
         if not np.any(f):
             f[:] = 1.0
         else:
@@ -763,6 +915,10 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
+        if has_torch == True and type(f) is torch.Tensor:
+            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+            print('Please convert to numpy array prior to running this algorithm.')
+            return f
         numSubsets = min(numSubsets, self.get_numAngles())
         #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
         #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
@@ -846,6 +1002,10 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
+        if has_torch == True and type(f) is torch.Tensor:
+            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+            print('Please convert to numpy array prior to running this algorithm.')
+            return f
         if numTV <= 0:
             return self.SART(g,f,numIter,numSubsets)
         numSubsets = min(numSubsets, self.get_numAngles())
@@ -1035,6 +1195,10 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
+        if has_torch == True and type(f) is torch.Tensor:
+            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+            print('Please convert to numpy array prior to running this algorithm.')
+            return f
         conjGradRestart = 50
         if W is None:
             W = g.copy()
@@ -1175,6 +1339,10 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
+        if has_torch == True and type(f) is torch.Tensor:
+            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+            print('Please convert to numpy array prior to running this algorithm.')
+            return f
         beta = max(0.0, beta/float(numSubsets))
     
         t = np.exp(-g)
@@ -1283,9 +1451,14 @@ class tomographicModels:
             f, the same as the input
         """
         #bool BlurFilter(float* f, int, int, int, float FWHM);
-        self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.BlurFilter.restype = ctypes.c_bool
-        return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.BlurFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.BlurFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, self.data_on_cpu)
+        else:
+            self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, self.data_on_cpu)
     
     def MedianFilter(self, f, threshold=0.0):
         """Applies a thresholded 3D median filter (3x3x3) to the provided numpy array
@@ -1303,9 +1476,14 @@ class tomographicModels:
             f, the same as the input
         """
         #bool MedianFilter(float* f, int, int, int, float threshold);
-        self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.MedianFilter.restype = ctypes.c_bool
-        return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, True)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.MedianFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, self.data_on_cpu)
+        else:
+            self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, self.data_on_cpu)
     
     def TVcost(self, f, delta, beta=0.0):
         """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
@@ -1321,10 +1499,14 @@ class tomographicModels:
             TV functional value
         """
         #float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta);
-        self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVcost.restype = ctypes.c_float
-        
-        return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.TVcost.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVcost(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+        else:
+            self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
         
     def TVgradient(self, f, delta, beta=0.0):
         """Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
@@ -1340,12 +1522,20 @@ class tomographicModels:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
         """
         #bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
-        self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVgradient.restype = ctypes.c_bool
         
-        Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
-        self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
-        return Df
+        if has_torch == True and type(f) is torch.Tensor:
+            Df = f.clone()
+            self.set_model()
+            self.libprojectors.TVgradient.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            return Df
+        else:
+            Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
+            self.set_model()
+            self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            return Df
     
     def TVquadForm(self, f, d, delta, beta=0.0):
         """Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays
@@ -1366,10 +1556,14 @@ class tomographicModels:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
         """
         #float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta);
-        self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
         self.libprojectors.TVquadForm.restype = ctypes.c_float
-        
-        return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.TVquadForm.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVquadForm(f.data_ptr(), d.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+        else:
+            self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
         
     def diffuse(self, f, delta, numIter):
         """Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
@@ -1385,9 +1579,14 @@ class tomographicModels:
         Returns:
             f, the same array as the input denoised
         """
-        self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
         self.libprojectors.Diffuse.restype = ctypes.c_bool
-        self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, True)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.Diffuse.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, self.data_on_cpu)
+        else:
+            self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, self.data_on_cpu)
         return f
         ''' Here is equivalent code to run this algorithm using the TV functions above
         for n in range(N):
@@ -1414,6 +1613,7 @@ class tomographicModels:
         """Set which GPU to use, use -1 to do CPU calculations"""
         self.libprojectors.set_GPU.argtypes = [ctypes.c_int]
         self.libprojectors.set_GPU.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_GPU(which)
         
     def set_gpus(self, listOfGPUs):
@@ -1425,70 +1625,86 @@ class tomographicModels:
         self.libprojectors.set_GPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
         self.libprojectors.set_GPUs.restype = ctypes.c_bool
         listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
+        self.set_model()
         return self.libprojectors.set_GPUs(listOfGPUs, int(listOfGPUs.size))
         
     def get_GPU(self):
         """Get the index of the primary GPU that is being used"""
         self.libprojectors.get_GPU.restype = ctypes.c_int
+        self.set_model()
         return self.libprojectors.get_GPU()
         
     def set_diameterFOV(self, d):
         """Set the diameterFOV parameter"""
         self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
         self.libprojectors.set_rFOV.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_rFOV(0.5*d)
         
     def set_truncatedScan(self, aFlag):
         """Set the truncatedScan parameter"""
         self.libprojectors.set_truncatedScan.argtypes = [ctypes.c_bool]
         self.libprojectors.set_truncatedScan.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_truncatedScan(aFlag)
         
     def set_offsetScan(self, aFlag):
         """Set the offsetScan parameter"""
         self.libprojectors.set_offsetScan.argtypes = [ctypes.c_bool]
         self.libprojectors.set_offsetScan.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_offsetScan(aFlag)
     
     def set_axisOfSymmetry(self,val):
         """Set the axisOfSymmetry parameter"""
         self.libprojectors.set_axisOfSymmetry.argtypes = [ctypes.c_float]
         self.libprojectors.set_axisOfSymmetry.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_axisOfSymmetry(val)
         
     def clear_axisOfSymmetry(self):
         """Clears the axisOfSymmetry parameter (revert back to voxelized volume models)"""
         self.libprojectors.clear_axisOfSymmetry.argtypes = []
         self.libprojectors.clear_axisOfSymmetry.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.clear_axisOfSymmetry()
         
     def set_projector(self,which):
         """Set which projector model to use (deprecated)"""
         self.libprojectors.set_projector.argtypes = [ctypes.c_int]
         self.libprojectors.set_projector.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_projector(which)
         
     def set_rampFilter(self,which):
         """Set the ramp filter to use: 0, 2, 4, 6, 8, or 10"""
         self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
         self.libprojectors.set_rampID.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_rampID(which)
         
     def set_attenuationMap(self, mu):
         """Set the voxelized attenuation map for Attenuated Radon Transform calculations"""
-        self.libprojectors.set_attenuationMap.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_attenuationMap.restype = ctypes.c_bool
-        return self.libprojectors.set_attenuationMap(mu)
+        self.set_model()
+        if has_torch == True and type(mu) is torch.Tensor:
+            self.libprojectors.set_attenuationMap.argtypes = [ctypes.c_void_p]
+            return self.libprojectors.set_attenuationMap(mu.data_ptr())
+        else:
+            self.libprojectors.set_attenuationMap.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            return self.libprojectors.set_attenuationMap(mu)
         
     def set_cylindircalAttenuationMap(self, c, R):
         """Set the parameters for a cylindrical attenuation map for Attenuated Radon Transform calculations"""
         self.libprojectors.set_cylindircalAttenuationMap.argtypes = [ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_cylindircalAttenuationMap.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_cylindircalAttenuationMap(c, R)
         
     def clear_attenuationMap(self):
         """Clears the attenuation map parameters and reverts back to using the X-ray Transform"""
         self.libprojectors.clear_attenuationMap.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.clear_attenuationMap()
         
     def get_angles(self):
@@ -1496,6 +1712,7 @@ class tomographicModels:
         phis = np.ascontiguousarray(np.zeros(self.get_numAngles()).astype(np.float32), dtype=np.float32)
         self.libprojectors.get_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.get_angles.restype = ctypes.c_bool
+        self.set_model()
         self.libprojectors.get_angles(phis)
         return phis
         
@@ -1503,6 +1720,7 @@ class tomographicModels:
         """Set the projection angles"""
         self.libprojectors.set_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
         self.libprojectors.set_angles.restype = ctypes.c_bool
+        self.set_model()
         return self.libprojectors.set_angles(phis, int(phis.size))
 
     ###################################################################################################################
@@ -1513,6 +1731,7 @@ class tomographicModels:
     def get_geometry(self):
         """Get the CT geometry type"""
         self.libprojectors.get_geometry.restype = ctypes.c_int
+        self.set_model()
         geometryType = self.libprojectors.get_geometry()
         if geometryType == 0:
             return 'CONE'
@@ -1528,58 +1747,70 @@ class tomographicModels:
     def get_sod(self):
         """Get the sod parameter"""
         self.libprojectors.get_sod.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_sod()
         
     def get_sdd(self):
         """Get the sdd parameter"""
         self.libprojectors.get_sdd.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_sdd()
         
     def get_helicalPitch(self):
         """Get the helicalPitch parameter"""
         self.libprojectors.get_helicalPitch.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_helicalPitch()
         
     def get_z_source_offset(self):
         """Get the source position z-coordinate for the first projection"""
         self.libprojectors.get_z_source_offset.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_z_source_offset()
     
     def get_numAngles(self):
         """Get the numAngles parameter"""
+        self.set_model()
         return self.libprojectors.get_numAngles()
         
     def get_numRows(self):
         """Get the numRows parameter"""
+        self.set_model()
         return self.libprojectors.get_numRows()
         
     def get_numCols(self):
         """Get the numCols parameter"""
+        self.set_model()
         return self.libprojectors.get_numCols()
         
     def get_pixelHeight(self):
         """Get the pixelHeight parameter"""
         self.libprojectors.get_pixelHeight.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_pixelHeight()
         
     def get_pixelWidth(self):
         """Get the pixelWidth parameter"""
         self.libprojectors.get_pixelWidth.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_pixelWidth()
         
     def get_centerRow(self):
         """Get the centerRow parameter"""
         self.libprojectors.get_centerRow.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_centerRow()
         
     def get_centerCol(self):
         """Get the centerCol parameter"""
         self.libprojectors.get_centerCol.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_centerCol()
         
     def get_tau(self):
         """Get the tau parameter"""
         self.libprojectors.get_tau.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_tau()
         
     def get_sourcePositions(self):
@@ -1591,6 +1822,7 @@ class tomographicModels:
             x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
             self.libprojectors.get_sourcePositions.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.get_sourcePositions.restype = ctypes.c_bool
+            self.set_model()
             self.libprojectors.get_sourcePositions(x)
             return x
         
@@ -1603,6 +1835,7 @@ class tomographicModels:
             x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
             self.libprojectors.get_moduleCenters.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.get_moduleCenters.restype = ctypes.c_bool
+            self.set_model()
             self.libprojectors.get_moduleCenters(x)
             return x
         
@@ -1615,6 +1848,7 @@ class tomographicModels:
             x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
             self.libprojectors.get_rowVectors.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.get_rowVectors.restype = ctypes.c_bool
+            self.set_model()
             self.libprojectors.get_rowVectors(x)
             return x
         
@@ -1627,49 +1861,59 @@ class tomographicModels:
             x = np.ascontiguousarray(np.zeros((self.get_numAngles(),3)).astype(np.float32), dtype=np.float32)
             self.libprojectors.get_colVectors.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.get_colVectors.restype = ctypes.c_bool
+            self.set_model()
             self.libprojectors.get_colVectors(x)
             return x
         
     def get_numX(self):
         """Get the numX parameter"""
+        self.set_model()
         return self.libprojectors.get_numX()
     
     def get_numY(self):
         """Get the numY parameter"""
+        self.set_model()
         return self.libprojectors.get_numY()
     
     def get_numZ(self):
         """Get the numZ parameter"""
+        self.set_model()
         return self.libprojectors.get_numZ()
         
     def get_voxelHeight(self):
         """Get the voxelHeight parameter"""
         self.libprojectors.get_voxelHeight.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_voxelHeight()
         
     def get_voxelWidth(self):
         """Get the voxelWidth parameter"""
         self.libprojectors.get_voxelWidth.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_voxelWidth()
         
     def get_offsetX(self):
         """Get the offsetX parameter"""
         self.libprojectors.get_offsetX.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_offsetX()
         
     def get_offsetY(self):
         """Get the offsetY parameter"""
         self.libprojectors.get_offsetY.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_offsetY()
         
     def get_offsetZ(self):
         """Get the offsetZ parameter"""
         self.libprojectors.get_offsetZ.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_offsetZ()
         
     def get_z0(self):
         """Get the z-coordinate of the first voxel"""
         self.libprojectors.get_z0.restype = ctypes.c_float
+        self.set_model()
         return self.libprojectors.get_z0()
 
     
@@ -1971,7 +2215,7 @@ class tomographicModels:
             [Z[2],Z[3],Z[4],Z[5]]]
             ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
             
-    def addObject(self, f, type, c, r, val, A=None, clip=None):
+    def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None):
         """Adds a geometric object to the volume
         
         The CT volume parameters must be specified prior to running this functions
@@ -1985,7 +2229,6 @@ class tomographicModels:
             A (3x3 numpy array): rotation matrix to rotate the object about its center
             clip (3X1 numpy array): specifies the clipping planes, if any
         """
-        self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.addObject.restype = ctypes.c_bool
         if A is None:
             A = np.zeros((3,3),dtype=np.float32)
@@ -1999,7 +2242,13 @@ class tomographicModels:
         r = np.ascontiguousarray(r, dtype=np.float32)
         A = np.ascontiguousarray(A, dtype=np.float32)
         clip = np.ascontiguousarray(clip, dtype=np.float32)
-        return self.libprojectors.addObject(f, int(type), c, r, float(val), A, clip)
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.addObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            return self.libprojectors.addObject(f.data_ptr(), int(typeOfObject), c, r, float(val), A, clip)
+        else:
+            self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            return self.libprojectors.addObject(f, int(typeOfObject), c, r, float(val), A, clip)
         
     def set_FORBILD(self, f, includeEar=False):
         """Sets the FORBILD head phantom

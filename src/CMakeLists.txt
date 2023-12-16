@@ -20,6 +20,7 @@ endif()
 
 set(HEADER
   tomographic_models.h
+  list_of_tomographic_models.h
   tomographic_models_c_interface.h
   parameters.h
   projectors.h
@@ -50,6 +51,7 @@ set(HEADER
 
 set(SRC_CPP
   tomographic_models.cpp
+  list_of_tomographic_models.cpp
   tomographic_models_c_interface.cpp
   parameters.cpp
   projectors.cpp
