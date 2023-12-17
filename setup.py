@@ -42,7 +42,7 @@ if cuda:
     ext_mod = CUDAExtension(
         name='leapct',
         sources=source_files,
-        extra_compile_args={'cxx': ['-g', '-D__USE_GPU', '-I%s' % pybind11.get_include()], 
+        extra_compile_args={'cxx': ['-g', '-D__USE_GPU'], 
                             'nvcc': ['-g', '-D__USE_GPU']}
     )
 else:
@@ -53,7 +53,7 @@ else:
     ext_mod = CppExtension(
         name='leapct',
         sources=source_files,
-        extra_compile_args={'cxx': ['-g', '-D__USE_CPU', '-I%s' % pybind11.get_include()]}
+        extra_compile_args={'cxx': ['-g', '-D__USE_CPU']}
         #extra_compile_args=['-g', '-D__USE_CPU'],
     )
 
