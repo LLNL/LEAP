@@ -243,7 +243,7 @@ use_fov = args.use_fov
 # initialize projector and load CT geometry and CT volume parameters
 proj = Projector(forward_project=True, use_static=True, use_gpu=use_cuda, gpu_device=device)
 proj.load_param(param_fn)
-proj.allocate_batch_data()
+#proj.allocate_batch_data()
 proj.print_param()
 
 # Get volume and projection data sizes

@@ -126,9 +126,58 @@ class Projector(torch.nn.Module):
         self.vol_data = None
         self.proj_data = None
         
+    def set_volume(self, numX, numY, numZ, voxelWidth, voxelHeight, offsetX=0.0, offsetY=0.0, offsetZ=0.0):
+        self.lct.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
+        vol_np = np.ascontiguousarray(np.zeros((self.batch_size, numZ, numY, numX),dtype=np.float32), dtype=np.float32)
+        self.vol_data = torch.from_numpy(vol_np)
+        if self.use_gpu:
+            self.vol_data = self.vol_data.float().to(self.gpu_device)
+            
+    def set_default_volume(self, scale=1.0):
+        self.lct.set_defaultVolume(scale)
+        dim1, dim2, dim3 = self.get_volume_dim()
+        vol_np = np.ascontiguousarray(np.zeros((self.batch_size, dim1, dim2, dim3),dtype=np.float32), dtype=np.float32)
+        self.vol_data = torch.from_numpy(vol_np)
+        if self.use_gpu:
+            self.vol_data = self.vol_data.float().to(self.gpu_device)
+
+    def set_parallelbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
+        self.lct.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
+        self.proj_data = torch.from_numpy(proj_np)
+        if self.use_gpu:
+            self.proj_data = self.proj_data.float().to(self.gpu_device)
+            
+    def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
+        self.lct.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
+        self.proj_data = torch.from_numpy(proj_np)
+        if self.use_gpu:
+            self.proj_data = self.proj_data.float().to(self.gpu_device)
+
+    def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+        self.lct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
+        self.proj_data = torch.from_numpy(proj_np)
+        if self.use_gpu:
+            self.proj_data = self.proj_data.float().to(self.gpu_device)
+    
+    def set_modularbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVec, colVec):
+        self.lct.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVec, colVec)
+        proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
+        self.proj_data = torch.from_numpy(proj_np)
+        if self.use_gpu:
+            self.proj_data = self.proj_data.float().to(self.gpu_device)
+        
+    def get_volume_dim(self):
+        return self.lct.get_volume_dim()
+        
+    def get_projection_dim(self):
+        return self.lct.get_projection_dim()
+        
     def allocate_batch_data(self):
-        vol_dim1, vol_dim2, vol_dim3 = self.lct.get_volume_dim()
-        proj_dim1, proj_dim2, proj_dim3 = self.lct.get_projection_dim()
+        vol_dim1, vol_dim2, vol_dim3 = self.get_volume_dim()
+        proj_dim1, proj_dim2, proj_dim3 = self.get_projection_dim()
         
         if vol_dim1 > 0 and vol_dim2 > 0 and vol_dim3 > 0 and proj_dim1 > 0 and proj_dim2 > 0 and proj_dim3 > 0:
             self.vol_data = torch.from_numpy(np.ascontiguousarray(np.zeros((self.batch_size, vol_dim1, vol_dim2, vol_dim3),dtype=np.float32), dtype=np.float32))
@@ -168,25 +217,25 @@ class Projector(torch.nn.Module):
             phis = phis*pdic['proj_arange']/float(pdic['proj_nangles'])
             #phis = torch.from_numpy(phis)
         
-        self.lct.set_volume(int(pdic['img_dimx']), int(pdic['img_dimy']), int(pdic['img_dimz']),
+        self.set_volume(int(pdic['img_dimx']), int(pdic['img_dimy']), int(pdic['img_dimz']),
                         pdic['img_pwidth'], pdic['img_pheight'], 
                         pdic['img_offsetx'], pdic['img_offsety'], pdic['img_offsetz'])
         if pdic['proj_geometry'] == 'parallel':
-            self.lct.set_parallelbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+            self.set_parallelbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
                                    pdic['proj_pheight'], pdic['proj_pwidth'], 
                                    pdic['proj_crow'], pdic['proj_ccol'], phis)
         elif pdic['proj_geometry'] == 'fan':
-            self.lct.set_fanbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+            self.set_fanbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
                                pdic['proj_pheight'], pdic['proj_pwidth'], 
                                pdic['proj_crow'], pdic['proj_ccol'], 
                                phis, pdic['proj_sod'], pdic['proj_sdd'])
         elif pdic['proj_geometry'] == 'cone':
-            self.lct.set_conebeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+            self.set_conebeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
                                pdic['proj_pheight'], pdic['proj_pwidth'], 
                                pdic['proj_crow'], pdic['proj_ccol'], 
                                phis, pdic['proj_sod'], pdic['proj_sdd'])
         #elif pdic['proj_geometry'] == 'modular':
-        #    self.lct.set_modularbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+        #    self.set_modularbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
         #                          pdic['proj_pheight'], pdic['proj_pwidth'], 
         #                          srcpos, modcenter, rowvec, colvec)
 
