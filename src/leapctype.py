@@ -24,8 +24,8 @@ class tomographicModels:
     Usage Example:
     from leapctype import *
     leapct = tomographicModels()
-    leapct.setConeParams(...)
-    leapct.setDefaultVolume(...)
+    leapct.set_conebeam(...)
+    leapct.set_default_volume(...)
     ...
     leapct.project(g,f)
     """
@@ -90,10 +90,9 @@ class tomographicModels:
             
         if whichModel is not None:
             self.whichModel = whichModel
-            self.set_model()
         else:
-            self.libprojectors.create_new_model.restype = ctypes.c_int
-            self.whichModel = self.libprojectors.create_new_model()
+            self.whichModel = self.create_new_model()
+        self.set_model()
 
     def set_model(self, i=None):
         self.libprojectors.set_model.restype = ctypes.c_bool
@@ -102,6 +101,10 @@ class tomographicModels:
             return self.libprojectors.set_model(self.whichModel)
         else:
             return self.libprojectors.set_model(i)
+
+    def create_new_model(self):
+        self.libprojectors.create_new_model.restype = ctypes.c_int
+        return self.libprojectors.create_new_model()
 
     def reset(self):
         """reset
@@ -451,6 +454,32 @@ class tomographicModels:
         else:
             return None
         
+    def get_volume_dim(self):
+        """Get dimension sizes of volume data
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Returns:
+            numpy array of the dimension sizes of the volume
+        """
+        N_x = self.get_numX()
+        N_y = self.get_numY()
+        N_z = self.get_numZ()
+        if self.get_volumeDimensionOrder() == 0:
+            return np.array([N_x,N_y,N_z],dtype=np.int32)
+        else:
+            return np.array([N_z,N_y,N_x],dtype=np.int32)
+            
+    def get_projection_dim(self):
+        """Get dimension sizes of projection data
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Returns:
+            numpy array of the dimension sizes of the projections
+        """
+        return np.array([self.get_numAngles(),self.get_numRows(),self.get_numCols()],dtype=np.int32)
+        
     def allocateVolume(self, val=0.0, astensor=False):
         """Allocates reconstruction volume data
         
@@ -514,6 +543,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             g, the same as the input with the same name
@@ -538,11 +568,12 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             g, the same as the input with the same name
         """
-        if self.data_on_cpu:
+        if self.data_on_cpu == False:
             print('Error: project_cpu requires that the data be on the CPU')
             return g
         self.libprojectors.project_cpu.restype = ctypes.c_bool
@@ -565,12 +596,13 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             g, the same as the input with the same name
         """
         if self.data_on_cpu:
-            print('Error: project_cpu requires that the data be on the CPU')
+            print('Error: project_gpu requires that the data be on the GPU')
             return g
         self.libprojectors.project_gpu.restype = ctypes.c_bool
         self.set_model(param_id)
@@ -661,6 +693,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             f, the same as the input with the same name
@@ -685,10 +718,14 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             f, the same as the input with the same name
         """
+        if self.data_on_cpu == False:
+            print('Error: backproject_cpu requires that the data be on the CPU')
+            return f
         self.libprojectors.backproject_cpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
@@ -709,10 +746,14 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             f, the same as the input with the same name
         """
+        if self.data_on_cpu:
+            print('Error: backproject_gpu requires that the data be on the GPU')
+            return f
         self.libprojectors.backproject_gpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:

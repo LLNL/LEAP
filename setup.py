@@ -13,15 +13,15 @@ from torch.utils.cpp_extension import CUDAExtension
 from torch.utils.cpp_extension import CppExtension
 from torch.utils.cpp_extension import BuildExtension
 import os
-import pybind11
+#import pybind11
 import torch
 
 
-cpp_files=['main_projector.cpp', 'tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
+cpp_files=['tomographic_models.cpp', 'tomographic_models_c_interface.cpp', 
            'parameters.cpp', 'projectors.cpp', 'filtered_backprojection.cpp', 
            'projectors_SF_cpu.cpp', 'projectors_Joseph_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
            'projectors_Siddon_cpu.cpp', 'sensitivity_cpu.cpp', 'ramp_filter_cpu.cpp', 'cpu_utils.cpp', 
-           'phantom.cpp', 'ray_weighting_cpu.cpp']
+           'phantom.cpp', 'ray_weighting_cpu.cpp', 'list_of_tomographic_models.cpp']
 
 cuda_files=['projectors_SF.cu', 'projectors_extendedSF.cu', 
             'projectors_Joseph.cu', 'projectors_symmetric.cu', 
@@ -69,7 +69,7 @@ setup(
     packages=find_packages("src"), 
     package_dir={'': 'src'},
     install_requires=['numpy', 'torch'], 
-    py_modules=['leaptorch'], 
+    py_modules=['leaptorch','leapctype'], 
     ext_modules=[ext_mod], 
     cmdclass={'build_ext': BuildExtension}, 
 )

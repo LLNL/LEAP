@@ -1243,7 +1243,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool cpu_to_gpu)
     {
         //printf("using extended\n");
         if (params->voxelWidth > params->default_voxelWidth() || params->voxelHeight > params->default_voxelHeight())
-            return backproject_eSF_cone(g, f, params, cpu_to_gpu);
+            return backproject_eSF(g, f, params, cpu_to_gpu);
     }
 
     cudaSetDevice(params->whichGPU);
