@@ -142,6 +142,8 @@ class Projector(torch.nn.Module):
             self.vol_data = self.vol_data.float().to(self.gpu_device)
 
     def set_parallelbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
+        if type(phis) is torch.Tensor:
+            phis = phis.numpy()
         self.lct.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
@@ -149,6 +151,8 @@ class Projector(torch.nn.Module):
             self.proj_data = self.proj_data.float().to(self.gpu_device)
             
     def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
+        if type(phis) is torch.Tensor:
+            phis = phis.numpy()
         self.lct.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
@@ -156,6 +160,8 @@ class Projector(torch.nn.Module):
             self.proj_data = self.proj_data.float().to(self.gpu_device)
 
     def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+        if type(phis) is torch.Tensor:
+            phis = phis.numpy()
         self.lct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
@@ -163,6 +169,14 @@ class Projector(torch.nn.Module):
             self.proj_data = self.proj_data.float().to(self.gpu_device)
     
     def set_modularbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVec, colVec):
+        if type(sourcePositions) is torch.Tensor:
+            sourcePositions = sourcePositions.numpy()
+        if type(detectorCenters) is torch.Tensor:
+            detectorCenters = detectorCenters.numpy()
+        if type(rowVec) is torch.Tensor:
+            rowVec = rowVec.numpy()
+        if type(colVec) is torch.Tensor:
+            colVec = colVec.numpy()
         self.lct.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVec, colVec)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)

@@ -119,6 +119,12 @@ class tomographicModels:
         """
         return self.print_parameters()
 
+    def print_param(self):
+        """printParameters
+        prints all CT geometry and CT volume parameters to the screen
+        """
+        return self.print_parameters()
+
     def print_parameters(self):
         """print_parameters
         prints all CT geometry and CT volume parameters to the screen
@@ -165,7 +171,9 @@ class tomographicModels:
         """
         self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_conebeam.restype = ctypes.c_bool
-        if type(phis) is not np.ndarray:
+        if has_torch and type(phis) is torch.Tensor:
+            phis = phis.numpy()
+        elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
         self.set_model()
@@ -208,7 +216,9 @@ class tomographicModels:
         """
         self.libprojectors.set_fanbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_fanbeam.restype = ctypes.c_bool
-        if type(phis) is not np.ndarray:
+        if has_torch and type(phis) is torch.Tensor:
+            phis = phis.numpy()
+        elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
         self.set_model()
@@ -246,7 +256,9 @@ class tomographicModels:
         """
         self.libprojectors.set_parallelbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_parallelbeam.restype = ctypes.c_bool
-        if type(phis) is not np.ndarray:
+        if has_torch and type(phis) is torch.Tensor:
+            phis = phis.numpy()
+        elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
         self.set_model()
@@ -445,7 +457,7 @@ class tomographicModels:
             else:
                 g = np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
             if has_torch and astensor:
-                if data_on_cpu:
+                if self.data_on_cpu:
                     return torch.from_numpy(g)
                 else:
                     return torch.from_numpy(g).float().to(self.get_gpu())
@@ -506,7 +518,7 @@ class tomographicModels:
                 else:
                     f = np.ascontiguousarray(val*np.ones((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
             if has_torch and astensor:
-                if data_on_cpu:
+                if self.data_on_cpu:
                     return torch.from_numpy(f)
                 else:
                     return torch.from_numpy(f).float().to(self.get_gpu())
@@ -853,6 +865,12 @@ class tomographicModels:
                 self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
                 self.libprojectors.FBP(g, f, self.data_on_cpu)
         return f
+        
+    def fbp_cpu(self, g, f, inplace=False):
+        return self.FBP_cpu(g, f, inplace)
+        
+    def fbp_gpu(self, g, f, inplace=False):
+        return self.FBP_gpu(g, f, inplace)
         
     def FBP_cpu(self, g, f, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f

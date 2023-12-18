@@ -13,6 +13,7 @@
 # python test_project.py --param-fn ${param_fn}  --img-fn ${data_dir}/S_193_0100_pred.npy  --out-fn ${data_dir}/S_193_0100_sino2.npy
 
 import sys
+from sys import platform as _platform
 sys.stdout.flush()
 import argparse
 import numpy as np
@@ -20,7 +21,7 @@ import imageio
 
 import torch
 import torch.nn as nn
-import leapct
+#import leapct
 from leaptorch import Projector
 
 
@@ -31,7 +32,6 @@ parser.add_argument("--param-fn", default="sample_data/param_parallel64.cfg", he
 parser.add_argument("--out-fn", default="sample_data/FORBILD_head_64_sino.npy", help="path to output projection data file")
 parser.add_argument("--use-API", action="store_true", help="use API or PyTorch Projector class (default)")
 args = parser.parse_args()
-
 
 
 def simulate_img(M, N):
@@ -66,6 +66,11 @@ def load_param(param_fn):
 
 
 # read arguments
+if _platform == "win32":
+    args.img_fn = args.img_fn.replace("/","\\")
+    args.param_fn = args.param_fn.replace("/","\\")
+    args.out_fn = args.out_fn.replace("/","\\")
+
 img_fn = args.img_fn
 param_fn = args.param_fn
 out_fn = args.out_fn
@@ -74,7 +79,7 @@ use_API = args.use_API
 
 # if CUDA is available, use the first GPU
 use_cuda = torch.cuda.is_available()
-#use_cuda = False
+use_cuda = False
 if use_cuda:
     print("##### GPU CUDA mode #####")
     device_name = "cuda:0"
@@ -87,9 +92,10 @@ else:
 
 
 # initialize projector and load parameters
-proj = Projector(use_gpu=use_cuda, gpu_device=device, batch_size=1)
+#proj = Projector(use_gpu=use_cuda, gpu_device=device, batch_size=1)
+proj = Projector(forward_project=True, use_static=True, use_gpu=use_cuda, gpu_device=device, batch_size=1)
+
 proj.load_param(param_fn)
-proj.set_projector(1)
 proj.print_param()
 dimz, dimy, dimx = proj.get_volume_dim()
 views, rows, cols = proj.get_projection_dim()
@@ -97,18 +103,21 @@ params, _ = load_param(param_fn)
 
 # load image (f)
 if len(img_fn) > 0:
+    print('load: ', img_fn)
     f = np.load(img_fn)
     f = f.reshape((1, 1, f.shape[0], f.shape[1])) # batch, z, y, x
 else:
     f = simulate_img(dimz, dimx)
+    #leapct.set_FORBILD(f)
 
+f = np.ascontiguousarray(f, dtype=np.float32)
 
 if not use_API: # use PyTorch Projector class
     print("### use leapct Projector class ###")
 
     # set image tensor
     f_th = torch.from_numpy(f).to(device)
-    imageio.imsave(img_fn[:-4] + ".png", f[0,0,:,:]/np.max(f)*255)
+    imageio.imsave(img_fn[:-4] + ".png", np.uint8(f[0,0,:,:]/np.max(f)*255))
 
     # forward project
     g_th = proj(f_th)
@@ -116,7 +125,7 @@ if not use_API: # use PyTorch Projector class
 
     # save projection data
     np.save(out_fn, g)
-    imageio.imsave(out_fn[:-4] + ".png", g/np.max(g)*255)
+    imageio.imsave(out_fn[:-4] + ".png", np.uint8(g/np.max(g)*255))
 
     # run filtered back projection
     f_recon = proj.fbp(g_th)
@@ -124,10 +133,14 @@ if not use_API: # use PyTorch Projector class
 
     # save FBP reconstructed image
     np.save(out_fn[:-4] + "_FBP.npy", f_recon_slice)
-    imageio.imsave(out_fn[:-4] + "_FBP.png", f_recon_slice/np.max(f_recon_slice)*255)
+    imageio.imsave(out_fn[:-4] + "_FBP.png", np.uint8(f_recon_slice/np.max(f_recon_slice)*255))
 
 else: # use LEAP API functions
     print("### use leapct API ###")
+    
+    from leapctype import *
+    leapct = tomographicModels(use_cuda==False)
+    
     M = int(params["img_dimz"])
     N = int(params["img_dimx"])
     pixelSize = params["img_pwidth"]
@@ -142,52 +155,44 @@ else: # use LEAP API functions
     f = torch.from_numpy(f[0,:,:,:])
 
     # set up CT parameters
-    whichProjector = 1
-    midP = int(N/2)
-    quarterP = int(midP/2)
-    arange = 180
-    phis = np.array(range(N_phis)).astype(np.float32)
-    phis = phis*arange/float(N_phis)
-    phis = torch.from_numpy(phis)
+    angularRange = 180.0
+    phis = leapct.setAngleArray(N_phis, angularRange)
 
     # set up CT projector
     if params["proj_geometry"] == "parallel":
-        leapct.set_parallel_beam(-1, N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
-        leapct.set_volume(-1, N, N, M, pixelSize, pixelSize, 0.0, 0.0, 0.0)
+        leapct.set_parallelbeam(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis)
+        leapct.set_volume(N, N, M, pixelSize, pixelSize, 0.0, 0.0, 0.0)
     elif params["proj_geometry"] == "cone":
-        leapct.set_cone_beam(-1, N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, sod, sdd)
-        leapct.set_volume(-1, N, N, M, pixelSize*sod/sdd, pixelSize*sod/sdd, 0.0, 0.0, 0.0)
+        leapct.set_conebeam(N_phis, M, N, pixelSize, pixelSize, 0.5*float(M-1), 0.5*float(N-1), phis, sod, sdd)
+        leapct.set_volume(N, N, M, pixelSize*sod/sdd, pixelSize*sod/sdd, 0.0, 0.0, 0.0)
 
-    leapct.print_param(-1)
-    leapct.set_projector(-1, whichProjector)
-    leapct.set_gpu(-1, 0)
+    leapct.print_param()
 
     # create projection data (g)
-    g = np.zeros((N_phis,M,N), dtype=np.float32, order='C')
-    g = torch.from_numpy(g)
+    g = leapct.allocateProjections(0.0, True)
 
     # simulate projection data
     if use_cuda:
         f = f.float().to(device)
         g = g.float().to(device)
-        leapct.project_gpu(-1, g, f)
+        leapct.project_gpu(g, f)
     else:
-        leapct.project_cpu(-1, g, f)
-
+        leapct.project_cpu(g, f)
+        
     # save projection data to npy file and image file
     g_np = g.cpu().detach().numpy()
     np.save(out_fn, g_np)
-    imageio.imsave(out_fn[:-4] + ".png", g_np[:,0,:]/np.max(g_np))
+    imageio.imsave(out_fn[:-4] + ".png", np.uint8(g_np[:,0,:]*255/np.max(g_np)))
 
     # run filtered back projection
     if use_cuda:
-        leapct.fbp_gpu(-1, g, f)
+        leapct.fbp_gpu(g, f)
     else:
-        leapct.fbp_cpu(-1, g, f)
+        leapct.fbp_cpu(g, f)
     
     # save FBP reconstructed image
     f_np = f.cpu().detach().numpy()
     f_np = f_np[0,:,:]
     np.save(out_fn[:-4] + "_FBP.npy", f_np)
-    imageio.imsave(out_fn[:-4] + "_FBP.png", f_np[:,0,:]/np.max(f_np))
+    imageio.imsave(out_fn[:-4] + "_FBP.png", np.uint8(f_np*255/np.max(f_np)))
 
