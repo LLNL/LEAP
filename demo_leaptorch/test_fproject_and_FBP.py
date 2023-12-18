@@ -79,7 +79,7 @@ use_API = args.use_API
 
 # if CUDA is available, use the first GPU
 use_cuda = torch.cuda.is_available()
-use_cuda = False
+#use_cuda = False
 if use_cuda:
     print("##### GPU CUDA mode #####")
     device_name = "cuda:0"
@@ -139,7 +139,7 @@ else: # use LEAP API functions
     print("### use leapct API ###")
     
     from leapctype import *
-    leapct = tomographicModels(use_cuda==False)
+    leapct = tomographicModels()
     
     M = int(params["img_dimz"])
     N = int(params["img_dimx"])

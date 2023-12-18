@@ -109,12 +109,11 @@ class Projector(torch.nn.Module):
         super(Projector, self).__init__()
         self.forward_project = forward_project
 
-        lct.data_on_cpu = (use_gpu==False)        
         if use_static:
             self.param_id = 0
-            self.lct = tomographicModels((use_gpu==False), self.param_id)
+            self.lct = tomographicModels(self.param_id)
         else:
-            self.lct = tomographicModels((use_gpu==False))
+            self.lct = tomographicModels()
             self.param_id = self.lct.whichModel
         lct.whichModel = self.param_id
         self.param_id_t = torch.tensor(self.param_id).to(gpu_device) if use_gpu else torch.tensor(self.param_id)

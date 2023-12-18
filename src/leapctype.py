@@ -30,12 +30,11 @@ class tomographicModels:
     leapct.project(g,f)
     """
 
-    def __init__(self, data_on_cpu=True, whichModel=None, lib_dir=""):
+    def __init__(self, whichModel=None, lib_dir=""):
         """Constructor
 
         The functions in this class can take as input and output data that is either on the CPU or the GPU.
-        This is set with the data_on_cpu constructor argument.  Note that all input and ouput data
-        for all functions must lie either on a specific GPU or on the CPU.
+        Note that all input and ouput data for all functions must lie either on a specific GPU or on the CPU.
         You cannot have some data on the CPU and some on a GPU.
         
         If the data is on the CPU:
@@ -64,17 +63,10 @@ class tomographicModels:
         that is also shared by another object of this class.  See the whichModel argument description below.
         
         Args:
-            data_on_cpu (bool): This flag specifies whether the data (CT projections and CT volume) provided is on the CPU
             whichModel (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use
             lib_dir (string): Path to the LEAP dynamic library
         
         """
-        if has_torch == False and data_on_cpu == False:
-            print('ERROR: One must have pytorch installed to enable this option!')
-            print('Setting data_on_cpu to True')
-            self.data_on_cpu = True
-        else:
-            self.data_on_cpu = data_on_cpu
         if len(lib_dir) > 0:
             current_dir = lib_dir
         else:
@@ -87,6 +79,10 @@ class tomographicModels:
         elif _platform == "win32":
             from ctypes import windll
             self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libLEAP.dll'))
+        elif _platform == "darwin":  # Darwin is the name for MacOS in Python's platform module
+            from ctypes import cdll
+            # there is current no support for LEAP on Mac, but maybe someone can figure this out
+            self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "../build/lib/libleap.dylib"))
             
         if whichModel is not None:
             self.whichModel = whichModel
@@ -444,9 +440,10 @@ class tomographicModels:
 
         Args:
             val (float): value to fill the array with
+            astensor (bool): if true turns array into a pytorch tensor
             
         Returns:
-            numpy array is numAngles, numRows, and numCols are all positive, None otherwise
+            numpy array/ pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
         """
         N_phis = self.get_numAngles()
         N_rows = self.get_numRows()
@@ -457,14 +454,38 @@ class tomographicModels:
             else:
                 g = np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
             if has_torch and astensor:
-                if self.data_on_cpu:
-                    return torch.from_numpy(g)
-                else:
-                    return torch.from_numpy(g).float().to(self.get_gpu())
-            else:
-                return g
+                g = torch.from_numpy(g)
+            return g
         else:
             return None
+            
+    def allocateProjections_gpu(self, val=0.0):
+        """Allocates projection data as a pytorch tensor on the gpu
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Args:
+            val (float): value to fill the array with
+            
+        Returns:
+            pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
+        """
+        if has_torch == False:
+            print('Error: you must have pytorch installed for this function')
+            return None
+        N_phis = self.get_numAngles()
+        N_rows = self.get_numRows()
+        N_cols = self.get_numCols()
+        if N_phis > 0 and N_rows > 0 and N_cols > 0:
+            if val == 0.0:
+                g = np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
+            else:
+                g = np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
+            g = torch.from_numpy(g).float().to(max(0,self.get_gpu()))
+            return g
+        else:
+            return None
+        
         
     def get_volume_dim(self):
         """Get dimension sizes of volume data
@@ -501,29 +522,43 @@ class tomographicModels:
             val (float): value to fill the array with
             
         Returns:
-            numpy array is numAngles, numRows, and numCols are all positive, None otherwise
+            numpy array/ pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
         """
-        N_x = self.get_numX()
-        N_y = self.get_numY()
-        N_z = self.get_numZ()
-        if N_x > 0 and N_y > 0 and N_z > 0:
-            if self.get_volumeDimensionOrder() == 0:
-                if val == 0.0:
-                    f = np.ascontiguousarray(np.zeros((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
-                else:
-                    f = np.ascontiguousarray(val*np.ones((N_x,N_y,N_z),dtype=np.float32), dtype=np.float32)
+        dim1, dim2, dim3 = self.get_volume_dim()
+        if dim1 > 0 and dim2 > 0 and dim3 > 0:
+            if val == 0.0:
+                f = np.ascontiguousarray(np.zeros((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
             else:
-                if val == 0.0:
-                    f = np.ascontiguousarray(np.zeros((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
-                else:
-                    f = np.ascontiguousarray(val*np.ones((N_z,N_y,N_x),dtype=np.float32), dtype=np.float32)
+                f = np.ascontiguousarray(val*np.ones((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
             if has_torch and astensor:
-                if self.data_on_cpu:
-                    return torch.from_numpy(f)
-                else:
-                    return torch.from_numpy(f).float().to(self.get_gpu())
+                f = torch.from_numpy(f)
+            return f
+        else:
+            return None
+            
+    def allocateVolume_gpu(self, val=0.0):
+        """Allocates reconstruction volume data as a pytorch tensor on the gpu
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Args:
+            val (float): value to fill the array with
+            
+        Returns:
+            pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
+        """
+        if has_torch == False:
+            print('Error: you must have pytorch installed for this function')
+            return None
+            
+        dim1, dim2, dim3 = self.get_volume_dim()
+        if dim1 > 0 and dim2 > 0 and dim3 > 0:
+            if val == 0.0:
+                f = np.ascontiguousarray(np.zeros((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
             else:
-                return f
+                f = np.ascontiguousarray(val*np.ones((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
+            f = torch.from_numpy(f).float().to(max(0,self.get_gpu()))
+            return f
         else:
             return None
             
@@ -564,10 +599,10 @@ class tomographicModels:
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.project.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.project(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
+            self.libprojectors.project(g.data_ptr(), f.data_ptr(), g.is_cuda == False)
         else:
             self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.project(g, f, self.data_on_cpu)
+            self.libprojectors.project(g, f, True)
         return g
         
     def project_cpu(self, g, f, param_id=None):
@@ -578,21 +613,21 @@ class tomographicModels:
         Returning g is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array or torch tensor): projection data
-            f (C contiguous float32 numpy array or torch tensor): volume data
+            g (C contiguous float32 numpy array or torch tensor): projection data on the CPU
+            f (C contiguous float32 numpy array or torch tensor): volume data on the CPU
             param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             g, the same as the input with the same name
         """
-        if self.data_on_cpu == False:
-            print('Warning: project_cpu requires that the data be on the CPU')
-        #    return g
         self.libprojectors.project_cpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.project_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-            self.libprojectors.project_cpu(g.data_ptr(), f.data_ptr())
+            if g.is_cuda:
+                print('Error: project_cpu requires that the data be on the CPU')
+            else:
+                self.libprojectors.project_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                self.libprojectors.project_cpu(g.data_ptr(), f.data_ptr())
         else:
             self.libprojectors.project_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.project_cpu(g, f)
@@ -606,95 +641,25 @@ class tomographicModels:
         Returning g is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array or torch tensor): projection data
-            f (C contiguous float32 numpy array or torch tensor): volume data
+            g (C contiguous float32 torch tensor): projection data on a GPU
+            f (C contiguous float32 torch tensor): volume data on a GPU
             param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             g, the same as the input with the same name
         """
-        if self.data_on_cpu:
-            print('Warning: project_gpu requires that the data be on the GPU')
-        #    return g
         self.libprojectors.project_gpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.project_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-            self.libprojectors.project_gpu(g.data_ptr(), f.data_ptr())
+            if g.is_cuda == False:
+                print('Error: project_gpu requires that the data be on the GPU')
+            else:
+                self.libprojectors.project_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                self.libprojectors.project_gpu(g.data_ptr(), f.data_ptr())
         else:
-            self.libprojectors.project_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-            self.libprojectors.project_gpu(g, f)
+            print('Error: project_gpu requires that the data be pytorch tensors on the GPU')
         return g
-        
-    def filterProjections(self, g):
-        """Filters the projection data, g, so that its backprojection results in an FBP reconstruction
-        
-        The CT geometry parameters must be set prior to running this function.
-        This function take the argument g and returns the same g.
-        Returning g is just there for nesting several algorithms.
-        
-        Args:
-            g (C contiguous float32 numpy array or torch tensor): projection data
             
-        Returns:
-            g, the same as the input with the same name
-        """
-        self.libprojectors.filterProjections.restype = ctypes.c_bool
-        self.set_model()
-        if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.filterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.filterProjections(g.data_ptr(), self.data_on_cpu)
-        else:
-            self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.filterProjections(g, self.data_on_cpu)
-        return g
-        
-    def rampFilterProjections(self, g):
-        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function
-        
-        The CT geometry parameters must be set prior to running this function.
-        This function take the argument g and returns the same g.
-        Returning g is just there for nesting several algorithms.
-        
-        Args:
-            g (C contiguous float32 numpy array or torch tensor): projection data
-            
-        Returns:
-            g, the same as the input with the same name
-        """
-        self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
-        self.set_model()
-        if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.rampFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.rampFilterProjections(g.data_ptr(), self.data_on_cpu, 1.0)
-        else:
-            self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.rampFilterProjections(g, self.data_on_cpu, 1.0)
-        return g
-        
-    def HilbertFilterProjections(self, g):
-        """Applies the Hilbert filter to the projection data, g, which is a subset of the operations in some reconstruction algorithms
-        
-        The CT geometry parameters must be set prior to running this function.
-        This function take the argument g and returns the same g.
-        Returning g is just there for nesting several algorithms.
-        
-        Args:
-            g (C contiguous float32 numpy array or torch tensor): projection data
-            
-        Returns:
-            g, the same as the input with the same name
-        """
-        self.libprojectors.HilbertFilterProjections.restype = ctypes.c_bool
-        self.set_model()
-        if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.HilbertFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.HilbertFilterProjections(g.data_ptr(), self.data_on_cpu, 1.0)
-        else:
-            self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.HilbertFilterProjections(g, self.data_on_cpu, 1.0)
-        return g
-    
     def backproject(self, g, f, param_id=None):
         """Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f
         
@@ -714,10 +679,10 @@ class tomographicModels:
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.backproject.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.backproject(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
+            self.libprojectors.backproject(g.data_ptr(), f.data_ptr(), g.is_cuda == False)
         else:
             self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.backproject(g, f, self.data_on_cpu)
+            self.libprojectors.backproject(g, f, True)
         return f
         
     def backproject_cpu(self, g, f, param_id=None):
@@ -735,14 +700,14 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if self.data_on_cpu == False:
-            print('Warning: backproject_cpu requires that the data be on the CPU')
-        #    return f
         self.libprojectors.backproject_cpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.backproject_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-            self.libprojectors.backproject_cpu(g.data_ptr(), f.data_ptr())
+            if g.is_cuda:
+                print('Error: backproject_cpu requires that the data be on the CPU')
+            else:
+                self.libprojectors.backproject_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                self.libprojectors.backproject_cpu(g.data_ptr(), f.data_ptr())
         else:
             self.libprojectors.backproject_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.backproject_cpu(g, f)
@@ -756,26 +721,94 @@ class tomographicModels:
         Returning f is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array or torch tensor): projection data
-            f (C contiguous float32 numpy array or torch tensor): volume data
+            g (C contiguous float32 torch tensor): projection data
+            f (C contiguous float32 torch tensor): volume data
             param_id (int): optional parameter to project a particular parameter index
             
         Returns:
             f, the same as the input with the same name
         """
-        if self.data_on_cpu:
-            print('Warning: backproject_gpu requires that the data be on the GPU')
-        #    return f
         self.libprojectors.backproject_gpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.backproject_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-            self.libprojectors.backproject_gpu(g.data_ptr(), f.data_ptr())
+            if g.is_cuda == False:
+                print('Error: backproject_gpu requires that the data be on the GPU')
+            else:
+                self.libprojectors.backproject_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                self.libprojectors.backproject_gpu(g.data_ptr(), f.data_ptr())
         else:
-            self.libprojectors.backproject_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-            self.libprojectors.backproject_gpu(g, f)
+            print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
         
+    def filterProjections(self, g):
+        """Filters the projection data, g, so that its backprojection results in an FBP reconstruction
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
+        self.libprojectors.filterProjections.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.filterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.filterProjections(g.data_ptr(), g.is_cuda == False)
+        else:
+            self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.filterProjections(g, True)
+        return g
+        
+    def rampFilterProjections(self, g):
+        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
+        self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.rampFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.rampFilterProjections(g.data_ptr(), g.is_cuda == False, 1.0)
+        else:
+            self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.rampFilterProjections(g, True, 1.0)
+        return g
+        
+    def HilbertFilterProjections(self, g):
+        """Applies the Hilbert filter to the projection data, g, which is a subset of the operations in some reconstruction algorithms
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
+        self.libprojectors.HilbertFilterProjections.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.HilbertFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.HilbertFilterProjections(g.data_ptr(), g.is_cuda == False, 1.0)
+        else:
+            self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
+            self.libprojectors.HilbertFilterProjections(g, True, 1.0)
+        return g
+    
     def weightedBackproject(self,g,f):
         """Calculate the weighted backprojection of g and stores the result in f
         
@@ -797,10 +830,10 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.weightedBackproject.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.weightedBackproject(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
+            self.libprojectors.weightedBackproject(g.data_ptr(), f.data_ptr(), g.is_cuda == False)
         else:
             self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.weightedBackproject(g, f, self.data_on_cpu)
+            self.libprojectors.weightedBackproject(g, f, True)
         return f
         
     def rampFilterVolume(self, f):
@@ -816,10 +849,10 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.rampFilterVolume.argtypes = [ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.rampFilterVolume(f.data_ptr(), self.data_on_cpu)
+            self.libprojectors.rampFilterVolume(f.data_ptr(), f.is_cuda == False)
         else:
             self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.rampFilterVolume(f, self.data_on_cpu)
+            self.libprojectors.rampFilterVolume(f, True)
         return f
 
     def get_FBPscalar(self):
@@ -844,26 +877,24 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.FBP.restype = ctypes.c_bool
-        if inplace == False and self.get_GPU() < 0:
+        
+        # Make a copy of g if necessary
+        if inplace == False:
             if has_torch == True and type(g) is torch.Tensor:
-                self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-                q  = g.clone()
-                self.set_model()
-                self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), self.data_on_cpu)
+                q = g.clone()
             else:
-                self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-                q  = g.copy()
-                self.set_model()
-                self.libprojectors.FBP(q, f, self.data_on_cpu)
+                q = g.copy()
         else:
-            self.set_model()
-            if has_torch == True and type(g) is torch.Tensor:
-                self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-                self.libprojectors.FBP(g.data_ptr(), f.data_ptr(), self.data_on_cpu)
-            else:
-                self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-                self.libprojectors.FBP(g, f, self.data_on_cpu)
+            q = g
+        
+        self.libprojectors.FBP.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(q) is torch.Tensor:
+            self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
+        else:
+            self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.FBP(q, f, True)
         return f
         
     def fbp_cpu(self, g, f, inplace=False):
@@ -886,26 +917,29 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.FBP_cpu.restype = ctypes.c_bool
-        if inplace == False and self.get_GPU() < 0:
+        
+        # First make validation checks that the data is on the CPU
+        if has_torch == True and type(g) is torch.Tensor and g.is_cuda == True:
+            print('Error: FBP_cpu requires that the data be on the CPU')
+            return f
+
+        # Make a copy of g if necessary
+        if inplace == False:
             if has_torch == True and type(g) is torch.Tensor:
-                self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                q  = g.clone()
-                self.set_model()
-                self.libprojectors.FBP_cpu(q.data_ptr(), f.data_ptr())
+                q = g.clone()
             else:
-                self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-                q  = g.copy()
-                self.set_model()
-                self.libprojectors.FBP_cpu(q, f)
+                q = g.copy()
         else:
-            self.set_model()
-            if has_torch == True and type(g) is torch.Tensor:
-                self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                self.libprojectors.FBP_cpu(g.data_ptr(), f.data_ptr())
-            else:
-                self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-                self.libprojectors.FBP_cpu(g, f)
+            q = g
+            
+        self.libprojectors.FBP_cpu.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(q) is torch.Tensor:
+            self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.libprojectors.FBP_cpu(q.data_ptr(), f.data_ptr())
+        else:
+            self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.FBP_cpu(q, f)
         return f
         
     def FBP_gpu(self, g, f, inplace=False):
@@ -916,32 +950,34 @@ class tomographicModels:
         Returning f is just there for nesting several algorithms.
         
         Args:
-            g (C contiguous float32 numpy array or torch tensor): projection data
-            f (C contiguous float32 numpy array or torch tensor): volume data
+            g (C contiguous float32 torch tensor): projection data
+            f (C contiguous float32 torch tensor): volume data
             
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.FBP_gpu.restype = ctypes.c_bool
-        if inplace == False and self.get_GPU() < 0:
-            if has_torch == True and type(g) is torch.Tensor:
-                self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                q  = g.clone()
-                self.set_model()
-                self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
-            else:
-                self.libprojectors.FBP_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-                q  = g.copy()
-                self.set_model()
-                self.libprojectors.FBP_gpu(q, f)
+        
+        # First make validation checks that the data is on the CPU
+        if has_torch == True and type(g) is torch.Tensor:
+            if g.is_cuda == False:
+                print('Error: FBP_gpu requires that the data be on the GPU')
+                return f
         else:
-            self.set_model()
+            print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
+            return f
+
+        # Make a copy of g if necessary
+        if inplace == False:
             if has_torch == True and type(g) is torch.Tensor:
-                self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                self.libprojectors.FBP_gpu(g.data_ptr(), f.data_ptr())
-            else:
-                self.libprojectors.FBP_gpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-                self.libprojectors.FBP_gpu(g, f)
+                q = g.clone()
+        else:
+            q = g
+        
+        if has_torch == True and type(q) is torch.Tensor:
+            self.libprojectors.FBP_gpu.restype = ctypes.c_bool
+            self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.set_model()
+            self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
         return f
         
     def BPF(self, g, f):
@@ -980,19 +1016,21 @@ class tomographicModels:
             f (C contiguous float32 numpy array or torch tensor): (optional argument) volume data to store the result
             
         Returns:
-            f
+            f, the same as the input
         """
-        if f is None:
-            f = self.allocateVolume()
-        #bool sensitivity(float* f, bool cpu_to_gpu);
         self.libprojectors.sensitivity.restype = ctypes.c_bool
-        self.set_model()
-        if has_torch == True and type(f) is torch.Tensor:
+        if has_torch == True and f is not None and type(f) is torch.Tensor:
+            #if f is None:
+            #    f = self.allocateVolume(0.0, True)
             self.libprojectors.sensitivity.argtypes = [ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.sensitivity(f.data_ptr(), self.data_on_cpu)
+            self.set_model()
+            self.libprojectors.sensitivity(f.data_ptr(), f.is_cuda == False)
         else:
+            if f is None:
+                f = self.allocateVolume()
             self.libprojectors.sensitivity.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.sensitivity(f, self.data_on_cpu)
+            self.set_model()
+            self.libprojectors.sensitivity(f, True)
         return f
     
     def rowRangeNeededForBackprojection(self):
@@ -1688,10 +1726,10 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.BlurFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BlurFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, self.data_on_cpu)
+            return self.libprojectors.BlurFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
         else:
             self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, self.data_on_cpu)
+            return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
     
     def MedianFilter(self, f, threshold=0.0):
         """Applies a thresholded 3D median filter (3x3x3) to the provided numpy array
@@ -1713,10 +1751,10 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.MedianFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, self.data_on_cpu)
+            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, f.is_cuda == False)
         else:
             self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, self.data_on_cpu)
+            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, True)
     
     def TVcost(self, f, delta, beta=0.0):
         """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
@@ -1736,10 +1774,10 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.TVcost.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVcost(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            return self.libprojectors.TVcost(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, f.is_cuda == False)
         else:
             self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         
     def TVgradient(self, f, delta, beta=0.0):
         """Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
@@ -1761,13 +1799,13 @@ class tomographicModels:
             Df = f.clone()
             self.set_model()
             self.libprojectors.TVgradient.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, f.is_cuda == False)
             return Df
         else:
             Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
             self.set_model()
             self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
             return Df
     
     def TVquadForm(self, f, d, delta, beta=0.0):
@@ -1793,10 +1831,10 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.TVquadForm.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVquadForm(f.data_ptr(), d.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            return self.libprojectors.TVquadForm(f.data_ptr(), d.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, f.is_cuda == False)
         else:
             self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, self.data_on_cpu)
+            return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
         
     def diffuse(self, f, delta, numIter):
         """Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
@@ -1816,10 +1854,10 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.Diffuse.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, self.data_on_cpu)
+            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, f.is_cuda == False)
         else:
             self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, self.data_on_cpu)
+            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, True)
         return f
         ''' Here is equivalent code to run this algorithm using the TV functions above
         for n in range(N):
