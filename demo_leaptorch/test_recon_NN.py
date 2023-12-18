@@ -216,7 +216,7 @@ class Reconstructor:
 
 # if CUDA is available, use the first GPU
 use_cuda = torch.cuda.is_available()
-use_cuda = False
+#use_cuda = False
 if use_cuda:
     print("##### GPU CUDA mode #####")
     device_name = "cuda:0"

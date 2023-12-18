@@ -30,7 +30,7 @@ class tomographicModels:
     leapct.project(g,f)
     """
 
-    def __init__(self, whichModel=None, lib_dir=""):
+    def __init__(self, param_id=None, lib_dir=""):
         """Constructor
 
         The functions in this class can take as input and output data that is either on the CPU or the GPU.
@@ -59,11 +59,11 @@ class tomographicModels:
         
         The LEAP library has the ability to generate and track several parameter sets.
         By default every new object instance will create a new parameter set.
-        Otherwise one can use the whichModel parameter so that the object will utilize a parameter set
-        that is also shared by another object of this class.  See the whichModel argument description below.
+        Otherwise one can use the param_id parameter so that the object will utilize a parameter set
+        that is also shared by another object of this class.  See the param_id argument description below.
         
         Args:
-            whichModel (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use
+            param_id (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use
             lib_dir (string): Path to the LEAP dynamic library
         
         """
@@ -84,17 +84,17 @@ class tomographicModels:
             # there is current no support for LEAP on Mac, but maybe someone can figure this out
             self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "../build/lib/libleap.dylib"))
             
-        if whichModel is not None:
-            self.whichModel = whichModel
+        if param_id is not None:
+            self.param_id = param_id
         else:
-            self.whichModel = self.create_new_model()
+            self.param_id = self.create_new_model()
         self.set_model()
 
     def set_model(self, i=None):
         self.libprojectors.set_model.restype = ctypes.c_bool
         self.libprojectors.set_model.argtypes = [ctypes.c_int]
         if i is None:
-            return self.libprojectors.set_model(self.whichModel)
+            return self.libprojectors.set_model(self.param_id)
         else:
             return self.libprojectors.set_model(i)
 

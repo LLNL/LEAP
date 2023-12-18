@@ -4,7 +4,7 @@ test_ART_save.py
 # data files
 *.dat
 *.raw
-
+*.png
 
 # temporary files
 *.bak

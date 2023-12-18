@@ -9,9 +9,8 @@
 
 import numpy as np
 import torch
-#import leapct
 from leapctype import *
-lct = tomographicModels()
+leapct = tomographicModels()
 
 # Note:
 # Image tensor format: [Batch, ImageZ, ImageY, ImageX]
@@ -24,7 +23,7 @@ class ProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = input[batch]
             g = proj[batch]
-            lct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            leapct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
         ctx.save_for_backward(input, vol, param_id)
         return proj
 
@@ -34,7 +33,7 @@ class ProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = grad_output[batch]
-            lct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            leapct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
         return vol, None, None, None
 
 # GPU Projector for forward and backward propagation
@@ -44,7 +43,7 @@ class ProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = input[batch]
             g = proj[batch]
-            lct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            leapct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
         ctx.save_for_backward(input, vol, param_id)
         return proj
 
@@ -54,7 +53,7 @@ class ProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = grad_output[batch]
-            lct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            leapct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
         return vol, None, None, None
 
 
@@ -65,7 +64,7 @@ class BackProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = input[batch]
-            lct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            leapct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
             #vol[batch] = f
         ctx.save_for_backward(input, proj, param_id)
         return vol
@@ -76,7 +75,7 @@ class BackProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = grad_output[batch]
             g = proj[batch]
-            lct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            leapct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
             #proj[batch] = g
         return None, proj, None, None
 
@@ -87,7 +86,7 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = input[batch]
-            lct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            leapct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
             #vol[batch] = f
         ctx.save_for_backward(input, proj, param_id)
         return vol
@@ -98,7 +97,7 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = grad_output[batch]
             g = proj[batch]
-            lct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            leapct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
             #proj[batch] = g
         return None, proj, None, None
 
@@ -114,8 +113,8 @@ class Projector(torch.nn.Module):
             self.lct = tomographicModels(self.param_id)
         else:
             self.lct = tomographicModels()
-            self.param_id = self.lct.whichModel
-        lct.whichModel = self.param_id
+            self.param_id = self.lct.param_id
+        leapct.param_id = self.param_id
         self.param_id_t = torch.tensor(self.param_id).to(gpu_device) if use_gpu else torch.tensor(self.param_id)
         self.use_gpu = use_gpu
         self.gpu_device = gpu_device
