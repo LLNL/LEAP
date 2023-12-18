@@ -586,8 +586,8 @@ class tomographicModels:
             g, the same as the input with the same name
         """
         if self.data_on_cpu == False:
-            print('Error: project_cpu requires that the data be on the CPU')
-            return g
+            print('Warning: project_cpu requires that the data be on the CPU')
+        #    return g
         self.libprojectors.project_cpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
@@ -614,8 +614,8 @@ class tomographicModels:
             g, the same as the input with the same name
         """
         if self.data_on_cpu:
-            print('Error: project_gpu requires that the data be on the GPU')
-            return g
+            print('Warning: project_gpu requires that the data be on the GPU')
+        #    return g
         self.libprojectors.project_gpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
@@ -736,8 +736,8 @@ class tomographicModels:
             f, the same as the input with the same name
         """
         if self.data_on_cpu == False:
-            print('Error: backproject_cpu requires that the data be on the CPU')
-            return f
+            print('Warning: backproject_cpu requires that the data be on the CPU')
+        #    return f
         self.libprojectors.backproject_cpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
@@ -764,8 +764,8 @@ class tomographicModels:
             f, the same as the input with the same name
         """
         if self.data_on_cpu:
-            print('Error: backproject_gpu requires that the data be on the GPU')
-            return f
+            print('Warning: backproject_gpu requires that the data be on the GPU')
+        #    return f
         self.libprojectors.backproject_gpu.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
