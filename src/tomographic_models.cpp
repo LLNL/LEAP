@@ -1703,6 +1703,7 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 				scalarAdd_cpu(f, -stepSize, d, N_1, N_2, N_3);
 			}
 			free(d);
+			return true;
 		}
 	}
 	else
