@@ -1297,7 +1297,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
 
     int4 N_f_mod = make_int4(N_f.x, N_f.y, int(ceil(float(N_f.z)/float(NUM_SLICES_PER_THREAD))), N_f.w);
     dim3 dimBlock_slab = setBlockSize(N_f_mod);
-    dim3 dimGrid_slab = setGridSize(N_f_mod, dimBlock);
+    dim3 dimGrid_slab = setGridSize(N_f_mod, dimBlock_slab);
     if (params->geometry == parameters::PARALLEL)
     {
         parallelBeamBackprojectorKernel_SF <<< dimGrid_slab, dimBlock_slab >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
