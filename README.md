@@ -1,18 +1,25 @@
 # LivermorE AI Projector for Computed Tomography (LEAP)
-This is a C/C++/CUDA library of tomographic projectors (forward and back projection) implemented for both multi-GPU and multi-core CPU.  We provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
+This is a C/C++/CUDA library of 3D tomographic projectors (forward and back projection) implemented for both multi-GPU and multi-core CPU.  We provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
-Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam.  These geometry types accomodate shifts of the detectors and non-uniform angular spacing.  For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair.  All projectors use the Separable Footprint [Long, Fessler, and Balter, TMI, 2010] method which provides a matched projector pair that models the finite size of the voxel and detector pixel.  These matched projectors ensure convergence and provide accurate, smooth results.  Unmatch projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations [DeMan and Basu, PMB, 2004].
+<p align="center">
+  <img src=https://github.com/LLNL/LEAP/blob/main/documentation/LEAPoverview.png>
+</p>
 
-We also provide projectors and analytic inversion algorithms, i.e., FBP, for a few specialized x-ray/Radon transforms:
-1) Cylindrically-symmetric/anitsymmetric objects (related to the Abel Transform) in parallel- and cone-beam geometries with user-specified symmetry axis [Champley and Maddox, Optica, 2021].  These are often used in flash radiography applications.
-2) Attenuated Radon Transform (ART) for parallel-beam geometries.  These are used in parallel-hole collimator SPECT and Volumetric Additive Manufacturing (VAM).
+There are a lot of CT reconstruction packages out there, so why choose LEAP?
+1) **Seamless integration with PyTorch** using torch.nn.Module and torch.autograd.Function to enable differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
+2) **Quantitatively accurate, matched (forward and back) projector pairs** that model the finite size of the voxel and detector pixel; very similar to the Separable Footprint method [Long, Fessler, and Balter, TMI, 2010].  These matched projectors ensure convergence and provide accurate, smooth results.  Unmatch projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations [DeMan and Basu, PMB, 2004].
+3) **Multi-GPU and multi-core CPU implementations of all algorithms** that are as fast or faster than other popular CT packages.
+4) **Flexible 3D CT geometry** specification that allows users to specify arbitrary shifts of the detectors and non-uniform angular spacing.
+5) **Flexible 3D CT volume** specification.
+6) **Quantitatively accurate and flexible** analytic reconstruction algorithms, i.e., Filtered Backprojection (**FBP**).
+7) Special-case FBP algorithms that are rarely included in other packages, such as helical, truncated projections, offset detector scan, and Attenuated Radon Transform.
+8) Special-case models such as the Attenuated Radon Transform (SPECT and VAM applications) and reconstruction of cylindrically-symmetric objects (flash x-ray applications).
+9) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, ML-TR.
+10) Fast multi-GPU 3D densoing methods.
+11) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
+12) Permissible license.
 
-In addition to the projectors, we also provide a few other algorithms for tomographic imaging, including:
-1) Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
-2) A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction.
-3) Python implementations of some iterative reconstruction algorithms: OSEM, SART, ASD-POCS, and RWLS.
-
-The CPU- and GPU-based projectors are nearly identical (32-bit floating point precision) and are quantitatively accurate and thus can be used in conjuction with physics-based corrections, such as, scatter and beam hardening correction.  If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948)
+If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948)
 
 
 ## Installation and Usage
