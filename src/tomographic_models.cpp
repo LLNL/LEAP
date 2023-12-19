@@ -1709,3 +1709,71 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	else
 		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU);
 }
+
+bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
+{
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+
+	int N_1 = params.numZ;
+	int N_2 = params.numY;
+	int N_3 = params.numX;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	{
+		if (data_on_cpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+				parameters params_chunk = params;
+				params_chunk.numZ = sliceEnd - sliceStart + 1;
+				params_chunk.whichGPU = whichGPU;
+
+				azimuthalBlur(f_chunk, &params_chunk, FWHM, data_on_cpu);
+			}
+
+			return true;
+		}
+	}
+	else
+		return azimuthalBlur(f, &params, FWHM, data_on_cpu);
+}

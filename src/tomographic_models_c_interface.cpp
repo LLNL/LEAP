@@ -481,6 +481,11 @@ bool addObject(float* f, int type, float* c, float* r, float val, float* A, floa
 	return testObject.addObject(f, &(tomo()->params), type, c, r, val, A, clip);
 }
 
+bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
+{
+	return tomo()->AzimuthalBlur(f, FWHM, data_on_cpu);
+}
+
 bool saveParamsToFile(const char* param_fn)
 {
 	tomographicModels* p_model = tomo();

@@ -13,6 +13,84 @@
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+#include "parameters.h"
+
+__global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, const float3 T, const float3 startVal, const int N_phi_max, const float filterWidth)
+{
+    // return;
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+
+    const float x = i * T.x + startVal.x;
+    const float y = j * T.y + startVal.y;
+    // const float z = k * T.z + startVal.z;
+
+    const float r = sqrt(x * x + y * y);
+    const float one_over_Tx = 1.0f / T.x;
+    int N_phi;
+    float val = 0.0f;
+
+    const float* f_slice = &f[uint64(k) * uint64(N.x * N.y)];
+
+    const int N_xy = N.x * N.y;
+
+    // do filtering
+    if (filterWidth >= 360.0f)
+    {
+        float T_phi = atan(T.x / r);
+        N_phi = max(4, min(N_phi_max, 2 * (int)(ceil(3.141592653589793f / T_phi))));
+        T_phi = 2.0f * 3.141592653589793f / ((float)N_phi);
+        for (int l = 0; l < N_phi; l += 2)
+        {
+            const float phi = T_phi * l + 0.5f * T_phi;
+            const int ix_A = int(0.5f + (r * cos(phi) - startVal.x) * one_over_Tx);
+            const int iy_A = int(0.5f + (r * sin(phi) - startVal.y) * one_over_Tx);
+            const int ix_B = int(0.5f + (r * cos(phi + T_phi) - startVal.x) * one_over_Tx);
+            const int iy_B = int(0.5f + (r * sin(phi + T_phi) - startVal.y) * one_over_Tx);
+
+            const int ind_A = iy_A * N.x + ix_A;
+            const int ind_B = iy_B * N.x + ix_B;
+            if (0 <= ind_A && ind_A < N_xy)
+                val += f_slice[ind_A];
+            if (0 <= ind_B && ind_B < N_xy)
+                val += f_slice[ind_B];
+            // val += read_imagef(f, sampler, (float2)((r * sin(phi) - clf_y_0(f_info)) * one_over_Tx + 0.5f, (r *
+            // cos(phi) - clf_x_0(f_info)) * one_over_Tx + 0.5f))
+            //+ read_imagef(f, sampler, (float2)((r * sin(phi + T_phi) - clf_y_0(f_info)) * one_over_Tx + 0.5f, (r *
+            //cos(phi + T_phi) - clf_x_0(f_info)) * one_over_Tx + 0.5f));
+        }
+    }
+    else
+    {
+        float T_phi = atan(T.x / r);
+        N_phi = max(4, min(N_phi_max, 2 * (int)(ceil((3.141592653589793f / 360.0f) * filterWidth / T_phi))));
+        T_phi = (3.141592653589793f / 180.0f) * filterWidth / ((float)N_phi);
+        const float psi = atan2(y, x) + 0.5f * T_phi * N_phi;
+        for (int l = 0; l < N_phi; l += 2)
+        {
+            const float phi = T_phi * l + 0.5f * T_phi - psi;
+            const int ix_A = int(0.5f + (r * cos(phi) - startVal.x) * one_over_Tx);
+            const int iy_A = int(0.5f + (-r * sin(phi) - startVal.y) * one_over_Tx);
+            const int ix_B = int(0.5f + (r * cos(phi + T_phi) - startVal.x) * one_over_Tx);
+            const int iy_B = int(0.5f + (-r * sin(phi + T_phi) - startVal.y) * one_over_Tx);
+            const int ind_A = iy_A * N.x + ix_A;
+            const int ind_B = iy_B * N.x + ix_B;
+            if (0 <= ind_A && ind_A < N_xy)
+                val += f_slice[ind_A];
+            if (0 <= ind_B && ind_B < N_xy)
+                val += f_slice[ind_B];
+
+            // val += read_imagef(f, sampler, (float2)((-r * sin(phi) - clf_y_0(f_info)) * one_over_Tx + 0.5f, (r *
+            // cos(phi) - clf_x_0(f_info)) * one_over_Tx + 0.5f))
+            //+ read_imagef(f, sampler, (float2)((-r * sin(phi + T_phi) - clf_y_0(f_info)) * one_over_Tx + 0.5f, (r *
+            //cos(phi + T_phi) - clf_x_0(f_info)) * one_over_Tx + 0.5f));
+        }
+    }
+
+    f_filtered[uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i)] = val / ((float)N_phi);
+}
 
 __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold, int sliceStart, int sliceEnd)
 {
@@ -319,6 +397,70 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool dat
     {
         // copy dev_Df to dev_f
         cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1*N_2*N_3, cudaMemcpyDeviceToDevice);
+    }
+    if (dev_Df != 0)
+    {
+        cudaFree(dev_Df);
+    }
+
+    return true;
+}
+
+bool azimuthalBlur(float* f, parameters* params, float filterWidth, bool data_on_cpu, float* f_out)
+{
+    if (f == NULL) return false;
+
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(params->numX, params->numY, params->numZ);
+    float3 T = make_float3(params->voxelWidth, params->voxelWidth, params->voxelHeight);
+    float3 startVal = make_float3(params->x_0(), params->y_0(), params->z_0());
+    float* dev_f = 0;
+    if (data_on_cpu)
+    {
+        //dev_f = copy3DdataToGPU(f, N, params->whichGPU);
+        dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
+    }
+    else
+        dev_f = f;
+
+    int N_phi_max = max(4, 2 * int(double(max(N.x, N.y))));
+
+    // Allocate space on GPU for the gradient
+    float* dev_Df = 0;
+    if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N.x, N.y, N.z);
+        return false;
+    }
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    azimuthalBlurKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, T, startVal, N_phi_max, filterWidth);
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        if (f_out != NULL)
+            pull3DdataFromGPU(f_out, N, dev_Df, params->whichGPU);
+        else
+            pullVolumeDataFromGPU(f, params, dev_Df, params->whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+    else
+    {
+        // copy dev_Df to dev_f
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * uint64(N.x) * uint64(N.y) * uint64(N.z), cudaMemcpyDeviceToDevice);
     }
     if (dev_Df != 0)
     {

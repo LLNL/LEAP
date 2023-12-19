@@ -133,4 +133,6 @@ extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float
 
 extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip);
 
+extern "C" PROJECTOR_API bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
+
 extern "C" PROJECTOR_API bool saveParamsToFile(const char* param_fn);

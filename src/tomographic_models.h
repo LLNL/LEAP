@@ -521,6 +521,16 @@ public:
 	 */
 	bool flipAttenuationMapSign(bool data_on_cpu);
 
+	/**
+	 * \fn          AzimuthalBlur
+	 * \brief       applies a low pass filter in the azimuthal angle
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   FWHM full width at half maximum of the filter (measured in degrees)
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
+
 	// Filters for 3D data
 	/**
 	 * \fn          BlurFilter

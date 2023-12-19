@@ -865,6 +865,26 @@ class tomographicModels:
             self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.rampFilterVolume(f, True)
         return f
+        
+    def AzimuthalBlur(self, f, FWHM):
+        """Applies an low pass filter to the volume data in the azimuthal direction, f, for each z-slice
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            FWHM (float): full width at half maximum of the filter (in degrees)
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        self.libprojectors.AzimuthalBlur.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.AzimuthalBlur.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.AzimuthalBlur(f.data_ptr(), FWHM, f.is_cuda == False)
+        else:
+            self.libprojectors.AzimuthalBlur.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.AzimuthalBlur(f, FWHM, True)
+        return f
 
     def get_FBPscalar(self):
         """Returns the scalar necessary for quantitative reconstruction when using the filterProjections and backproject functions
