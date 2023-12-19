@@ -160,6 +160,17 @@ bool tomographicModels::rampFilterVolume(float* f, bool cpu_to_gpu)
 	return rampFilter2D(f, &params, cpu_to_gpu);
 }
 
+bool tomographicModels::windowFOV(float* f, bool cpu_to_gpu)
+{
+	if (cpu_to_gpu == false)
+	{
+		printf("Error: windowFOV only implemented for CPU\n");
+		return false;
+	}
+	else
+		return windowFOV_cpu(f, &params);
+}
+
 float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 {
 	int numSlices = lastSlice - firstSlice + 1;
@@ -980,6 +991,22 @@ bool tomographicModels::clear_attenuationMap()
 	params.mu = NULL;
 	params.muCoeff = 0.0;
 	params.muRadius = 0.0;
+	return true;
+}
+
+bool tomographicModels::flipAttenuationMapSign(bool cpu_to_gpu)
+{
+	if (params.muCoeff != 0.0)
+	{
+		params.muCoeff *= -1.0;
+		//printf("flipping sign of muCoeff (%f)\n", params.muCoeff);
+	}
+	else if (params.mu != NULL && params.numZ > 0 && params.numY > 0 && params.numX > 0)
+	{
+		//printf("flipping sign of the attenuation map\n");
+		scale_cpu(params.mu, -1.0, params.numZ, params.numY, params.numX);
+		//scale(params.mu, -1.0, make_int3(params.numZ, params.numY, params.numX), params.whichGPU);
+	}
 	return true;
 }
 

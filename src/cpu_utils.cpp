@@ -284,6 +284,22 @@ bool equal_cpu(float* f_out, float* f_in, int N_1, int N_2, int N_3)
     return true;
 }
 
+bool scale_cpu(float* f, float c, int N_1, int N_2, int N_3)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        float* aSlice = &f[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+                aSlice[j * N_3 + k] *= c;
+        }
+    }
+    return true;
+}
+
 bool clip_cpu(float* f, int N_1, int N_2, int N_3, float clipVal)
 {
     omp_set_num_threads(omp_get_num_procs());
@@ -320,4 +336,53 @@ bool replaceZeros_cpu(float* f, int N_1, int N_2, int N_3, float newVal)
         }
     }
     return true;
+}
+
+bool windowFOV_cpu(float* f, parameters* params)
+{
+    if (f == NULL || params == NULL)
+        return false;
+    else
+    {
+        float rFOVsq = params->rFOV() * params->rFOV();
+        if (params->volumeDimensionOrder == parameters::XYZ)
+        {
+            omp_set_num_threads(omp_get_num_procs());
+            #pragma omp parallel for
+            for (int ix = 0; ix < params->numX; ix++)
+            {
+                float x = ix * params->voxelWidth + params->x_0();
+                for (int iy = 0; iy < params->numY; iy++)
+                {
+                    float y = iy * params->voxelWidth + params->y_0();
+                    if (x * x + y * y > rFOVsq)
+                    {
+                        float* zLine = &f[uint64(ix) * uint64(params->numY * params->numZ) + uint64(iy * params->numZ)];
+                        for (int iz = 0; iz < params->numZ; iz++)
+                            zLine[iz] = 0.0;
+                    }
+                }
+            }
+        }
+        else // ZYX
+        {
+            omp_set_num_threads(omp_get_num_procs());
+            #pragma omp parallel for
+            for (int iz = 0; iz < params->numZ; iz++)
+            {
+                float* zSlice = &f[uint64(iz) * uint64(params->numX * params->numY)];
+                for (int iy = 0; iy < params->numY; iy++)
+                {
+                    float y = iy * params->voxelWidth + params->y_0();
+                    for (int ix = 0; ix < params->numX; ix++)
+                    {
+                        float x = ix * params->voxelWidth + params->x_0();
+                        if (x * x + y * y > rFOVsq)
+                            zSlice[iy * params->numX + ix] = 0.0;
+                    }
+                }
+            }
+        }
+        return true;
+    }
 }

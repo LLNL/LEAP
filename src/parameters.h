@@ -386,13 +386,6 @@ public:
 	 */
 	float* setToZero(float* data, uint64 N);
 
-	/**
-	 * \fn          windowFOV
-	 * \brief       sets the array to zero for those values outside the field of view
-	 * \return      true is operation  was sucessful, false otherwise
-	 */
-	bool windowFOV(float*);
-
 	//float smallestVoxelForFastSF();
 	//float largestVoxelForFastSF();
 

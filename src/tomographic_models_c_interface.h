@@ -48,6 +48,8 @@ extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool cpu_to_gpu);
 
 extern "C" PROJECTOR_API bool sensitivity(float* f, bool cpu_to_gpu);
 
+extern "C" PROJECTOR_API bool windowFOV(float* f, bool cpu_to_gpu);
+
 extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
 extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
 extern "C" PROJECTOR_API bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
@@ -84,6 +86,8 @@ extern "C" PROJECTOR_API bool set_normalizedHelicalPitch(float h_normalized);
 extern "C" PROJECTOR_API bool set_attenuationMap(float*);
 extern "C" PROJECTOR_API bool set_cylindircalAttenuationMap(float, float);
 extern "C" PROJECTOR_API bool clear_attenuationMap();
+extern "C" PROJECTOR_API bool muSpecified();
+extern "C" PROJECTOR_API bool flipAttenuationMapSign(bool cpu_to_gpu);
 
 extern "C" PROJECTOR_API int get_geometry();
 extern "C" PROJECTOR_API float get_sod();

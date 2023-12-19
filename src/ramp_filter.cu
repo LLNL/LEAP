@@ -814,7 +814,8 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
     int N_z = params->numZ;
 
     // Pad and then find next power of 2
-    int N_H1 = int(pow(2.0, ceil(log2(2 * max(N_y, N_x)))));
+    //int N_H1 = int(pow(2.0, ceil(log2(2 * max(N_y, N_x)))));
+    int N_H1 = optimalFFTsize(2 * max(N_y, N_x));
     int N_H2 = N_H1;
     int N_H2_over2 = N_H2 / 2 + 1;
 

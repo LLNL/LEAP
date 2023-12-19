@@ -680,51 +680,6 @@ float* parameters::setToZero(float* data, uint64 N)
 	return setToConstant(data, N, 0.0);
 }
 
-bool parameters::windowFOV(float* f)
-{
-	if (f == NULL)
-		return false;
-	else
-	{
-		float rFOVsq = rFOV()*rFOV();
-		if (volumeDimensionOrder == XYZ)
-		{
-			for (int ix = 0; ix < numX; ix++)
-			{
-				float x = ix * voxelWidth + x_0();
-				for (int iy = 0; iy < numY; iy++)
-				{
-					float y = iy * voxelWidth + y_0();
-					if (x * x + y * y > rFOVsq)
-					{
-						float* zLine = &f[uint64(ix) * uint64(numY * numZ) + uint64(iy * numZ)];
-						for (int iz = 0; iz < numZ; iz++)
-							zLine[iz] = 0.0;
-					}
-				}
-			}
-		}
-		else // ZYX
-		{
-			for (int iz = 0; iz < numZ; iz++)
-			{
-				float* zSlice = &f[uint64(iz) * uint64(numX * numY)];
-				for (int iy = 0; iy < numY; iy++)
-				{
-					float y = iy * voxelWidth + y_0();
-					for (int ix = 0; ix < numX; ix++)
-					{
-						float x = ix * voxelWidth + x_0();
-						if (x * x + y * y > rFOVsq)
-							zSlice[iy * numX + ix] = 0.0;
-					}
-				}
-			}
-		}
-		return true;
-	}
-}
-
 bool parameters::set_angles()
 {
 	if (phis != NULL)

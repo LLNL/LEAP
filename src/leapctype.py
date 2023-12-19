@@ -1033,6 +1033,28 @@ class tomographicModels:
             self.libprojectors.sensitivity(f, True)
         return f
     
+    def windowFOV(self, f):
+        """Sets all voxels outside the field of view to zero
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): volume data to operate on
+            
+        Returns:
+            f, the same as the input
+        """
+        self.libprojectors.windowFOV.restype = ctypes.c_bool
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.windowFOV.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.windowFOV(f.data_ptr(), f.is_cuda == False)
+        else:
+            self.libprojectors.windowFOV.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.windowFOV(f, True)
+        return f
+    
     def rowRangeNeededForBackprojection(self):
         """Calculates the detector rows necessary to reconstruct the current volume specification
         
@@ -1968,6 +1990,29 @@ class tomographicModels:
         else:
             self.libprojectors.set_attenuationMap.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             return self.libprojectors.set_attenuationMap(mu)
+            
+    def muSpecified(self):
+        """Returns a boolean of whether or not the attenuation model has been set for the Attenuated Radon Transform
+        
+        Returns:
+            true if (muCoeff != 0 and muRadius > 0) or mu != NULL, false otherwise
+        """
+        self.set_model()
+        self.libprojectors.muSpecified.restype = ctypes.c_bool
+        return self.libprojectors.muSpecified()
+        
+    def flipAttenuationMapSign(self):
+        """Changes the sign of the attenuation model has been set for the Attenuated Radon Transform
+
+        WARNING: does not work if mu is stored on a GPU!
+        
+        If muCoeff != 0.0, muCoeff *= -1
+        if mu != NULL, mu *= -1
+        """
+        self.set_model()
+        self.libprojectors.flipAttenuationMapSign.restype = ctypes.c_bool
+        self.libprojectors.flipAttenuationMapSign.argtypes = [ctypes.c_bool]
+        return self.libprojectors.flipAttenuationMapSign(True)
         
     def set_cylindircalAttenuationMap(self, c, R):
         """Set the parameters for a cylindrical attenuation map for Attenuated Radon Transform calculations"""

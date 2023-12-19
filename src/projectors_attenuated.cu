@@ -710,7 +710,7 @@ __global__ void cylindricalAttenuatedBackprojectorKernel_SF(cudaTextureObject_t 
     const float s_shift = -startVals_g.z * T_u_inv;
     float cos_phi, sin_phi, C, s_arg, ds;
 
-    const float D = T_f.x * max(N_f.x, N_f.y);
+    //const float D = T_f.x * max(N_f.x, N_f.y);
 
     float val = 0.0;
     // loop over projection angles
@@ -760,9 +760,6 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
     const float v = m * T_g.y + startVals_g.y;
     const float u = n * T_g.z + startVals_g.z;
 
-    const float iz = float(m) + 0.5f;
-    const float Tx_inv = 1.0f / T_f.x;
-
     const float sin_phi = sin(phis[l]);
     const float cos_phi = cos(phis[l]);
 
@@ -787,51 +784,36 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
             shiftConstant = (n_minus_half - C) * ds_ind_dj_inv;
         else
             shiftConstant = (n_plus_half + C) * ds_ind_dj_inv;
-        for (int ii = 0; ii < N_f.x; ii++)
+        for (int i = 0; i < N_f.x; i++)
         {
-            int i = ii;
-            if (cos_phi > 0.0f)
-                i = N_f.x - 1 - ii;
-
             const float s_ind_base = (float)i * ds_ind_di + s_ind_offset;
             const int j_min_A = (int)ceil(shiftConstant - s_ind_base * ds_ind_dj_inv);
             const float s_ind_A = s_ind_base + (float)j_min_A * ds_ind_dj;
 
+            if (((float)i * T_f.x + startVals_f.x) * ((float)i * T_f.x + startVals_f.x) + ((float)j_min_A * T_f.y + startVals_f.y) * ((float)j_min_A * T_f.y + startVals_f.y) > rFOVsq)
+                continue;
+
+            //u = -sin_phi * x + cos_phi * y
             const float x = float(i) * T_f.x + startVals_f.x;
             const float y = (u + sin_phi * x) * cos_phi_inv;
-            //s = -sin_phi * x + cos_phi * y
-
-            if (x * x + y * y > rFOVsq)
-                continue;
 
             // Terms for attenuation factor
             float expTerm = 0.0f;
-            /*
-            if (fabs(u) < muRadius)
-            {
-                attenExpCoeff = sqrt(muRadius * muRadius - u * u);
-                attenExpCoeff = attenExpCoeff + min(attenExpCoeff, -x * cos_phi - y * sin_phi);
-            }
-            //*/
             const float t = x * cos_phi + y * sin_phi;
             if (u * u + t * t < muRadius * muRadius)
                 expTerm = exp(-muCoeff * (sqrt(muRadius * muRadius - u * u) - t));
-            //attenExpCoeff = -x * cos_phi - y * sin_phi; // ERT
-            // End Terms for attenuation factor
 
+            const float weight_0 = max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C));
+            const float weight_1 = max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C));
             if (volumeDimensionOrder == 0)
             {
-                g_output += (max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, m, j_min_A, i)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C)) * tex3D<float>(f, m, j_min_A + 1, i)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, m, j_min_A + 2, i))
-                    * expTerm;
+                g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(m) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(i) + 0.5f)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, float(m) + 0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f)) * expTerm;
             }
             else
             {
-                g_output += (max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, i, j_min_A, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C)) * tex3D<float>(f, i, j_min_A + 1, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, i, j_min_A + 2, m))
-                    * expTerm;
+                g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(m) + 0.5f)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(m) + 0.5f)) * expTerm;
             }
         }
     }
@@ -845,51 +827,36 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
             shiftConstant = (n_minus_half - C) * ds_ind_di_inv;
         else
             shiftConstant = (n_plus_half + C) * ds_ind_di_inv;
-        for (int jj = 0; jj < N_f.y; jj++)
+        for (int j = 0; j < N_f.y; j++)
         {
-            int j = jj;
-            if (sin_phi > 0.0f)
-                j = N_f.y - 1 - jj;
-
             const float s_ind_base = (float)j * ds_ind_dj + s_ind_offset;
             const int i_min_A = (int)ceil(shiftConstant - s_ind_base * ds_ind_di_inv);
             const float s_ind_A = s_ind_base + (float)i_min_A * ds_ind_di;
 
-            const float y = float(j) * T_f.y + startVals_f.y;
-            //s = -sin_phi * x + cos_phi * y
-            const float x = (cos_phi * y - u) * sin_phi_inv;
-
-            if (x*y + y*y > rFOVsq)
+            if (((float)i_min_A * T_f.x + startVals_f.x) * ((float)i_min_A * T_f.x + startVals_f.x) + ((float)j * T_f.y + startVals_f.y) * ((float)j * T_f.y + startVals_f.y) > rFOVsq)
                 continue;
+
+            //u = -sin_phi * x + cos_phi * y
+            const float y = float(j) * T_f.y + startVals_f.y;
+            const float x = (cos_phi * y - u) * sin_phi_inv;
 
             // Terms for attenuation factor
             float expTerm = 0.0f;
-            /*
-            if (fabs(u) < muRadius)
-            {
-                attenExpCoeff = sqrt(muRadius * muRadius - u * u);
-                attenExpCoeff = attenExpCoeff + min(attenExpCoeff, -x * cos_phi - y * sin_phi);
-            }
-            //*/
             const float t = x * cos_phi + y * sin_phi;
             if (u * u + t * t < muRadius * muRadius)
                 expTerm = exp(-muCoeff * (sqrt(muRadius * muRadius - u * u) - t));
-            //attenExpCoeff = -x * cos_phi - y * sin_phi; // ERT
-            // End Terms for attenuation factor
 
+            const float weight_0 = max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C));
+            const float weight_1 = max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C));
             if (volumeDimensionOrder == 0)
             {
-                g_output += (max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, m, j, i_min_A)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C)) * tex3D<float>(f, m, j, i_min_A + 1)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, m, j, i_min_A + 2))
-                    * expTerm;
+                g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1))
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A + 2) + 0.5f)) * expTerm;
             }
             else
             {
-                g_output += (max(0.0f, min(n_plus_half, s_ind_A + C) - max(n_minus_half, s_ind_A - C)) * tex3D<float>(f, i_min_A, j, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C)) * tex3D<float>(f, i_min_A + 1, j, m)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, i_min_A + 2, j, m))
-                    * expTerm;
+                g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(j) + 0.5f, float(m) + 0.5f)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(m) + 0.5f)) * expTerm;
             }
         }
     }

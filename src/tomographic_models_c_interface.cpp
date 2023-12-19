@@ -127,6 +127,11 @@ bool sensitivity(float* f, bool cpu_to_gpu)
 	return tomo()->sensitivity(f, cpu_to_gpu);
 }
 
+bool windowFOV(float* f, bool cpu_to_gpu)
+{
+	return tomo()->windowFOV(f, cpu_to_gpu);
+}
+
 float get_FBPscalar()
 {
 	return tomo()->get_FBPscalar();
@@ -250,6 +255,16 @@ bool set_cylindircalAttenuationMap(float c, float R)
 bool clear_attenuationMap()
 {
 	return tomo()->clear_attenuationMap();
+}
+
+bool muSpecified()
+{
+	return tomo()->params.muSpecified();
+}
+
+bool flipAttenuationMapSign(bool cpu_to_gpu)
+{
+	return tomo()->flipAttenuationMapSign(cpu_to_gpu);
 }
 
 bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)

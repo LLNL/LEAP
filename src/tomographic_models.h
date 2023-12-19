@@ -184,6 +184,15 @@ public:
 	bool rampFilterVolume(float* f, bool cpu_to_gpu);
 
 	/**
+	 * \fn          windowFOV
+	 * \brief       sets the array to zero for those values outside the field of view
+	 * \param[in]   f pointer to the volume data (input and output)
+	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool windowFOV(float* f, bool cpu_to_gpu);
+
+	/**
 	 * \fn          print_parameters
 	 * \brief       prints the CT geometry and CT volume parameters to the screen
 	 * \return      true is operation  was sucessful, false otherwise
@@ -503,6 +512,13 @@ public:
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
 	bool clear_attenuationMap();
+
+	/**
+	 * \fn          flipAttenuationMapSign
+	 * \brief       flips the sign of the attenuation map of the Attenuated Radon Transform
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool flipAttenuationMapSign(bool cpu_to_gpu);
 
 	// Filters for 3D data
 	/**
