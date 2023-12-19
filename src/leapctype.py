@@ -2558,7 +2558,41 @@ class tomographicModels:
             [Z[0],Z[1],Z[6],Z[7]],
             [Z[2],Z[3],Z[4],Z[5]]]
             ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
-            
+    
+    def saveVolume(self, fileName, f):
+        volFilePath, dontCare = os.path.split(fileName)
+        if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
+            print('Folder to save volume either does not exist or not accessible!')
+            return False
+        if fileName.endswith('.nrrd'):
+            try:
+                import nrrd
+                
+                if self.get_numX() > 0 and self.get_numY() > 0 and self.get_numZ() > 0:
+                    z_0 = self.z_samples()[0]
+                    y_0 = self.y_samples()[0]
+                    x_0 = self.x_samples()[0]
+                    T = self.get_voxelWidth()
+                else:
+                    x_0 = 0.0
+                    y_0 = 0.0
+                    z_0 = 0.0
+                    T = 1.0
+                # https://pynrrd.readthedocs.io/en/latest/examples.html
+                #header = {'units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T],}
+                #header = {'space units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T], 'space origin': '('+str(x_0)+','+str(y_0)+','+str(z_0)')', 'space':'RAS'}
+                #header = {'space units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T], 'space origin': [x_0, y_0, z_0], 'space':'RAS'}
+                header = {'units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T], 'axismins': [x_0, y_0, z_0], 'thicknesses': [T, T, T],}
+                nrrd.write(fileName, f, header)
+                return True
+            except:
+                print('Error: Failed to load nrrd library!')
+                print('To install this package do: pip install pynrrd')
+                return False
+        else:
+            print('Error: must be an nrrd file!')
+            return False
+    
     def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None):
         """Adds a geometric object to the volume
         
