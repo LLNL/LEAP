@@ -87,10 +87,18 @@ The CPU- and GPU-based projectors are nearly identical (32-bit floating point pr
 
 \section{Software Architecture}
 
-The majority of LEAP is written in C/C++/CUDA using the standard libraries.  The main class is called \textit{tomographicModels}.  All calls to LEAP must go through this class.  This class contains functions to call the projectors (forward projection and backprojection), FBP reconstruction algorithms, and noise filter functions.  It also contains a class called \textit{parameters} which contains all the CT geometry, CT volume parameters, and other run-time parameters.
+There are three major layers in the architecture.  Users may interact with LEAP at any of these layers as each have their own API.  Each of these APIs is how we interact with it from a higher layer.  A diagram of the LEAP software architecture is shown in Figure \ref{fig:LEAParchitecture}.
 
-There are two different interfaces to \textit{tomographicModels} class.  The first interface uses torch and PyTorch, so that LEAP can be used as differentiable projectors in ML/DL applications.  Installation of this interface is achieved with a pip install command.  The second interface uses standard ANSI C and a simple ctypes Python binding.  This interface is for those that want to use LEAP as a library of tomographic functions and want a version of LEAP that does not require torch/PyTorch.  Installation of this interface is achieved with cmake.  Installation instructions are given in the github wiki page.  A diagram of the LEAP software architecture is shown in Figure \ref{fig:LEAParchitecture}.
+%There are two layers built on top of this layer to interfaces with Python.  The first interface uses torch and PyTorch, so that LEAP can be used as differentiable projectors in ML/DL applications.  Installation of this interface is achieved with a pip install command.  The second interface uses standard ANSI C and a simple ctypes Python binding.  This interface is for those that want to use LEAP as a library of tomographic functions and want a version of LEAP that does not require torch/PyTorch.  Installation of this interface is achieved with cmake.  Installation instructions are given in the github wiki page.  A diagram of the LEAP software architecture is shown in Figure \ref{fig:LEAParchitecture}.
 
+\begin{figure}[h!]
+\begin{center}
+\includegraphics[scale=0.65]{LEAPoverview.png}
+\end{center}
+\vspace{-10pt}\caption{Overview of LEAP software architecture.} \label{fig:LEAParchitecture}
+\end{figure}
+
+\begin{comment}
 \begin{figure}[h!]
 \psset{unit=0.5mm}
 \pspicture(-150,-40)(50,50)%
@@ -107,8 +115,15 @@ There are two different interfaces to \textit{tomographicModels} class.  The fir
 \endpspicture
 \caption{Overview of LEAP software architecture.  The gray boxes are Python and the white boxes are C/C++/CUDA.} \label{fig:LEAParchitecture}
 \end{figure}
+\end{comment}
 
-The forward projection, backprojection, FBP, and imaging denoising algorithms are completely contained in the C/C++/CUDA code.  The iterative reconstruction algorithms are written in Python.  These can be found in the leapctypes file (which is a Python class that is also called tomographicModels).
+The bottom C++/CUDA layer (Tomographic Models Library) contains all the forward projection, backprojection, FBP reconstruction, and imaging denoising algorithms.  This layer contains all the multi-GPU and multi-core CPU functionality.  This is the dynamic library (\textit{libleap.so} on Linux and \textit{libLEAP.dll} on Windows) that get compiled.  The main class is called \texttt{tomographicModels}.  All calls to LEAP must go through this class.  This class also contains a class called \textit{parameters} which contains all the CT geometry, CT volume parameters, and other run-time parameters.
+
+The next layer is the primary Python interface, \textit{leapctype.py} (which is a Python class that is also called \texttt{tomographicModels}).  This provides an API to all the functionality in the bottom C++/CUDA layer and contains the iterative reconstruction algorithms.  If PyTorch is available it can take either PyTorch tensors or numpy arrays as input.  If PyTorch is not available, all the functionality still works.
+
+The top layer provides the integration with the PyTorch neural network functionality using the \texttt{torch.nn.Module} and \texttt{torch.autograd.Function} PyTorch classes.  This code is contained in the file named \textit{leaptorch.py} which primarily consists of a class called \texttt{Projector}.  
+
+The remainder of this document describes the algorithms in LEAP and the API class called \texttt{tomographicModels} which is in \textit{leapctype.py}.  Calls to this class can also be made from the \texttt{Projector} class in \textit{leaptorch.py} through the member variable named \texttt{leapct}.
 
 \section{Troubleshooting Tools}
 
