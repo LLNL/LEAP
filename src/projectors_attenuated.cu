@@ -863,14 +863,14 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
     g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = l_phi * g_output;
 }
 
-bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->muSpecified() == false || params->allDefined() == false)
         return false;
     if (params->voxelSizeWorksForFastSF() == false)
     {
         //printf("using extended\n");
-        //return project_eSF(g, f, params, cpu_to_gpu);
+        //return project_eSF(g, f, params, data_on_cpu);
         return false;
     }
     if (params->geometry != parameters::PARALLEL)
@@ -893,7 +893,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu
 
     float rFOVsq = params->rFOV() * params->rFOV();
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
@@ -908,7 +908,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
     else
         dev_f = f;
@@ -917,7 +917,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu
     cudaArray* d_mu_array = NULL;
     if (params->mu != NULL)
     {
-        if (cpu_to_gpu)
+        if (data_on_cpu)
             dev_mu = copyVolumeDataToGPU(params->mu, params, params->whichGPU);
         else
             dev_mu = params->mu;
@@ -945,7 +945,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
     else
         g = dev_g;
@@ -960,7 +960,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu
     }
     cudaFree(dev_phis);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if (dev_g != 0)
             cudaFree(dev_g);
@@ -973,7 +973,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu
     return true;
 }
 
-bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->muSpecified() == false || params->allDefined() == false)
         return false;
@@ -985,7 +985,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to
     if (params->voxelSizeWorksForFastSF() == false)
     {
         //printf("using extended\n");
-        //return backproject_eSF_cone(g, f, params, cpu_to_gpu);
+        //return backproject_eSF_cone(g, f, params, data_on_cpu);
         return false;
     }
 
@@ -1001,7 +1001,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
@@ -1022,7 +1022,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to
 
     float rFOVsq = params->rFOV() * params->rFOV();
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
     else
         dev_g = g;
@@ -1031,7 +1031,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to
     cudaArray* d_mu_array = NULL;
     if (params->mu != NULL)
     {
-        if (cpu_to_gpu)
+        if (data_on_cpu)
             dev_mu = copyVolumeDataToGPU(params->mu, params, params->whichGPU);
         else
             dev_mu = params->mu;
@@ -1066,7 +1066,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to
         fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
     else
         f = dev_f;
@@ -1081,7 +1081,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to
     }
     cudaFree(dev_phis);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if (dev_g != 0)
             cudaFree(dev_g);

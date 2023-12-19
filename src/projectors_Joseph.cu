@@ -718,23 +718,23 @@ __global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g,
         g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_ZYX(f, N_f, T_f, startVals_f, edgePos, dst);
 }
 
-bool project_Joseph(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_Joseph(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
     if (params->geometry == parameters::MODULAR)
-        return project_Joseph_modular(g, f, params, cpu_to_gpu);
+        return project_Joseph_modular(g, f, params, data_on_cpu);
     else
         return false;
 }
 
-bool backproject_Joseph(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_Joseph(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
     if (params->geometry == parameters::MODULAR)
-        return backproject_Joseph_modular(g, f, params, cpu_to_gpu);
+        return backproject_Joseph_modular(g, f, params, data_on_cpu);
     else
         return false;
 }
 
-bool project_Joseph_modular(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -749,7 +749,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool cpu_to
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
     
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
@@ -786,7 +786,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool cpu_to
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
     else
         dev_f = f;
@@ -808,7 +808,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool cpu_to
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
     else
         g = dev_g;
@@ -821,7 +821,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool cpu_to
     cudaFree(dev_rowVectors);
     cudaFree(dev_colVectors);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if (dev_g != 0)
             cudaFree(dev_g);
@@ -832,7 +832,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool cpu_to
     return true;
 }
 
-bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -847,7 +847,7 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool cp
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
@@ -884,7 +884,7 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool cp
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
     else
         dev_g = g;
@@ -922,7 +922,7 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool cp
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
     else
         f = dev_f;
@@ -935,7 +935,7 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool cp
     cudaFree(dev_rowVectors);
     cudaFree(dev_colVectors);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if (dev_g != 0)
             cudaFree(dev_g);

@@ -652,37 +652,37 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Main Routines
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool project_eSF_parallel(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_eSF_parallel(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
-    return project_eSF(g, f, params, cpu_to_gpu);
+    return project_eSF(g, f, params, data_on_cpu);
 }
 
-bool backproject_eSF_parallel(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_eSF_parallel(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
-    return backproject_eSF(g, f, params, cpu_to_gpu);
+    return backproject_eSF(g, f, params, data_on_cpu);
 }
 
-bool project_eSF_fan(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_eSF_fan(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
-    return project_eSF(g, f, params, cpu_to_gpu);
+    return project_eSF(g, f, params, data_on_cpu);
 }
 
-bool backproject_eSF_fan(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_eSF_fan(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
-    return backproject_eSF(g, f, params, cpu_to_gpu);
+    return backproject_eSF(g, f, params, data_on_cpu);
 }
 
-bool project_eSF_cone(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_eSF_cone(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
-    return project_eSF(g, f, params, cpu_to_gpu);
+    return project_eSF(g, f, params, data_on_cpu);
 }
 
-bool backproject_eSF_cone(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_eSF_cone(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
-    return backproject_eSF(g, f, params, cpu_to_gpu);
+    return backproject_eSF(g, f, params, data_on_cpu);
 }
 
-bool project_eSF(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_eSF(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -699,7 +699,7 @@ bool project_eSF(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 
     float rFOVsq = params->rFOV() * params->rFOV();
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
@@ -714,7 +714,7 @@ bool project_eSF(float*& g, float* f, parameters* params, bool cpu_to_gpu)
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
     else
         dev_f = f;
@@ -741,7 +741,7 @@ bool project_eSF(float*& g, float* f, parameters* params, bool cpu_to_gpu)
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
     else
         g = dev_g;
@@ -751,7 +751,7 @@ bool project_eSF(float*& g, float* f, parameters* params, bool cpu_to_gpu)
     cudaDestroyTextureObject(d_data_txt);
     cudaFree(dev_phis);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if (dev_g != 0)
             cudaFree(dev_g);
@@ -762,7 +762,7 @@ bool project_eSF(float*& g, float* f, parameters* params, bool cpu_to_gpu)
     return true;
 }
 
-bool backproject_eSF(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -777,7 +777,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool cpu_to_gpu)
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
@@ -794,7 +794,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 
     float rFOVsq = params->rFOV() * params->rFOV();
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
     else
         dev_g = g;
@@ -821,7 +821,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool cpu_to_gpu)
         fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
     else
         f = dev_f;
@@ -831,7 +831,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool cpu_to_gpu)
     cudaDestroyTextureObject(d_data_txt);
     cudaFree(dev_phis);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if (dev_g != 0)
             cudaFree(dev_g);

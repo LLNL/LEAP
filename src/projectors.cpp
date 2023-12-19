@@ -35,7 +35,7 @@ projectors::~projectors()
 
 }
 
-bool projectors::project(float* g, float* f, parameters* params, bool cpu_to_gpu)
+bool projectors::project(float* g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (params == NULL)
 		return false;
@@ -46,7 +46,7 @@ bool projectors::project(float* g, float* f, parameters* params, bool cpu_to_gpu
 	}
 	else if (params->whichGPU >= 0)
 	{
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 		{
 			if (params->hasSufficientGPUmemory() == false)
 			{
@@ -56,13 +56,13 @@ bool projectors::project(float* g, float* f, parameters* params, bool cpu_to_gpu
 		}
 
 		if (params->isSymmetric())
-			return project_symmetric(g, f, params, cpu_to_gpu);
+			return project_symmetric(g, f, params, data_on_cpu);
 		else if (params->muSpecified())
-			return project_attenuated(g, f, params, cpu_to_gpu);
+			return project_attenuated(g, f, params, data_on_cpu);
 		else if (params->geometry == parameters::MODULAR)
-			return project_Joseph_modular(g, f, params, cpu_to_gpu);
+			return project_Joseph_modular(g, f, params, data_on_cpu);
 		else
-			return project_SF(g, f, params, cpu_to_gpu);
+			return project_SF(g, f, params, data_on_cpu);
 	}
 	else
 	{
@@ -110,13 +110,13 @@ bool projectors::project(float* g, float* f, parameters* params, bool cpu_to_gpu
 	}
 }
 
-bool projectors::backproject(float* g, float* f, parameters* params, bool cpu_to_gpu)
+bool projectors::backproject(float* g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (params->allDefined() == false || g == NULL || f == NULL)
 		return false;
 	else if (params->whichGPU >= 0)
 	{
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 		{
 			if (params->hasSufficientGPUmemory() == false)
 			{
@@ -126,13 +126,13 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool cpu_to
 		}
 
 		if (params->isSymmetric())
-			return backproject_symmetric(g, f, params, cpu_to_gpu);
+			return backproject_symmetric(g, f, params, data_on_cpu);
 		else if (params->muSpecified())
-			return backproject_attenuated(g, f, params, cpu_to_gpu);
+			return backproject_attenuated(g, f, params, data_on_cpu);
 		else if (params->geometry == parameters::MODULAR)
-			return backproject_Joseph_modular(g, f, params, cpu_to_gpu);
+			return backproject_Joseph_modular(g, f, params, data_on_cpu);
 		else
-			return backproject_SF(g, f, params, cpu_to_gpu);
+			return backproject_SF(g, f, params, data_on_cpu);
 	}
 	else
 	{
@@ -186,13 +186,13 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool cpu_to
 	}
 }
 
-bool projectors::weightedBackproject(float* g, float* f, parameters* params, bool cpu_to_gpu)
+bool projectors::weightedBackproject(float* g, float* f, parameters* params, bool data_on_cpu)
 {
 	bool doWeightedBackprojection_save = params->doWeightedBackprojection;
 	params->doWeightedBackprojection = true;
 	bool doExtrapolation_save = params->doExtrapolation;
 	params->doExtrapolation = true;
-	bool retVal = backproject(g, f, params, cpu_to_gpu);
+	bool retVal = backproject(g, f, params, data_on_cpu);
 	params->doWeightedBackprojection = doWeightedBackprojection_save;
 	params->doExtrapolation = doExtrapolation_save;
 	return retVal;

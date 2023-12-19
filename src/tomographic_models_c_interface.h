@@ -34,21 +34,21 @@ extern "C" PROJECTOR_API bool backproject_cpu(float* g, float* f);
 extern "C" PROJECTOR_API bool FBP_cpu(float* g, float* f);
 extern "C" PROJECTOR_API bool FBP_gpu(float* g, float* f);
 
-extern "C" PROJECTOR_API bool project(float* g, float* f, bool cpu_to_gpu);
-extern "C" PROJECTOR_API bool backproject(float* g, float* f, bool cpu_to_gpu);
-extern "C" PROJECTOR_API bool weightedBackproject(float* g, float* f, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool project(float* g, float* f, bool data_on_cpu);
+extern "C" PROJECTOR_API bool backproject(float* g, float* f, bool data_on_cpu);
+extern "C" PROJECTOR_API bool weightedBackproject(float* g, float* f, bool data_on_cpu);
 
-extern "C" PROJECTOR_API bool HilbertFilterProjections(float* g, bool cpu_to_gpu, float scalar);
-extern "C" PROJECTOR_API bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar);
-extern "C" PROJECTOR_API bool filterProjections(float* g, bool cpu_to_gpu);
-extern "C" PROJECTOR_API bool rampFilterVolume(float* f, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar);
+extern "C" PROJECTOR_API bool rampFilterProjections(float* g, bool data_on_cpu, float scalar);
+extern "C" PROJECTOR_API bool filterProjections(float* g, bool data_on_cpu);
+extern "C" PROJECTOR_API bool rampFilterVolume(float* f, bool data_on_cpu);
 extern "C" PROJECTOR_API float get_FBPscalar();
 
-extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool data_on_cpu);
 
-extern "C" PROJECTOR_API bool sensitivity(float* f, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool sensitivity(float* f, bool data_on_cpu);
 
-extern "C" PROJECTOR_API bool windowFOV(float* f, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool windowFOV(float* f, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
 extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
@@ -59,14 +59,14 @@ extern "C" PROJECTOR_API bool set_volumeDimensionOrder(int which);
 extern "C" PROJECTOR_API int get_volumeDimensionOrder();
 extern "C" PROJECTOR_API bool set_default_volume(float scale);
 
-extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
-extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
-extern "C" PROJECTOR_API bool projectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
-extern "C" PROJECTOR_API bool backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+extern "C" PROJECTOR_API bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+extern "C" PROJECTOR_API bool backprojectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
-extern "C" PROJECTOR_API bool projectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
-extern "C" PROJECTOR_API bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+extern "C" PROJECTOR_API bool projectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+extern "C" PROJECTOR_API bool backprojectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
 extern "C" PROJECTOR_API bool rowRangeNeededForBackprojection(int* rowsNeeded);
 
@@ -87,7 +87,7 @@ extern "C" PROJECTOR_API bool set_attenuationMap(float*);
 extern "C" PROJECTOR_API bool set_cylindircalAttenuationMap(float, float);
 extern "C" PROJECTOR_API bool clear_attenuationMap();
 extern "C" PROJECTOR_API bool muSpecified();
-extern "C" PROJECTOR_API bool flipAttenuationMapSign(bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool flipAttenuationMapSign(bool data_on_cpu);
 
 extern "C" PROJECTOR_API int get_geometry();
 extern "C" PROJECTOR_API float get_sod();
@@ -122,14 +122,14 @@ extern "C" PROJECTOR_API float get_offsetZ();
 extern "C" PROJECTOR_API float get_z0();
 
 // Filters for 3D data
-extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool cpu_to_gpu);
-extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, bool cpu_to_gpu);
+extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
+extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, bool data_on_cpu);
 
 // Anisotropic Total Variation for 3D data
-extern "C" PROJECTOR_API float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
-extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
-extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
-extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu);
+extern "C" PROJECTOR_API float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
+extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
+extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
+extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip);
 

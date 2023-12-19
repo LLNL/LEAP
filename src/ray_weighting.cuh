@@ -16,12 +16,12 @@
 #include "parameters.h"
 #include <stdlib.h>
 
-bool applyPreRampFilterWeights(float* g, parameters*, bool cpu_to_gpu);
-bool applyPostRampFilterWeights(float* g, parameters*, bool cpu_to_gpu);
+bool applyPreRampFilterWeights(float* g, parameters*, bool data_on_cpu);
+bool applyPostRampFilterWeights(float* g, parameters*, bool data_on_cpu);
 
-bool applyPreRampFilterWeights_GPU(float* g, parameters*, bool cpu_to_gpu);
-bool applyPostRampFilterWeights_GPU(float* g, parameters*, bool cpu_to_gpu);
+bool applyPreRampFilterWeights_GPU(float* g, parameters*, bool data_on_cpu);
+bool applyPostRampFilterWeights_GPU(float* g, parameters*, bool data_on_cpu);
 
-bool convertARTtoERT(float* g, parameters*, bool cpu_to_gpu, bool doInverse=false);
+bool convertARTtoERT(float* g, parameters*, bool data_on_cpu, bool doInverse=false);
 
 #endif

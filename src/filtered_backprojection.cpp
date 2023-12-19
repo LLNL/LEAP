@@ -34,17 +34,17 @@ filteredBackprojection::~filteredBackprojection()
 
 }
 
-bool filteredBackprojection::HilbertFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift)
+bool filteredBackprojection::HilbertFilterProjections(float* g, parameters* params, bool data_on_cpu, float scalar, float sampleShift)
 {
-	return convolve1D(g, params, cpu_to_gpu, scalar, 1, sampleShift);
+	return convolve1D(g, params, data_on_cpu, scalar, 1, sampleShift);
 }
 
-bool filteredBackprojection::rampFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar)
+bool filteredBackprojection::rampFilterProjections(float* g, parameters* params, bool data_on_cpu, float scalar)
 {
-	return convolve1D(g, params, cpu_to_gpu, scalar, 0);
+	return convolve1D(g, params, data_on_cpu, scalar, 0);
 }
 
-bool filteredBackprojection::convolve1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter, float sampleShift)
+bool filteredBackprojection::convolve1D(float* g, parameters* params, bool data_on_cpu, float scalar, int whichFilter, float sampleShift)
 {
 	if (params->whichGPU < 0)
 	{
@@ -73,13 +73,13 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool cpu_t
 	{
 		if (params->isSymmetric())
 		{
-			if (cpu_to_gpu)
+			if (data_on_cpu)
 			{
 				float* g_left = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
 				float* g_right = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
 				splitLeftAndRight(g, g_left, g_right, params);
-				bool retVal = rampFilter1D(g_left, params, cpu_to_gpu, scalar);
-				rampFilter1D(g_right, params, cpu_to_gpu, scalar);
+				bool retVal = rampFilter1D(g_left, params, data_on_cpu, scalar);
+				rampFilter1D(g_right, params, data_on_cpu, scalar);
 				mergeLeftAndRight(g, g_left, g_right, params);
 				free(g_left);
 				free(g_right);
@@ -93,18 +93,18 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool cpu_t
 			if (whichFilter == 0)
 			{
 				/*
-				ray_derivative(g, params, cpu_to_gpu, scalar, 1.0);
-				return Hilbert1D(g, params, cpu_to_gpu, 1.0, -1.0);
+				ray_derivative(g, params, data_on_cpu, scalar, 1.0);
+				return Hilbert1D(g, params, data_on_cpu, 1.0, -1.0);
 				//*/
-				return rampFilter1D(g, params, cpu_to_gpu, scalar);
+				return rampFilter1D(g, params, data_on_cpu, scalar);
 			}
 			else
-				return Hilbert1D(g, params, cpu_to_gpu, scalar, sampleShift);
+				return Hilbert1D(g, params, data_on_cpu, scalar, sampleShift);
 		}
 	}
 }
 
-bool filteredBackprojection::filterProjections(float* g, parameters* params, bool cpu_to_gpu)
+bool filteredBackprojection::filterProjections(float* g, parameters* params, bool data_on_cpu)
 {
 	if (params->geometry == parameters::MODULAR)
 	{
@@ -113,9 +113,9 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 	}
 
 	if (params->muSpecified())
-		return filterProjections_Novikov(g, params, cpu_to_gpu);
+		return filterProjections_Novikov(g, params, data_on_cpu);
 
-	if (params->whichGPU < 0 || cpu_to_gpu == false)
+	if (params->whichGPU < 0 || data_on_cpu == false)
 	{
 		// no transfers to/from GPU are necessary; just run the code
 		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
@@ -126,13 +126,13 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 		}
 		else
 		{
-			applyPreRampFilterWeights(g, params, cpu_to_gpu);
+			applyPreRampFilterWeights(g, params, data_on_cpu);
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, false, false);
-			rampFilterProjections(g, params, cpu_to_gpu, FBPscalar(params));
+			rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, false, true);
-			return applyPostRampFilterWeights(g, params, cpu_to_gpu);
+			return applyPostRampFilterWeights(g, params, data_on_cpu);
 		}
 	}
 	else
@@ -161,7 +161,7 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 	}
 }
 
-bool filteredBackprojection::execute(float* g, float* f, parameters* params, bool cpu_to_gpu)
+bool filteredBackprojection::execute(float* g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (params->geometry == parameters::MODULAR)
 	{
@@ -175,16 +175,16 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 	}
 
 	if (params->muSpecified())
-		return execute_attenuated(g, f, params, cpu_to_gpu);
+		return execute_attenuated(g, f, params, data_on_cpu);
 
-	if (params->whichGPU < 0 || cpu_to_gpu == false)
+	if (params->whichGPU < 0 || data_on_cpu == false)
 	{
 		float* g_pad = NULL;
 		float* g_save = g;
 		if (params->offsetScan)
 		{
 			/*
-			if (params->whichGPU >= 0 && cpu_to_gpu == false)
+			if (params->whichGPU >= 0 && data_on_cpu == false)
 			{
 				printf("Error: currently offsetScan reconstruction only works on CPU or on GPU and the data resided on the CPU\n");
 				printf("In other words, you did something we did not expect.  Please submit a new feature request\n");
@@ -211,10 +211,10 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 			if (params->whichGPU < 0)
 				retVal = CPUinverse_symmetric(g, f, params);
 			else
-				retVal = inverse_symmetric(g, f, params, cpu_to_gpu);
+				retVal = inverse_symmetric(g, f, params, data_on_cpu);
 		}
 		else
-			retVal = proj.backproject(g, f, params, cpu_to_gpu);
+			retVal = proj.backproject(g, f, params, data_on_cpu);
 		params->doWeightedBackprojection = doWeightedBackprojection_save;
 		params->doExtrapolation = doExtrapolation_save;
 		params->colShiftFromFilter = 0.0;
@@ -273,10 +273,10 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 	}
 }
 
-bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* params, bool cpu_to_gpu)
+bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (params->mu != NULL)
-		return execute_Novikov(g, f, params, cpu_to_gpu);
+		return execute_Novikov(g, f, params, data_on_cpu);
 	if (params->geometry != parameters::PARALLEL)
 	{
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
@@ -287,11 +287,11 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;
 	}
-	if (params->whichGPU < 0 || cpu_to_gpu == false)
+	if (params->whichGPU < 0 || data_on_cpu == false)
 	{
 		// data transfers to/from GPU are not necessary
 		// don't need memory checks
-		applyPreRampFilterWeights(g, params, cpu_to_gpu);
+		applyPreRampFilterWeights(g, params, data_on_cpu);
 		convertARTtoERT(g, params, false, false);
 		rampFilterProjections(g, params, false, FBPscalar(params));
 		convertARTtoERT(g, params, false, true);
@@ -338,7 +338,7 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 	}
 }
 
-bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* params, bool cpu_to_gpu)
+bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* params, bool data_on_cpu)
 {
 	if (params->geometry != parameters::PARALLEL)
 	{
@@ -359,7 +359,7 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 	float* params_mu_save = params->mu;
 	float* dev_g = 0;
 	float* dev_mu = 0;
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (params->hasSufficientGPUmemory() == false)
 		{
@@ -455,7 +455,7 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 
 	// Clean up
 	params->mu = params_mu_save;
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
 		if (dev_g != 0)
@@ -466,7 +466,7 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 	return true;
 }
 
-bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* params, bool cpu_to_gpu)
+bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (params->geometry != parameters::PARALLEL)
 	{
@@ -491,7 +491,7 @@ bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* par
 	float* dev_g = 0;
 	float* dev_f = 0;
 	float* dev_mu = 0;
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (params->hasSufficientGPUmemory() == false)
 		{
@@ -602,7 +602,7 @@ bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* par
 	proj.weightedBackproject(dev_g, dev_f, params, false);
 	params->mu = params_mu_save;
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
 		if (dev_f != 0)

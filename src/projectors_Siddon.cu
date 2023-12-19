@@ -1461,12 +1461,12 @@ __global__ void modularBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float
 
 //#########################################################################################
 //#########################################################################################
-bool project_Siddon(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_Siddon(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (params == NULL)
 		return false;
 	if (params->geometry == parameters::MODULAR)
-		return project_modular(g, f, params, cpu_to_gpu);
+		return project_modular(g, f, params, data_on_cpu);
 
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
@@ -1481,7 +1481,7 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	int4 N_g; float4 T_g; float4 startVal_g;
 	setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
 		{
@@ -1496,7 +1496,7 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
 	else
 		dev_f = f;
@@ -1524,7 +1524,7 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 	}
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
 	else
 		g = dev_g;
@@ -1534,7 +1534,7 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	cudaDestroyTextureObject(d_data_txt);
 	cudaFree(dev_phis);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (dev_g != 0)
 			cudaFree(dev_g);
@@ -1545,12 +1545,12 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	return true;
 }
 
-bool backproject_Siddon(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_Siddon(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
 	if (params == NULL)
 		return false;
 	if (params->geometry == parameters::MODULAR)
-		return backproject_modular(g, f, params, cpu_to_gpu);
+		return backproject_modular(g, f, params, data_on_cpu);
 
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
@@ -1565,7 +1565,7 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool cpu_to_gpu
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
 		{
@@ -1582,7 +1582,7 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool cpu_to_gpu
 
 	float rFOVsq = params->rFOV() * params->rFOV();
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 	else
 		dev_g = g;
@@ -1609,7 +1609,7 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool cpu_to_gpu
 		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 	}
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
 	else
 		f = dev_f;
@@ -1619,7 +1619,7 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool cpu_to_gpu
 	cudaDestroyTextureObject(d_data_txt);
 	cudaFree(dev_phis);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (dev_g != 0)
 			cudaFree(dev_g);
@@ -1630,37 +1630,37 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool cpu_to_gpu
 	return true;
 }
 
-bool project_fan(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_fan(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
-	return project_Siddon(g, f, params, cpu_to_gpu);
+	return project_Siddon(g, f, params, data_on_cpu);
 }
 
-bool backproject_fan(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_fan(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
-	return backproject_Siddon(g, f, params, cpu_to_gpu);
+	return backproject_Siddon(g, f, params, data_on_cpu);
 }
 
-bool project_cone(float *&g, float *f, parameters* params, bool cpu_to_gpu)
+bool project_cone(float *&g, float *f, parameters* params, bool data_on_cpu)
 {
-	return project_Siddon(g, f, params, cpu_to_gpu);
+	return project_Siddon(g, f, params, data_on_cpu);
 }
 
-bool backproject_cone(float* g, float *&f, parameters* params, bool cpu_to_gpu)
+bool backproject_cone(float* g, float *&f, parameters* params, bool data_on_cpu)
 {
-	return backproject_Siddon(g, f, params, cpu_to_gpu);
+	return backproject_Siddon(g, f, params, data_on_cpu);
 }
 
-bool project_parallel(float *&g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_parallel(float *&g, float* f, parameters* params, bool data_on_cpu)
 {
-	return project_Siddon(g, f, params, cpu_to_gpu);
+	return project_Siddon(g, f, params, data_on_cpu);
 }
 
-bool backproject_parallel(float* g, float *&f, parameters* params, bool cpu_to_gpu)
+bool backproject_parallel(float* g, float *&f, parameters* params, bool data_on_cpu)
 {
-	return backproject_Siddon(g, f, params, cpu_to_gpu);
+	return backproject_Siddon(g, f, params, data_on_cpu);
 }
 
-bool project_modular(float *&g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_modular(float *&g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
@@ -1675,7 +1675,7 @@ bool project_modular(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 	int4 N_g; float4 T_g; float4 startVal_g;
 	setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
 		{
@@ -1712,7 +1712,7 @@ bool project_modular(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
 	else
 		dev_f = f;
@@ -1734,7 +1734,7 @@ bool project_modular(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 	}
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
 	else
 		g = dev_g;
@@ -1747,7 +1747,7 @@ bool project_modular(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 	cudaFree(dev_rowVectors);
 	cudaFree(dev_colVectors);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (dev_g != 0)
 			cudaFree(dev_g);
@@ -1758,7 +1758,7 @@ bool project_modular(float *&g, float* f, parameters* params, bool cpu_to_gpu)
 	return true;
 }
 
-bool backproject_modular(float* g, float *&f, parameters* params, bool cpu_to_gpu)
+bool backproject_modular(float* g, float *&f, parameters* params, bool data_on_cpu)
 {
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
@@ -1773,7 +1773,7 @@ bool backproject_modular(float* g, float *&f, parameters* params, bool cpu_to_gp
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
 		{
@@ -1810,7 +1810,7 @@ bool backproject_modular(float* g, float *&f, parameters* params, bool cpu_to_gp
 	int4 N_g; float4 T_g; float4 startVal_g;
 	setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 	else
 		dev_g = g;
@@ -1832,7 +1832,7 @@ bool backproject_modular(float* g, float *&f, parameters* params, bool cpu_to_gp
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 	}
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
 	else
 		f = dev_f;
@@ -1845,7 +1845,7 @@ bool backproject_modular(float* g, float *&f, parameters* params, bool cpu_to_gp
 	cudaFree(dev_rowVectors);
 	cudaFree(dev_colVectors);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (dev_g != 0)
 			cudaFree(dev_g);

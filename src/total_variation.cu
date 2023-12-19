@@ -273,7 +273,7 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
         dist_3;
 }
 
-bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
+bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd)
 {
     if (f == NULL) return false;
     if (beta <= 0.0)
@@ -297,7 +297,7 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
     float* dev_Df = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         dev_f = copy3DdataToGPU(f, N, whichGPU);
         
@@ -321,7 +321,7 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     cudaDeviceSynchronize();
 
     // pull result off GPU
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         float* dev_Df_shift = &dev_Df[uint64(sliceStart) * uint64(N.y) * uint64(N.z)];
         int3 N_crop = make_int3(sliceEnd-sliceStart+1, N_2, N_3);
@@ -329,18 +329,18 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     }
 
     // Clean up
-    if (cpu_to_gpu && dev_f != 0)
+    if (data_on_cpu && dev_f != 0)
     {
         cudaFree(dev_f);
     }
-    if (cpu_to_gpu && dev_Df != 0)
+    if (data_on_cpu && dev_Df != 0)
     {
         cudaFree(dev_Df);
     }
     return true;
 }
 
-float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
+float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd)
 {
     if (f == NULL || d == NULL) return -1.0;
     if (beta <= 0.0)
@@ -364,7 +364,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
     float* dev_d = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         dev_f = copy3DdataToGPU(f, N, whichGPU);
         dev_d = copy3DdataToGPU(d, N, whichGPU);
@@ -406,11 +406,11 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     //*/
 
     // Clean up
-    if (cpu_to_gpu && dev_f != 0)
+    if (data_on_cpu && dev_f != 0)
     {
         cudaFree(dev_f);
     }
-    if (cpu_to_gpu && dev_d != 0)
+    if (data_on_cpu && dev_d != 0)
     {
         cudaFree(dev_d);
     }
@@ -422,7 +422,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     return retVal;
 }
 
-float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd)
+float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd)
 {
     if (f == NULL) return -1.0;
     if (beta <= 0.0)
@@ -445,7 +445,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_f = copy3DdataToGPU(f, N, whichGPU);
     else
         dev_f = f;
@@ -468,7 +468,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     float retVal = sum(dev_d, N, whichGPU);
 
     // Clean up
-    if (cpu_to_gpu && dev_f != 0)
+    if (data_on_cpu && dev_f != 0)
     {
         cudaFree(dev_f);
     }
@@ -480,7 +480,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     return retVal;
 }
 
-bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu, int whichGPU)
+bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu, int whichGPU)
 {
     if (f == NULL) return -1.0;
     float beta = 1.0;
@@ -493,7 +493,7 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_f = copy3DdataToGPU(f, N, whichGPU);
     else
         dev_f = f;
@@ -519,11 +519,11 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
     }
 
     // pull result off GPU
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pull3DdataFromGPU(f, N, dev_f, whichGPU);
 
     // Clean up
-    if (cpu_to_gpu && dev_f != 0)
+    if (data_on_cpu && dev_f != 0)
     {
         cudaFree(dev_f);
     }

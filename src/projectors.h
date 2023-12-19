@@ -30,10 +30,10 @@ public:
     projectors();
     ~projectors();
 
-    bool project(float* g, float* f, parameters* params, bool cpu_to_gpu);
-    bool backproject(float* g, float* f, parameters* params, bool cpu_to_gpu);
+    bool project(float* g, float* f, parameters* params, bool data_on_cpu);
+    bool backproject(float* g, float* f, parameters* params, bool data_on_cpu);
 
-    bool weightedBackproject(float* g, float* f, parameters* params, bool cpu_to_gpu);
+    bool weightedBackproject(float* g, float* f, parameters* params, bool data_on_cpu);
 };
 
 #endif

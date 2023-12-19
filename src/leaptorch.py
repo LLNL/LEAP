@@ -10,7 +10,7 @@
 import numpy as np
 import torch
 from leapctype import *
-leapct = tomographicModels()
+lct = tomographicModels()
 
 # Note:
 # Image tensor format: [Batch, ImageZ, ImageY, ImageX]
@@ -23,7 +23,7 @@ class ProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = input[batch]
             g = proj[batch]
-            leapct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            lct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
         ctx.save_for_backward(input, vol, param_id)
         return proj
 
@@ -33,7 +33,7 @@ class ProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = grad_output[batch]
-            leapct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            lct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
         return vol, None, None, None
 
 # GPU Projector for forward and backward propagation
@@ -43,7 +43,7 @@ class ProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = input[batch]
             g = proj[batch]
-            leapct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            lct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
         ctx.save_for_backward(input, vol, param_id)
         return proj
 
@@ -53,7 +53,7 @@ class ProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = grad_output[batch]
-            leapct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            lct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
         return vol, None, None, None
 
 
@@ -64,7 +64,7 @@ class BackProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = input[batch]
-            leapct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            lct.backproject_cpu(g, f, param_id.item()) # compute input (f) from proj (g)
             #vol[batch] = f
         ctx.save_for_backward(input, proj, param_id)
         return vol
@@ -75,7 +75,7 @@ class BackProjectorFunctionCPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = grad_output[batch]
             g = proj[batch]
-            leapct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            lct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
             #proj[batch] = g
         return None, proj, None, None
 
@@ -86,7 +86,7 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = vol[batch]
             g = input[batch]
-            leapct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
+            lct.backproject_gpu(g, f, param_id.item()) # compute input (f) from proj (g)
             #vol[batch] = f
         ctx.save_for_backward(input, proj, param_id)
         return vol
@@ -97,7 +97,7 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
         for batch in range(input.shape[0]):
             f = grad_output[batch]
             g = proj[batch]
-            leapct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
+            lct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
             #proj[batch] = g
         return None, proj, None, None
 
@@ -110,11 +110,11 @@ class Projector(torch.nn.Module):
 
         if use_static:
             self.param_id = 0
-            self.lct = tomographicModels(self.param_id)
+            self.leapct = tomographicModels(self.param_id)
         else:
-            self.lct = tomographicModels()
-            self.param_id = self.lct.param_id
-        leapct.param_id = self.param_id
+            self.leapct = tomographicModels()
+            self.param_id = self.leapct.param_id
+        lct.param_id = self.param_id
         self.param_id_t = torch.tensor(self.param_id).to(gpu_device) if use_gpu else torch.tensor(self.param_id)
         self.use_gpu = use_gpu
         self.gpu_device = gpu_device
@@ -125,14 +125,14 @@ class Projector(torch.nn.Module):
         self.proj_data = None
         
     def set_volume(self, numX, numY, numZ, voxelWidth, voxelHeight, offsetX=0.0, offsetY=0.0, offsetZ=0.0):
-        self.lct.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
+        self.leapct.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
         vol_np = np.ascontiguousarray(np.zeros((self.batch_size, numZ, numY, numX),dtype=np.float32), dtype=np.float32)
         self.vol_data = torch.from_numpy(vol_np)
         if self.use_gpu:
             self.vol_data = self.vol_data.float().to(self.gpu_device)
             
     def set_default_volume(self, scale=1.0):
-        self.lct.set_defaultVolume(scale)
+        self.leapct.set_defaultVolume(scale)
         dim1, dim2, dim3 = self.get_volume_dim()
         vol_np = np.ascontiguousarray(np.zeros((self.batch_size, dim1, dim2, dim3),dtype=np.float32), dtype=np.float32)
         self.vol_data = torch.from_numpy(vol_np)
@@ -142,7 +142,7 @@ class Projector(torch.nn.Module):
     def set_parallelbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
         if type(phis) is torch.Tensor:
             phis = phis.numpy()
-        self.lct.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
+        self.leapct.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
@@ -151,7 +151,7 @@ class Projector(torch.nn.Module):
     def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
         if type(phis) is torch.Tensor:
             phis = phis.numpy()
-        self.lct.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
+        self.leapct.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
@@ -160,7 +160,7 @@ class Projector(torch.nn.Module):
     def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
         if type(phis) is torch.Tensor:
             phis = phis.numpy()
-        self.lct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
+        self.leapct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
@@ -175,17 +175,17 @@ class Projector(torch.nn.Module):
             rowVec = rowVec.numpy()
         if type(colVec) is torch.Tensor:
             colVec = colVec.numpy()
-        self.lct.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVec, colVec)
+        self.leapct.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVec, colVec)
         proj_np = np.ascontiguousarray(np.zeros((self.batch_size, numAngles, numRows, numCols),dtype=np.float32), dtype=np.float32)
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
         
     def get_volume_dim(self):
-        return self.lct.get_volume_dim()
+        return self.leapct.get_volume_dim()
         
     def get_projection_dim(self):
-        return self.lct.get_projection_dim()
+        return self.leapct.get_projection_dim()
         
     def allocate_batch_data(self):
         vol_dim1, vol_dim2, vol_dim3 = self.get_volume_dim()
@@ -252,25 +252,25 @@ class Projector(torch.nn.Module):
         #                          srcpos, modcenter, rowvec, colvec)
 
     def save_param(self, param_fn):
-        return self.lct.save_param(param_fn)
+        return self.leapct.save_param(param_fn)
 
     def set_gpu(self, which):
         self.gpu_device = which
-        return self.lct.set_gpu(self.gpu_device.index)
+        return self.leapct.set_gpu(self.gpu_device.index)
         
     def set_gpus(self, listofgpus):
         self.gpu_device = listofgpus[0]
-        return self.lct.set_gpus(listofgpus)
+        return self.leapct.set_gpus(listofgpus)
         
     def print_parameters(self):
-        self.lct.print_parameters()
+        self.leapct.print_parameters()
     
     def fbp(self, input): # input is projection data (g batch)
         for batch in range(input.shape[0]):
             if self.use_gpu:
-                self.lct.FBP_gpu(input[batch], self.vol_data[batch])
+                self.leapct.FBP_gpu(input[batch], self.vol_data[batch])
             else:
-                self.lct.FBP_cpu(input[batch], self.vol_data[batch])
+                self.leapct.FBP_cpu(input[batch], self.vol_data[batch])
         return self.vol_data
 
     def forward(self, input):

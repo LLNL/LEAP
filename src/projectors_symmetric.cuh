@@ -16,10 +16,10 @@
 
 #include "parameters.h"
 
-bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu);
-bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu);
+bool project_symmetric(float*& g, float* f, parameters* params, bool data_on_cpu);
+bool backproject_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu);
 
-bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu);
+bool inverse_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu);
 
 /* Utility Functions for anti-symmetric projections
 float* splitVolume(float*, parameters* params, bool rightHalf = true);

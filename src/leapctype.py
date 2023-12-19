@@ -37,17 +37,17 @@ class tomographicModels:
         Note that all input and ouput data for all functions must lie either on a specific GPU or on the CPU.
         You cannot have some data on the CPU and some on a GPU.
         
-        If the data is on the CPU:
+        If the data is on the CPU (works for both numpy arrays or pytorch tensors):
             1) and one wishes the computations to take place on the CPU, then run the following
                command: set_gpu(-1).
             2) and one wishes the computations to take place on one of more GPUs, then run
                the following command: set_gpus(list_of_gpu_indices), e.g., set_gpus([0,1])
                The default setting is for LEAP to use all GPUs, so if this is what you want
                there is no need to run the set_gpus function
-        If the data is on the GPU:
+        If the data is on the GPU (only possible with torch tensors):
             then the computations must also take place on this particular GPU and
             you must run the following command: set_gpu(index), where index is GPU index
-            of where the data resides
+            of where the data resides.
             
         Providing data that is already on a GPU is best for small data sets, where data
         transfers to and from the GPU are more time consuming than the computations
@@ -64,7 +64,7 @@ class tomographicModels:
         
         Args:
             param_id (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use
-            lib_dir (string): Path to the LEAP dynamic library
+            lib_dir (string): Path to the LEAP dynamic library, default value is the same path as this file
         
         """
         if len(lib_dir) > 0:
@@ -412,6 +412,9 @@ class tomographicModels:
     
     def set_volumeDimensionOrder(self,which):
         """Sets the order of the dimensions of the volume
+        
+        WARNING: multi-GPU processing only works for ZYX order
+        
         Args:
             setVolumeDimensionOrder (int): 0 sets the order to XYZ, 1 sets the order to ZYX (this is the default value)
             
@@ -481,7 +484,8 @@ class tomographicModels:
                 g = np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
             else:
                 g = np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
-            g = torch.from_numpy(g).float().to(max(0,self.get_gpu()))
+            if has_torch:
+                g = torch.from_numpy(g).float().to(max(0,self.get_gpu()))
             return g
         else:
             return None
@@ -557,7 +561,8 @@ class tomographicModels:
                 f = np.ascontiguousarray(np.zeros((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
             else:
                 f = np.ascontiguousarray(val*np.ones((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
-            f = torch.from_numpy(f).float().to(max(0,self.get_gpu()))
+            if has_torch:
+                f = torch.from_numpy(f).float().to(max(0,self.get_gpu()))
             return f
         else:
             return None
@@ -574,6 +579,12 @@ class tomographicModels:
             numpy array is numAngles, numRows, and numCols are all positive, None otherwise
         """
         return np.array(range(numAngles)).astype(np.float32) * angularRange/float(numAngles)
+        
+    def copyData(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            return x.clone()
+        else:
+            return x.copy()
     
     ###################################################################################################################
     ###################################################################################################################
@@ -880,10 +891,7 @@ class tomographicModels:
         
         # Make a copy of g if necessary
         if inplace == False:
-            if has_torch == True and type(g) is torch.Tensor:
-                q = g.clone()
-            else:
-                q = g.copy()
+            q = self.copyData(g)
         else:
             q = g
         
@@ -925,10 +933,7 @@ class tomographicModels:
 
         # Make a copy of g if necessary
         if inplace == False:
-            if has_torch == True and type(g) is torch.Tensor:
-                q = g.clone()
-            else:
-                q = g.copy()
+            q = self.copyData(g)
         else:
             q = g
             
@@ -963,13 +968,12 @@ class tomographicModels:
                 print('Error: FBP_gpu requires that the data be on the GPU')
                 return f
         else:
-            print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
+            print('Error: FBP_gpu requires that the data be pytorch tensors on the GPU')
             return f
 
         # Make a copy of g if necessary
         if inplace == False:
-            if has_torch == True and type(g) is torch.Tensor:
-                q = g.clone()
+            q = self.copyData(g)
         else:
             q = g
         
@@ -1494,11 +1498,11 @@ class tomographicModels:
             return f
         conjGradRestart = 50
         if W is None:
-            W = g.copy()
+            W = self.copyData(g)
             W = np.exp(-W)
         if f is None:
             f = self.allocateVolume()
-        Pf = g.copy()
+        Pf = self.copyData(g)
         if np.any(f):
             # fix scaling
             f[f<0.0] = 0.0
@@ -1539,7 +1543,7 @@ class tomographicModels:
         
         for n in range(numIter):
             print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
-            WPf_minus_g = Pf_minus_g.copy()
+            WPf_minus_g = self.copyData(Pf_minus_g)
             if W is not None:
                 WPf_minus_g *= W
             self.backproject(WPf_minus_g, grad)

@@ -136,7 +136,7 @@ __global__ void coneBeamSensitivityKernel(int4 N_g, float4 T_g, float4 startVals
     f[ind] = val * scalar;
 }
 
-bool sensitivity_gpu(float*& f, parameters* params, bool cpu_to_gpu)
+bool sensitivity_gpu(float*& f, parameters* params, bool data_on_cpu)
 {
     if (f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -151,7 +151,7 @@ bool sensitivity_gpu(float*& f, parameters* params, bool cpu_to_gpu)
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
@@ -192,7 +192,7 @@ bool sensitivity_gpu(float*& f, parameters* params, bool cpu_to_gpu)
         fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
     else
         f = dev_f;
@@ -200,7 +200,7 @@ bool sensitivity_gpu(float*& f, parameters* params, bool cpu_to_gpu)
     // Clean up
     cudaFree(dev_phis);
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         if (dev_f != 0)
             cudaFree(dev_f);

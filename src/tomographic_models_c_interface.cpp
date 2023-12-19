@@ -72,14 +72,14 @@ bool backproject_cpu(float* g, float* f)
 	return tomo()->backproject_cpu(g, f);
 }
 
-bool project(float* g, float* f, bool cpu_to_gpu)
+bool project(float* g, float* f, bool data_on_cpu)
 {
-	return tomo()->project(g, f, cpu_to_gpu);
+	return tomo()->project(g, f, data_on_cpu);
 }
 
-bool backproject(float* g, float* f, bool cpu_to_gpu)
+bool backproject(float* g, float* f, bool data_on_cpu)
 {
-	return tomo()->backproject(g, f, cpu_to_gpu);
+	return tomo()->backproject(g, f, data_on_cpu);
 }
 
 bool FBP_cpu(float* g, float* f)
@@ -92,44 +92,44 @@ bool FBP_gpu(float* g, float* f)
 	return tomo()->FBP_gpu(g, f);
 }
 
-bool weightedBackproject(float* g, float* f, bool cpu_to_gpu)
+bool weightedBackproject(float* g, float* f, bool data_on_cpu)
 {
-	return tomo()->weightedBackproject(g, f, cpu_to_gpu);
+	return tomo()->weightedBackproject(g, f, data_on_cpu);
 }
 
-bool filterProjections(float* g, bool cpu_to_gpu)
+bool filterProjections(float* g, bool data_on_cpu)
 {
-	return tomo()->filterProjections(g, cpu_to_gpu);
+	return tomo()->filterProjections(g, data_on_cpu);
 }
 
-bool HilbertFilterProjections(float* g, bool cpu_to_gpu, float scalar)
+bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar)
 {
-	return tomo()->HilbertFilterProjections(g, cpu_to_gpu, scalar);
+	return tomo()->HilbertFilterProjections(g, data_on_cpu, scalar);
 }
 
-bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar)
+bool rampFilterProjections(float* g, bool data_on_cpu, float scalar)
 {
-	return tomo()->rampFilterProjections(g, cpu_to_gpu, scalar);
+	return tomo()->rampFilterProjections(g, data_on_cpu, scalar);
 }
 
-bool rampFilterVolume(float* f, bool cpu_to_gpu)
+bool rampFilterVolume(float* f, bool data_on_cpu)
 {
-	return tomo()->rampFilterVolume(f, cpu_to_gpu);
+	return tomo()->rampFilterVolume(f, data_on_cpu);
 }
 
-bool FBP(float* g, float* f, bool cpu_to_gpu)
+bool FBP(float* g, float* f, bool data_on_cpu)
 {
-	return tomo()->doFBP(g, f, cpu_to_gpu);
+	return tomo()->doFBP(g, f, data_on_cpu);
 }
 
-bool sensitivity(float* f, bool cpu_to_gpu)
+bool sensitivity(float* f, bool data_on_cpu)
 {
-	return tomo()->sensitivity(f, cpu_to_gpu);
+	return tomo()->sensitivity(f, data_on_cpu);
 }
 
-bool windowFOV(float* f, bool cpu_to_gpu)
+bool windowFOV(float* f, bool data_on_cpu)
 {
-	return tomo()->windowFOV(f, cpu_to_gpu);
+	return tomo()->windowFOV(f, data_on_cpu);
 }
 
 float get_FBPscalar()
@@ -262,39 +262,39 @@ bool muSpecified()
 	return tomo()->params.muSpecified();
 }
 
-bool flipAttenuationMapSign(bool cpu_to_gpu)
+bool flipAttenuationMapSign(bool data_on_cpu)
 {
-	return tomo()->flipAttenuationMapSign(cpu_to_gpu);
+	return tomo()->flipAttenuationMapSign(data_on_cpu);
 }
 
-bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-	return tomo()->projectConeBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+	return tomo()->projectConeBeam(g, f, data_on_cpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool backprojectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool backprojectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-	return tomo()->backprojectConeBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+	return tomo()->backprojectConeBeam(g, f, data_on_cpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool projectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-	return tomo()->projectFanBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+	return tomo()->projectFanBeam(g, f, data_on_cpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool backprojectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-	return tomo()->backprojectFanBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+	return tomo()->backprojectFanBeam(g, f, data_on_cpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool projectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool projectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-	return tomo()->projectParallelBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+	return tomo()->projectParallelBeam(g, f, data_on_cpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
-bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
+bool backprojectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
-	return tomo()->backprojectParallelBeam(g, f, cpu_to_gpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
+	return tomo()->backprojectParallelBeam(g, f, data_on_cpu, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
 }
 
 bool rowRangeNeededForBackprojection(int* rowsNeeded)
@@ -445,34 +445,34 @@ float get_z0()
 	return tomo()->params.z_0();
 }
 
-bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu)
+bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
-	return tomo()->BlurFilter(f, N_1, N_2, N_3, FWHM, cpu_to_gpu);
+	return tomo()->BlurFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);
 }
 
-bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu)
+bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool data_on_cpu)
 {
-	return tomo()->MedianFilter(f, N_1, N_2, N_3, threshold, cpu_to_gpu);
+	return tomo()->MedianFilter(f, N_1, N_2, N_3, threshold, data_on_cpu);
 }
 
-float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
+float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
 {
-	return tomo()->TVcost(f, N_1, N_2, N_3, delta, beta, cpu_to_gpu);
+	return tomo()->TVcost(f, N_1, N_2, N_3, delta, beta, data_on_cpu);
 }
 
-bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
+bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
 {
-	return tomo()->TVgradient(f, Df, N_1, N_2, N_3, delta, beta, cpu_to_gpu);
+	return tomo()->TVgradient(f, Df, N_1, N_2, N_3, delta, beta, data_on_cpu);
 }
 
-float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu)
+float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
 {
-	return tomo()->TVquadForm(f, d, N_1, N_2, N_3, delta, beta, cpu_to_gpu);
+	return tomo()->TVquadForm(f, d, N_1, N_2, N_3, delta, beta, data_on_cpu);
 }
 
-bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu)
+bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu)
 {
-	return tomo()->Diffuse(f, N_1, N_2, N_3, delta, numIter, cpu_to_gpu);
+	return tomo()->Diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu);
 }
 
 bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip)

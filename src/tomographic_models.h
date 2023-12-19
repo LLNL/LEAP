@@ -38,7 +38,7 @@ public:
 	/**
 	 * \fn          reset
 	 * \brief       resets (clears) all CT geometry and CT volume parameter values
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool reset();
 
@@ -47,7 +47,7 @@ public:
 	 * \brief       performs a forward projection on GPU
  	 * \param[in]   g pointer to the projection data (output) on the GPU
 	 * \param[in]   f pointer to the volume data (input) on the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool project_gpu(float* g, float* f);
 
@@ -56,7 +56,7 @@ public:
 	 * \brief       performs a backprojection on GPU
 	 * \param[in]   g pointer to the projection data (input) on the GPU
 	 * \param[in]   f pointer to the volume data (output) on the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool backproject_gpu(float* g, float* f);
 
@@ -65,7 +65,7 @@ public:
 	 * \brief       performs a forward projection on CPU
 	 * \param[in]   g pointer to the projection data (output) on the CPU
 	 * \param[in]   f pointer to the volume data (input) on the CPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool project_cpu(float* g, float* f);
 
@@ -74,7 +74,7 @@ public:
 	 * \brief       performs a backprojection on CPU
 	 * \param[in]   g pointer to the projection data (input) on the CPU
 	 * \param[in]   f pointer to the volume data (output) on the CPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool backproject_cpu(float* g, float* f);
 
@@ -83,37 +83,37 @@ public:
 	 * \brief       performs a forward projection
 	 * \param[in]   g pointer to the projection data (output)
 	 * \param[in]   f pointer to the volume data (input)
-	 * \param[in]   cpu_to_gpu true if data (g and f) needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f and g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool project(float* g, float* f, bool cpu_to_gpu);
+	bool project(float* g, float* f, bool data_on_cpu);
 
 	/**
 	 * \fn          backproject
 	 * \brief       performs a backprojection
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   f pointer to the volume data (output)
-	 * \param[in]   cpu_to_gpu true if data (g and f) needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f and g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool backproject(float* g, float* f, bool cpu_to_gpu);
+	bool backproject(float* g, float* f, bool data_on_cpu);
 
 	/**
 	 * \fn          weightedBackproject
 	 * \brief       performs a weighted backprojection (for an FBP algorithm)
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   f pointer to the volume data (output)
-	 * \param[in]   cpu_to_gpu true if data (g and f) needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f and g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool weightedBackproject(float* g, float* f, bool cpu_to_gpu);
+	bool weightedBackproject(float* g, float* f, bool data_on_cpu);
 
 	/**
 	 * \fn          FBP_cpu
 	 * \brief       performs an FBP reconstruction on CPU
 	 * \param[in]   g pointer to the projection data (input) on the CPU
 	 * \param[in]   f pointer to the volume data (output) on the CPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool FBP_cpu(float* g, float* f);
 
@@ -122,7 +122,7 @@ public:
 	 * \brief       performs an FBP reconstruction on GPU
 	 * \param[in]   g pointer to the projection data (input) on the GPU
 	 * \param[in]   f pointer to the volume data (output) on the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool FBP_gpu(float* g, float* f);
 
@@ -131,71 +131,71 @@ public:
 	 * \brief       performs an FBP reconstruction
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   f pointer to the volume data (output)
-	 * \param[in]   cpu_to_gpu true if data (g and f) needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f and g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool doFBP(float* g, float* f, bool cpu_to_gpu);
+	bool doFBP(float* g, float* f, bool data_on_cpu);
 
 	/**
 	 * \fn          sensitivity
 	 * \brief       calculates the sensitivity, i.e., backprojection of ones
 	 * \param[in]   f pointer to the volume data (output)
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool sensitivity(float* f, bool cpu_to_gpu);
+	bool sensitivity(float* f, bool data_on_cpu);
 
 	/**
 	 * \fn          HilbertFilterProjections
 	 * \brief       applies a Hilbert filter to each row and projection angle
 	 * \param[in]   g pointer to the projection data (input and output)
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \param[in]   scalar optional scalar to multiply the result by
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool HilbertFilterProjections(float* g, bool cpu_to_gpu, float scalar = 1.0);
+	bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar = 1.0);
 
 	/**
 	 * \fn          rampFilterProjections
 	 * \brief       applies a ramp filter to each row and projection angle
 	 * \param[in]   g pointer to the projection data (input and output)
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \param[in]   scalar optional scalar to multiply the result by
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool rampFilterProjections(float* g, bool cpu_to_gpu, float scalar = 1.0);
+	bool rampFilterProjections(float* g, bool data_on_cpu, float scalar = 1.0);
 
 	/**
 	 * \fn          filterProjections
 	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
 	 * \param[in]   g pointer to the projection data (input and output)
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool filterProjections(float* g, bool cpu_to_gpu);
+	bool filterProjections(float* g, bool data_on_cpu);
 
 	/**
 	 * \fn          rampFilterVolume
 	 * \brief       applies a 2D ramp filter to each z-slice
 	 * \param[in]   f pointer to the volume data (input and output)
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool rampFilterVolume(float* f, bool cpu_to_gpu);
+	bool rampFilterVolume(float* f, bool data_on_cpu);
 
 	/**
 	 * \fn          windowFOV
 	 * \brief       sets the array to zero for those values outside the field of view
 	 * \param[in]   f pointer to the volume data (input and output)
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool windowFOV(float* f, bool cpu_to_gpu);
+	bool windowFOV(float* f, bool data_on_cpu);
 
 	/**
 	 * \fn          print_parameters
 	 * \brief       prints the CT geometry and CT volume parameters to the screen
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool print_parameters();
 
@@ -214,7 +214,7 @@ public:
 	 * \param[in]   sdd source to detector distance, measured in mm
 	 * \param[in]   tau the center of rotation horizontal translation (mm)
 	 * \param[in]   helicalPitch the helical pitch (mm/radians)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
 
@@ -232,7 +232,7 @@ public:
 	 * \param[in]   sod source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
 	 * \param[in]   sdd source to detector distance, measured in mm
 	 * \param[in]   tau the center of rotation horizontal translation (mm)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0);
 
@@ -247,7 +247,7 @@ public:
 	 * \param[in]   centerRow the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
 	 * \param[in]   centerCol the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
 	 * \param[in]   phis pointer to an array for specifying the angles of each projection, measured in degrees
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
 
@@ -265,7 +265,7 @@ public:
 	 * \param[in]   moduleCenters (numAngles X 3) array of (x,y,z) coordinates of the center of each detector module
 	 * \param[in]   rowVectors (numAngles X 3) array of vectors pointing in the positive detector row direction
 	 * \param[in]   colVectors (numAngles X 3) array of vectors pointing in the positive detector column direction
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors);
 
@@ -280,7 +280,7 @@ public:
 	 * \param[in]   offsetX shift the volume in the x-dimension (mm)
 	 * \param[in]   offsetY shift the volume in the y-dimension (mm)
 	 * \param[in]   offsetZ shift the volume in the z-dimension (mm)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
@@ -288,7 +288,7 @@ public:
 	 * \fn          set_defaultVolume
 	 * \brief       sets the default CT volume parameters
 	 * \param[in]   scale the default voxel size is divided by this number
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_default_volume(float scale = 1.0);
 
@@ -296,7 +296,7 @@ public:
 	 * \fn          set_volumeDimensionOrder
 	 * \brief       sets the volumeDimensionOrder
 	 * \param[in]   which 1 for the ZYX order, 0 for the XYZ order
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_volumeDimensionOrder(int which);
 
@@ -311,7 +311,7 @@ public:
 	 * \fn          set_GPU
 	 * \brief       sets the primary GPU index
 	 * \param[in]   whichGPU the primary GPU index one wishes to use
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_GPU(int whichGPU);
 
@@ -320,7 +320,7 @@ public:
 	 * \brief       sets a list of GPU indices to use
 	 * \param[in]   whichGPUs array of GPU indices one wishes to use
 	 * \param[in]   N the number of elements in the array
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_GPUs(int* whichGPUs, int N);
 
@@ -335,14 +335,14 @@ public:
 	 * \fn          set_axisOfSymmetry
 	 * \brief       sets axisOfSymmetry
 	 * \param[in]   axisOfSymmetry the axis of symmetry angle (degrees)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_axisOfSymmetry(float axisOfSymmetry);
 
 	/**
 	 * \fn          clear_axisOfSymmetry
 	 * \brief       clears the axisOfSymmetry parameter (turns the cylindrical symmetry model off)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool clear_axisOfSymmetry();
 
@@ -350,7 +350,7 @@ public:
 	 * \fn          set_projector (depreciated)
 	 * \brief       sets the projector model (Separable Footprint, Siddon, Joseph)
 	 * \param[in]   which the projector type (SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_projector(int which);
 
@@ -358,7 +358,7 @@ public:
 	 * \fn          set_rFOV
 	 * \brief       sets the radius of the cylindrical field of view in the x-y plane
 	 * \param[in]   rFOV the radius of the field of view (mm)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_rFOV(float rFOV);
 
@@ -366,7 +366,7 @@ public:
 	 * \fn          set_rampID
 	 * \brief       sets the rampID parameter which controls the sharpness of the filter
 	 * \param[in]   rampID the order of the finite difference equation used
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_rampID(int);
 
@@ -409,14 +409,14 @@ public:
 	 * \fn          set_tau
 	 * \brief       sets tau
 	 * \param[in]   tau the value for tau (mm)
-	 * \return      true is successful, false otherwise
+	 * \return      true if successful, false otherwise
 	 */
 	bool set_tau(float tau_in);
 
 	/**
 	 * \fn          set_helicalPitch
 	 * \brief       sets the helicalPitch parameter (mm/radian)
-	 * \return      true is successful, false otherwise
+	 * \return      true if successful, false otherwise
 	 */
 	bool set_helicalPitch(float);
 
@@ -424,7 +424,7 @@ public:
 	 * \fn          set_normalizedHelicalPitch
 	 * \brief       sets the helicalPitch and z_source_offset parameters
 	 * \param[in]   h_normalized, the normalized helical pitch
-	 * \return      true is successful, false otherwise
+	 * \return      true if successful, false otherwise
 	 */
 	bool set_normalizedHelicalPitch(float h_normalized);
 
@@ -493,7 +493,7 @@ public:
 	 * \fn          set_attenuationMap
 	 * \brief       sets the floating point array of the attenuation map (used in the Attenuated Radon Transform)
 	 * \param[in]   mu the floating point array of attenuation values (mm^-1)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_attenuationMap(float* mu);
 
@@ -502,23 +502,24 @@ public:
 	 * \brief       sets the cylindrical attenuation parameters (used in the Attenuated Radon Transform)
 	 * \param[in]   muCoeff attenuation coefficient (mm^-1)
 	 * \param[in]   muRadius radius of the cylindrical attenuation map (mm)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_attenuationMap(float muCoeff, float muRadius);
 
 	/**
 	 * \fn          clear_attenuationMap
 	 * \brief       clears all parameters associated with the Attenuated Radon Transform
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool clear_attenuationMap();
 
 	/**
 	 * \fn          flipAttenuationMapSign
 	 * \brief       flips the sign of the attenuation map of the Attenuated Radon Transform
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (mu) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool flipAttenuationMapSign(bool cpu_to_gpu);
+	bool flipAttenuationMapSign(bool data_on_cpu);
 
 	// Filters for 3D data
 	/**
@@ -529,10 +530,10 @@ public:
 	 * \param[in]   N_2 number of samples in the second dimension
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   FWHM full width at half maximum of the filter (measured in number of voxels)
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool cpu_to_gpu);
+	bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
 
 	/**
 	 * \fn          MedianFilter
@@ -543,10 +544,10 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   threshold original value is only replaced by the median value
 	 *              if the relative difference is greater than this value
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool MedianFilter(float* f, int, int, int, float threshold, bool cpu_to_gpu);
+	bool MedianFilter(float* f, int, int, int, float threshold, bool data_on_cpu);
 
 	// Anisotropic Total Variation for 3D data
 	/**
@@ -558,10 +559,10 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
 	 * \param[in]   beta the strength of the functional
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      value of the aTV functional
 	 */
-	float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
+	float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
 
 	/**
 	 * \fn          TVgradient
@@ -573,10 +574,10 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
 	 * \param[in]   beta the strength of the functional
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise 
+	 * \param[in]   data_on_cpu true if data (f and Df) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise 
 	 */
-	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
+	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
 
 	/**
 	 * \fn          TVquadForm
@@ -588,10 +589,10 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
 	 * \param[in]   beta the strength of the functional
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
+	 * \param[in]   data_on_cpu true if data (f and d) are on the cpu, false if they are on the gpu
 	 * \return      value of the aTV quadratic form, i.e., <d, dR''(d)>, where R'' is the second derivative of the aTV functional
 	 */
-	float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool cpu_to_gpu);
+	float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
 
 	/**
 	 * \fn          Diffuse
@@ -603,20 +604,20 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
 	 * \param[in]   numIter the number of iterations
-	 * \param[in]   cpu_to_gpu true if data needs to be transfered from the CPU to the GPU
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool cpu_to_gpu);
+	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu);
 	
 	// Set all parameters and Project/Backproject
-	bool projectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
-	bool backprojectFanBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+	bool backprojectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
-	bool projectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
-	bool backprojectConeBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+	bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+	bool backprojectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
-	bool projectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
-	bool backprojectParallelBeam(float* g, float* f, bool cpu_to_gpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+	bool projectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
+	bool backprojectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
 	parameters params;
 private:
@@ -626,16 +627,16 @@ private:
 	 * \brief       performs a forward projection on multiple GPUs
 	 * \param[in]   g pointer to the projection data (output)
 	 * \param[in]   f pointer to the volume data (input)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation was executed on multiple GPUs, false if multi-GPU processing is not possible or not necessary
 	 */
 	bool project_multiGPU(float* g, float* f);
 
 	/**
 	 * \fn          project_multiGPU_splitViews
-	 * \brief       performs a forward projection on multiple GPUs, by splitting up the projections
+	 * \brief       performs a forward projection on multiple GPUs, by splitting up the projections (for modular and helical only)
 	 * \param[in]   g pointer to the projection data (output)
 	 * \param[in]   f pointer to the volume data (input)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation was executed on multiple GPUs, false if multi-GPU processing is not possible or not necessary
 	 */
 	bool project_multiGPU_splitViews(float* g, float* f);
 
@@ -644,16 +645,16 @@ private:
 	 * \brief       performs a backprojection on multiple GPUs
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   f pointer to the volume data (output)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation was executed on multiple GPUs, false if multi-GPU processing is not possible or not necessary
 	 */
 	bool backproject_multiGPU(float* g, float* f);
 
 	/**
 	 * \fn          backproject_FBP_multiGPU_splitViews
-	 * \brief       performs a backprojection or FBP on multiple GPUs, by splitting up the projections
+	 * \brief       performs a backprojection or FBP on multiple GPUs, by splitting up the projections (for modular and helical only)
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   f pointer to the volume data (output)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation was executed on multiple GPUs, false if multi-GPU processing is not possible or not necessary
 	 */
 	bool backproject_FBP_multiGPU_splitViews(float* g, float* f, bool doFBP);
 
@@ -662,7 +663,7 @@ private:
 	 * \brief       performs an FBP reconstruction on multiple GPUs
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   f pointer to the volume data (output)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation was executed on multiple GPUs, false if multi-GPU processing is not possible or not necessary
 	 */
 	bool FBP_multiGPU(float* g, float* f);
 	
@@ -671,7 +672,7 @@ private:
 	 * \brief       performs a backprojection or FBP reconstruction on multiple GPUs
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   f pointer to the volume data (output)
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation was executed on multiple GPUs, false if multi-GPU processing is not possible or not necessary
 	 */
 	bool backproject_FBP_multiGPU(float* g, float* f, bool doFBP);
 
@@ -692,7 +693,7 @@ private:
 	 * \param[in]   g_chunk the cropped data
 	 * \param[in]   rowStart the first index to copy
 	 * \param[in]   rowEnd the last index to copy
-	 * \return      true is operation  was sucessful, false otherwise
+	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool combineRows(float* g, float* g_chunk, int rowStart, int rowEnd);
 

@@ -16,10 +16,10 @@
 
 #include "parameters.h"
 
-bool project_Joseph(float*&, float*, parameters*, bool cpu_to_gpu);
-bool backproject_Joseph(float*, float*&, parameters*, bool cpu_to_gpu);
+bool project_Joseph(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_Joseph(float*, float*&, parameters*, bool data_on_cpu);
 
-bool project_Joseph_modular(float*&, float*, parameters*, bool cpu_to_gpu);
-bool backproject_Joseph_modular(float*, float*&, parameters*, bool cpu_to_gpu);
+bool project_Joseph_modular(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_Joseph_modular(float*, float*&, parameters*, bool data_on_cpu);
 
 #endif

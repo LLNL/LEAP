@@ -10,6 +10,31 @@
 #include "cuda_runtime.h"
 #include <string.h>
 
+__global__ void windowFOVKernel(float* f, const int4 N, const float4 T, const float4 startVal, const float rFOVsq, const int volumeDimensionOrder)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= N.x || iy >= N.y || iz >= N.z)
+        return;
+
+    const float x = ix * T.x + startVal.x;
+    const float y = iy * T.y + startVal.y;
+    const float z = iz * T.z + startVal.z;
+
+    if (x * x + y * y > rFOVsq)
+    {
+        uint64 ind;
+        if (volumeDimensionOrder == 0)
+            ind = uint64(ix) * uint64(N.y * N.z) + uint64(iy * N.z + iz);
+        else
+            ind = uint64(iz) * uint64(N.y * N.x) + uint64(iy * N.x + ix);
+
+        f[ind] = 0.0f;
+    }
+}
+
 __global__ void replaceZerosKernel(float* lhs, const int3 dim, const float newVal)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
@@ -899,4 +924,22 @@ bool setVolumeGPUparams(parameters* params, int4& N, float4& T, float4& startVal
         startVals.x = params->x_0(); startVals.y = params->y_0(); startVals.z = params->z_0();
         return true;
     }
+}
+
+bool windowFOV_gpu(float* f, parameters* params)
+{
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    float rFOVsq = params->rFOV() * params->rFOV();
+
+    int4 N; float4 T; float4 startVal;
+    setVolumeGPUparams(params, N, T, startVal);
+
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid = setGridSize(N, dimBlock);
+    windowFOVKernel <<< dimGrid, dimBlock >>> (f, N, T, startVal, rFOVsq, params->volumeDimensionOrder);
+    cudaStatus = cudaDeviceSynchronize();
+
+    return true;
 }

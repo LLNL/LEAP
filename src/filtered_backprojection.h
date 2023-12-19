@@ -31,18 +31,18 @@ public:
     filteredBackprojection();
     ~filteredBackprojection();
 
-    bool HilbertFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift = 0.0);
-    bool rampFilterProjections(float* g, parameters* params, bool cpu_to_gpu, float scalar);
-    bool filterProjections(float* g, parameters* ctParams, bool cpu_to_gpu);
+    bool HilbertFilterProjections(float* g, parameters* params, bool data_on_cpu, float scalar, float sampleShift = 0.0);
+    bool rampFilterProjections(float* g, parameters* params, bool data_on_cpu, float scalar);
+    bool filterProjections(float* g, parameters* ctParams, bool data_on_cpu);
 
-    bool execute(float* g, float* f, parameters* params, bool cpu_to_gpu);
+    bool execute(float* g, float* f, parameters* params, bool data_on_cpu);
 
 private:
-    bool convolve1D(float* g, parameters* params, bool cpu_to_gpu, float scalar, int whichFilter, float sampleShift = 0.0);
-    bool filterProjections_Novikov(float* g, parameters* ctParams, bool cpu_to_gpu);
+    bool convolve1D(float* g, parameters* params, bool data_on_cpu, float scalar, int whichFilter, float sampleShift = 0.0);
+    bool filterProjections_Novikov(float* g, parameters* ctParams, bool data_on_cpu);
 
-    bool execute_attenuated(float* g, float* f, parameters* params, bool cpu_to_gpu);
-    bool execute_Novikov(float* g, float* f, parameters* params, bool cpu_to_gpu);
+    bool execute_attenuated(float* g, float* f, parameters* params, bool data_on_cpu);
+    bool execute_Novikov(float* g, float* f, parameters* params, bool data_on_cpu);
 
     projectors proj;
 };

@@ -16,19 +16,19 @@
 
 #include "parameters.h"
 
-bool project_Siddon(float*&, float*, parameters*, bool cpu_to_gpu);
-bool backproject_Siddon(float*, float*&, parameters*, bool cpu_to_gpu);
+bool project_Siddon(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_Siddon(float*, float*&, parameters*, bool data_on_cpu);
 
-bool project_cone(float*&, float*, parameters*, bool cpu_to_gpu);
-bool backproject_cone(float*, float*&, parameters*, bool cpu_to_gpu);
+bool project_cone(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_cone(float*, float*&, parameters*, bool data_on_cpu);
 
-bool project_fan(float*&, float*, parameters*, bool cpu_to_gpu);
-bool backproject_fan(float*, float*&, parameters*, bool cpu_to_gpu);
+bool project_fan(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_fan(float*, float*&, parameters*, bool data_on_cpu);
 
-bool project_parallel(float*&, float*, parameters*, bool cpu_to_gpu);
-bool backproject_parallel(float*, float*&, parameters*, bool cpu_to_gpu);
+bool project_parallel(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_parallel(float*, float*&, parameters*, bool data_on_cpu);
 
-bool project_modular(float*&, float*, parameters*, bool cpu_to_gpu);
-bool backproject_modular(float*, float*&, parameters*, bool cpu_to_gpu);
+bool project_modular(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_modular(float*, float*&, parameters*, bool data_on_cpu);
 
 #endif

@@ -16,7 +16,7 @@
 
 #include "parameters.h"
 
-bool project_attenuated(float*& g, float* f, parameters* params, bool cpu_to_gpu);
-bool backproject_attenuated(float* g, float*& f, parameters* params, bool cpu_to_gpu);
+bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cpu);
+bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_on_cpu);
 
 #endif

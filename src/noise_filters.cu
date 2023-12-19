@@ -182,7 +182,7 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
     f_filtered[i * N.y * N.z + j * N.z + k] = val / sum;
 }
 
-bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
 
@@ -201,7 +201,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_f = copy3DdataToGPU(f, N, whichGPU);
     else
         dev_f = f;
@@ -229,7 +229,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     cudaDeviceSynchronize();
 
     // Clean up
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         // pull result off GPU
         if (f_out != NULL)
@@ -257,7 +257,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     return true;
 }
 
-bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu_to_gpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
 
@@ -276,7 +276,7 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
     float* dev_f = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         dev_f = copy3DdataToGPU(f, N, whichGPU);
     else
         dev_f = f;
@@ -300,7 +300,7 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool cpu
     cudaDeviceSynchronize();
 
     // Clean up
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         // pull result off GPU
         if (f_out != NULL)

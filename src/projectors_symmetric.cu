@@ -655,7 +655,7 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 	f[ind] = curVal * sqrt(1.0f + tan_beta * tan_beta);
 }
 
-bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
+bool project_symmetric(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
 	if (params->isSymmetric() == false)
 		return false;
@@ -674,7 +674,7 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	int4 N_g; float4 T_g; float4 startVal_g;
 	setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if ((cudaStatus = cudaMalloc((void**)&dev_g, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
 		{
@@ -687,7 +687,7 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
 	else
 		dev_f = f;
@@ -713,7 +713,7 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 	}
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
 	else
 		g = dev_g;
@@ -722,7 +722,7 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	cudaFreeArray(d_data_array);
 	cudaDestroyTextureObject(d_data_txt);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (dev_g != 0)
 			cudaFree(dev_g);
@@ -733,7 +733,7 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool cpu_to_gpu)
 	return true;
 }
 
-bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool backproject_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
 	if (params->isSymmetric() == false)
 		return false;
@@ -752,7 +752,7 @@ bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
 		{
@@ -767,7 +767,7 @@ bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_
 
 	float rFOVsq = params->rFOV() * params->rFOV();
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 	else
 		dev_g = g;
@@ -792,7 +792,7 @@ bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_
 		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 	}
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
 	else
 		f = dev_f;
@@ -801,7 +801,7 @@ bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_
 	cudaFreeArray(d_data_array);
 	cudaDestroyTextureObject(d_data_txt);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (dev_g != 0)
 			cudaFree(dev_g);
@@ -812,7 +812,7 @@ bool backproject_symmetric(float* g, float*& f, parameters* params, bool cpu_to_
 	return true;
 }
 
-bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
+bool inverse_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
 	if (params->isSymmetric() == false)
 		return false;
@@ -831,7 +831,7 @@ bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
 		{
@@ -846,7 +846,7 @@ bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 
 	float rFOVsq = params->rFOV() * params->rFOV();
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 	else
 		dev_g = g;
@@ -871,7 +871,7 @@ bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 	}
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
 	else
 		f = dev_f;
@@ -880,7 +880,7 @@ bool inverse_symmetric(float* g, float*& f, parameters* params, bool cpu_to_gpu)
 	cudaFreeArray(d_data_array);
 	cudaDestroyTextureObject(d_data_txt);
 
-	if (cpu_to_gpu)
+	if (data_on_cpu)
 	{
 		if (dev_g != 0)
 			cudaFree(dev_g);

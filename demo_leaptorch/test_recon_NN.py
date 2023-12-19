@@ -247,8 +247,8 @@ proj.load_param(param_fn)
 proj.print_param()
 
 # Get volume and projection data sizes
-dimz, dimy, dimx = proj.lct.get_volume_dim()
-views, rows, cols = proj.lct.get_projection_dim()
+dimz, dimy, dimx = proj.leapct.get_volume_dim()
+views, rows, cols = proj.leapct.get_projection_dim()
 
 
 # initialize model (NN + projector)

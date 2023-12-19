@@ -555,7 +555,7 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
 bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar)
 {
     //printf("rampFilter1D_symmetric...\n");
-    bool cpu_to_gpu = false;
+    bool data_on_cpu = false;
     bool retVal = true;
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -588,8 +588,8 @@ bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar)
     cudaStatus = cudaDeviceSynchronize();
 
     // Do ramp filter
-    rampFilter1D(dev_g_left, params, cpu_to_gpu, scalar);
-    rampFilter1D(dev_g_right, params, cpu_to_gpu, scalar);
+    rampFilter1D(dev_g_left, params, data_on_cpu, scalar);
+    rampFilter1D(dev_g_right, params, data_on_cpu, scalar);
 
     // Merge back to g
     mergeLeftAndRight <<< dimGrid, dimBlock >>> (dev_g, dev_g_left, dev_g_right, N_g, T_g, startVal_g);
@@ -602,24 +602,24 @@ bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar)
     return retVal;
 }
 
-bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar)
+bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu, float scalar)
 {
-    return conv1D(g, params, cpu_to_gpu, scalar, 0);
+    return conv1D(g, params, data_on_cpu, scalar, 0);
 }
 
-bool Hilbert1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift)
+bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu, float scalar, float sampleShift)
 {
-    return conv1D(g, params, cpu_to_gpu, scalar, 1, sampleShift);
+    return conv1D(g, params, data_on_cpu, scalar, 1, sampleShift);
 }
 
-bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int which, float sampleShift)
+bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
 {
     bool retVal = true;
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
 
     float* dev_g = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
     }
@@ -769,7 +769,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
         }
         cudaDeviceSynchronize();
 
-        if (cpu_to_gpu)
+        if (data_on_cpu)
         {
             // Copy result back to host
             cudaStatus = cudaMemcpy(g, dev_g, uint64(numAngles) * uint64(numRows) * uint64(params->numCols) * sizeof(float), cudaMemcpyDeviceToHost);
@@ -786,7 +786,7 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     cufftDestroy(forward_plan);
     cufftDestroy(backward_plan);
     cudaFree(dev_g_pad);
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         cudaFree(dev_g);
     if (dev_H != 0)
         cudaFree(dev_H);
@@ -801,9 +801,9 @@ bool conv1D(float*& g, parameters* params, bool cpu_to_gpu, float scalar, int wh
     return retVal;
 }
 
-bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
+bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
 {
-    if (cpu_to_gpu == false)
+    if (data_on_cpu == false)
     {
         printf("Error: current implementation of rampFilter2D requires that data reside on the CPU\n");
         return false;
@@ -992,28 +992,28 @@ bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
     return retVal;
 }
 #else
-bool rampFilter1D(float*& g, parameters* params, bool cpu_to_gpu)
+bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu)
 {
     //printf("CUFFT libraries not available!\n");
     //return false;
     return rampFilter1D_cpu(g, params);
 }
 
-bool Hilbert1D(float*& g, parameters* params, bool cpu_to_gpu)
+bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu)
 {
     //printf("CUFFT libraries not available!\n");
     //return false;
     return Hilbert1D_cpu(g, params);
 }
 
-bool rampFilter2D(float*& f, parameters* params, bool cpu_to_gpu)
+bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
 {
     printf("CUFFT libraries not available!\n");
     return false;
 }
 #endif
 
-bool ray_derivative(float*& g, parameters* params, bool cpu_to_gpu, float scalar, float sampleShift)
+bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scalar, float sampleShift)
 {
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1023,7 +1023,7 @@ bool ray_derivative(float*& g, parameters* params, bool cpu_to_gpu, float scalar
 
     float* dev_g = 0;
     float* dev_Dg = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
         if (cudaSuccess != cudaMalloc((void**)&dev_Dg, params->projectionData_numberOfElements() * sizeof(float)))
@@ -1050,10 +1050,10 @@ bool ray_derivative(float*& g, parameters* params, bool cpu_to_gpu, float scalar
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullProjectionDataFromGPU(g, params, dev_Dg, params->whichGPU);
 
-    if (cpu_to_gpu == true && dev_Dg != 0)
+    if (data_on_cpu == true && dev_Dg != 0)
         cudaFree(dev_Dg);
     if (dev_g != 0)
         cudaFree(dev_g);
@@ -1061,7 +1061,7 @@ bool ray_derivative(float*& g, parameters* params, bool cpu_to_gpu, float scalar
     return true;
 }
 
-bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
+bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
 {
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1073,7 +1073,7 @@ bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
 
     float* dev_g = 0;
     float* dev_Dg = 0;
-    if (cpu_to_gpu)
+    if (data_on_cpu)
     {
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
         if (cudaSuccess != cudaMalloc((void**)&dev_Dg, params->projectionData_numberOfElements() * sizeof(float)))
@@ -1107,13 +1107,13 @@ bool parallelRay_derivative(float*& g, parameters* params, bool cpu_to_gpu)
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (cpu_to_gpu)
+    if (data_on_cpu)
         pullProjectionDataFromGPU(g, params, dev_Dg, params->whichGPU);
 
     cudaFreeArray(d_data_array);
     cudaDestroyTextureObject(d_data_txt);
 
-    if (cpu_to_gpu == true && dev_Dg != 0)
+    if (data_on_cpu == true && dev_Dg != 0)
         cudaFree(dev_Dg);
     if (dev_phis != 0)
         cudaFree(dev_phis);

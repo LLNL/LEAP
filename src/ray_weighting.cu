@@ -46,7 +46,7 @@ __global__ void applyWeightsKernel(float* g, const float* w_view, const float* w
 	g[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] *= theWeight;
 }
 
-bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gpu)
+bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool data_on_cpu)
 {
 	float* w_ray = setPreRampFilterWeights(params);
 	float* w_view = setViewWeights(params); // numAngles X numCols
@@ -60,7 +60,7 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gpu
 
 		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
 		float* dev_g = 0;
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 		{
 			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		}
@@ -99,7 +99,7 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gpu
 			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		}
 
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 		{
 			//printf("pulling projections off GPU...\n");
 			pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
@@ -113,14 +113,14 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gpu
 			free(w_ray);
 		if (w_view != NULL)
 			free(w_view);
-		if (cpu_to_gpu == true && dev_g != 0)
+		if (data_on_cpu == true && dev_g != 0)
 			cudaFree(dev_g);
 
 		return true;
 	}
 }
 
-bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gpu)
+bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool data_on_cpu)
 {
 	float* w_ray = setInverseConeWeight(params); // numRows X numCols
 	if (w_ray == NULL)
@@ -132,7 +132,7 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gp
 
 		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
 		float* dev_g = 0;
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 		{
 			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		}
@@ -164,7 +164,7 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gp
 			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		}
 
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 		{
 			//printf("pulling projections off GPU...\n");
 			pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
@@ -174,30 +174,30 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool cpu_to_gp
 			cudaFree(dev_w_ray);
 		if (w_ray != NULL)
 			free(w_ray);
-		if (cpu_to_gpu == true && dev_g != 0)
+		if (data_on_cpu == true && dev_g != 0)
 			cudaFree(dev_g);
 
 		return true;
 	}
 }
 
-bool applyPreRampFilterWeights(float* g, parameters* params, bool cpu_to_gpu)
+bool applyPreRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
 {
 	if (params->whichGPU < 0)
 		return applyPreRampFilterWeights_CPU(g, params);
 	else
-		return applyPreRampFilterWeights_GPU(g, params, cpu_to_gpu);
+		return applyPreRampFilterWeights_GPU(g, params, data_on_cpu);
 }
 
-bool applyPostRampFilterWeights(float* g, parameters* params, bool cpu_to_gpu)
+bool applyPostRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
 {
 	if (params->whichGPU < 0)
 		return applyPostRampFilterWeights_CPU(g, params);
 	else
-		return applyPostRampFilterWeights_GPU(g, params, cpu_to_gpu);
+		return applyPostRampFilterWeights_GPU(g, params, data_on_cpu);
 }
 
-bool convertARTtoERT(float* g, parameters* params, bool cpu_to_gpu, bool doInverse)
+bool convertARTtoERT(float* g, parameters* params, bool data_on_cpu, bool doInverse)
 {
 	if (params->whichGPU < 0)
 		return convertARTtoERT_CPU(g, params, doInverse);
@@ -208,7 +208,7 @@ bool convertARTtoERT(float* g, parameters* params, bool cpu_to_gpu, bool doInver
 
 		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
 		float* dev_g = 0;
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		else
 			dev_g = g;
@@ -230,10 +230,10 @@ bool convertARTtoERT(float* g, parameters* params, bool cpu_to_gpu, bool doInver
 			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		}
 
-		if (cpu_to_gpu)
+		if (data_on_cpu)
 			pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
 
-		if (cpu_to_gpu == true && dev_g != 0)
+		if (data_on_cpu == true && dev_g != 0)
 			cudaFree(dev_g);
 
 		return true;

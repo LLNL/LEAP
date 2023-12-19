@@ -16,6 +16,6 @@
 
 #include "parameters.h"
 
-bool sensitivity_gpu(float*& f, parameters* params, bool cpu_to_gpu);
+bool sensitivity_gpu(float*& f, parameters* params, bool data_on_cpu);
 
 #endif
