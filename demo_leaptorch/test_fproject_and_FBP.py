@@ -124,7 +124,7 @@ if not use_API: # use PyTorch Projector class
     g = g_th.cpu().detach().numpy()[0,:,0,:]  # batch, angles, detector row, detector col -> which gives "sinogram"
 
     # save projection data
-    np.save(out_fn, g)
+    np.save(out_fn, np.squeeze(g))
     imageio.imsave(out_fn[:-4] + ".png", np.uint8(g/np.max(g)*255))
 
     # run filtered back projection
@@ -132,7 +132,7 @@ if not use_API: # use PyTorch Projector class
     f_recon_slice = f_recon.cpu().detach().numpy()[0,0,:,:]
 
     # save FBP reconstructed image
-    np.save(out_fn[:-4] + "_FBP.npy", f_recon_slice)
+    np.save(out_fn[:-4] + "_FBP.npy", np.squeeze(f_recon_slice))
     imageio.imsave(out_fn[:-4] + "_FBP.png", np.uint8(f_recon_slice/np.max(f_recon_slice)*255))
 
 else: # use LEAP API functions
@@ -181,7 +181,7 @@ else: # use LEAP API functions
         
     # save projection data to npy file and image file
     g_np = g.cpu().detach().numpy()
-    np.save(out_fn, g_np)
+    np.save(out_fn, np.squeeze(g_np))
     imageio.imsave(out_fn[:-4] + ".png", np.uint8(g_np[:,0,:]*255/np.max(g_np)))
 
     # run filtered back projection
@@ -193,6 +193,6 @@ else: # use LEAP API functions
     # save FBP reconstructed image
     f_np = f.cpu().detach().numpy()
     f_np = f_np[0,:,:]
-    np.save(out_fn[:-4] + "_FBP.npy", f_np)
+    np.save(out_fn[:-4] + "_FBP.npy", np.squeeze(f_np))
     imageio.imsave(out_fn[:-4] + "_FBP.png", np.uint8(f_np*255/np.max(f_np)))
 

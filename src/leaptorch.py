@@ -198,58 +198,9 @@ class Projector(torch.nn.Module):
                 self.vol_data = self.vol_data.float().to(self.gpu_device)
                 self.proj_data = self.proj_data.float().to(self.gpu_device)
                 
-    def parse_param_dic(self, param_fn):
-        pdic = {}
-        with open(param_fn, 'r') as f:
-            lines = f.readlines()
-            for line in lines:
-                if len(line.strip()) == 0:
-                    continue
-                key = line.split('=')[0].strip()
-                value = line.split('=')[1].strip()
-                if key == 'proj_phis' or key == 'proj_geometry':
-                    pdic[key] = value
-                else:
-                    pdic[key] = float(value)
-        return pdic
-
     def load_param(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
-        pdic = {}
-        if param_type == 0:
-            pdic = self.parse_param_dic(param_fn)
-        elif param_type == 1:
-            pdic = param_fn
-
-        phis_str = pdic['proj_phis']
-        if len(phis_str) > 0:
-            #phis = torch.from_numpy(np.array([float(x.strip()) for x in phis_str.split(',')]).astype(np.float32))
-            phis = np.array([float(x.strip()) for x in phis_str.split(',')]).astype(np.float32)
-        else:
-            phis = np.array(range(int(pdic['proj_nangles']))).astype(np.float32)
-            phis = phis*pdic['proj_arange']/float(pdic['proj_nangles'])
-            #phis = torch.from_numpy(phis)
-        
-        self.set_volume(int(pdic['img_dimx']), int(pdic['img_dimy']), int(pdic['img_dimz']),
-                        pdic['img_pwidth'], pdic['img_pheight'], 
-                        pdic['img_offsetx'], pdic['img_offsety'], pdic['img_offsetz'])
-        if pdic['proj_geometry'] == 'parallel':
-            self.set_parallelbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
-                                   pdic['proj_pheight'], pdic['proj_pwidth'], 
-                                   pdic['proj_crow'], pdic['proj_ccol'], phis)
-        elif pdic['proj_geometry'] == 'fan':
-            self.set_fanbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
-                               pdic['proj_pheight'], pdic['proj_pwidth'], 
-                               pdic['proj_crow'], pdic['proj_ccol'], 
-                               phis, pdic['proj_sod'], pdic['proj_sdd'])
-        elif pdic['proj_geometry'] == 'cone':
-            self.set_conebeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
-                               pdic['proj_pheight'], pdic['proj_pwidth'], 
-                               pdic['proj_crow'], pdic['proj_ccol'], 
-                               phis, pdic['proj_sod'], pdic['proj_sdd'])
-        #elif pdic['proj_geometry'] == 'modular':
-        #    self.set_modularbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
-        #                          pdic['proj_pheight'], pdic['proj_pwidth'], 
-        #                          srcpos, modcenter, rowvec, colvec)
+        if self.leapct.load_param(param_fn, param_type) == True:
+            self.allocate_batch_data()
 
     def save_param(self, param_fn):
         return self.leapct.save_param(param_fn)

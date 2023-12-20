@@ -983,8 +983,11 @@ bool parameters::anglesAreEquispaced()
 		for (int i = 1; i < numAngles-1; i++)
 		{
 			float curSpacing = phis[i + 1] - phis[i];
-			if (fabs(curSpacing - firstSpacing) > 1.0e-8)
+			if (fabs(curSpacing - firstSpacing) > 5.0e-7)
+			{
+				//printf("dist: %e\n", fabs(curSpacing - firstSpacing));
 				return false;
+			}
 		}
 		return true;
 	}

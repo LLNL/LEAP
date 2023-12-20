@@ -2559,40 +2559,273 @@ class tomographicModels:
             [Z[2],Z[3],Z[4],Z[5]]]
             ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
     
+
+    ###################################################################################################################
+    ###################################################################################################################
+    # FILE I/O FUNCTIONS
+    ###################################################################################################################
+    ###################################################################################################################
+    def parse_param_dic(self, param_fn):
+        pdic = {}
+        not_scalar_params = ['proj_geometry', 'proj_phis', 'proj_srcpos', 'proj_modcenter', 'proj_rowvec', 'proj_colvec', 'geometry', 'phis', 'sourcePositions', 'moduleCenters', 'rowVectors', 'colVectors']
+        with open(param_fn, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                if len(line.strip()) == 0 or line[0] == '#':
+                    continue
+                key = line.split('=')[0].strip()
+                value = line.split('=')[1].strip()
+                #if key == 'proj_phis' or key == 'proj_geometry' or key == 'proj_srcpos' or key == 'proj_modcenter' or key == 'proj_rowvec' or key == 'proj_colvec':
+                if any(item == key for item in not_scalar_params): 
+                    pdic[key] = value
+                else:
+                    pdic[key] = float(value)
+        return pdic
+
+    def load_parameters(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
+        return self.load_param(param_fn, param_type)
+
+    def load_param(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
+        pdic = {}
+        if param_type == 0:
+            pdic = self.parse_param_dic(param_fn)
+        elif param_type == 1:
+            pdic = param_fn
+
+        if 'geometry' not in pdic.keys():
+            # Could not load a basic parameter
+            # Try loading the legacy parameters
+            return self.load_param_legacy(param_fn, param_type)
+
+        if 'phis' not in pdic.keys():
+            phis_str = ''
+        else:
+            phis_str = pdic['phis']
+        if len(phis_str) > 0:
+            phis = np.array([float(x.strip()) for x in phis_str.split(',')]).astype(np.float32)
+        elif 'angularRange' in pdic.keys():
+            phis = self.setAngleArray(int(pdic['numAngles']), pdic['angularRange'])
+        else:
+            if pdic['geometry'] == 'parallel' or pdic['geometry'] == 'fan' or pdic['geometry'] == 'cone':
+                print('ERROR: invalid LEAP parameter file')
+                return False
+        if pdic['geometry'] == 'modular':
+            if 'sourcePositions' not in pdic.keys():
+                print('ERROR: invalid LEAP parameter file')
+                return False
+        
+        self.set_volume(int(pdic['numX']), int(pdic['numY']), int(pdic['numZ']),
+                        pdic['voxelWidth'], pdic['voxelHeight'], 
+                        pdic['offsetX'], pdic['offsetY'], pdic['offsetZ'])
+        if pdic['geometry'] == 'parallel':
+            self.set_parallelbeam(int(pdic['numAngles']), int(pdic['numRows']), int(pdic['numCols']), 
+                                   pdic['pixelHeight'], pdic['pixelWidth'], 
+                                   pdic['centerRow'], pdic['centerCol'], phis)
+            if 'muCoeff' in pdic.keys() and 'muRadius' in pdic.keys():
+                self.set_cylindircalAttenuationMap(pdic['muCoeff'], pdic['muRadius'])
+        elif pdic['geometry'] == 'fan':
+            self.set_fanbeam(int(pdic['numAngles']), int(pdic['numRows']), int(pdic['numCols']), 
+                               pdic['pixelHeight'], pdic['pixelWidth'], 
+                               pdic['centerRow'], pdic['centerCol'], 
+                               phis, pdic['sod'], pdic['sdd'], pdic['tau'])
+        elif pdic['geometry'] == 'cone':
+            self.set_conebeam(int(pdic['numAngles']), int(pdic['numRows']), int(pdic['numCols']), 
+                               pdic['pixelHeight'], pdic['pixelWidth'], 
+                               pdic['centerRow'], pdic['centerCol'], 
+                               phis, pdic['sod'], pdic['sdd'], pdic['tau'], pdic['helicalPitch'])
+        elif pdic['geometry'] == 'modular':
+            self.set_modularbeam(int(pdic['numAngles']), int(pdic['numRows']), int(pdic['numCols']), 
+                                  pdic['pixelHeight'], pdic['pixelWidth'], 
+                                  pdic['sourcePositions'], pdic['moduleCenters'], pdic['rowVectors'], pdic['colVectors'])
+        
+        if 'axisOfSymmetry' in pdic.keys():
+            self.set_axisOfSymmetry(pdic['axisOfSymmetry'])
+        
+        return True
+
+    def load_param_legacy(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
+        pdic = {}
+        if param_type == 0:
+            pdic = self.parse_param_dic(param_fn)
+        elif param_type == 1:
+            pdic = param_fn
+
+        if 'proj_geometry' not in pdic.keys():
+            print('ERROR: invalid LEAP parameter file')
+            return False
+
+        if 'proj_phis' not in pdic.keys():
+            phis_str = ''
+        else:
+            phis_str = pdic['proj_phis']
+        if len(phis_str) > 0:
+            #phis = torch.from_numpy(np.array([float(x.strip()) for x in phis_str.split(',')]).astype(np.float32))
+            phis = np.array([float(x.strip()) for x in phis_str.split(',')]).astype(np.float32)
+        elif 'proj_arange' in pdic.keys():
+            phis = self.setAngleArray(int(pdic['proj_nangles']), pdic['proj_arange'])
+            #phis = torch.from_numpy(phis)
+        else:
+            if pdic['proj_geometry'] == 'parallel' or pdic['proj_geometry'] == 'fan' or pdic['proj_geometry'] == 'cone':
+                print('ERROR: invalid LEAP parameter file')
+                return False
+        if pdic['proj_geometry'] == 'modular':
+            if 'proj_srcpos' not in pdic.keys():
+                print('ERROR: invalid LEAP parameter file')
+                return False
+        
+        self.set_volume(int(pdic['img_dimx']), int(pdic['img_dimy']), int(pdic['img_dimz']),
+                        pdic['img_pwidth'], pdic['img_pheight'], 
+                        pdic['img_offsetx'], pdic['img_offsety'], pdic['img_offsetz'])
+        if pdic['proj_geometry'] == 'parallel':
+            self.set_parallelbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+                                   pdic['proj_pheight'], pdic['proj_pwidth'], 
+                                   pdic['proj_crow'], pdic['proj_ccol'], phis)
+        elif pdic['proj_geometry'] == 'fan':
+            self.set_fanbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+                               pdic['proj_pheight'], pdic['proj_pwidth'], 
+                               pdic['proj_crow'], pdic['proj_ccol'], 
+                               phis, pdic['proj_sod'], pdic['proj_sdd'])
+        elif pdic['proj_geometry'] == 'cone':
+            self.set_conebeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+                               pdic['proj_pheight'], pdic['proj_pwidth'], 
+                               pdic['proj_crow'], pdic['proj_ccol'], 
+                               phis, pdic['proj_sod'], pdic['proj_sdd'])
+        elif pdic['proj_geometry'] == 'modular':
+            self.set_modularbeam(int(pdic['proj_nangles']), int(pdic['proj_nrows']), int(pdic['proj_ncols']), 
+                                  pdic['proj_pheight'], pdic['proj_pwidth'], 
+                                  pdic['proj_srcpos'], pdic['proj_modcenter'], pdic['proj_rowvec'], pdic['proj_colvec'])
+        
+        return True
+    
+    def save_parameters(self, fileName):
+        """Alias for save_param"""
+        return self.save_param(fileName)
+    
+    def save_param(self, fileName):
+        """Save the CT volume and CT geometry parameters to file"""
+        if sys.version_info[0] == 3:
+            fileName = bytes(str(fileName), 'ascii')
+        self.libprojectors.saveParamsToFile.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.saveParamsToFile(fileName)
+        
+        return self.leapct.save_param(fileName)
+    
+    def save_projections(self, fileName, g):
+        """Alias for saveProjections"""
+        return self.saveProjections(fileName, g)
+        
+    def saveProjections(self, fileName, g):
+        """Save projection data to file (nrrd or npy)"""
+        if self.get_numAngles() > 0 and self.get_numRows() > 0 and self.get_numCols() > 0:
+            pixelWidth = self.get_pixelWidth()
+            pixelHeight = self.get_pixelHeight()
+            numCols = self.get_numCols()
+            numRows = self.get_numRows()
+            centerRow = self.get_centerRow()
+            centerCol = self.get_centerCol()
+            phis = self.get_angles()
+        
+            phi_0 = phis[0]
+            row_0 = -centerRow*pixelHeight
+            col_0 = -centerCol*pixelWidth
+            T = pixelWidth
+        else:
+            phi_0 = 0.0
+            row_0 = 0.0
+            col_0 = 0.0
+            T = 1.0
+        return self.saveData(fileName, g, T, phi_0, row_0, col_0)
+    
+    def save_volume(self, fileName, f):
+        """Alias for saveVolume"""
+        return self.saveVolume(fileName, f)
+    
     def saveVolume(self, fileName, f):
+        """Save volume data to file (nrrd or npy)"""
+        if self.get_numX() > 0 and self.get_numY() > 0 and self.get_numZ() > 0:
+            z_0 = self.z_samples()[0]
+            y_0 = self.y_samples()[0]
+            x_0 = self.x_samples()[0]
+            T = self.get_voxelWidth()
+        else:
+            x_0 = 0.0
+            y_0 = 0.0
+            z_0 = 0.0
+            T = 1.0
+        return self.saveData(fileName, f, T, x_0, y_0, z_0)
+        
+    def saveData(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0):
+        """Save 3D data to file (nrrd or npy)"""
         volFilePath, dontCare = os.path.split(fileName)
         if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
-            print('Folder to save volume either does not exist or not accessible!')
+            print('Folder to save data either does not exist or not accessible!')
             return False
-        if fileName.endswith('.nrrd'):
+        if fileName.endswith('.npy'):
+            if has_torch == True and type(x) is torch.Tensor:
+                np.save(fileName, x.numpy())
+            else:
+                np.save(fileName, x)
+            return True
+        elif fileName.endswith('.nrrd'):
             try:
                 import nrrd
                 
-                if self.get_numX() > 0 and self.get_numY() > 0 and self.get_numZ() > 0:
-                    z_0 = self.z_samples()[0]
-                    y_0 = self.y_samples()[0]
-                    x_0 = self.x_samples()[0]
-                    T = self.get_voxelWidth()
-                else:
-                    x_0 = 0.0
-                    y_0 = 0.0
-                    z_0 = 0.0
-                    T = 1.0
                 # https://pynrrd.readthedocs.io/en/latest/examples.html
-                #header = {'units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T],}
-                #header = {'space units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T], 'space origin': '('+str(x_0)+','+str(y_0)+','+str(z_0)')', 'space':'RAS'}
-                #header = {'space units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T], 'space origin': [x_0, y_0, z_0], 'space':'RAS'}
-                header = {'units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T], 'axismins': [x_0, y_0, z_0], 'thicknesses': [T, T, T],}
-                nrrd.write(fileName, f, header)
+                header = {'units': ['mm', 'mm', 'mm'], 'spacings': [T, T, T], 'axismins': [offset_0, offset_1, offset_2], 'thicknesses': [T, T, T],}
+                nrrd.write(fileName, x, header)
                 return True
             except:
                 print('Error: Failed to load nrrd library!')
                 print('To install this package do: pip install pynrrd')
                 return False
         else:
-            print('Error: must be an nrrd file!')
+            print('Error: must be an npy or nrrd file!')
             return False
+            
+    def loadVolume(self, fileName):
+        """Load 3D volume data from file (nrrd or npy)"""
+        return self.loadData(fileName)
+        
+    def load_volume(self, fileName):
+        """Load 3D volume data from file (nrrd or npy)"""
+        return self.loadData(fileName)
+        
+    def loadProjections(self, fileName):
+        """Load 3D projection data from file (nrrd or npy)"""
+        return self.loadData(fileName)
+        
+    def load_projections(self, fileName):
+        """Load 3D projection data from file (nrrd or npy)"""
+        return self.loadData(fileName)
+            
+    def loadData(self, fileName):
+        """Load 3D data from file (nrrd or npy)"""
+        if os.path.isfile(fileName) == False:
+            print('file does not exist')
+            return None
+        if fileName.endswith('.npy'):
+            return self.load(fileName)
+        elif fileName.endswith('.nrrd'):
+            try:
+                import nrrd
+                x, header = nrrd.read(fileName)
+                T_fromFile = header['spacings'][0]
+                return x
+            except:
+                print('Error: Failed to load nrrd library!')
+                print('To install this package do: pip install pynrrd')
+                return None
+        else:
+            print('Error: must be an npy or nrrd file!')
+            return None
     
+    
+    ###################################################################################################################
+    ###################################################################################################################
+    # PHANTOM SPECIFICATION FUNCTIONS
+    ###################################################################################################################
+    ###################################################################################################################
     def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None):
         """Adds a geometric object to the volume
         
