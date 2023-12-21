@@ -54,6 +54,10 @@ extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCo
 extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
 extern "C" PROJECTOR_API bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
 extern "C" PROJECTOR_API bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float*, float*, float*, float*);
+
+extern "C" PROJECTOR_API bool set_flatDetector();
+extern "C" PROJECTOR_API bool set_curvedDetector();
+
 extern "C" PROJECTOR_API bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool set_volumeDimensionOrder(int which);
 extern "C" PROJECTOR_API int get_volumeDimensionOrder();

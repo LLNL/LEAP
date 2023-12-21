@@ -410,20 +410,40 @@ bool parameters::allDefined()
 bool parameters::geometryDefined()
 {
 	if (geometry != CONE && geometry != PARALLEL && geometry != FAN && geometry != MODULAR)
+	{
+		printf("Error: CT geometry type not defined!\n");
 		return false;
+	}
 	if (numCols <= 0 || numRows <= 0 || numAngles <= 0 || pixelWidth <= 0.0 || pixelHeight <= 0.0)
+	{
+		printf("Error: detector pixel sizes and number of data elements must be positive\n");
 		return false;
+	}
 	if (geometry == MODULAR)
 	{
 		if (sourcePositions == NULL || moduleCenters == NULL || rowVectors == NULL || colVectors == NULL)
+		{
+			printf("Error: sourcePositions, moduleCenters, rowVectors, and colVectors must be defined for modular-beam geometries\n");
 			return false;
+		}
 	}
 	else if (angularRange == 0.0 && phis == NULL)
+	{
+		printf("Error: projection angles not defined\n");
 		return false;
+	}
 	if (geometry == CONE || geometry == FAN)
 	{
 		if (sod <= 0.0 || sdd <= sod)
+		{
+			printf("Error: sod and sdd must be positive for fan- and cone-beam geometries\n");
 			return false;
+		}
+	}
+	if (detectorType == CURVED && geometry != CONE)
+	{
+		printf("Error: curved detector only defined for cone-beam geometries\n");
+		return false;
 	}
 
 	return true;
@@ -432,7 +452,10 @@ bool parameters::geometryDefined()
 bool parameters::volumeDefined()
 {
 	if (numX <= 0 || numY <= 0 || numZ <= 0 || voxelWidth <= 0.0 || voxelHeight <= 0.0 || volumeDimensionOrder < 0 || volumeDimensionOrder > 1)
+	{
+		printf("Error: volume voxel sizes and number of data elements must be positive\n");
 		return false;
+	}
 	else
 	{
 		if (geometry == PARALLEL || geometry == FAN)
@@ -584,7 +607,12 @@ void parameters::printAll()
 	printf("\n");
 
 	if (geometry == CONE)
-		printf("======== CT Cone-Beam Geometry ========\n");
+	{
+		if (detectorType == CURVED)
+			printf("======== CT Cone-Beam Geometry (CURVED) ========\n");
+		else
+			printf("======== CT Cone-Beam Geometry ========\n");
+	}
 	else if (geometry == PARALLEL)
 		printf("======== CT Parallel-Beam Geometry ========\n");
 	else if (geometry == FAN)

@@ -159,6 +159,16 @@ bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight,
 	return tomo()->set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
 }
 
+bool set_flatDetector()
+{
+	return tomo()->set_flatDetector();
+}
+
+bool set_curvedDetector()
+{
+	return tomo()->set_curvedDetector();
+}
+
 bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	return tomo()->set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
@@ -571,7 +581,7 @@ bool saveParamsToFile(const char* param_fn)
 		{
 			float phis = (params->phis[i] + 0.5 * PI) * 180.0 / PI;
 			char phis_str[64];
-			sprintf(phis_str, " %f", phis);
+			sprintf(phis_str, " %e", phis);
 			phis_strs += phis_str;
 			if (i != params->numAngles - 1)
 				phis_strs += ",";
@@ -590,11 +600,11 @@ bool saveParamsToFile(const char* param_fn)
 	param_file << numX << " = " << params->numX << std::endl;
 	param_file << numY << " = " << params->numY << std::endl;
 	param_file << numZ << " = " << params->numZ << std::endl;
-	param_file << voxelWidth << " = " << params->voxelWidth << std::endl;
-	param_file << voxelHeight << " = " << params->voxelHeight << std::endl;
-	param_file << offsetX << " = " << params->offsetX << std::endl;
-	param_file << offsetY << " = " << params->offsetY << std::endl;
-	param_file << offsetZ << " = " << params->offsetZ << std::endl;
+	param_file << voxelWidth << " = " << std::scientific << params->voxelWidth << std::endl;
+	param_file << voxelHeight << " = " << std::scientific << params->voxelHeight << std::endl;
+	param_file << offsetX << " = " << std::scientific << params->offsetX << std::endl;
+	param_file << offsetY << " = " << std::scientific << params->offsetY << std::endl;
+	param_file << offsetZ << " = " << std::scientific << params->offsetZ << std::endl;
 
 	param_file << std::endl;
 
@@ -608,11 +618,15 @@ bool saveParamsToFile(const char* param_fn)
 		param_file << geometry << " = " << "fan" << std::endl;
 	else if (params->geometry == parameters::MODULAR)
 		param_file << geometry << " = " << "modular" << std::endl;
+
+	if (params->geometry == parameters::CONE && params->detectorType == parameters::CURVED)
+		param_file << "detectorType = curved" << std::endl;
+
 	param_file << numAngles << " = " << params->numAngles << std::endl;
 	param_file << numRows << " = " << params->numRows << std::endl;
 	param_file << numCols << " = " << params->numCols << std::endl;
-	param_file << pixelHeight << " = " << params->pixelHeight << std::endl;
-	param_file << pixelWidth << " = " << params->pixelWidth << std::endl;
+	param_file << pixelHeight << " = " << std::scientific << params->pixelHeight << std::endl;
+	param_file << pixelWidth << " = " << std::scientific << params->pixelWidth << std::endl;
 	param_file << centerRow << " = " << params->centerRow << std::endl;
 	param_file << centerCol << " = " << params->centerCol << std::endl;
 	if (params->anglesAreEquispaced())
@@ -655,22 +669,22 @@ bool saveParamsToFile(const char* param_fn)
 		{
 			char temp_str[256];
 
-			sprintf(temp_str, "%f, %f, %f", params->sourcePositions[i * 3 + 0], params->sourcePositions[i * 3 + 1], params->sourcePositions[i * 3 + 2]);
+			sprintf(temp_str, "%e, %e, %e", params->sourcePositions[i * 3 + 0], params->sourcePositions[i * 3 + 1], params->sourcePositions[i * 3 + 2]);
 			sourcePositions_strs += temp_str;
 			if (i != params->numAngles - 1)
 				sourcePositions_strs += ", ";
 
-			sprintf(temp_str, "%f, %f, %f", params->moduleCenters[i * 3 + 0], params->moduleCenters[i * 3 + 1], params->moduleCenters[i * 3 + 2]);
+			sprintf(temp_str, "%e, %e, %e", params->moduleCenters[i * 3 + 0], params->moduleCenters[i * 3 + 1], params->moduleCenters[i * 3 + 2]);
 			moduleCenters_strs += temp_str;
 			if (i != params->numAngles - 1)
 				moduleCenters_strs += ", ";
 
-			sprintf(temp_str, "%f, %f, %f", params->rowVectors[i * 3 + 0], params->rowVectors[i * 3 + 1], params->rowVectors[i * 3 + 2]);
+			sprintf(temp_str, "%e, %e, %e", params->rowVectors[i * 3 + 0], params->rowVectors[i * 3 + 1], params->rowVectors[i * 3 + 2]);
 			rowVectors_strs += temp_str;
 			if (i != params->numAngles - 1)
 				rowVectors_strs += ", ";
 
-			sprintf(temp_str, "%f, %f, %f", params->colVectors[i * 3 + 0], params->colVectors[i * 3 + 1], params->colVectors[i * 3 + 2]);
+			sprintf(temp_str, "%e, %e, %e", params->colVectors[i * 3 + 0], params->colVectors[i * 3 + 1], params->colVectors[i * 3 + 2]);
 			colVectors_strs += temp_str;
 			if (i != params->numAngles - 1)
 				colVectors_strs += ", ";

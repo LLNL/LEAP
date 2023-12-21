@@ -345,6 +345,18 @@ class tomographicModels:
         self.libprojectors.set_normalizedHelicalPitch.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_normalizedHelicalPitch(h_normalized)
+        
+    def set_flatDetector(self):
+        """Set the detectorType to FLAT"""
+        self.set_model()
+        self.libprojectors.set_flatDetector.restype = ctypes.c_bool
+        return self.libprojectors.set_flatDetector()
+        
+    def set_curvedDetector(self):
+        """Set the detectorType to CURVED"""
+        self.set_model()
+        self.libprojectors.set_curvedDetector.restype = ctypes.c_bool
+        return self.libprojectors.set_curvedDetector()
     
     ###################################################################################################################
     ###################################################################################################################
@@ -2637,9 +2649,19 @@ class tomographicModels:
                                pdic['centerRow'], pdic['centerCol'], 
                                phis, pdic['sod'], pdic['sdd'], pdic['tau'], pdic['helicalPitch'])
         elif pdic['geometry'] == 'modular':
+        
+            sourcePositions = np.array([float(x.strip()) for x in pdic['sourcePositions'].split(',')]).astype(np.float32)
+            moduleCenters = np.array([float(x.strip()) for x in pdic['moduleCenters'].split(',')]).astype(np.float32)
+            rowVectors = np.array([float(x.strip()) for x in pdic['rowVectors'].split(',')]).astype(np.float32)
+            colVectors = np.array([float(x.strip()) for x in pdic['colVectors'].split(',')]).astype(np.float32)
             self.set_modularbeam(int(pdic['numAngles']), int(pdic['numRows']), int(pdic['numCols']), 
                                   pdic['pixelHeight'], pdic['pixelWidth'], 
-                                  pdic['sourcePositions'], pdic['moduleCenters'], pdic['rowVectors'], pdic['colVectors'])
+                                  sourcePositions, moduleCenters, rowVectors, colVectors)
+
+        self.set_flatDetector()
+        if 'detectorType' in pdic.keys():
+            if pdic['detectorType'] == 'curved':
+                self.set_curvedDetector()
         
         if 'axisOfSymmetry' in pdic.keys():
             self.set_axisOfSymmetry(pdic['axisOfSymmetry'])

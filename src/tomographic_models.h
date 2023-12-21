@@ -270,6 +270,20 @@ public:
 	bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors);
 
 	/**
+	 * \fn          set_flatDetector
+	 * \brief       sets the detectorType to parameters::FLAT
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_flatDetector();
+
+	/**
+	 * \fn          set_flatDetector
+	 * \brief       sets the detectorType to parameters::CURVED
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_curvedDetector();
+
+	/**
 	 * \fn          set_volume
 	 * \brief       sets the CT volume parameters
 	 * \param[in]   numX number of voxels in the x-dimension

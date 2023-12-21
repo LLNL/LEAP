@@ -842,6 +842,20 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 	return params.geometryDefined();
 }
 
+bool tomographicModels::set_flatDetector()
+{
+	params.detectorType = parameters::FLAT;
+	return true;
+}
+
+bool tomographicModels::set_curvedDetector()
+{
+	params.detectorType = parameters::CURVED;
+	if (params.geometry != parameters::CONE)
+		printf("Warning: curved detector only defined for cone-beam geometries\n");
+	return true;
+}
+
 bool tomographicModels::set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	if (voxelWidth <= 0.0)
