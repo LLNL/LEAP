@@ -78,7 +78,10 @@ class tomographicModels:
             self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "../build/lib/libleap.so"))
         elif _platform == "win32":
             from ctypes import windll
-            self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libLEAP.dll'))
+            try:
+                self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll'))
+            except:
+                self.libprojectors = ctypes.CDLL(os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll'), winmode=0)
         elif _platform == "darwin":  # Darwin is the name for MacOS in Python's platform module
             from ctypes import cdll
             # there is current no support for LEAP on Mac, but maybe someone can figure this out
