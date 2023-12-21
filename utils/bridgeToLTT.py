@@ -67,10 +67,6 @@ def setLEAPfromLTT(LTT,leapct):
 def setLTTfromLEAP(leapct,LTT):
     geometry = leapct.get_geometry()
     
-    if geometry == 'MODULAR':
-        print('ERROR: Conversion of modular-beam not yet implemented!')
-        return
-    
     sod = leapct.get_sod()
     sdd = leapct.get_sdd()
     numAngles = leapct.get_numAngles()
@@ -84,16 +80,6 @@ def setLTTfromLEAP(leapct,LTT):
     phis = leapct.get_angles()
     #angularRange = (phis[1]-phis[0])*phis.size
     angularRange = (phis[-1]-phis[0]) + phis[1]-phis[0]
-    
-    LTT.cmd('geometry = ' + str(geometry))
-    if geometry == 'CONE':
-        LTT.cmd(['sod = ' + str(sod), 'sdd = ' + str(sdd), 'detectorShape = flat'])
-        LTT.cmd('helicalPitch = ' + str(helicalPitch))
-    elif geometry == 'FAN':
-        LTT.cmd(['sod = ' + str(sod), 'sdd = ' + str(sdd), 'detectorShape = flat'])
-    LTT.cmd(['numAngles = ' + str(numAngles), 'numRows = ' + str(numRows), 'numCols = ' + str(numCols)])
-    LTT.cmd(['angularRange = ' + str(angularRange), 'pixelHeight = ' + str(pixelHeight), 'pixelWidth = ' + str(pixelWidth)])
-    LTT.cmd(['centerRow = ' + str(centerRow), 'centerCol = ' + str(centerCol)])
     
     numX = leapct.get_numX()
     numY = leapct.get_numY()
@@ -112,6 +98,20 @@ def setLTTfromLEAP(leapct,LTT):
     LTT.cmd(['rxelements = ' + str(numX), 'ryelements = ' + str(numY), 'rzelements = ' + str(numZ)])
     LTT.cmd(['rxsize = ' + str(voxelWidth), 'rysize = ' + str(voxelWidth), 'rzsize = ' + str(voxelHeight)])
     LTT.cmd(['rxref = ' + str(rxref), 'ryref = ' + str(ryref), 'rzref = ' + str(rzref)])
+    
+    if geometry == 'MODULAR':
+        print('ERROR: Conversion of modular-beam not yet implemented!')
+        return
+    
+    LTT.cmd('geometry = ' + str(geometry))
+    if geometry == 'CONE':
+        LTT.cmd(['sod = ' + str(sod), 'sdd = ' + str(sdd), 'detectorShape = flat'])
+        LTT.cmd('helicalPitch = ' + str(helicalPitch))
+    elif geometry == 'FAN':
+        LTT.cmd(['sod = ' + str(sod), 'sdd = ' + str(sdd), 'detectorShape = flat'])
+    LTT.cmd(['numAngles = ' + str(numAngles), 'numRows = ' + str(numRows), 'numCols = ' + str(numCols)])
+    LTT.cmd(['angularRange = ' + str(angularRange), 'pixelHeight = ' + str(pixelHeight), 'pixelWidth = ' + str(pixelWidth)])
+    LTT.cmd(['centerRow = ' + str(centerRow), 'centerCol = ' + str(centerCol)])
 
 ''' Example Usage
 leapct = tomographicModels()
