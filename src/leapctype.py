@@ -2719,7 +2719,7 @@ class tomographicModels:
         return self.saveProjections(fileName, g)
         
     def saveProjections(self, fileName, g):
-        """Save projection data to file (nrrd or npy)"""
+        """Save projection data to file (tif sequence, nrrd, or npy)"""
         if self.get_numAngles() > 0 and self.get_numRows() > 0 and self.get_numCols() > 0:
             pixelWidth = self.get_pixelWidth()
             pixelHeight = self.get_pixelHeight()
@@ -2745,7 +2745,7 @@ class tomographicModels:
         return self.saveVolume(fileName, f)
     
     def saveVolume(self, fileName, f):
-        """Save volume data to file (nrrd or npy)"""
+        """Save volume data to file (tif sequence, nrrd, or npy)"""
         if self.get_numX() > 0 and self.get_numY() > 0 and self.get_numZ() > 0:
             z_0 = self.z_samples()[0]
             y_0 = self.y_samples()[0]
@@ -2759,7 +2759,7 @@ class tomographicModels:
         return self.saveData(fileName, f, T, x_0, y_0, z_0)
         
     def saveData(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0):
-        """Save 3D data to file (nrrd or npy)"""
+        """Save 3D data to file (tif sequence, nrrd, or npy)"""
         volFilePath, dontCare = os.path.split(fileName)
         if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
             print('Folder to save data either does not exist or not accessible!')
@@ -2782,34 +2782,56 @@ class tomographicModels:
                 print('Error: Failed to load nrrd library!')
                 print('To install this package do: pip install pynrrd')
                 return False
+        elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
+            try:
+                from PIL import Image
+                
+                baseName, fileExtension = os.path.splitext(fileName)
+                
+                for i in range(x.shape[0]):
+                    if has_torch == True and type(x) is torch.Tensor:
+                        im = Image.fromarray(x[i,:,:].numpy())
+                    else:
+                        im = Image.fromarray(x[i,:,:])
+                    im.save(baseName + '_' + str(int(i)) + fileExtension)
+                return True
+                
+            except:
+                print('Error: Failed to load PIL library!')
+                print('To install this package do: pip install Pillow')
+                return False
         else:
-            print('Error: must be an npy or nrrd file!')
+            print('Error: must be a tif, npy, or nrrd file!')
             return False
             
     def loadVolume(self, fileName):
-        """Load 3D volume data from file (nrrd or npy)"""
+        """Load 3D volume data from file (tif sequence, nrrd, or npy)"""
         return self.loadData(fileName)
         
     def load_volume(self, fileName):
-        """Load 3D volume data from file (nrrd or npy)"""
+        """Load 3D volume data from file (tif sequence, nrrd, or npy)"""
         return self.loadData(fileName)
         
     def loadProjections(self, fileName):
-        """Load 3D projection data from file (nrrd or npy)"""
+        """Load 3D projection data from file (tif sequence, nrrd, or npy)"""
         return self.loadData(fileName)
         
     def load_projections(self, fileName):
-        """Load 3D projection data from file (nrrd or npy)"""
+        """Load 3D projection data from file (tif sequence, nrrd, or npy)"""
         return self.loadData(fileName)
             
     def loadData(self, fileName):
-        """Load 3D data from file (nrrd or npy)"""
-        if os.path.isfile(fileName) == False:
-            print('file does not exist')
-            return None
+        """Load 3D data from file (tif sequence, nrrd, or npy)"""
         if fileName.endswith('.npy'):
-            return self.load(fileName)
+            if os.path.isfile(fileName) == False:
+                print('file does not exist')
+                return None
+            else:
+                return self.load(fileName)
         elif fileName.endswith('.nrrd'):
+            if os.path.isfile(fileName) == False:
+                print('file does not exist')
+                return None
             try:
                 import nrrd
                 x, header = nrrd.read(fileName)
@@ -2819,8 +2841,58 @@ class tomographicModels:
                 print('Error: Failed to load nrrd library!')
                 print('To install this package do: pip install pynrrd')
                 return None
+        elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
+            
+            try:
+                from PIL import Image
+                import glob
+                currentWorkingDirectory = os.getcwd()
+                dataFolder, baseFileName = os.path.split(fileName)
+                if len(dataFolder) > 0:
+                    os.chdir(dataFolder)
+                baseFileName, fileExtension = os.path.splitext(os.path.basename(baseFileName))
+                templateFile = baseFileName + '_*' + fileExtension
+                fileList = glob.glob(os.path.split(templateFile)[1])
+                if len(fileList) == 0:
+                    os.chdir(currentWorkingDirectory)
+                    print('file sequence does not exist')
+                    return None
+                justDigits = []
+                for i in range(len(fileList)):
+                    digitStr = fileList[i].replace(baseFileName+'_','').replace('.tif','')
+                    justDigits.append(int(digitStr))
+                ind = np.argsort(justDigits)
+
+                firstImg = np.array(Image.open(fileList[0]))
+                x = np.zeros((len(fileList), firstImg.shape[0], firstImg.shape[1]), dtype=np.float32)
+                for i in range(len(fileList)):
+                    anImage = np.array(Image.open(fileList[ind[i]]))
+                    x[i,:,:] = anImage[:,:]
+                os.chdir(currentWorkingDirectory)
+                return x
+                    
+            except:
+                print('Error: Failed to load PIL or glob library!')
+                print('To install PIL do: pip install Pillow')
+                return None
+            '''
+            try:
+                from PIL import Image
+                
+                baseName, fileExtension = os.path.splitext(fileName)
+                
+                for i in range(x.shape[0]):
+                    im = Image.fromarray(x[i,:,:])
+                    im.save(baseName + '_' + str(int(i)) + fileExtension)
+                return x
+                
+            except:
+                print('Error: Failed to load PIL library!')
+                print('To install this package do: pip install Pillow')
+                return None
+            #'''
         else:
-            print('Error: must be an npy or nrrd file!')
+            print('Error: must be a tif, npy, or nrrd file!')
             return None
     
     

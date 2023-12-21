@@ -82,7 +82,8 @@ def setLTTfromLEAP(leapct,LTT):
     centerCol = leapct.get_centerCol()
     helicalPitch = leapct.get_helicalPitch()
     phis = leapct.get_angles()
-    angularRange = (phis[1]-phis[0])*phis.size
+    #angularRange = (phis[1]-phis[0])*phis.size
+    angularRange = (phis[-1]-phis[0]) + phis[1]-phis[0]
     
     LTT.cmd('geometry = ' + str(geometry))
     if geometry == 'CONE':

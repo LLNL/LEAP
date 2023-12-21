@@ -5,6 +5,7 @@ test_ART_save.py
 *.dat
 *.raw
 demo_leaptorch/sample_data/*.png
+LTT.log
 
 # temporary files
 *.bak
