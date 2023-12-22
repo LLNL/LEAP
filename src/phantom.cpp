@@ -25,7 +25,7 @@ phantom::~phantom()
 {
 }
 
-bool phantom::addObject(float* f, parameters* params_in, int type, float* c, float* r, float val, float* A, float* clip)
+bool phantom::addObject(float* f, parameters* params_in, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
 {
 	if (f == NULL || params_in == NULL || c == NULL || r == NULL)
 		return false;
@@ -140,37 +140,98 @@ bool phantom::addObject(float* f, parameters* params_in, int type, float* c, flo
 	minZ = max(0, min(numZ - 1, minZ));
 	maxZ = max(0, min(numZ - 1, maxZ));
 
+	oversampling = max(1, min(oversampling, 5));
+
 	if (params->volumeDimensionOrder == parameters::ZYX)
 	{
-		omp_set_num_threads(omp_get_num_procs());
-		#pragma omp parallel for
-		for (int iz = minZ; iz <= maxZ; iz++)
+		if (oversampling == 1)
 		{
-			float z = iz * T_z + z_0;
-			float z_hat = (z - c[2]) / r[2];
-			float* zSlice = &f[uint64(iz) * uint64(numY * numX)];
-			for (int iy = minY; iy <= maxY; iy++)
+			omp_set_num_threads(omp_get_num_procs());
+			#pragma omp parallel for
+			for (int iz = minZ; iz <= maxZ; iz++)
 			{
-				float y = iy * T_y + y_0;
-				float y_hat = (y - c[1]) / r[1];
-				float* xLine = &zSlice[iy * numX];
-				for (int ix = minX; ix <= maxX; ix++)
+				float z = iz * T_z + z_0;
+				float z_hat = (z - c[2]) / r[2];
+				float* zSlice = &f[uint64(iz) * uint64(numY * numX)];
+				for (int iy = minY; iy <= maxY; iy++)
 				{
-					float x = ix * T_x + x_0;
-					float x_hat = (x - c[0]) / r[0];
+					float y = iy * T_y + y_0;
+					float y_hat = (y - c[1]) / r[1];
+					float* xLine = &zSlice[iy * numX];
+					for (int ix = minX; ix <= maxX; ix++)
+					{
+						float x = ix * T_x + x_0;
+						float x_hat = (x - c[0]) / r[0];
 
-					if (isRotated)
-					{
-						float x_r = (A[0] * (x - c[0]) + A[1] * (y - c[1]) + A[2] * (z - c[2])) / r[0];
-						float y_r = (A[3] * (x - c[0]) + A[4] * (y - c[1]) + A[5] * (z - c[2])) / r[1];
-						float z_r = (A[6] * (x - c[0]) + A[7] * (y - c[1]) + A[8] * (z - c[2])) / r[2];
-						if (isInside(x_r, y_r, z_r, type, clip))
-							xLine[ix] = val;
+						if (isRotated)
+						{
+							float x_r = (A[0] * (x - c[0]) + A[1] * (y - c[1]) + A[2] * (z - c[2])) / r[0];
+							float y_r = (A[3] * (x - c[0]) + A[4] * (y - c[1]) + A[5] * (z - c[2])) / r[1];
+							float z_r = (A[6] * (x - c[0]) + A[7] * (y - c[1]) + A[8] * (z - c[2])) / r[2];
+							if (isInside(x_r, y_r, z_r, type, clip))
+								xLine[ix] = val;
+						}
+						else
+						{
+							if (isInside(x_hat, y_hat, z_hat, type, clip))
+								xLine[ix] = val;
+						}
 					}
-					else
+				}
+			}
+		}
+		else
+		{
+			double frac = 1.0 / float(oversampling * oversampling * oversampling);
+
+			omp_set_num_threads(omp_get_num_procs());
+			#pragma omp parallel for
+			for (int iz = minZ; iz <= maxZ; iz++)
+			{
+				float z = iz * T_z + z_0;
+				//float z_hat = (z - c[2]) / r[2];
+				float* zSlice = &f[uint64(iz) * uint64(numY * numX)];
+				for (int iy = minY; iy <= maxY; iy++)
+				{
+					float y = iy * T_y + y_0;
+					//float y_hat = (y - c[1]) / r[1];
+					float* xLine = &zSlice[iy * numX];
+					for (int ix = minX; ix <= maxX; ix++)
 					{
-						if (isInside(x_hat, y_hat, z_hat, type, clip))
-							xLine[ix] = val;
+						float x = ix * T_x + x_0;
+						//float x_hat = (x - c[0]) / r[0];
+
+						float curVal = xLine[ix];
+						float accum = 0.0;
+						for (int iz_os = 0; iz_os < oversampling; iz_os++)
+						{
+							float z_os = z + T_z / float(oversampling + 1) * (float(iz_os) - 0.5 * float(oversampling - 1));
+							float z_hat = (z_os - c[2]) / r[2];
+							for (int iy_os = 0; iy_os < oversampling; iy_os++)
+							{
+								float y_os = y + T_y / float(oversampling + 1) * (float(iy_os) - 0.5 * float(oversampling - 1));
+								float y_hat = (y_os - c[1]) / r[1];
+								for (int ix_os = 0; ix_os < oversampling; ix_os++)
+								{
+									float x_os = x + T_x / float(oversampling + 1) * (float(ix_os) - 0.5 * float(oversampling - 1));
+									float x_hat = (x_os - c[0]) / r[0];
+									if (isRotated)
+									{
+										float x_r = (A[0] * (x_os - c[0]) + A[1] * (y_os - c[1]) + A[2] * (z_os - c[2])) / r[0];
+										float y_r = (A[3] * (x_os - c[0]) + A[4] * (y_os - c[1]) + A[5] * (z_os - c[2])) / r[1];
+										float z_r = (A[6] * (x_os - c[0]) + A[7] * (y_os - c[1]) + A[8] * (z_os - c[2])) / r[2];
+										if (isInside(x_r, y_r, z_r, type, clip))
+											accum += (val-curVal)*frac;
+									}
+									else
+									{
+										if (isInside(x_hat, y_hat, z_hat, type, clip))
+											accum += (val - curVal) * frac;
+									}
+								}
+							}
+						}
+						xLine[ix] = accum+curVal;
 					}
 				}
 			}

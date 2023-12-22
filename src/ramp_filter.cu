@@ -64,6 +64,112 @@ __global__ void ray_derivative_kernel(float* g, float* Dg, const int4 N, const f
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = diff;
 }
 
+__global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis)
+{
+    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int m = threadIdx.y + blockIdx.y * blockDim.y;
+    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    if (l >= N.x || m >= N.y || n >= N.z)
+        return;
+
+    const float v = m * T.y + startVal.y;
+    const float u = n * T.z + startVal.z + 0.5f * T.z;
+
+    const float cos_u = cos(u);
+    const float sin_u = sin(u);
+    const float lineLength = R * cos_u + tau * sin_u;
+
+    const float one_over_T_v = 1.0f / T.y;
+    const float one_over_T_u = 1.0f / T.z;
+    const float u_shift = startVal.z * one_over_T_u - 0.5f;
+    const float v_shift = startVal.y * one_over_T_v - 0.5f;
+
+    const float l0 = (float)l;
+    const int l_prev = max(0, l - 1);
+    const int l_next = min(N.x - 1, l + 1);
+
+    const float phi = phis[l];
+    float T_phi = T.x;
+    if (l == 0)
+        T_phi = phis[1] - phis[0];
+    else if (l == N.x - 1)
+        T_phi = phis[N.x - 1] - phis[N.x - 2];
+    else
+        T_phi = 0.5f * (phis[l] - phis[l - 1] + phis[l + 1] - phis[l]);
+
+    const float cos_T_phi_epsilon = cos(epsilon * T_phi);
+    const float sin_T_phi_epsilon = sin(epsilon * T_phi);
+    const float cos_phi = cos(phi);
+    const float sin_phi = sin(phi);
+    const float cos_phi_prev = cos(phis[l_prev]);
+    const float sin_phi_prev = sin(phis[l_prev]);
+    const float cos_phi_next = cos(phis[l_next]);
+    const float sin_phi_next = sin(phis[l_next]);
+
+    int shiftDirection;
+    float B0, B1, B2;
+    float one_over_neg_B_dot_theta;
+    float cos_phi_epsilon, sin_phi_epsilon;
+    float cos_phi_shift, sin_phi_shift;
+    float u_arg, v_arg;
+
+    shiftDirection = 0;
+    cos_phi_epsilon = cos_phi * cos_T_phi_epsilon - sin_phi * sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi * cos_T_phi_epsilon + cos_phi * sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi;
+    sin_phi_shift = sin_phi;
+    
+    shiftDirection = 0;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon + cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi;
+    sin_phi_shift = sin_phi;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau*(sin_phi_epsilon-sin_phi_shift) - lineLength*(cos_phi*cos_u+sin_phi*sin_u);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau *(cos_phi_epsilon-cos_phi_shift) - lineLength*(sin_phi*cos_u-cos_phi*sin_u);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
+    u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
+    v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
+    const float term1 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+
+    shiftDirection = l_next-l;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon + cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi_next;
+    sin_phi_shift = sin_phi_next;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau *(sin_phi_epsilon-sin_phi_shift) - lineLength*(cos_phi*cos_u+sin_phi*sin_u);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau *(cos_phi_epsilon-cos_phi_shift) - lineLength*(sin_phi*cos_u-cos_phi*sin_u);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
+    u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
+    v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
+    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
+
+    shiftDirection = 0;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon - cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi;
+    sin_phi_shift = sin_phi;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau *(sin_phi_epsilon-sin_phi_shift) - lineLength*(cos_phi*cos_u+sin_phi*sin_u);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau *(cos_phi_epsilon-cos_phi_shift) - lineLength*(sin_phi*cos_u-cos_phi*sin_u);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
+    u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
+    v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
+    const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+
+    shiftDirection = l_prev-l;
+    cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
+    sin_phi_epsilon = sin_phi*cos_T_phi_epsilon - cos_phi*sin_T_phi_epsilon;
+    cos_phi_shift = cos_phi_prev;
+    sin_phi_shift = sin_phi_prev;
+    B0 = R*(cos_phi_epsilon-cos_phi_shift) + tau *(sin_phi_epsilon-sin_phi_shift) - lineLength*(cos_phi*cos_u+sin_phi*sin_u);
+    B1 = R*(sin_phi_epsilon-sin_phi_shift) - tau *(cos_phi_epsilon-cos_phi_shift) - lineLength*(sin_phi*cos_u-cos_phi*sin_u);
+    B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
+    u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
+    v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
+    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
+
+    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (4.0f * epsilon); // ? 1.0f / T_phi
+}
+
 __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
@@ -72,34 +178,15 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     if (l >= N.x || m >= N.y || n >= N.z)
         return;
 
-    //*
     const float v = m * T.y + startVal.y;
     const float u = n * T.z + startVal.z + 0.5f*T.z;
 
     const float lineLength = (R + tau * u) / (1.0f + u * u);
-    //const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
-    //const float lineLength = (R + tau * (u + 0.5f * T.z)) * rsqrt(1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
-
-    const float one_over_T_v = 1.0f / T.y;
-    const float one_over_T_u = 1.0f / T.z;
-    //const float u_shift = startVal.z * one_over_T_u - 1.0f;
-    //const float v_shift = startVal.y * one_over_T_v - 1.0f;
-    const float u_shift = startVal.z * one_over_T_u - 0.5f;
-    const float v_shift = startVal.y * one_over_T_v - 0.5f;
-    //*/
-
-    /*
-    const float v = m * T.y + startVal.y + 0.5f*T.y;
-    const float u = n * T.z + startVal.z + 0.5f*T.z;
-
-    const float lineLength = (R + tau * u) / (1.0f + u * u);
-    //const float lineLength = (R + tau * (u+0.5f*T.z)) / (1.0f + (u + 0.5f * T.z) * (u + 0.5f * T.z));
 
     const float one_over_T_v = 1.0f / T.y;
     const float one_over_T_u = 1.0f / T.z;
     const float u_shift = startVal.z * one_over_T_u - 0.5f;
     const float v_shift = startVal.y * one_over_T_v - 0.5f;
-    //*/
 
     const float l0 = (float)l;
     const int l_prev = max(0, l - 1);
@@ -182,7 +269,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
-    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = T_phi*((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon); // ? 1.0f / T_phi
+    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (4.0f * epsilon); // ? 1.0f / T_phi
 }
 
 #ifdef INCLUDE_CUFFT
@@ -1094,7 +1181,10 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
 
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
-    deriv_helical_NHDLH_flat <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis);
+    if (params->detectorType == parameters::FLAT)
+        deriv_helical_NHDLH_flat <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis);
+    else
+        deriv_helical_NHDLH_curved <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis);
     params->colShiftFromFilter += -0.5; // opposite sign as LTT
     //params->rowShiftFromFilter += -0.5;
 

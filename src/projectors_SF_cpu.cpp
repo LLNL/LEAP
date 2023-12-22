@@ -952,11 +952,12 @@ bool CPUbackproject_SF_cone(float* g, float* f, parameters* params, bool setToZe
 {
     if (g == NULL || f == NULL || params == NULL)
         return false;
-	applyInversePolarWeight(g, params);
+	//applyInversePolarWeight(g, params);
     if (setToZero)
     	params->setToZero(f, params->volumeData_numberOfElements());
     if (params->volumeDimensionOrder == parameters::ZYX)
         return CPUbackproject_SF_ZYX(g, f, params);
+    applyInversePolarWeight(g, params);
     int num_threads = omp_get_num_procs();
     omp_set_num_threads(num_threads);
     #pragma omp parallel for schedule(dynamic)
@@ -975,10 +976,19 @@ bool CPUbackproject_SF_cone(float* g, float* f, parameters* params, bool setToZe
 
 bool CPUproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi)
 {
-    float u_0 = params->u_0() / params->sdd;
-    float v_0 = params->v_0() / params->sdd;
-    float T_u = params->pixelWidth / params->sdd;
+    float T_u, u_0;
     float T_v = params->pixelHeight / params->sdd;
+    float v_0 = params->v_0() / params->sdd;
+    if (params->detectorType == parameters::CURVED)
+    {
+        T_u = atan(params->pixelWidth / params->sdd);
+        u_0 = params->u_0();
+    }
+    else
+    {
+        u_0 = params->u_0() / params->sdd;
+        T_u = params->pixelWidth / params->sdd;
+    }
     
     const float cos_phi = cos(params->phis[iphi]);
     const float sin_phi = sin(params->phis[iphi]);
@@ -1068,7 +1078,14 @@ bool CPUproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, 
                 tau[1] = (x_dot_theta_perp + A_y) / (R_minus_x_dot_theta + B_y);
             }
 
-            v_denom = R_minus_x_dot_theta;
+            if (params->detectorType == parameters::CURVED)
+            {
+                tau[0] = atan(tau[0]);
+                tau[1] = atan(tau[1]);
+                v_denom = dist_from_source;
+            }
+            else
+                v_denom = R_minus_x_dot_theta;
 
             theWeight = sampleConstant * l_phi;
 
@@ -1380,10 +1397,19 @@ bool CPUproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, 
 
 bool CPUbackproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi)
 {
-    float u_0 = params->u_0() / params->sdd;
-    float v_0 = params->v_0() / params->sdd;
-    float T_u = params->pixelWidth / params->sdd;
+    float T_u, u_0;
     float T_v = params->pixelHeight / params->sdd;
+    float v_0 = params->v_0() / params->sdd;
+    if (params->detectorType == parameters::CURVED)
+    {
+        T_u = atan(params->pixelWidth / params->sdd);
+        u_0 = params->u_0();
+    }
+    else
+    {
+        u_0 = params->u_0() / params->sdd;
+        T_u = params->pixelWidth / params->sdd;
+    }
     
     float rFOVsq = params->rFOV()*params->rFOV();
     
@@ -1477,7 +1503,14 @@ bool CPUbackproject_SF_cone_kernel(float* aProj, float* xSlice, parameters* para
                 tau[1] = (x_dot_theta_perp + A_y) / (R_minus_x_dot_theta + B_y);
             }
 
-            v_denom = R_minus_x_dot_theta;
+            if (params->detectorType == parameters::CURVED)
+            {
+                tau[0] = atan(tau[0]);
+                tau[1] = atan(tau[1]);
+                v_denom = dist_from_source;
+            }
+            else
+                v_denom = R_minus_x_dot_theta;
 
             theWeight = sampleConstant * l_phi;
 
@@ -1673,7 +1706,7 @@ bool applyPolarWeight(float* g, parameters* params)
 		float* aProj = &g[uint64(i)* uint64(params->numRows*params->numCols)];
 		for (int j = 0; j < params->numRows; j++)
 		{
-			float v = (j*params->pixelHeight + params->v_0()) / params->sdd;
+            float v = params->v(j) / params->sdd;
 			float temp = 1.0 / sqrt(1.0 + v*v);
 			float* zLine = &aProj[j*params->numCols];
 			for (int k = 0; k < params->numCols; k++)
@@ -1692,7 +1725,7 @@ bool applyInversePolarWeight(float* g, parameters* params)
 		float* aProj = &g[uint64(i)* uint64(params->numRows*params->numCols)];
 		for (int j = 0; j < params->numRows; j++)
 		{
-			float v = (j*params->pixelHeight + params->v_0()) / params->sdd;
+            float v = params->v(j) / params->sdd;
 			float temp = sqrt(1.0 + v*v);
 			float* zLine = &aProj[j*params->numCols];
 			for (int k = 0; k < params->numCols; k++)

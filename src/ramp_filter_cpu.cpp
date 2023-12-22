@@ -373,11 +373,21 @@ double* HilbertTransformImpulseResponse(int N, int whichDirection/* = 1*/)
 
 Complex* HilbertTransformFrequencyResponse_cpu(int N, parameters* params)
 {
+    float T = params->pixelWidth * params->sod / params->sdd;
+
     //double* h_d = HilbertTransformImpulseResponse(N);
     double* h_d = HilbertTransformImpulseResponse(N, 0);
     float* h = new float[N];
     for (int i = 0; i < N; i++)
+    {
         h[i] = h_d[i];
+        if (i != 0 && params->geometry == parameters::CONE && params->detectorType == parameters::CURVED)
+        {
+            double s = timeSamples(i, N) * T / params->sod;
+            double temp = s / sin(s);
+            h[i] *= temp * temp;
+        }
+    }
     delete[] h_d;
 
     Complex* test = new Complex[N];

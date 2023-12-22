@@ -893,13 +893,24 @@ bool setProjectionGPUparams(parameters* params, int4& N, float4& T, float4& star
             T.w = 0.0;
             startVals.w = 0.0;
         }
-        if (doNormalize)
+
+        if (params->geometry == parameters::CONE && params->detectorType == parameters::CURVED)
+        {
+            T.z = atan(T.z / params->sdd);
+            if (doNormalize)
+            {
+                T.y = T.y / params->sdd;
+                startVals.y = startVals.y / params->sdd;
+            }
+        }
+        else if (doNormalize)
         {
             if (params->geometry == parameters::CONE)
             {
                 T.y = T.y / params->sdd;
-                T.z = T.z / params->sdd;
                 startVals.y = startVals.y / params->sdd;
+                
+                T.z = T.z / params->sdd;
                 startVals.z = startVals.z / params->sdd;
             }
             else if (params->geometry == parameters::FAN)

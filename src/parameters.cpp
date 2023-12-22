@@ -289,9 +289,13 @@ float parameters::rFOV()
 
 		//float R_tau = sqrt(sod * sod + tau * tau);
 		float alpha_right = u_0();
-		float alpha_left = pixelWidth * float(numCols - 1) + u_0();
-		alpha_right = atan(alpha_right / sdd);
-		alpha_left = atan(alpha_left / sdd);
+		//float alpha_left = pixelWidth * float(numCols - 1) + u_0();
+		float alpha_left = u(numCols - 1);
+		if (detectorType == FLAT)
+		{
+			alpha_right = atan(alpha_right / sdd);
+			alpha_left = atan(alpha_left / sdd);
+		}
 		if (offsetScan)
 			return sod * sin(max(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
 		else
@@ -529,12 +533,17 @@ bool parameters::set_default_volume(float scale)
 	numY = numX;
 
 	voxelWidth = default_voxelWidth() * scale;
-	voxelHeight = default_voxelHeight() * scale;
 
-	if (geometry == CONE || geometry == MODULAR)
+	if ((geometry == CONE && numRows > 1) || geometry == MODULAR)
+	{
+		voxelHeight = default_voxelHeight() * scale;
 		numZ = int(ceil(float(numRows) / scale));
+	}
 	else
+	{
+		voxelHeight = default_voxelHeight();
 		numZ = numRows;
+	}
 	offsetX = 0.0;
 	offsetY = 0.0;
 	offsetZ = 0.0;
@@ -860,7 +869,10 @@ bool parameters::set_truncatedScan(bool aFlag)
 
 float parameters::u_0()
 {
-	return -(centerCol + colShiftFromFilter) * pixelWidth;
+	if (geometry == CONE && detectorType == CURVED)
+		return -(centerCol + colShiftFromFilter) * atan(pixelWidth / sdd);
+	else
+		return -(centerCol + colShiftFromFilter) * pixelWidth;
 }
 
 float parameters::v_0()
@@ -878,7 +890,9 @@ float parameters::phi_0()
 
 float parameters::u(int i)
 {
-	if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+	if (geometry == CONE && detectorType == CURVED)
+		return (i * atan(pixelWidth/sdd) + u_0());
+	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
 		return (i * pixelWidth + u_0()) / sdd;
 	else
 		return i * pixelWidth + u_0();
@@ -886,7 +900,9 @@ float parameters::u(int i)
 
 float parameters::u_inv(float val)
 {
-	if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+	if (geometry == CONE && detectorType == CURVED)
+		return (val - u_0()) / atan(pixelWidth / sdd);
+	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
 	{
 		return (sdd*val - u_0()) / pixelWidth;
 	}

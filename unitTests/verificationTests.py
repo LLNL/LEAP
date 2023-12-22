@@ -4,54 +4,17 @@ import time
 import numpy as np
 from LTTserver import LTTserver
 from leapctype import *
+sys.path.append(r'..\utils')
+from bridgeToLTT import *
 
 objfile = r'C:\Users\champley\Documents\tools\LTT\sampleScripts\FORBILD_head_noEar.pd'
 
 LTT = LTTserver()
 leapct = tomographicModels()
 
-def setLEAPfromLTT():
-    numAngles = int(LTT.getParam('nangles'))
-    numRows = int(LTT.getParam('numRows'))
-    numCols = int(LTT.getParam('numCols'))
-    
-    arange = float(LTT.getParam('arange'))
-    pixelHeight = float(LTT.getParam('pixelHeight'))
-    pixelWidth = float(LTT.getParam('pixelWidth'))
-    
-    centerRow = float(LTT.getParam('centerRow'))
-    centerCol = float(LTT.getParam('centerCol'))
-    
-    geometry = LTT.getParam('geometry')
-    if geometry == 'CONE':
-        sod = float(LTT.getParam('sod'))
-        sdd = float(LTT.getParam('sdd'))
-        leapct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
-    elif geometry == 'FAN':
-        sod = float(LTT.getParam('sod'))
-        sdd = float(LTT.getParam('sdd'))
-        leapct.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd)
-    elif geometry == 'PARALLEL':
-        leapct.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange))
-    
-    if LTT.unknown('axisOfSymmetry') == False:
-        leapct.set_axisOfSymmetry(float(LTT.getParam('axisOfSymmetry')))
-        
-    numX = int(LTT.getParam('rxelements'))
-    numY = int(LTT.getParam('ryelements'))
-    numZ = int(LTT.getParam('rzelements'))
-    
-    voxelWidth = float(LTT.getParam('rxsize'))
-    voxelHeight = float(LTT.getParam('rzsize'))
-    
-    offsetX = float(LTT.getParam('rxref')) - 0.5*float(numX-1)
-    offsetY = float(LTT.getParam('ryref')) - 0.5*float(numY-1)
-    offsetZ = float(LTT.getParam('rzref')) - 0.5*float(numZ-1)
-    
-    leapct.set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ)
-    
+test_cpu_methods = True
+
 for n in range(3):
-    set_cpu_methods = True
     LTT.cmd('clearAll')
     LTT.cmd('diskIO=off')
     LTT.cmd('archdir=pwd')
@@ -64,6 +27,7 @@ for n in range(3):
     if n == 0:
         print('********* CONE-BEAM *********')
         LTT.cmd(['geometry=cone','detectorShape=flat','sdd=1400','sod=1100','numAngles = ' + str(numAngles),'arange=360','pixelSize='+str(pixelSize),'numRows=340/'+str((pixelSize)),'numCols=320/'+str((pixelSize)),'centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
+        LTT.cmd('detectorShape=curved')
     elif n == 1:
         if LTT.unknown('axisOfSymmetry') == False:
             continue
@@ -77,7 +41,7 @@ for n in range(3):
     LTT.cmd('dataType=atten')
     LTT.cmd('projectorType=SF')
 
-    setLEAPfromLTT()
+    setLEAPfromLTT(LTT,leapct)
     #leapct.set_volumeDimensionOrder(0) # XYZ
     leapct.set_volumeDimensionOrder(1) # ZYX
 
@@ -99,7 +63,7 @@ for n in range(3):
     leapct.project(g_leap_GPU,f_true)
     print('project GPU elapsed time: ' + str(time.time()-startTime))
 
-    if set_cpu_methods:
+    if test_cpu_methods:
         leapct.set_GPU(-1)
     g_leap_CPU = leapct.allocateProjections()
     startTime = time.time()
@@ -128,7 +92,7 @@ for n in range(3):
     leapct.backproject(g_true, f_leap_GPU)
     print('backproject GPU elapsed time: ' + str(time.time()-startTime))
     
-    if set_cpu_methods:
+    if test_cpu_methods:
         leapct.set_GPU(-1)
     f_leap_CPU = leapct.allocateVolume()
     startTime = time.time()
@@ -157,7 +121,7 @@ for n in range(3):
     leapct.FBP(g_true, f_leap_GPU)
     print('FBP GPU elapsed time: ' + str(time.time()-startTime))
 
-    if set_cpu_methods:
+    if test_cpu_methods:
         leapct.set_GPU(-1)
     f_leap_CPU = leapct.allocateVolume()
     startTime = time.time()
@@ -168,5 +132,5 @@ for n in range(3):
     leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
     #'''
     
-    #quit()
+    quit()
     

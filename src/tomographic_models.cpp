@@ -798,6 +798,8 @@ bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, fl
 
 bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
 {
+	params.detectorType = parameters::FLAT;
+
 	params.geometry = parameters::FAN;
 	params.detectorType = parameters::FLAT;
 	params.sod = sod;
@@ -816,6 +818,8 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 
 bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
 {
+	params.detectorType = parameters::FLAT;
+
 	params.geometry = parameters::PARALLEL;
 	params.pixelWidth = pixelWidth;
 	params.pixelHeight = pixelHeight;
@@ -830,6 +834,8 @@ bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols
 
 bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
 {
+	params.detectorType = parameters::FLAT;
+
 	params.geometry = parameters::MODULAR;
 	params.pixelWidth = pixelWidth;
 	params.pixelHeight = pixelHeight;
@@ -850,10 +856,16 @@ bool tomographicModels::set_flatDetector()
 
 bool tomographicModels::set_curvedDetector()
 {
-	params.detectorType = parameters::CURVED;
 	if (params.geometry != parameters::CONE)
-		printf("Warning: curved detector only defined for cone-beam geometries\n");
-	return true;
+	{
+		printf("Error: curved detector only defined for cone-beam geometries\n");
+		return false;
+	}
+	else
+	{
+		params.detectorType = parameters::CURVED;
+		return true;
+	}
 }
 
 bool tomographicModels::set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)

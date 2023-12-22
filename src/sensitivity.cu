@@ -92,7 +92,7 @@ __global__ void fanBeamSensitivityKernel(int4 N_g, float4 T_g, float4 startVals_
     f[ind] = val * scalar;
 }
 
-__global__ void coneBeamSensitivityKernel(int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
+__global__ void coneBeamSensitivityKernel(const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, const bool isCurved)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -125,11 +125,26 @@ __global__ void coneBeamSensitivityKernel(int4 N_g, float4 T_g, float4 startVals
         const float sin_phi = sin(phis[l]);
         const float z_source = phis[l] * T_g.w + startVals_g.w;
 
-        const float v_denom_inv = 1.0 / (R - x * cos_phi - y * sin_phi);
-        const float u_arg = (-sin_phi * x + cos_phi * y + tau) * v_denom_inv;
-        const float v_arg = (z - z_source) * v_denom_inv;
-        if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-            val += sqrt(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+        if (isCurved)
+        {
+            const float u_denom_inv = 1.0f / (R - x * cos_phi - y * sin_phi);
+            const float u_arg = atan(-sin_phi * x + cos_phi * y + tau) * u_denom_inv;
+
+            const float dist_from_source_components_x = fabs(R * cos_phi + tau * sin_phi - x);
+            const float dist_from_source_components_y = fabs(R * sin_phi - tau * cos_phi - y);
+            const float v_denom_inv = rsqrtf(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
+            const float v_arg = (z - z_source) * v_denom_inv;
+            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                val += sqrt(1.0f + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+        }
+        else
+        {
+            const float v_denom_inv = 1.0f / (R - x * cos_phi - y * sin_phi);
+            const float u_arg = (-sin_phi * x + cos_phi * y + tau) * v_denom_inv;
+            const float v_arg = (z - z_source) * v_denom_inv;
+            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                val += sqrt(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+        }
     }
     if (val == 0.0f)
         val = 1.0f / scalar;
@@ -181,7 +196,7 @@ bool sensitivity_gpu(float*& f, parameters* params, bool data_on_cpu)
     }
     else if (params->geometry == parameters::CONE)
     {
-        coneBeamSensitivityKernel <<< dimGrid, dimBlock >>> (N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        coneBeamSensitivityKernel <<< dimGrid, dimBlock >>> (N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, bool(params->detectorType == parameters::CURVED));
     }
 
     // pull result off GPU

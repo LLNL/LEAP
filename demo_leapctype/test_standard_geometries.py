@@ -39,6 +39,7 @@ numRows = numCols
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_curvedDetector()
 
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
@@ -80,10 +81,10 @@ f[:] = 0.0
 startTime = time.time()
 #leapct.backproject(g,f)
 leapct.FBP(g,f)
-#leapct.ASDPOCS(g,f,50,10,1,0.02/20.0)
+#leapct.ASDPOCS(g,f,10,10,1,0.02/20.0)
 #leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
-#leapct.LS(g,f,10,True)
+#leapct.LS(g,f,100,True)
 #leapct.MLTR(g,f,50,10,0.02/20.0,0.1)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 

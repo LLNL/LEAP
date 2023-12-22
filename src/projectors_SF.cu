@@ -585,6 +585,174 @@ __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 s
     g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrt(1.0f + v * v);
 }
 
+__global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+        return;
+
+    uint64 ind;
+    if (volumeDimensionOrder == 0)
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
+    else
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
+
+    const float x = i * T_f.x + startVals_f.x;
+    const float y = j * T_f.y + startVals_f.y;
+    const float z = k * T_f.z + startVals_f.z;
+    if (x * x + y * y > rFOVsq)
+    {
+        f[ind] = 0.0f;
+        return;
+    }
+
+    const float T_x_over_2 = 0.5f * T_f.x;
+    const float v0_over_Tv = startVals_g.y / T_g.y;
+    const float Tz_over_Tv = T_f.z / T_g.y;
+    const float v_phi_x_start_num = z / T_g.y;
+    const float Tv_inv = 1.0f / T_g.y;
+    const float Tu_inv = 1.0f / T_g.z;
+
+    const float atan_term = atan(2.0f * tau * R / (R * R - tau * tau));
+    const int maxTurns = int(ceil((1.0f / d_v_max_inv - 1.0f / d_v_min_inv) * (R + sqrt(x * x + y * y)) / fabs(PI * T_g.w)));
+
+    float val = 0.0f;
+
+    for (int l = 0; l < N_g.x; l++)
+    {
+        const float phi_cur = phis[l];
+        const float L = (float)l + 0.5f;
+        const float z_source = (phi_cur * T_g.w + startVals_g.w);
+        const float z_source_over_T_v = z_source * Tv_inv;
+        const float sin_phi = sin(phi_cur);
+        const float cos_phi = cos(phi_cur);
+
+        const float x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
+        const float R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
+        const float R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
+
+        const float dist_from_source_components_x = fabs(R * cos_phi + tau * sin_phi - x);
+        const float dist_from_source_components_y = fabs(R * sin_phi - tau * cos_phi - y);
+        const float dist_from_source = sqrt(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
+        const float dist_from_source_inv = 1.0f / dist_from_source;
+
+        const float v_arg = (z - z_source) * dist_from_source_inv;
+        const float centralWeight = helicalConeWeight(v_arg);
+        if (centralWeight > 0.0f)
+        {
+            float B_x = (sin_phi < 0.0f) ? -cos_phi * T_x_over_2 : cos_phi * T_x_over_2;
+            const float B_y = (cos_phi < 0.0f) ? sin_phi * T_x_over_2 : -sin_phi * T_x_over_2;
+
+            const float l_phi = T_f.x * dist_from_source / max(dist_from_source_components_x, dist_from_source_components_y);
+
+            const float u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
+            const float x_denom = fabs(u_arg * cos_phi - sin_phi);
+            const float y_denom = fabs(u_arg * sin_phi + cos_phi);
+            //const float l_phi = T_f.x * sqrt(1.0f + u_arg * u_arg) / max(x_denom, y_denom);
+            float A_x;
+            if (x_denom > y_denom)
+                A_x = fabs(sin_phi) * T_x_over_2;
+            else
+            {
+                A_x = fabs(cos_phi) * T_x_over_2;
+                B_x = B_y;
+            }
+            const float tau_low = (atan((x_dot_theta_perp - A_x) / (R_minus_x_dot_theta - B_x)) - startVals_g.z) * Tu_inv;
+            const float tau_high = (atan((x_dot_theta_perp + A_x) / (R_minus_x_dot_theta + B_x)) - startVals_g.z) * Tu_inv;
+
+            float ind_first = floor(tau_low + 0.5f); // first detector index
+
+            const float horizontalWeights_0_A = (min(tau_high, ind_first + 1.5f) - tau_low) * l_phi;
+            const float horizontalWeights_1_A = l_phi * (tau_high - tau_low) - horizontalWeights_0_A;
+
+            const float ind_last = ind_first + 2.5f;
+            ind_first = ind_first + 0.5f + max(0.0f, min(tau_high - ind_first - 0.5f, 1.0f)) * l_phi / horizontalWeights_0_A;
+
+            const float v_phi_x_step_A = Tz_over_Tv * dist_from_source_inv;
+            const float v_phi_x_first = (v_phi_x_start_num - z_source_over_T_v) * dist_from_source_inv - v0_over_Tv;
+            
+            //const float v_phi_x = (v_phi_x_start_num + k_offset * Tz_over_Tv - z_source_over_T_v) * R_minus_x_dot_theta_inv - v0_over_Tv;
+            const float v_phi_x = v_phi_x_first;
+
+            const float row_high_A = floor(v_phi_x - 0.5f * v_phi_x_step_A + 0.5f) + 0.5f;
+            const float z_high_A = v_phi_x + 0.5f * v_phi_x_step_A - row_high_A;
+
+            // Calculate the View Redundancy Weight
+            const float phi_conj_shift = -2.0f * atan(u_arg) + atan_term;
+            //const float R_minus_x_dot_theta_inv_conj = 1.0f / (R - x * cos(phi_cur + phi_conj_shift + PI) - y * sin(phi_cur + phi_conj_shift + PI));
+            const float cos_phi_conj = cos(phi_cur + phi_conj_shift + PI);
+            const float sin_phi_conj = sin(phi_cur + phi_conj_shift + PI);
+            const float dist_from_source_components_x_conj = fabs(R * cos_phi_conj + tau * sin_phi_conj - x);
+            const float dist_from_source_components_y_conj = fabs(R * sin_phi_conj - tau * cos_phi_conj - y);
+            const float dist_from_source_conj = sqrt(dist_from_source_components_x_conj * dist_from_source_components_x_conj + dist_from_source_components_y_conj * dist_from_source_components_y_conj);
+            const float dist_from_source_inv_conj = 1.0f / dist_from_source_conj;
+
+            float sumWeights = 0.0f;
+
+            const int N_turns_below = min(maxTurns, int(ceil((phi_cur - d_phi_start) * PIINV))) + 1;
+            const int N_turns_above = min(maxTurns, int(ceil((d_phi_end - phi_cur) * PIINV))) + 1;
+
+            for (int iturn = -1; iturn >= -N_turns_below; iturn--)
+            {
+                if (int(-iturn) % 2 == 0)
+                {
+                    const float phi_turn = phi_cur + iturn * PI;
+                    if (phi_turn < d_phi_start)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * dist_from_source_inv);
+                }
+                else
+                {
+                    const float phi_turn = phi_cur + phi_conj_shift + iturn * PI;
+                    if (phi_turn < d_phi_start)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * dist_from_source_inv_conj);
+                }
+            }
+            for (int iturn = 1; iturn <= N_turns_above; iturn++)
+            {
+                if (int(iturn) % 2 == 0)
+                {
+                    const float phi_turn = phi_cur + iturn * PI;
+                    if (phi_turn > d_phi_end)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * dist_from_source_inv);
+                }
+                else
+                {
+                    const float phi_turn = phi_cur + phi_conj_shift + iturn * PI;
+                    if (phi_turn > d_phi_end)
+                        break;
+                    sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * dist_from_source_inv_conj);
+                }
+            }
+            // End-Calculate the View Redundancy Weight
+            //sumWeights = centralWeight;
+
+            const float v_weight_one = min(v_phi_x_step_A, v_phi_x_step_A - z_high_A);
+            const float v_weight_two = max(0.0f, min(z_high_A, 1.0f));
+            const float v_oneAndTwo = v_weight_two / (v_weight_one + v_weight_two);
+            const float row_high_plus_two_A = row_high_A + 2.0f;
+
+            if (z_high_A > 1.0f)
+            {
+                val += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
+                    + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
+                        + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f)) *centralWeight / (centralWeight + sumWeights);
+            }
+            else
+            {
+                val += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)) *centralWeight / (centralWeight + sumWeights);
+            }
+        }
+    }
+    f[ind] = val;
+}
+
 __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -729,6 +897,321 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
     f[ind] = val;
 }
 
+__global__ void curvedConeBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = (threadIdx.z + blockIdx.z * blockDim.z) * NUM_SLICES_PER_THREAD;
+    if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+        return;
+
+    uint64 ind;
+    if (volumeDimensionOrder == 0)
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
+    else
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
+
+    const float x = i * T_f.x + startVals_f.x;
+    const float y = j * T_f.y + startVals_f.y;
+    const float z = k * T_f.z + startVals_f.z;
+    if (x * x + y * y > rFOVsq)
+    {
+        f[ind] = 0.0f;
+        return;
+    }
+
+    const float T_x_over_2 = 0.5f * T_f.x;
+    const float v0_over_Tv = startVals_g.y / T_g.y;
+    const float Tz_over_Tv = T_f.z / T_g.y;
+    const float v_phi_x_start_num = z / T_g.y;
+    const float Tv_inv = 1.0f / T_g.y;
+    const float Tu_inv = 1.0f / T_g.z;
+
+    float vals[NUM_SLICES_PER_THREAD];
+    int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
+    for (int k_offset = 0; k_offset < numZ; k_offset++)
+        vals[k_offset] = 0.0f;
+
+    for (int l = 0; l < N_g.x; l++)
+    {
+        const float L = (float)l + 0.5f;
+        const float z_source_over_T_v = (phis[l] * T_g.w + startVals_g.w) * Tv_inv;
+        const float sin_phi = sin(phis[l]);
+        const float cos_phi = cos(phis[l]);
+
+        float B_x = (sin_phi < 0.0f) ? -cos_phi * T_x_over_2 : cos_phi * T_x_over_2;
+        const float B_y = (cos_phi < 0.0f) ? sin_phi * T_x_over_2 : -sin_phi * T_x_over_2;
+
+        const float x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
+        const float R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
+        const float R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
+
+        const float dist_from_source_components_x = fabs(R * cos_phi + tau * sin_phi - x);
+        const float dist_from_source_components_y = fabs(R * sin_phi - tau * cos_phi - y);
+        const float dist_from_source = sqrt(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
+        const float l_phi = T_f.x * dist_from_source / max(dist_from_source_components_x, dist_from_source_components_y);
+
+        const float u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
+        const float x_denom = fabs(u_arg * cos_phi - sin_phi);
+        const float y_denom = fabs(u_arg * sin_phi + cos_phi);
+        //const float l_phi = T_f.x * sqrt(1.0f + u_arg * u_arg) / max(x_denom, y_denom);
+        float A_x;
+        if (x_denom > y_denom)
+            A_x = fabs(sin_phi) * T_x_over_2;
+        else
+        {
+            A_x = fabs(cos_phi) * T_x_over_2;
+            B_x = B_y;
+        }
+        const float tau_low = (atan((x_dot_theta_perp - A_x) / (R_minus_x_dot_theta - B_x)) - startVals_g.z) * Tu_inv;
+        const float tau_high = (atan((x_dot_theta_perp + A_x) / (R_minus_x_dot_theta + B_x)) - startVals_g.z) * Tu_inv;
+
+        float ind_first = floor(tau_low + 0.5f); // first detector index
+
+        const float horizontalWeights_0_A = (min(tau_high, ind_first + 1.5f) - tau_low) * l_phi;
+        const float horizontalWeights_1_A = l_phi * (tau_high - tau_low) - horizontalWeights_0_A;
+
+        const float ind_last = ind_first + 2.5f;
+        ind_first = ind_first + 0.5f + max(0.0f, min(tau_high - ind_first - 0.5f, 1.0f)) * l_phi / horizontalWeights_0_A;
+
+        const float v_phi_x_step_A = Tz_over_Tv / dist_from_source;
+        const float v_phi_x_first = (v_phi_x_start_num - z_source_over_T_v) / dist_from_source - v0_over_Tv;
+        for (int k_offset = 0; k_offset < numZ; k_offset++)
+        {
+            //const float v_phi_x = (v_phi_x_start_num + k_offset * Tz_over_Tv - z_source_over_T_v) * R_minus_x_dot_theta_inv - v0_over_Tv;
+            const float v_phi_x = v_phi_x_first + k_offset * v_phi_x_step_A;
+
+            const float row_high_A = floor(v_phi_x - 0.5f * v_phi_x_step_A + 0.5f) + 0.5f;
+            const float z_high_A = v_phi_x + 0.5f * v_phi_x_step_A - row_high_A;
+
+            const float v_weight_one = min(v_phi_x_step_A, v_phi_x_step_A - z_high_A);
+            const float v_weight_two = max(0.0f, min(z_high_A, 1.0f));
+            const float v_oneAndTwo = v_weight_two / (v_weight_one + v_weight_two);
+            const float row_high_plus_two_A = row_high_A + 2.0f;
+
+            if (z_high_A > 1.0f)
+            {
+                vals[k_offset] += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
+                    + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
+                        + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f);
+            }
+            else
+            {
+                vals[k_offset] += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two);
+            }
+        }
+    }
+
+    if (volumeDimensionOrder == 0)
+    {
+        for (int k_offset = 0; k_offset < numZ; k_offset++)
+            f[ind + uint64(k_offset)] = vals[k_offset];
+    }
+    else
+    {
+        for (int k_offset = 0; k_offset < numZ; k_offset++)
+            f[ind + uint64(k_offset) * uint64(N_f.y * N_f.x)] = vals[k_offset];
+    }
+}
+
+__global__ void curvedConeBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
+{
+    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int m = threadIdx.y + blockIdx.y * blockDim.y;
+    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
+        return;
+
+    const float v = m * T_g.y + startVals_g.y;
+    const float u = tan(n * T_g.z + startVals_g.z);
+
+    const float sin_phi = sin(phis[l]);
+    const float cos_phi = cos(phis[l]);
+
+    const float n_minus_half = (float)n - 0.5f; // +startVals_g.z / T_g.z;
+    const float n_plus_half = (float)n + 0.5f; // +startVals_g.z / T_g.z;
+    const float m_minus_half = (float)m - 0.5f;
+    const float m_plus_half = (float)m + 0.5f;
+
+    const float u0_over_Tu = startVals_g.z / T_g.z;
+    const float one_over_Tu = 1.0f / T_g.z;
+
+    const float Tz_over_Tv = T_f.z / T_g.y;
+    const float v0_over_Tv = startVals_g.y / T_g.y;
+
+    const float z_source = phis[l] * T_g.w + startVals_g.w;
+
+    const float z0_over_Tz_plus_half = startVals_f.z / T_f.z + 0.5f;
+    const float z_ind_offset = -z0_over_Tz_plus_half + z_source / T_f.z;
+
+    const float z_ind_slope = (v - 0.5f * T_g.y) / T_f.z;
+
+    const float sourcePos_x = R * cos_phi + tau * sin_phi;
+    const float sourcePos_y = R * sin_phi - tau * cos_phi;
+
+    float g_output = 0.0f;
+
+    if (fabs(u * cos_phi - sin_phi) > fabs(u * sin_phi + cos_phi))
+    {
+        const float A_x = fabs(sin_phi) * 0.5f * T_f.x;
+        const float B_x = cos_phi * 0.5f * T_f.x * ((sin_phi < 0.0f) ? -1.0f : 1.0f);
+        const float Tx_sin = T_f.x * sin_phi;
+        //const float Tx_cos = T_g.z * T_f.x * cos_phi; // FIXME?
+        const float Tx_cos = T_f.x * cos_phi; // FIXME?
+
+        float shiftConstant, slopeConstant;
+        if (u * cos_phi - sin_phi > 0.0f)
+        {
+            shiftConstant = (((R + B_x) * (u - 0.5f * T_g.z) - A_x - tau) / (cos_phi * (u - 0.5f * T_g.z) - sin_phi) - startVals_f.x) / T_f.x;
+            slopeConstant = ((-sin_phi * (u - 0.5f * T_g.z) - cos_phi) / (cos_phi * (u - 0.5f * T_g.z) - sin_phi)) / T_f.x;
+        }
+        else
+        {
+            shiftConstant = (((R - B_x) * (u + 0.5f * T_g.z) + A_x - tau) / (cos_phi * (u + 0.5f * T_g.z) - sin_phi) - startVals_f.x) / T_f.x;
+            slopeConstant = ((sin_phi * (u + 0.5f * T_g.z) + cos_phi) / (-cos_phi * (u + 0.5f * T_g.z) + sin_phi)) / T_f.x;
+        }
+
+        for (int j = 0; j < N_f.y; j++)
+        {
+            const float y = (float)j * T_f.y + startVals_f.y;
+            const int i = (int)ceil(y * slopeConstant + shiftConstant);
+            const float x = (float)i * T_f.x + startVals_f.x;
+
+            if (x * x + y * y > rFOVsq)
+                continue;
+
+            const float v_denom_inv = rsqrtf((sourcePos_x - x) * (sourcePos_x - x) + (sourcePos_y - y) * (sourcePos_y - y));
+
+            const float R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
+            //const int k = (int)ceil(z_ind_slope * R_minus_x_dot_theta + z_ind_offset);
+            const int k = (int)ceil(z_ind_slope / v_denom_inv + z_ind_offset);
+
+            if (k <= -3)
+            {
+                continue;
+            }
+            if (k >= N_f.z)
+            {
+                continue;
+            }
+
+            const float num_low = tau - x * sin_phi + y * cos_phi - A_x;
+            const float num_high = num_low + 2.0f * A_x;
+
+            const float denom_low = R_minus_x_dot_theta - B_x;
+            const float denom_high = R_minus_x_dot_theta + B_x;
+
+            const float hWeight_0 = max(0.0f, min(atan(num_high / denom_high)* one_over_Tu- u0_over_Tu, n_plus_half) - max(atan(num_low / denom_low)* one_over_Tu- u0_over_Tu, n_minus_half));
+            const float hWeight_1 = max(0.0f, min(atan((num_high - Tx_sin) / (denom_high - Tx_cos))* one_over_Tu- u0_over_Tu, n_plus_half) - max(atan((num_low - Tx_sin) / (denom_low - Tx_cos))* one_over_Tu- u0_over_Tu, n_minus_half));
+            const float hWeight_2 = max(0.0f, 1.0f - hWeight_1 - hWeight_0);
+
+            const float v_phi_x_step = Tz_over_Tv * v_denom_inv;
+            const float xi_high = ((float)k - z_ind_offset) * v_phi_x_step - v0_over_Tv;
+
+            const float vWeight_0 = (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f);
+            const float vWeight_1 = max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f);
+            const float vWeight_2 = max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
+            const float x_12 = float(i) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1);
+            const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
+            if (volumeDimensionOrder == 0)
+            {
+                g_output += (tex3D<float>(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, z_12, float(j) + 0.5f, float(i + 2) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, float(i + 2) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+            else
+            {
+                g_output += (tex3D<float>(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, x_12, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+        }
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
+    }
+    else
+    {
+        const float A_y = fabs(cos_phi) * 0.5f * T_f.x;
+        const float B_y = sin_phi * 0.5f * T_f.x * ((cos_phi < 0.0f) ? 1.0f : -1.0f);
+        const float Ty_cos = T_f.y * cos_phi;
+        //const float Ty_sin = T_g.z * T_f.y * sin_phi;
+        const float Ty_sin = T_f.y * sin_phi;
+
+        float shiftConstant, slopeConstant;
+        if (u * sin_phi + cos_phi >= 0.0f)
+        {
+            shiftConstant = (((R + B_y) * (u - 0.5f * T_g.z) - A_y - tau) / (sin_phi * (u - 0.5f * T_g.z) + cos_phi) - startVals_f.y) / T_f.y;
+            slopeConstant = ((sin_phi - cos_phi * (u - 0.5f * T_g.z)) / (sin_phi * (u - 0.5f * T_g.z) + cos_phi)) / T_f.y;
+        }
+        else
+        {
+            shiftConstant = (((R - B_y) * (u + 0.5f * T_g.z) + A_y - tau) / (cos_phi + sin_phi * (u + 0.5f * T_g.z)) - startVals_f.y) / T_f.y;
+            slopeConstant = ((sin_phi - cos_phi * (u + 0.5f * T_g.z)) / (cos_phi + sin_phi * (u + 0.5f * T_g.z))) / T_f.y;
+        }
+        for (int i = 0; i < N_f.x; i++)
+        {
+            const float x = (float)i * T_f.x + startVals_f.x;
+            const int j = (int)ceil(x * slopeConstant + shiftConstant);
+            const float y = (float)j * T_f.y + startVals_f.y;
+
+            if (x * x + y * y > rFOVsq)
+                continue;
+
+            const float v_denom_inv = rsqrtf((sourcePos_x - x) * (sourcePos_x - x) + (sourcePos_y - y) * (sourcePos_y - y));
+
+            const float R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
+            //const int k = (int)ceil(z_ind_slope * R_minus_x_dot_theta + z_ind_offset);
+            const int k = (int)ceil(z_ind_slope / v_denom_inv + z_ind_offset);
+
+            if (k <= -3)
+            {
+                continue;
+            }
+            if (k >= N_f.z)
+            {
+                continue;
+            }
+
+            const float num_low = tau - x * sin_phi + y * cos_phi - A_y;
+            const float num_high = num_low + 2.0f * A_y;
+
+            const float denom_low = R_minus_x_dot_theta - B_y;
+            const float denom_high = R_minus_x_dot_theta + B_y;
+
+            const float hWeight_0 = max(0.0f, min(atan(num_high / denom_high)*one_over_Tu- u0_over_Tu, n_plus_half) - max(atan(num_low / denom_low)*one_over_Tu- u0_over_Tu, n_minus_half));
+            const float hWeight_1 = max(0.0f, min(atan((num_high + Ty_cos) / (denom_high - Ty_sin))*one_over_Tu- u0_over_Tu, n_plus_half) - max(atan((num_low + Ty_cos) / (denom_low - Ty_sin))*one_over_Tu- u0_over_Tu, n_minus_half));
+            const float hWeight_2 = max(0.0f, 1.0f - hWeight_1 - hWeight_0);
+
+            const float v_phi_x_step = Tz_over_Tv * v_denom_inv;
+            const float xi_high = ((float)k - z_ind_offset) * v_phi_x_step - v0_over_Tv;
+
+            const float vWeight_0 = (min(xi_high - m_minus_half, 1.0f)) * ((k >= 0) ? 1.0f : 0.0f);
+            const float vWeight_1 = max(0.0f, min(v_phi_x_step, m_plus_half - xi_high)) * ((k >= -1 && k + 1 < N_f.z) ? 1.0f : 0.0f);
+            const float vWeight_2 = max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
+            const float y_12 = float(j) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1);
+            const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
+            if (volumeDimensionOrder == 0)
+            {
+                g_output += (tex3D<float>(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, z_12, float(j + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(k + 2) + 0.5f, float(j + 2) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+            else
+            {
+                g_output += (tex3D<float>(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+        }
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
+    }
+}
+
 __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -759,7 +1242,6 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
     const float Tv_inv = 1.0f / T_g.y;
     const float Tu_inv = 1.0f / T_g.z;
 
-    //*
     float vals[NUM_SLICES_PER_THREAD];
     int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
     for (int k_offset = 0; k_offset < numZ; k_offset++)
@@ -842,75 +1324,6 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
         for (int k_offset = 0; k_offset < numZ; k_offset++)
             f[ind + uint64(k_offset) * uint64(N_f.y * N_f.x)] = vals[k_offset];
     }
-    //*/
-
-    /*
-    float val = 0.0;
-    for (int l = 0; l < N_g.x; l++)
-    {
-        const float L = (float)l + 0.5f;
-        const float z_source_over_T_v = (phis[l] * T_g.w + startVals_g.w) * Tv_inv;
-        const float sin_phi = sin(phis[l]);
-        const float cos_phi = cos(phis[l]);
-
-        float B_x = (sin_phi < 0.0f) ? -cos_phi * T_x_over_2 : cos_phi * T_x_over_2;
-        const float B_y = (cos_phi < 0.0f) ? sin_phi * T_x_over_2 : -sin_phi * T_x_over_2;
-
-        const float x_dot_theta_perp = cos_phi * y - sin_phi * x + tau;
-        const float R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
-        const float R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
-
-        const float u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
-        const float x_denom = fabs(u_arg * cos_phi - sin_phi);
-        const float y_denom = fabs(u_arg * sin_phi + cos_phi);
-        const float l_phi = T_f.x * sqrt(1.0f + u_arg * u_arg) / max(x_denom, y_denom);
-        float A_x;
-        if (x_denom > y_denom)
-            A_x = fabs(sin_phi) * T_x_over_2;
-        else
-        {
-            A_x = fabs(cos_phi) * T_x_over_2;
-            B_x = B_y;
-        }
-        const float tau_low = ((x_dot_theta_perp - A_x) / (R_minus_x_dot_theta - B_x) - startVals_g.z) * Tu_inv;
-        const float tau_high = ((x_dot_theta_perp + A_x) / (R_minus_x_dot_theta + B_x) - startVals_g.z) * Tu_inv;
-
-        float ind_first = floor(tau_low + 0.5f); // first detector index
-
-        const float horizontalWeights_0_A = (min(tau_high, ind_first + 1.5f) - tau_low) * l_phi;
-        const float horizontalWeights_1_A = l_phi * (tau_high - tau_low) - horizontalWeights_0_A;
-
-        const float ind_last = ind_first + 2.5f;
-        ind_first = ind_first + 0.5f + max(0.0f, min(tau_high - ind_first - 0.5f, 1.0f)) * l_phi / horizontalWeights_0_A;
-
-        const float v_phi_x = (v_phi_x_start_num - z_source_over_T_v) * R_minus_x_dot_theta_inv - v0_over_Tv;
-        const float v_phi_x_step_A = Tz_over_Tv * R_minus_x_dot_theta_inv;
-
-        const float row_high_A = floor(v_phi_x - 0.5f * v_phi_x_step_A + 0.5f) + 0.5f;
-        const float z_high_A = v_phi_x + 0.5f * v_phi_x_step_A - row_high_A;
-
-        const float v_weight_one = min(v_phi_x_step_A, v_phi_x_step_A - z_high_A);
-        const float v_weight_two = max(0.0f, min(z_high_A, 1.0f));
-        const float v_oneAndTwo = v_weight_two / (v_weight_one + v_weight_two);
-        //const float row_high_plus_one_A = row_high_A + 1.0f;
-        const float row_high_plus_two_A = row_high_A + 2.0f;
-
-        if (z_high_A > 1.0f)
-        {
-            val += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
-                + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
-                    + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f);
-        }
-        else
-        {
-            val += (tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two);
-        }
-    }
-
-    f[ind] = val;
-    //*/
 }
 
 __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
@@ -1193,7 +1606,12 @@ bool project_SF(float *&g, float *f, parameters* params, bool data_on_cpu)
     dim3 dimGrid = setGridSize(N_g, dimBlock);
     if (params->geometry == parameters::CONE)
     {
-        coneBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        if (params->detectorType == parameters::FLAT)
+            coneBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        else
+        {
+            curvedConeBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        }
         applyInversePolarWeight <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g);
     }
     else if (params->geometry == parameters::FAN)
@@ -1308,7 +1726,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     }
     else if (params->geometry == parameters::CONE)
     {
-        if (params->doWeightedBackprojection && params->helicalPitch != 0)
+        if (params->doWeightedBackprojection && params->helicalPitch != 0.0)
         {
             float q_helical = 0.7;
             float weightFcnParameter = -2.0 / ((1.0 - q_helical) * (1.0 - q_helical));
@@ -1331,11 +1749,17 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
             cudaMemcpyToSymbol(d_phi_start, &phi_start, sizeof(float));
             cudaMemcpyToSymbol(d_phi_end, &phi_end, sizeof(float));
 
-            coneBeamHelicalWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+            if (params->detectorType == parameters::FLAT)
+                coneBeamHelicalWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+            else
+                curvedConeBeamHelicalWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
         }
         else
         {
-            coneBeamBackprojectorKernel_SF <<< dimGrid_slab, dimBlock_slab >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+            if (params->detectorType == parameters::FLAT)
+                coneBeamBackprojectorKernel_SF <<< dimGrid_slab, dimBlock_slab >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+            else
+                curvedConeBeamBackprojectorKernel_SF <<< dimGrid_slab, dimBlock_slab >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
         }
     }
 

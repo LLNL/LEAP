@@ -8,9 +8,9 @@ from leapctype import *
 def setLEAPfromLTT(LTT,leapct):
 
     geometry = LTT.getParam('geometry')
-    if geometry == 'MODULAR':
-        print('ERROR: Conversion of modular-beam not yet implemented!')
-        return
+    #if geometry == 'MODULAR':
+    #    print('ERROR: Conversion of modular-beam not yet implemented!')
+    #    return
 
     numAngles = int(LTT.getParam('nangles'))
     numRows = int(LTT.getParam('numRows'))
@@ -27,8 +27,15 @@ def setLEAPfromLTT(LTT,leapct):
         sod = float(LTT.getParam('sod'))
         sdd = float(LTT.getParam('sdd'))
         tau = 0.0
-        helicalPitch = float(LTT.getParam('helicalPitch'))
+        if LTT.unknown('helicalPitch') == False:
+            helicalPitch = float(LTT.getParam('helicalPitch'))
+        else:
+            helicalPitch = 0.0
         leapct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange), sod, sdd, tau, helicalPitch)
+        if LTT.getParam('detectorShape') == 'FLAT':
+            leapct.set_flatDetector()
+        else:
+            leapct.set_curvedDetector()
     elif geometry == 'FAN':
         sod = float(LTT.getParam('sod'))
         sdd = float(LTT.getParam('sdd'))
@@ -105,7 +112,8 @@ def setLTTfromLEAP(leapct,LTT):
     
     LTT.cmd('geometry = ' + str(geometry))
     if geometry == 'CONE':
-        LTT.cmd(['sod = ' + str(sod), 'sdd = ' + str(sdd), 'detectorShape = flat'])
+        detectorType = leapct.get_detectorType()
+        LTT.cmd(['sod = ' + str(sod), 'sdd = ' + str(sdd), 'detectorShape = ' + str(detectorType)])
         LTT.cmd('helicalPitch = ' + str(helicalPitch))
     elif geometry == 'FAN':
         LTT.cmd(['sod = ' + str(sod), 'sdd = ' + str(sdd), 'detectorShape = flat'])

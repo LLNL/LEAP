@@ -25,7 +25,7 @@ public:
     phantom();
     ~phantom();
 
-    bool addObject(float* f, parameters*, int type, float* c, float* r, float val, float* A = NULL, float* clip = NULL);
+    bool addObject(float* f, parameters*, int type, float* c, float* r, float val, float* A = NULL, float* clip = NULL, int oversampling = 1);
 
 private:
     float x_inv(float);

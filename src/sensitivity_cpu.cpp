@@ -31,11 +31,14 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
     if (s == NULL || params == NULL)
         return false;
 
-    float u_min = params->u_0() / params->sdd;
-    float u_max = ((params->numCols-1)*params->pixelWidth + params->u_0()) / params->sdd;
+    bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+    params->normalizeConeAndFanCoordinateFunctions = true;
+    float u_min = params->u(0);
+    float u_max = params->u(params->numCols-1);
 
-    float v_min = params->v_0() / params->sdd;
-    float v_max = ((params->numRows - 1) * params->pixelHeight + params->v_0()) / params->sdd;
+    float v_min = params->v(0);
+    float v_max = params->v(params->numRows - 1);
+    params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
 
     float magFactor = params->sod / params->sdd;
     float scalar = (params->voxelWidth * params->voxelWidth / (magFactor*params->pixelWidth)) * (params->voxelHeight / (magFactor*params->pixelHeight)) * params->sod * params->sod;
@@ -62,11 +65,26 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
                         float sin_phi = sin(params->phis[iphi]);
                         float z_source = params->z_source(iphi);
 
-                        float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
-                        float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
-                        float v_arg = (z-z_source) * v_denom_inv;
-                        if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                            curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                        if (params->detectorType == parameters::CURVED)
+                        {
+                            float u_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
+                            float u_arg = atan(-sin_phi * x + cos_phi * y + params->tau) * u_denom_inv;
+
+                            float dist_from_source_components_x = fabs(params->sod * cos_phi + params->tau * sin_phi - x);
+                            float dist_from_source_components_y = fabs(params->sod * sin_phi - params->tau * cos_phi - y);
+                            float v_denom_inv = 1.0/sqrt(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
+                            float v_arg = (z - z_source) * v_denom_inv;
+                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                                curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                        }
+                        else
+                        {
+                            float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
+                            float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
+                            float v_arg = (z - z_source) * v_denom_inv;
+                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                                curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                        }
                     }
                     if (curVal == 0.0)
                         curVal = 1.0;
@@ -97,11 +115,26 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
                         float sin_phi = sin(params->phis[iphi]);
                         float z_source = params->z_source(iphi);
 
-                        float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
-                        float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
-                        float v_arg = (z-z_source) * v_denom_inv;
-                        if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_max <= v_arg)
-                            curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                        if (params->detectorType == parameters::CURVED)
+                        {
+                            float u_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
+                            float u_arg = atan(-sin_phi * x + cos_phi * y + params->tau) * u_denom_inv;
+
+                            float dist_from_source_components_x = fabs(params->sod * cos_phi + params->tau * sin_phi - x);
+                            float dist_from_source_components_y = fabs(params->sod * sin_phi - params->tau * cos_phi - y);
+                            float v_denom_inv = 1.0 / sqrt(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
+                            float v_arg = (z - z_source) * v_denom_inv;
+                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                                curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                        }
+                        else
+                        {
+                            float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
+                            float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
+                            float v_arg = (z - z_source) * v_denom_inv;
+                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_max <= v_arg)
+                                curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                        }
                     }
                     if (curVal == 0.0)
                         curVal = 1.0;

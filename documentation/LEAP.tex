@@ -55,7 +55,7 @@
 
 This document serves as a technical description of the algorithms in LivermorE AI Projector (LEAP) library.  LEAP is a C/C++/CUDA library of tomographic projectors (forward and back projection) and analytic inversion algorithms, i.e., FBP implemented for both multi-GPU and multi-core CPU. We provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
-Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam with axial or helical source trajectory. These geometry types accommodate shifts of the detectors and non-uniform angular spacing. Cartoonized sketches of these CT geometry types is shown in Figure \ref{fig:geometrySketches}. Projectors for these CT geometries use a method very similar to the Separable Footprint method \cite{Long_TMI_2010} that provides a matched projector pair that models the finite size of the voxel and detector pixel. These matched projectors ensure convergence and provide accurate, smooth results. Unmatched projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations \cite{DeManBasu_PMB_2004}.
+Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam with axial or helical source trajectory and flat or curved detector. These geometry types accommodate shifts of the detectors and non-uniform angular spacing. Cartoonized sketches of these CT geometry types is shown in Figure \ref{fig:geometrySketches}. Projectors for these CT geometries use a method very similar to the Separable Footprint method \cite{Long_TMI_2010} that provides a matched projector pair that models the finite size of the voxel and detector pixel. These matched projectors ensure convergence and provide accurate, smooth results. Unmatched projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations \cite{DeManBasu_PMB_2004}.
 
 For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair.  For this geometry we use a matched Joseph projector \cite{Joseph_TMI_1982}.
 
@@ -171,6 +171,12 @@ The helical pitch, $\Delta$, and the normalized helical pitch $\widehat{\Delta}$
 \begin{eqnarray*}
 \widehat{\Delta} &:=& 2\pi \frac{\Delta}{\text{numRows} * \text{pixelHeight} * \frac{\text{sod}}{\text{sdd}}}.
 \end{eqnarray*}
+
+For cone-beam data, LEAP has implementations of both flat panel and curved panel setups.  See Section \ref{sec:conebeamTransform} for a description.  The default setting is flat panel, but one can switch between flat and curved panel detectors with the following commands
+\begin{itemize}
+\item[] \texttt{set\_flatDetector()}
+\item[] \texttt{set\_curvedDetector()}.
+\end{itemize}
 
 \begin{table}[h!]
 \caption{Parallel-, fan-, and cone-beam parameters.  Note that \texttt{sod}, \texttt{sdd}, and \texttt{tau} only apply to fan- and cone-beam geometries and \texttt{helicalPitch} only applies to cone-beam. The \texttt{centerRow} parameter has no effect on parallel- and fan-beam geometries.  Note that the \texttt{phis} parameter values \textit{must} be monotonic.  Internally, LEAP maintains a copy of the \texttt{phis} array, so if you want to make changes to it, you must either re-specify all parameters or use the \texttt{set\_angles()} function.  More information can be found in Section \ref{sec:CTGeometries}.} \label{tab:stdGeometryParameters}
@@ -475,8 +481,7 @@ s &=& \frac{Ru-\tau}{\sqrt{1+u^2}}, \\
 
 %Let $i$ be the detector coordinate.  Then $u = \frac{i}{D}$ and $\alpha = \tan^{-1}\left(\frac{i}{D}\right)$.
 
-
-\subsection{Cone-Beam}
+\subsection{Cone-Beam} \label{sec:conebeamTransform}
 
 The X-ray transform and its adjoint in cone-beam coordinates (with planar detector) with center of rotation offset of $\tau$, source trajectory radius $R$, and helical pitch $\Delta$ are given by
 \begin{eqnarray*}
@@ -492,6 +497,20 @@ When $\Delta = 0$ (axial scan), the object, $f$, can be (approximately) reconstr
 f(\bm{x}) &\approx& \frac{R}{2\pi} \int \frac{1}{(R-\bm{x}\cdot\bm{\theta}(\beta))^2} \\ &\times& \int_\mathbb{R} h(u(\bm{x},\beta) - u) g(u,\beta, v(\bm{x},\beta)) m(\tan^{-1}u,\beta) \frac{1+\frac{\tau}{R}u}{\sqrt{1+u^2+v^2(\bm{x},\beta)}} \, du \, d\beta.
 \end{eqnarray*}
 The function $h$ is referred to as the ramp filter and is described in Section \ref{sec:rampFilter}.
+
+X-ray CT systems commonly used in medical and security applications employ a curved detector that approximately fits the surface of a cylinder whose center is at the x-ray source.  In this setup, we have the \textit{curved} cone-beam coordinates.  The X-ray transform and its adjoint in curved cone beam coordinates with center of rotation offset of $\tau$ and source trajectory radius $R$ are given by
+\begin{eqnarray*}
+Pf(\alpha,\beta,\nu) &=& \int_\mathbb{R} f\left(R\bm{\theta}(\beta) - \tau\bm{\theta}^\perp(\beta) + \Delta\varphi\widehat{\bm{z}} + \frac{l}{\sqrt{1+\nu^2}}\left[-\bm{\theta}(\beta-\alpha) + \nu\widehat{\bm{z}} \right] \right) \, dl \\
+P^*g(\bm{x}) &=& \int \frac{\sqrt{1+\nu^2(\bm{x},\beta)}}{\| R\bm{\theta}(\beta) - \tau\bm{\theta}^\perp(\beta) - \bm{x} \|^2}  g\left(\alpha(\bm{x},\beta), \beta, \nu(\bm{x},\beta)\right) \, d\beta \\
+\alpha(\bm{x},\beta) &:=& \tan^{-1}\left( \frac{\bm{x}\cdot \bm{\theta}^\perp(\beta) + \tau}{R - \bm{x}\cdot\bm{\theta}(\beta)} \right) \\
+\nu(\bm{x},\beta) &:=& \frac{x_3 - \Delta\varphi}{\|R\bm{\theta}(\beta) - \tau\bm{\theta}^\perp(\beta) - \bm{x} \|}
+\end{eqnarray*}
+Note that the $v$ and $\nu$ are related by $v = \sqrt{1+u^2}\nu$ and $u$ and $\alpha$ are related by $u = \tan\alpha$.
+
+When $\Delta = 0$ (axial scan) the object, $f$, can be approximately reconstructed by
+\begin{eqnarray*}
+f(\bm{x}) &\approx& \frac{R}{2\pi} \int \frac{1}{\| R\bm{\theta}(\beta) - \tau\bm{\theta}^\perp(\beta) - \bm{x} \|^2} \\ &\times& \int_{-\pi/2}^{\pi/2} h(\sin(\alpha(\bm{x},\beta) - \alpha)) g(\alpha, \beta, \nu(x,\beta)) m(\alpha, \beta) \frac{\left(\cos\alpha + \frac{\tau}{R}\sin\alpha\right)}{\sqrt{1+\nu^2(\bm{x},\beta)}} \, d\alpha \, d\beta.
+\end{eqnarray*}
 
 Although theoretically-exact reconstruction of helical cone-beam data can be acheived with the Katsevich algorithm \cite{Katsevich_SIAM_2002}, this algorithm is not able to use all the measured data and produces artifacts when the number of contributions to portions of the frequency-space of the reconstruction has an abrupt transition.  For this reason we chose to implement a variation of the WFBP \cite{WFBP} algorithm.  This algorithm was derived in \textit{cone-parallel} coordinates, so we re-derived this algorithm for the native cone-beam coordinates.  The view derivative step of the algorithm was implemented by the NHDLH \cite{NHDLH_PMB_2007} method which provides good resolution across the imaging field of view.
 
@@ -581,23 +600,87 @@ The projectors for parallel-, fan-, and cone-beam geometries in LEAP are impleme
 
 LEAP contains an extensive collection of analytic inversion algorithms for parallel-, fan-, and cone-beam geometries with arbtirary detector shifts, offset center of rotation, non-equispaced projections angles, different angular ranges (short scan, full scan, over scan), axial or helical source trajectories, different voxels sizes and arbitary shifts of the volume location, etc.  Inversion algorithms also exist for the Attenuated Radon Transform (ART) and objects with cylindrical symmetry (e.g., Abel Transform).  No matter the particular settings of any of these, the inversion algorithms in LEAP reconstruct quantitatively accurate volumes.  All of these algorithms are of Filtered Backprojection (FBP) type (e.g., FDK is an FBP type algorithm) algorithms and thus all one needs to do is specify the CT geometry and volume and then run the \textit{FBP} command to perform the reconstruction.  No need to know what the actual algorithm is called.
 
-With all that said there are a few LEAP parameters that perform some special case reconstructions.  Some of these are listed in table \ref{tab:FBPparameters}.  An example of one of these algorithms is the \textit{offsetScan} where the user deliberately offsets the detector and/or rotation stage to double the reconstructable field of view diameter with an FBP algorithm \cite{Gullberg_TMI_1986, Gregor_ICI_2003}.  A sketch of this idea is shown in Figure \ref{fig:offsetScan}.
+With all that said there are a few LEAP parameters that perform some special case reconstructions.  Some of these are listed in table \ref{tab:FBPparameters}.  An example of one of these algorithms is the \textit{offsetScan} where the user deliberately offsets the detector and/or rotation stage to double the reconstructable field of view diameter with an FBP algorithm \cite{Gullberg_TMI_1986, Gregor_ICI_2003}.  This scanning strategy is also sometimes referred to as \textit{half-fan} or \textit{half-cone}.  A sketch of this idea is shown in Figure \ref{fig:offsetScan}.
 
 \begin{table}[h!] \caption{Special purpose FBP parameters/algorithms} \label{tab:FBPparameters}
 \begin{tabular}{l|p{11cm}}
 function name & usage \\
 \hline
-\texttt{set\_offsetScan(bool)} & if set to true reconstructs data where the object extends past one side of the detector; can be used to double the diameter of the field of view \\
+\texttt{set\_offsetScan(bool)} & if set to true reconstructs data where the object extends past one side of the detector; can be used to double the diameter of the field of view, but requires projections over 360 degrees \\
 \texttt{set\_truncatedScan(bool)} & if set to true will mitigate artifacts from object that extend past the right and left side of the detector (but does not increase the diameter of the field of view) \\
 \texttt{set\_rampFilter(int)} & a larger number uses a sharper ramp filter; see Section \ref{sec:rampFilter}
 \end{tabular}
 \end{table}
 
 \begin{figure}[h!]
-\begin{center}
-\includegraphics[scale=0.3]{offsetDetectorFOV}
-\end{center}
-\caption{Increasing the imaging field of view with an \textit{offsetScan} FBP reconstruction.} \label{fig:offsetScan}
+\begin{tabular}{ccc}
+\psset{unit=0.1mm}
+\pspicture(-180,-50)(250,1000)%
+% Detector
+\psline[linewidth=2pt](-200,800)(200,800)
+\psline[linestyle=dotted](0,0)(-200,800)
+\psline[linestyle=dotted](0,0)(200,800)
+\rput(0,830){detector}
+% Source
+\qdisk(0,0){2.5pt}
+\rput(0,-30){source}
+% source trajectory
+\psarc[]{->}(0, 400){30}{0}{330}
+% Field of View
+\psarc[linecolor=red,linestyle=dashed](0, 400){100}{0}{360} % FOV
+\rput(0,530){\red Field of View}
+% center of rotation
+\psset{linecolor=blue}
+\qdisk(0,400){2.0pt}
+\rput(0,300){\parbox{1.5cm}{\blue center of rotation}}
+\psline{->}(0,340)(0,390)
+\endpspicture
+&
+\psset{unit=0.1mm}
+\pspicture(-250,-50)(250,1000)%
+% Detector
+\psline[linewidth=2pt](-200,800)(200,800)
+\psline[linestyle=dotted](0,0)(-200,800)
+\psline[linestyle=dotted](0,0)(200,800)
+\rput(0,830){detector}
+% Source
+\qdisk(0,0){2.5pt}
+\rput(0,-30){source}
+% source trajectory
+\psarc[]{->}(80, 400){30}{0}{330}
+% Field of View
+\psarc[linecolor=red,linestyle=dashed](80, 400){180}{0}{360} % FOV
+\rput(80,600){\red Field of View}
+% center of rotation
+\psset{linecolor=blue}
+\qdisk(80,400){2.0pt}
+\rput(80,300){\parbox{1.5cm}{\blue center of rotation}}
+\psline{->}(80,340)(80,390)
+\endpspicture
+&
+\psset{unit=0.1mm}
+\pspicture(-250,-50)(250,1000)%
+% Detector
+\psline[linewidth=2pt](-200,800)(200,800)
+\psline[linestyle=dotted](150,0)(-200,800)
+\psline[linestyle=dotted](150,0)(200,800)
+\rput(0,830){detector}
+% Source
+\qdisk(150,0){2.5pt}
+\rput(150,-30){source}
+% source trajectory
+\psarc[]{->}(160, 400){30}{0}{330}
+% Field of View
+\psarc[linecolor=red,linestyle=dashed](160, 400){175}{0}{360} % FOV
+\rput(150,600){\red Field of View}
+% center of rotation
+\psset{linecolor=blue}
+\qdisk(160,400){2.0pt}
+\rput(160,300){\parbox{1.5cm}{\blue center of rotation}}
+\psline{->}(160,340)(160,390)
+\endpspicture
+\end{tabular}
+\caption{Increasing the imaging field of view with an \textit{offsetScan} FBP reconstruction. (left) Standard setup where the source, center of rotation, and detector are all centered. (middle) Offset scan setup where center of rotation is laterally translated.  This can be modeled in LEAP by shifting both the \texttt{tau} and \texttt{centerCol} parameters. (right) Offset scan (also can half-fan or half-cone) where the detector is laterally translated.  This can be modeled is LEAP by shfting the \texttt{centerCol} parameter.}
 \end{figure}
 
 \input{rampFilter.tex}

@@ -57,6 +57,7 @@ extern "C" PROJECTOR_API bool set_modularbeam(int numAngles, int numRows, int nu
 
 extern "C" PROJECTOR_API bool set_flatDetector();
 extern "C" PROJECTOR_API bool set_curvedDetector();
+extern "C" PROJECTOR_API bool get_detectorType();
 
 extern "C" PROJECTOR_API bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool set_volumeDimensionOrder(int which);
@@ -135,7 +136,7 @@ extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, 
 extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
 extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu);
 
-extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip);
+extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling);
 
 extern "C" PROJECTOR_API bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
 

@@ -198,6 +198,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		}
 
 		// no transfers to/from GPU are necessary; just run the code
+		//printf("WARNING: disabling filtering in FBP for debugging purposes!!!!\n");
 		filterProjections(g, params, false);
 
 		bool retVal = true;

@@ -169,6 +169,11 @@ bool set_curvedDetector()
 	return tomo()->set_curvedDetector();
 }
 
+bool get_detectorType()
+{
+	return tomo()->params.detectorType;
+}
+
 bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	return tomo()->set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
@@ -487,10 +492,10 @@ bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
 	return tomo()->Diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu);
 }
 
-bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip)
+bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
 {
 	phantom testObject;
-	return testObject.addObject(f, &(tomo()->params), type, c, r, val, A, clip);
+	return testObject.addObject(f, &(tomo()->params), type, c, r, val, A, clip, oversampling);
 }
 
 bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
