@@ -211,7 +211,7 @@ float parameters::min_T_phi()
 	{
 		double retVal = fabs(phis[1] - phis[0]);
 		for (int i = 1; i < numAngles - 1; i++)
-			retVal = std::min(retVal, fabs(phis[i + 1] - phis[i]));
+			retVal = std::min(retVal, double(fabs(phis[i + 1] - phis[i])));
 		return float(retVal);
 	}
 }
