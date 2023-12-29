@@ -566,7 +566,7 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
 {
     float T = params->pixelWidth;
     bool isCurved = false;
-    if (params->geometry == parameters::FAN || params->geometry == parameters::CONE)
+    if (params->geometry == parameters::FAN || params->geometry == parameters::CONE || params->geometry == parameters::MODULAR)
     {
         T *= params->sod / params->sdd;
         if (params->detectorType == parameters::CURVED)

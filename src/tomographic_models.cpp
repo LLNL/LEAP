@@ -228,8 +228,13 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 {
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
-	if ((params.geometry == parameters::CONE && params.helicalPitch != 0.0) || params.geometry == parameters::MODULAR)
+	if (params.geometry == parameters::CONE && params.helicalPitch != 0.0)
 		return project_multiGPU_splitViews(g, f);
+	if (params.geometry == parameters::MODULAR)
+	{
+		if (params.modularbeamIsAxiallyAligned() == false)
+			return project_multiGPU_splitViews(g, f);
+	}
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numRowsPerChunk = std::min(64, params.numRows);
@@ -264,8 +269,8 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 	if (numChunks <= 1)
 		return false;
 
-	if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
-		return false;
+	//if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
+	//	return false;
 
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
 	#pragma omp parallel for schedule(dynamic)
@@ -448,8 +453,13 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	//return false;
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
-	if ((params.geometry == parameters::CONE && params.helicalPitch != 0.0) || params.geometry == parameters::MODULAR)
+	if (params.geometry == parameters::CONE && params.helicalPitch != 0.0)
 		return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
+	if (params.geometry == parameters::MODULAR)
+	{
+		if (params.modularbeamIsAxiallyAligned() == false)
+			return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
+	}
 
 	int extraCols = 0;
 	if (doFBP)
@@ -835,6 +845,8 @@ bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols
 bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
 {
 	params.detectorType = parameters::FLAT;
+	params.tau = 0.0;
+	params.helicalPitch = 0.0;
 
 	params.geometry = parameters::MODULAR;
 	params.pixelWidth = pixelWidth;

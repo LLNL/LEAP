@@ -24,4 +24,6 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters*, bool data_on_cpu);
 
 bool convertARTtoERT(float* g, parameters*, bool data_on_cpu, bool doInverse=false);
 
+bool applyViewDependentPolarWeights_gpu(float* g, parameters* params, float* w, bool data_on_cpu, bool doInverse);
+
 #endif

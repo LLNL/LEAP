@@ -17,7 +17,7 @@ using namespace std;
 float FBPscalar(parameters* params)
 {
 	float magFactor = params->sod / params->sdd;
-	if (params->geometry == parameters::CONE)
+	if (params->geometry == parameters::CONE || params->modularbeamIsAxiallyAligned())
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight * magFactor / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
 	else if (params->geometry == parameters::FAN)
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
@@ -38,7 +38,7 @@ float* setParkerWeights(parameters* params)
 	else if (params->angularRange >= 359.9999)
 		return NULL;
 
-	if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
+	if (params->geometry == parameters::CONE || params->geometry == parameters::FAN || params->modularbeamIsAxiallyAligned())
 	{
 		bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 		params->normalizeConeAndFanCoordinateFunctions = true;
@@ -49,7 +49,14 @@ float* setParkerWeights(parameters* params)
 		double gamma = asin(params->tau / sqrt(params->sod * params->sod + params->tau * params->tau));
 		double alpha_max;
 		if (params->detectorType == parameters::FLAT)
+		{
 			alpha_max = min(fabs(atan(params->u(0)) - gamma), fabs(atan(params->u(params->numCols - 1)) - gamma));
+			if (params->modularbeamIsAxiallyAligned())
+			{
+				for (int i = 0; i < params->numAngles; i++)
+					alpha_max = max(alpha_max, min(fabs(atan(params->u(0,i)) - gamma), fabs(atan(params->u(params->numCols - 1,i)) - gamma)));
+			}
+		}
 		else
 			alpha_max = min(fabs(params->u(0) - gamma), fabs(params->u(params->numCols - 1) - gamma));
 
@@ -68,19 +75,18 @@ float* setParkerWeights(parameters* params)
 		if (params->T_phi() < 0.0)
 			plus_or_minus = -1.0;
 		//plus_or_minus = 1.0;
-		for (int j = 0; j < params->numCols; j++)
+		for (int i = 0; i < params->numAngles; i++)
 		{
-			if (params->detectorType == parameters::FLAT)
-				alpha = plus_or_minus * atan(params->u(j)) - gamma;
-			else
-				alpha = plus_or_minus * params->u(j) - gamma;
-
-			alpha_c = -alpha;
-
-			for (int i = 0; i < params->numAngles; i++)
+			beta = fabs(params->phis[i] - params->phis[0]);
+			for (int j = 0; j < params->numCols; j++)
 			{
-				beta = fabs(params->phis[i] - params->phis[0]);
-				//beta = fabs(g->T_phi)*double(i); //g->phi(i) - g->phi_0;
+				if (params->detectorType == parameters::FLAT)
+					alpha = plus_or_minus * atan(params->u(j,i)) - gamma;
+				else
+					alpha = plus_or_minus * params->u(j,i) - gamma;
+
+				alpha_c = -alpha;
+
 				if (beta < 2.0 * (thres + alpha))
 				{
 					theWeight = sin(PI / 4.0 * beta / (thres + alpha));
@@ -139,6 +145,13 @@ float* setParkerWeights(parameters* params)
 
 float* setOffsetScanWeights(parameters* params)
 {
+	/*
+	if (params->geometry == parameters::MODULAR)
+	{
+		printf("Error: offsetScan FBP not defined for modular-beam data!\n");
+		return NULL;
+	}
+	//*/
 	if (params->offsetScan == false)
 		return NULL;
 	else if (params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
@@ -146,15 +159,10 @@ float* setOffsetScanWeights(parameters* params)
 		printf("Error: offsetScan requires at least 360 degree scan!\n");
 		return NULL;
 	}
-	else if (params->geometry == parameters::MODULAR)
-	{
-		printf("Error: FBP not defined for modular-beam data!\n");
-		return NULL;
-	}
 	else
 	{
 		//printf("applying offsetScan weights\n");
-		if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
+		if (params->geometry == parameters::CONE || params->geometry == parameters::FAN || params->geometry == parameters::MODULAR)
 		{
 			bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 			params->normalizeConeAndFanCoordinateFunctions = true;
@@ -276,9 +284,7 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 	}
 
 	// Now apply weights for cases where we have redundant measurements
-	if ((params->geometry == parameters::PARALLEL && params->angularRange >= 359.9999) ||
-		(params->geometry == parameters::FAN && params->angularRange >= 359.9999) ||
-		(params->geometry == parameters::CONE && params->angularRange >= 359.9999))
+	if (params->angularRange >= 359.9999)
 	{
 		float c = 0.5;
 		//float c = 1.0;
@@ -305,7 +311,7 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 
 float* setInverseConeWeight(parameters* params)
 {
-	if (params->geometry == parameters::CONE)
+	if (params->geometry == parameters::CONE || params->modularbeamIsAxiallyAligned())
 	{
 		bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 		params->normalizeConeAndFanCoordinateFunctions = true;
@@ -313,10 +319,10 @@ float* setInverseConeWeight(parameters* params)
 		float* retVal = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
 		for (int iv = 0; iv < params->numRows; iv++)
 		{
-			float v = params->v(iv);
+			float v = params->v(iv,0);
 			for (int iu = 0; iu < params->numCols; iu++)
 			{
-				float u = params->u(iu);
+				float u = params->u(iu,0);
 				if (params->detectorType == parameters::FLAT)
 					retVal[iv * params->numCols + iu] = 1.0 / sqrt(1.0 + u * u + v * v);
 				else
@@ -352,10 +358,29 @@ float* setInverseConeWeight(parameters* params)
 		return NULL;
 }
 
+float* setViewDependentPolarWeights(parameters* params)
+{
+	bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+	params->normalizeConeAndFanCoordinateFunctions = true;
+
+	float* retVal = (float*)malloc(sizeof(float) * params->numRows * params->numAngles);
+	for (int iphi = 0; iphi < params->numAngles; iphi++)
+	{
+		for (int iv = 0; iv < params->numRows; iv++)
+		{
+			float v = params->v(iv, iphi);
+			retVal[iphi * params->numRows + iv] = sqrt(1.0 + v * v);
+		}
+	}
+	params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+
+	return retVal;
+}
+
 float* setPreRampFilterWeights(parameters* params)
 {
 	float* w = setInverseConeWeight(params); // numRows X numCols
-	if (w != NULL && (params->geometry == parameters::CONE || params->geometry == parameters::FAN))
+	if (w != NULL && (params->geometry == parameters::CONE || params->geometry == parameters::FAN || params->modularbeamIsAxiallyAligned()))
 	{
 		bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 		params->normalizeConeAndFanCoordinateFunctions = true;
@@ -363,7 +388,7 @@ float* setPreRampFilterWeights(parameters* params)
 		{
 			for (int iu = 0; iu < params->numCols; iu++)
 			{
-				float u = params->u(iu);
+				float u = params->u(iu,0);
 				if (params->detectorType == parameters::FLAT)
 					w[iv * params->numCols + iu] *= (1.0 + params->tau / params->sod * u);
 				else

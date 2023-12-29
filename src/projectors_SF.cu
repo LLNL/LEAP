@@ -1522,6 +1522,18 @@ __global__ void coneBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Main Routines
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*
+bool project_SF_modular(float*& g, float* f, parameters* params, bool data_on_cpu)
+{
+    return project_SF(g, f, params, data_on_cpu);
+}
+
+bool backproject_SF_modular(float* g, float*& f, parameters* params, bool data_on_cpu)
+{
+    return backproject_SF(g, f, params, data_on_cpu);
+}
+//*/
+
 bool project_SF_fan(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
     return project_SF(g, f, params, data_on_cpu);
@@ -1731,9 +1743,9 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
             float q_helical = 0.7;
             float weightFcnParameter = -2.0 / ((1.0 - q_helical) * (1.0 - q_helical));
             float weightFcnTransition = (q_helical + 1.0) / 2.0;
-            float v_min_inv = (params->v(0) - 0.5*params->pixelHeight) / params->sdd;
+            float v_min_inv = (params->v(0) - 0.5 * params->pixelHeight) / params->sdd;
             v_min_inv = 1.0 / v_min_inv;
-            float v_max_inv = (params->v(params->numRows-1) + 0.5 * params->pixelHeight) / params->sdd;
+            float v_max_inv = (params->v(params->numRows - 1) + 0.5 * params->pixelHeight) / params->sdd;
             v_max_inv = 1.0 / v_max_inv;
             float phi_start = params->get_phi_start();
             float phi_end = params->get_phi_end();
@@ -1762,6 +1774,8 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
                 curvedConeBeamBackprojectorKernel_SF <<< dimGrid_slab, dimBlock_slab >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
         }
     }
+    else
+        return false;
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();

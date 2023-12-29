@@ -106,9 +106,9 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool data_
 
 bool filteredBackprojection::filterProjections(float* g, parameters* params, bool data_on_cpu)
 {
-	if (params->geometry == parameters::MODULAR)
+	if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
 	{
-		printf("Error: not implemented for modular geometries\n");
+		printf("Error: projection filtering only implemented for modular geometries whose rowVectors are aligned with the z-axis\n");
 		return false;
 	}
 
@@ -165,8 +165,11 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 {
 	if (params->geometry == parameters::MODULAR)
 	{
-		printf("Error: FBP not implemented for modular geometries\n");
-		return false;
+		if (params->modularbeamIsAxiallyAligned() == false || params->min_T_phi() < 1.0e-16)
+		{
+			printf("Error: FBP only implemented for modular geometries whose rowVectors are aligned with the z-axis\n");
+			return false;
+		}
 	}
 	if (params->geometry == parameters::CONE && params->helicalPitch != 0.0 && params->whichGPU < 0)
 	{

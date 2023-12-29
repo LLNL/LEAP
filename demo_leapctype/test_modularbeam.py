@@ -7,13 +7,13 @@ leapct = tomographicModels()
 
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
-numCols = 512//2
-numAngles = 2*int(360*numCols/1024)
+numCols = 512
+numAngles = 2*2*int(360*numCols/1024)
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
 numRows = numCols
-numRows = 1
+#numRows = 1
 
 # Make this modular-beam geometry just like a cone-beam dataset
 # so let's define sod and sdd when defining our geometry
@@ -49,6 +49,7 @@ leapct.set_modularbeam(numAngles, numRows, numCols, pixelSize, pixelSize, source
 
 # Set the volume parameters
 leapct.set_default_volume()
+leapct.set_diameterFOV(leapct.get_numX()*leapct.get_voxelWidth())
 
 # Trouble-Shooting Functions
 leapct.print_parameters()
@@ -65,7 +66,7 @@ f = leapct.allocateVolume()
 leapct.set_FORBILD(f,True)
 #leapct.display(f)
 
-leapct.set_gpu(0)
+#leapct.set_gpu(0)
 
 # "Simulate" projection data
 startTime = time.time()
@@ -85,8 +86,9 @@ f[:] = 0.0
 # Reconstruct the data
 startTime = time.time()
 #leapct.backproject(g,f)
+leapct.FBP(g,f)
 #leapct.ASDPOCS(g,f,50,10,1,1.0/20.0)
-leapct.SART(g,f,20,10)
+#leapct.SART(g,f,20,10)
 #leapct.OSEM(g,f,10,10)
 #leapct.LS(g,f,10,True)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
@@ -103,4 +105,13 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 leapct.display(f)
 
 
-    
+''' Compare to cone-beam
+ct2 = tomographicModels()
+ct2.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+ct2.set_default_volume()
+f_cone = ct2.allocateVolume()
+ct2.FBP(g,f_cone)
+leapct.display(f_cone)
+leapct.display(f_cone-f)
+quit()
+#'''

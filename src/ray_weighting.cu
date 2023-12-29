@@ -30,6 +30,20 @@ __global__ void convertARTtoERTkernel(float* g, const float muCoeff, const float
 		g[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] *= expf(muCoeff * sqrt(muRadius*muRadius - u*u));
 }
 
+__global__ void applyViewDependentPolarWeightsKernel(float* g, const float* w_polar, const int3 N, const bool doInverse)
+{
+	const int i = threadIdx.x + blockIdx.x * blockDim.x;
+	const int j = threadIdx.y + blockIdx.y * blockDim.y;
+	const int k = threadIdx.z + blockIdx.z * blockDim.z;
+	if (i >= N.x || j >= N.y || k >= N.z)
+		return;
+
+	if (doInverse)
+		g[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] /= w_polar[i * N.y + j];
+	else
+		g[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] *= w_polar[i * N.y + j];
+}
+
 __global__ void applyWeightsKernel(float* g, const float* w_view, const float* w_ray, int3 N)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -235,6 +249,60 @@ bool convertARTtoERT(float* g, parameters* params, bool data_on_cpu, bool doInve
 
 		if (data_on_cpu == true && dev_g != 0)
 			cudaFree(dev_g);
+
+		return true;
+	}
+}
+
+bool applyViewDependentPolarWeights_gpu(float* g, parameters* params, float* w_in, bool data_on_cpu, bool doInverse)
+{
+	if (params->whichGPU < 0)
+		return false;
+	else
+	{
+		float* w = NULL;
+		if (w_in == NULL)
+			w = setViewDependentPolarWeights(params);
+		else
+			w = w_in;
+		cudaSetDevice(params->whichGPU);
+		cudaError_t cudaStatus;
+
+		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
+		float* dev_g = 0;
+		if (data_on_cpu)
+			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		else
+			dev_g = g;
+
+		float* dev_w = 0;
+		if (cudaSuccess != cudaMalloc((void**)&dev_w, params->numRows * params->numAngles * sizeof(float)))
+			fprintf(stderr, "cudaMalloc failed!\n");
+		if (cudaMemcpy(dev_w, w, params->numRows * params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+			fprintf(stderr, "cudaMemcpy failed!\n");
+
+		dim3 dimBlock = setBlockSize(N);
+		dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+			int(ceil(double(N.z) / double(dimBlock.z))));
+		applyViewDependentPolarWeightsKernel <<< dimGrid, dimBlock >>> (dev_g, dev_w, N, doInverse);
+
+		cudaStatus = cudaDeviceSynchronize();
+		if (cudaStatus != cudaSuccess)
+		{
+			fprintf(stderr, "kernel failed!\n");
+			fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+		}
+
+		if (data_on_cpu)
+			pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+
+		if (data_on_cpu == true && dev_g != 0)
+			cudaFree(dev_g);
+		if (dev_w != 0)
+			cudaFree(dev_w);
+		if (w_in == NULL)
+			free(w);
 
 		return true;
 	}

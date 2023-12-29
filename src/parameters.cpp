@@ -188,9 +188,11 @@ void parameters::assign(const parameters& other)
 			this->phis[i] = other.phis[i];
 	}
     
-    this->set_sourcesAndModules(other.sourcePositions, other.moduleCenters, \
-        other.rowVectors, other.colVectors, other.numAngles);
-        
+	if (other.sourcePositions != NULL)
+	{
+		this->set_sourcesAndModules(other.sourcePositions, other.moduleCenters, \
+			other.rowVectors, other.colVectors, other.numAngles);
+	}
 }
 
 float parameters::T_phi()
@@ -199,6 +201,19 @@ float parameters::T_phi()
         return 2.0*PI;
 	else
 		return (phis[numAngles-1] - phis[0]) / float(numAngles-1);
+}
+
+float parameters::min_T_phi()
+{
+	if (numAngles <= 1 || phis == NULL)
+		return 2.0 * PI;
+	else
+	{
+		double retVal = fabs(phis[1] - phis[0]);
+		for (int i = 1; i < numAngles - 1; i++)
+			retVal = std::min(retVal, fabs(phis[i + 1] - phis[i]));
+		return float(retVal);
+	}
 }
 
 float parameters::phi_inv(float angle)
@@ -257,9 +272,18 @@ float parameters::phi_inv(float angle)
 float parameters::rFOV()
 {
 	if (rFOVspecified > 0.0)
-		return rFOVspecified;
+	{
+		float r_max = furthestFromCenter();
+		if (r_max > 0.0)
+			return min(r_max, rFOVspecified);
+		else
+			return rFOVspecified;
+	}
 	else if (geometry == MODULAR)
-		return 1.0e16;
+	{
+		//return 1.0e16;
+		return furthestFromCenter()+0.5*voxelWidth;
+	}
 	else if (geometry == PARALLEL)
 	{
 		if (offsetScan)
@@ -332,7 +356,7 @@ float parameters::furthestFromCenter()
 bool parameters::voxelSizeWorksForFastSF()
 {
 	float r = min(furthestFromCenter(), rFOV());
-	if (geometry == CONE) // || geometry == FAN)
+	if (geometry == CONE || geometry == MODULAR) // || geometry == FAN)
 	{
 		//f->T_x / (g->R - (rFOV - 0.25 * f->T_x)) < detectorPixelMultiplier * g->T_lateral
 		//voxelWidth < 2.0 * pixelWidth * (sod - rFOV) / sdd
@@ -618,7 +642,7 @@ void parameters::printAll()
 	if (geometry == CONE)
 	{
 		if (detectorType == CURVED)
-			printf("======== CT Cone-Beam Geometry (CURVED) ========\n");
+			printf("======== CT Cone-Beam Geometry (curved detector) ========\n");
 		else
 			printf("======== CT Cone-Beam Geometry ========\n");
 	}
@@ -627,9 +651,14 @@ void parameters::printAll()
 	else if (geometry == FAN)
 		printf("======== CT Fan-Beam Geometry ========\n");
 	else if (geometry == MODULAR)
-		printf("======== CT Modular-Beam Geometry ========\n");
+	{
+		if (modularbeamIsAxiallyAligned())
+			printf("======== CT Modular-Beam Geometry (axially aligned) ========\n");
+		else
+			printf("======== CT Modular-Beam Geometry ========\n");
+	}
 	printf("number of angles: %d\n", numAngles);
-	printf("number of detector elements: %d x %d\n", numRows, numCols);
+	printf("number of detector elements (rows, cols): %d x %d\n", numRows, numCols);
 	if (phis != NULL && numAngles >= 2)
 		printf("angular range: %f degrees\n", angularRange);
 		//printf("angular range: %f degrees\n", 180.0 / PI * ((phis[numAngles - 1] - phis[0]) + 0.5 * (phis[numAngles - 1] - phis[numAngles - 2]) + 0.5 * (phis[1] - phis[0])));
@@ -655,7 +684,7 @@ void parameters::printAll()
 	printf("\n");
 
 	printf("======== CT Volume ========\n");
-	printf("number of voxels: %d x %d x %d\n", numX, numY, numZ);
+	printf("number of voxels (x, y, z): %d x %d x %d\n", numX, numY, numZ);
 	printf("voxel size: %f mm x %f mm x %f mm\n", voxelWidth, voxelWidth, voxelHeight);
 	if (offsetX != 0.0 || offsetY != 0.0 || offsetZ != 0.0)
 		printf("volume offset: %f mm, %f mm, %f mm\n", offsetX, offsetY, offsetZ);
@@ -693,6 +722,14 @@ void parameters::printAll()
 			printf("  rowVector = (%f, %f, %f)\n", rowVectors[i * 3 + 0], rowVectors[i * 3 + 1], rowVectors[i * 3 + 2]);
 			printf("  colVector = (%f, %f, %f)\n", colVectors[i * 3 + 0], colVectors[i * 3 + 1], colVectors[i * 3 + 2]);
 		}
+	}
+	//*/
+	/*
+	if (phis != NULL)
+	{
+		for (int i = 0; i < numAngles; i++)
+			printf("%f ", phis[i] * 180.0 / PI);
+		printf("\n");
 	}
 	//*/
 
@@ -789,11 +826,19 @@ bool parameters::get_angles(float* phis_out)
 
 bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
 {
+	if (phis != NULL)
+		delete[] phis;
+	phis = NULL;
 	clearModularBeamParameters();
 	if (sourcePositions_in == NULL || moduleCenters_in == NULL || rowVectors_in == NULL || colVectors_in == NULL || numPairs <= 0)
+	{
+		printf("Error: no source/detector geometry parameters specified\n");
 		return false;
+	}
 	else
 	{
+		bool retVal = true;
+
 		numAngles = numPairs;
 		sourcePositions = new float[3 * numPairs];
 		moduleCenters = new float[3 * numPairs];
@@ -807,10 +852,58 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 			colVectors[i] = colVectors_in[i];
 		}
 
+		float* temp_phis = new float[numAngles];
+		bool isAxial = true;
+		float minSourceZ = sourcePositions[3 * 0 + 2];
+		float maxSourceZ = sourcePositions[3 * 0 + 2];
+
 		sod = 0.0;
 		sdd = 0.0;
 		for (int i = 0; i < numPairs; i++)
 		{
+			// Normalized rowVectors and colVectors
+			float mag;
+			mag = sqrt(rowVectors[3 * i + 0] * rowVectors[3 * i + 0] + rowVectors[3 * i + 1] * rowVectors[3 * i + 1] + rowVectors[3 * i + 2] * rowVectors[3 * i + 2]);
+			if (mag > 0.0)
+			{
+				rowVectors[3 * i + 0] /= mag;
+				rowVectors[3 * i + 1] /= mag;
+				rowVectors[3 * i + 2] /= mag;
+			}
+			else
+			{
+				printf("Error: rowVectors must be non-zero!\n");
+				retVal = false;
+				break;
+			}
+			mag = sqrt(colVectors[3 * i + 0] * colVectors[3 * i + 0] + colVectors[3 * i + 1] * colVectors[3 * i + 1] + colVectors[3 * i + 2] * colVectors[3 * i + 2]);
+			if (mag > 0.0)
+			{
+				colVectors[3 * i + 0] /= mag;
+				colVectors[3 * i + 1] /= mag;
+				colVectors[3 * i + 2] /= mag;
+			}
+			else
+			{
+				printf("Error: colVectors must be non-zero!\n");
+				retVal = false;
+				break;
+			}
+
+			// Orthogonalize row and col vectors
+			float u_dot_v = rowVectors[3 * i + 0] * colVectors[3 * i + 0] + rowVectors[3 * i + 1] * colVectors[3 * i + 1] + rowVectors[3 * i + 2] * colVectors[3 * i + 2];
+			if (fabs(u_dot_v) > 0.01)
+			{
+				printf("Error: colVectors and rowVectors must be orthogonal!\n");
+				retVal = false;
+				break;
+			}
+			//printf("u_dot_v = %f\n", u_dot_v);
+			rowVectors[3 * i + 0] -= u_dot_v * colVectors[3 * i + 0];
+			rowVectors[3 * i + 1] -= u_dot_v * colVectors[3 * i + 1];
+			rowVectors[3 * i + 2] -= u_dot_v * colVectors[3 * i + 2];
+
+			// Calculate sod and sdd
 			float s_x = sourcePositions[3 * i + 0];
 			float s_y = sourcePositions[3 * i + 1];
 			float s_z = sourcePositions[3 * i + 2];
@@ -819,14 +912,58 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 			float d_y = moduleCenters[3 * i + 1];
 			float d_z = moduleCenters[3 * i + 2];
 
-			sod += sqrt(s_x * s_x + s_y * s_y + s_z * s_z);
-			sdd += sqrt(d_x * d_x + d_y * d_y + d_z * d_z);
+			float sod_cur = sqrt(s_x * s_x + s_y * s_y + s_z * s_z);
+			float odd_cur = sqrt(d_x * d_x + d_y * d_y + d_z * d_z);
+
+			if (sod_cur <= 0.0 || odd_cur <= 0.0)
+			{
+				printf("Error: invalid source/detector position!\n");
+				retVal = false;
+				break;
+			}
+			sod += sod_cur;
+			sdd += odd_cur;
+
+			// Set phis
+			//temp_phis[i] = atan2(sourcePositions[3 * i + 1], sourcePositions[3 * i + 0]);
+			temp_phis[i] = atan2(s_y - d_y, s_x - d_x); //atan2(s_minus_c.y, s_minus_c.x);
+			if (i > 0)
+			{
+				//printf("%f ==> ", temp_phis[i] * 180.0 / PI);
+				temp_phis[i] -= 2.0 * PI * floor(0.5 + (temp_phis[i] - temp_phis[i - 1]) / (2.0 * PI));
+				//printf("%f\n", temp_phis[i] * 180.0 / PI);
+			}
+
+			// Check if geometry is axial
+			minSourceZ = min(minSourceZ, sourcePositions[3 * i + 2]);
+			maxSourceZ = max(maxSourceZ, sourcePositions[3 * i + 2]);
+			//if (fabs(rowVectors[3 * i + 2]) < 0.995) // max 5.732 degree panel rotation
+			if ((rowVectors[3 * i + 2]) < 0.995) // max 5.732 degree panel rotation
+				isAxial = false;
 		}
 		sod = sod / float(numPairs);
 		sdd = sdd / float(numPairs);
 		sdd += sod;
 
-		return true;
+		if (maxSourceZ - minSourceZ > 0.5 * numRows * pixelHeight)
+			isAxial = false;
+
+		if (isAxial == true && retVal == true)
+		{
+			tau = sin(temp_phis[0]) * sourcePositions[0] - cos(temp_phis[0]) * sourcePositions[1];
+			for (int i = 0; i < numAngles; i++)
+				temp_phis[i] = (temp_phis[i] + 0.5 * PI) * 180.0 / PI;
+			set_angles(temp_phis, numAngles);
+		}
+		else
+			tau = 0.0;
+		delete[] temp_phis;
+		temp_phis = NULL;
+
+		if (retVal == false)
+			clearModularBeamParameters();
+
+		return retVal;
 	}
 }
 
@@ -888,11 +1025,42 @@ float parameters::phi_0()
 		return phis[0];
 }
 
-float parameters::u(int i)
+float parameters::u(int i, int iphi)
 {
-	if (geometry == CONE && detectorType == CURVED)
+	/*
+	if (geometry == MODULAR && iphi >= 0 && iphi < numAngles)
+	{
+		float* s = &sourcePositions[3 * iphi];
+		float* c = &moduleCenters[3 * iphi];
+		float* u_vec = &colVectors[3 * iphi];
+		float* v_vec = &rowVectors[3 * iphi];
+
+		float detNormal[3];
+		detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
+		detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+		detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+		float t = 1.0 - (c[0] * detNormal[0] + c[1] * detNormal[1] + c[2] * detNormal[2]) / (s[0] * detNormal[0] + s[1] * detNormal[1] + s[2] * detNormal[2]);
+		float u_offs = (1 - t) * (s[0] * u_vec[0] + s[1] * u_vec[1] + s[2] * u_vec[2]);
+
+		if (normalizeConeAndFanCoordinateFunctions)
+			return u_offs / sdd + u(i);
+		else
+			return u_offs + u(i);
+	}
+	//*/
+	if (modularbeamIsAxiallyAligned())
+	{
+		float* u_vec = &colVectors[3 * iphi];
+		float colVec_dot_theta_perp = -u_vec[0] * sin(phis[iphi]) + u_vec[1] * cos(phis[iphi]);
+		if (normalizeConeAndFanCoordinateFunctions)
+			return colVec_dot_theta_perp*(i * pixelWidth + u_0()) / sdd;
+		else
+			return colVec_dot_theta_perp * (i * pixelWidth + u_0());
+	}
+	else if (geometry == CONE && detectorType == CURVED)
 		return (i * atan(pixelWidth/sdd) + u_0());
-	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN || geometry == MODULAR))
 		return (i * pixelWidth + u_0()) / sdd;
 	else
 		return i * pixelWidth + u_0();
@@ -910,9 +1078,39 @@ float parameters::u_inv(float val)
 		return (val - u_0()) / pixelWidth;
 }
 
-float parameters::v(int i)
+float parameters::v(int i, int iphi)
 {
-	if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+	/*
+	if (geometry == MODULAR && iphi >= 0 && iphi < numAngles)
+	{
+		float* s = &sourcePositions[3 * iphi];
+		float* c = &moduleCenters[3 * iphi];
+		float* u_vec = &colVectors[3 * iphi];
+		float* v_vec = &rowVectors[3 * iphi];
+
+		float detNormal[3];
+		detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
+		detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+		detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+		float t = 1.0 - (c[0] * detNormal[0] + c[1] * detNormal[1] + c[2] * detNormal[2]) / (s[0] * detNormal[0] + s[1] * detNormal[1] + s[2] * detNormal[2]);
+		float v_offs = (1 - t) * (s[0] * v_vec[0] + s[1] * v_vec[1] + s[2] * v_vec[2]);
+		if (normalizeConeAndFanCoordinateFunctions)
+			return v_offs / sdd + v(i);
+		else
+			return v_offs + v(i);
+	}
+	else */
+	if (modularbeamIsAxiallyAligned())
+	{
+		float* v_vec = &rowVectors[3 * iphi];
+		float rowVec_dot_z = v_vec[2];
+		if (normalizeConeAndFanCoordinateFunctions)
+			return rowVec_dot_z * (i * pixelHeight + v_0()) / sdd;
+		else
+			return rowVec_dot_z * (i * pixelHeight + v_0());
+	}
+	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN || geometry == MODULAR))
 		return (i * pixelHeight + v_0()) / sdd;
 	else
 		return i * pixelHeight + v_0();
@@ -1057,7 +1255,7 @@ float parameters::volumeDataSize()
 	return float(4.0 * double(numX) * double(numY) * double(numZ) / pow(2.0, 30.0));
 }
 
-bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice , int* rowsNeeded)
+bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice , int* rowsNeeded, bool doDebug)
 {
 	if (rowsNeeded == NULL || firstSlice > lastSlice)
 		return false;
@@ -1069,8 +1267,110 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice ,
 	}
 	else if (geometry == MODULAR)
 	{
-		rowsNeeded[0] = 0;
-		rowsNeeded[1] = numRows - 1;
+		if (modularbeamIsAxiallyAligned())
+		{
+			float z_lo = float(firstSlice) * voxelHeight + z_0() - 0.5 * voxelHeight;
+			float z_hi = float(lastSlice) * voxelHeight + z_0() + 0.5 * voxelHeight;
+
+			if (doDebug)
+				printf("z range: %f to %f\n", z_lo, z_hi);
+
+			vector<int> indices;
+			for (int iphi = 0; iphi < numAngles; iphi++)
+			{
+				float* s = &sourcePositions[3 * iphi];
+				float* c = &moduleCenters[3 * iphi];
+				float* u_vec = &colVectors[3 * iphi];
+				float* v_vec = &rowVectors[3 * iphi];
+
+				float detNormal[3];
+				detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
+				detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+				detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+				//float R = sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
+				float R_z = sqrt(s[0] * s[0] + s[1] * s[1]);
+				//float D = sqrt((s[0] - c[0]) * (s[0] - c[0]) + (s[1] - c[1]) * (s[1] - c[1]) + (s[2] - c[2]) * (s[2] - c[2]));
+				float D_z = sqrt((s[0] - c[0]) * (s[0] - c[0]) + (s[1] - c[1]) * (s[1] - c[1]));
+
+				float dist;
+				float r[3];
+				float t_lo, v_lo, t_hi, v_hi;
+
+				dist = R_z - rFOV() - voxelWidth;
+				r[0] = (c[0] - s[0]) * dist / D_z;
+				r[1] = (c[1] - s[1]) * dist / D_z;
+
+				r[2] = (z_lo - s[2]);
+				t_lo = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
+				v_lo = (s[0]+t_lo*r[0] - c[0]) * v_vec[0] + (s[1]+t_lo *r[1] - c[1]) * v_vec[1] + (s[2]+t_lo *r[2] - c[2]) * v_vec[2];
+
+				if (doDebug && iphi == 0)
+				{
+					//printf("%d: %f to %f\n", iphi, v_lo, v_hi);
+					//printf("R_z = %f, dist = %f, D_z = %f, z_lo = %f, z_hi = %f, sourceZ = %f, detector_z = %f\n", R_z, dist, D_z, z_lo, z_hi, s[2], c[2]);
+					//printf("%f, %f, %f\n", s[0] + t_lo * r[0], s[1] + t_lo * r[1], s[2] + t_lo * r[2]);
+					printf("source = %f, %f, %f  r = %f,%f,%f    t_lo = %f\n", s[0], s[1], s[2], r[0], r[1], r[2], t_lo);
+					printf("detector: %f, %f, %f   point = %f, %f, %f\n", c[0], c[1], c[2], s[0] + t_lo * r[0], s[1] + t_lo * r[1], s[2] + t_lo * r[2]);
+				}
+
+				r[2] = (z_hi - s[2]);
+				t_hi = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
+				v_hi = (s[0] + t_hi * r[0] - c[0]) * v_vec[0] + (s[1] + t_hi * r[1] - c[1]) * v_vec[1] + (s[2] + t_hi * r[2] - c[2]) * v_vec[2];
+
+				if (doDebug && iphi == 0)
+				{
+					//printf("%d: %f to %f\n", iphi, v_lo, v_hi);
+					//printf("R_z = %f, dist = %f, D_z = %f, z_lo = %f, z_hi = %f, sourceZ = %f, detector_z = %f\n", R_z, dist, D_z, z_lo, z_hi, s[2], c[2]);
+					//printf("%f, %f, %f\n", s[0]+ t_hi *r[0], s[1] + t_hi * r[1], s[2] + t_hi * r[2]);
+					printf("detector: %f, %f, %f   point = %f, %f, %f\n", c[0], c[1], c[2], s[0] + t_hi * r[0], s[1] + t_hi * r[1], s[2] + t_hi * r[2]);
+				}
+
+				float accountForClockingAndPixelSize = fabs(u_vec[2] * 0.5 * pixelWidth * float(numCols - 1)) + 0.5 * pixelHeight;
+				if (v_lo < 0.0)
+					v_lo -= accountForClockingAndPixelSize;
+				if (v_hi < 0.0)
+					v_hi -= accountForClockingAndPixelSize;
+				if (v_lo > 0.0)
+					v_lo += accountForClockingAndPixelSize;
+				if (v_hi > 0.0)
+					v_hi += accountForClockingAndPixelSize;
+
+				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - v_0()) / pixelHeight)))));
+				indices.push_back(max(0, min(numRows - 1,  int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));
+
+				dist = R_z + rFOV() + voxelWidth;
+				r[0] = (c[0] - s[0]) * dist / D_z;
+				r[1] = (c[1] - s[1]) * dist / D_z;
+
+				r[2] = (z_lo - s[2]);
+				t_lo = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
+				v_lo = (s[0] + t_lo * r[0] - c[0]) * v_vec[0] + (s[1] + t_lo * r[1] - c[1]) * v_vec[1] + (s[2] + t_lo * r[2] - c[2]) * v_vec[2];
+
+				r[2] = (z_hi - s[2]);
+				t_hi = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
+				v_hi = (s[0] + t_hi * r[0] - c[0]) * v_vec[0] + (s[1] + t_hi * r[1] - c[1]) * v_vec[1] + (s[2] + t_hi * r[2] - c[2]) * v_vec[2];
+
+				if (v_lo < 0.0)
+					v_lo -= accountForClockingAndPixelSize;
+				if (v_hi < 0.0)
+					v_hi -= accountForClockingAndPixelSize;
+				if (v_lo > 0.0)
+					v_lo += accountForClockingAndPixelSize;
+				if (v_hi > 0.0)
+					v_hi += accountForClockingAndPixelSize;
+
+				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - v_0()) / pixelHeight)))));
+				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));
+			}
+			rowsNeeded[0] = *std::min_element(std::begin(indices), std::end(indices));
+			rowsNeeded[1] = *std::max_element(std::begin(indices), std::end(indices));
+		}
+		else
+		{
+			rowsNeeded[0] = 0;
+			rowsNeeded[1] = numRows - 1;
+		}
 	}
 	else
 	{
@@ -1197,8 +1497,47 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 	}
 	else if (geometry == MODULAR)
 	{
-		slicesNeeded[0] = 0;
-		slicesNeeded[1] = numZ - 1;
+		if (modularbeamIsAxiallyAligned())
+		{
+			vector<float> zs;
+			for (int iphi = 0; iphi < numAngles; iphi++)
+			{
+				float* s = &sourcePositions[3 * iphi];
+				float* c = &moduleCenters[3 * iphi];
+				float* u_vec = &colVectors[3 * iphi];
+				float* v_vec = &rowVectors[3 * iphi];
+
+				float accountForClockingAndPixelSize = fabs(u_vec[2] * 0.5 * pixelWidth * float(numCols - 1)) + 0.5 * pixelHeight;
+				float v_lo = float(firstRow) * pixelHeight + v_0() - accountForClockingAndPixelSize;
+				float v_hi = float(lastRow) * pixelHeight + v_0() + accountForClockingAndPixelSize;
+
+				float R_z = sqrt(s[0] * s[0] + s[1] * s[1]);
+				float D_z = sqrt((s[0] - c[0]) * (s[0] - c[0]) + (s[1] - c[1]) * (s[1] - c[1]));
+
+				float dist_close = R_z - rFOV() - voxelWidth;
+				float dist_far = R_z + rFOV() + voxelWidth;
+
+				zs.push_back(s[2] + (c[2] + v_lo * v_vec[2] - s[2]) * dist_close / D_z);
+				zs.push_back(s[2] + (c[2] + v_lo * v_vec[2] - s[2]) * dist_far / D_z);
+				zs.push_back(s[2] + (c[2] + v_hi * v_vec[2] - s[2]) * dist_close / D_z);
+				zs.push_back(s[2] + (c[2] + v_hi * v_vec[2] - s[2]) * dist_far / D_z);
+			}
+			float z_min = *std::min_element(std::begin(zs), std::end(zs)) - 0.5 * voxelHeight;
+			float z_max = *std::max_element(std::begin(zs), std::end(zs)) + 0.5 * voxelHeight;
+
+			slicesNeeded[0] = int(floor((z_min - z_0()) / voxelHeight));
+			slicesNeeded[1] =  int(ceil((z_max - z_0()) / voxelHeight));
+			if (doClip)
+			{
+				slicesNeeded[0] = max(0, min(numZ - 1, slicesNeeded[0]));
+				slicesNeeded[1] = max(0, min(numZ - 1, slicesNeeded[1]));
+			}
+		}
+		else
+		{
+			slicesNeeded[0] = 0;
+			slicesNeeded[1] = numZ - 1;
+		}
 	}
 	else
 	{
@@ -1307,4 +1646,12 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 	}
 	numAngles = numAngles_new;
 	return true;
+}
+
+bool parameters::modularbeamIsAxiallyAligned()
+{
+	if (geometry == MODULAR && phis != NULL)
+		return true;
+	else
+		return false;
 }

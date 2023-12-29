@@ -75,17 +75,61 @@ class tomographicModels:
         if _platform == "linux" or _platform == "linux2":
             import readline
             from ctypes import cdll
-            self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "../build/lib/libleap.so"))
+            
+            fullPath = os.path.join(current_dir, 'libleap.so')
+            fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.so')
+            
+            if os.path.isfile(fullPath):
+                self.libprojectors = cdll.LoadLibrary(fullPath)
+            elif os.path.isfile(fullPath_backup):
+                self.libprojectors = cdll.LoadLibrary(fullPath_backup)
+            else:
+                print('Error: could not find LEAP dynamic library at')
+                print(fullPath)
+                print('or')
+                print(fullPath_backup)
+                self.libprojectors = None
+            
         elif _platform == "win32":
             from ctypes import windll
-            try:
-                self.libprojectors = windll.LoadLibrary(os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll'))
-            except:
-                self.libprojectors = ctypes.CDLL(os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll'), winmode=0)
+        
+            fullPath = os.path.join(current_dir, 'libleap.dll')
+            fullPath_backup = os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll')
+        
+            if os.path.isfile(fullPath):
+                try:
+                    self.libprojectors = windll.LoadLibrary(fullPath)
+                except:
+                    self.libprojectors = ctypes.CDLL(fullPath, winmode=0)
+            elif os.path.isfile(fullPath_backup):
+                try:
+                    self.libprojectors = windll.LoadLibrary(fullPath_backup)
+                except:
+                    self.libprojectors = ctypes.CDLL(fullPath_backup, winmode=0)
+            else:
+                print('Error: could not find LEAP dynamic library at')
+                print(fullPath)
+                print('or')
+                print(fullPath_backup)
+                self.libprojectors = None
+        
         elif _platform == "darwin":  # Darwin is the name for MacOS in Python's platform module
-            from ctypes import cdll
             # there is current no support for LEAP on Mac, but maybe someone can figure this out
-            self.libprojectors = cdll.LoadLibrary(os.path.join(current_dir, "../build/lib/libleap.dylib"))
+            from ctypes import cdll
+            
+            fullPath = os.path.join(current_dir, 'libleap.dylib')
+            fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.dylib')
+            
+            if os.path.isfile(fullPath):
+                self.libprojectors = cdll.LoadLibrary(fullPath)
+            elif os.path.isfile(fullPath_backup):
+                self.libprojectors = cdll.LoadLibrary(fullPath_backup)
+            else:
+                print('Error: could not find LEAP dynamic library at')
+                print(fullPath)
+                print('or')
+                print(fullPath_backup)
+                self.libprojectors = None
             
         if param_id is not None:
             self.param_id = param_id
@@ -918,7 +962,7 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.get_FBPscalar()
 
-    def FBP(self, g, f, inplace=False):
+    def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -942,9 +986,13 @@ class tomographicModels:
         self.libprojectors.FBP.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(q) is torch.Tensor:
+            if f is None:
+                f = self.allocateVolume(0.0,True)
             self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
             self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
         else:
+            if f is None:
+                f = self.allocateVolume()
             self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.FBP(q, f, True)
         return f
@@ -2367,7 +2415,11 @@ class tomographicModels:
 
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        self.drawCT(ax,whichView)
+        if whichView is None or len(whichView) == 1:
+            self.drawCT(ax,whichView)
+        else:
+            for i in range(len(whichView)):
+                self.drawCT(ax,whichView[i])
         self.drawVolume(ax)
         
         ax.set_xlabel('X (mm)')
@@ -2877,6 +2929,12 @@ class tomographicModels:
             try:
                 from PIL import Image
                 import glob
+                hasPIL = True
+            except:
+                print('Error: Failed to load PIL or glob library!')
+                print('To install PIL do: pip install Pillow')
+                return None
+            if hasPIL == True:
                 currentWorkingDirectory = os.getcwd()
                 dataFolder, baseFileName = os.path.split(fileName)
                 if len(dataFolder) > 0:
@@ -2894,18 +2952,17 @@ class tomographicModels:
                     justDigits.append(int(digitStr))
                 ind = np.argsort(justDigits)
 
+                #print('found ' + str(len(fileList)) + ' images')
+                #print('reading first image: ' + str(fileList[0]))
                 firstImg = np.array(Image.open(fileList[0]))
                 x = np.zeros((len(fileList), firstImg.shape[0], firstImg.shape[1]), dtype=np.float32)
+                print('found ' + str(x.shape[0]) + ' images of size ' + str(x.shape[1]) + ' x ' + str(x.shape[2]))
                 for i in range(len(fileList)):
                     anImage = np.array(Image.open(fileList[ind[i]]))
+                    #anImage = np.array(Image.open(fileList[ind[i]]).rotate(-0.5))
                     x[i,:,:] = anImage[:,:]
                 os.chdir(currentWorkingDirectory)
                 return x
-                    
-            except:
-                print('Error: Failed to load PIL or glob library!')
-                print('To install PIL do: pip install Pillow')
-                return None
             '''
             try:
                 from PIL import Image

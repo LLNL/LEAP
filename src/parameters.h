@@ -202,7 +202,7 @@ public:
 	 * \param       i the index of the i-th detector column
 	 * \return      returns the position of the i-th detector column (mm)
 	 */
-	float u(int i);
+	float u(int i, int iphi = -1);
 
 	/**
 	 * \fn          u_inv
@@ -218,7 +218,7 @@ public:
 	 * \param       i the index of the i-th detector row
 	 * \return      returns the position of the i-th detector row (mm)
 	 */
-	float v(int i);
+	float v(int i, int iphi = -1);
 
 	/**
 	 * \fn          z_samples
@@ -308,6 +308,13 @@ public:
 	 */
 	bool set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs);
 
+	/**
+	 * \fn          modularbeamIsAxiallyAligned
+	 * \brief       returns whether or not the modular-beam data detectors are aligned with the z-axis
+	 * \return      true if the modular-beam data detectors are aligned with the z-axis, false otherwise
+	 */
+	bool modularbeamIsAxiallyAligned();
+
 	bool set_offsetScan(bool aFlag);
 	bool set_truncatedScan(bool aFlag);
 
@@ -342,6 +349,13 @@ public:
 	 * \return      returns the mean distance between projection angles (radians)
 	 */
     float T_phi();
+
+	/**
+	 * \fn          min_T_phi
+	 * \brief       returns the minimum distance between projection angles (radians)
+	 * \return      returns the minimum distance between projection angles (radians)
+	 */
+	float min_T_phi();
 
 	/**
 	 * \fn          phi_inv
@@ -450,7 +464,7 @@ public:
 	 * \param[in]   rowsNeeded 2-element array where the first and last row indices are saved
 	 * \return      returns true if successful, false otherwise
 	 */
-	bool rowRangeNeededForBackprojection(int firstSlice, int lastSlice, int* rowsNeeded);
+	bool rowRangeNeededForBackprojection(int firstSlice, int lastSlice, int* rowsNeeded, bool doDebug = false);
 
 	/**
 	 * \fn          sliceRangeNeededForProjection

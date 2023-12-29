@@ -30,4 +30,6 @@ bool applyPostRampFilterWeights_CPU(float* g, parameters*);
 
 bool convertARTtoERT_CPU(float* g, parameters*, bool doInverse = false);
 
+float* setViewDependentPolarWeights(parameters*);
+
 #endif

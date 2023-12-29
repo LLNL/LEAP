@@ -168,7 +168,7 @@ float* rampFilterFrequencyResponseMagnitude_cpu(int N, parameters* params)
 {
     float T = params->pixelWidth;
     bool isCurved = false;
-    if (params->geometry == parameters::FAN || params->geometry == parameters::CONE)
+    if (params->geometry == parameters::FAN || params->geometry == parameters::CONE || params->geometry == parameters::MODULAR)
     {
         T *= params->sod / params->sdd;
         if (params->detectorType == parameters::CURVED)
@@ -529,7 +529,10 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
 {
     if (params == NULL)
         return 0;
-    else if (params->geometry == parameters::MODULAR || params->helicalPitch != 0.0 || params->offsetScan == false || params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+    else if (params->helicalPitch != 0.0 || params->offsetScan == false || params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+        return 0;
+
+    if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
         return 0;
 
     int N_add = 0;
@@ -598,7 +601,9 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
 {
     if (g == NULL || params == NULL)
         return NULL;
-    else if (params->geometry == parameters::MODULAR || params->helicalPitch != 0.0 || params->offsetScan == false)
+    else if (params->helicalPitch != 0.0 || params->offsetScan == false)
+        return NULL;
+    if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
         return NULL;
 
     bool padOnLeft;
