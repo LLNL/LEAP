@@ -57,7 +57,7 @@ This document serves as a technical description of the algorithms in LivermorE A
 
 Our projectors are implemented for the standard 3D CT geometry types: parallel-, fan-, and cone-beam with axial or helical source trajectory and flat or curved detector. These geometry types accommodate shifts of the detectors and non-uniform angular spacing. Cartoonized sketches of these CT geometry types is shown in Figure \ref{fig:geometrySketches}. Projectors for these CT geometries use a method very similar to the Separable Footprint method \cite{Long_TMI_2010} that provides a matched projector pair that models the finite size of the voxel and detector pixel. These matched projectors ensure convergence and provide accurate, smooth results. Unmatched projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations \cite{DeManBasu_PMB_2004}.
 
-For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair.  For this geometry we use a matched Joseph projector \cite{Joseph_TMI_1982}.
+For added flexibility, we also provide a flexible modular-beam format where the user may specify the location and orientation of every source and detector pair.  For this geometry, we use the projector method described above when the detector columns are roughly aligned with the z-axis and a matched Joseph projector \cite{Joseph_TMI_1982} otherwise.
 
 \begin{figure}[h]
 \begin{tabular}{cccc}
@@ -78,7 +78,7 @@ We also provide projectors and analytic inversion algorithms, i.e., FBP, for a f
 
 In addition to the projectors, we also provide a few other algorithms for tomographic imaging, including:
 \begin{enumerate}
-\item Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry except modular-beam.
+\item Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry including modular-beam when the detector columns are roughly align with the z-axis.
 \item A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction \cite{Yu_MIC_2006}.
 \item Python implementations of some iterative reconstruction algorithms: MLEM, OSEM, OS-SART, ASD-POCS \cite{ASDPOCS_PMB_2008}, RWLS \cite{Hager_Zhang_CG_2005, Fessler_TIP_1999, Yu_MIC_2006}, and ML-TR \cite{IMPACT_TMI_2001}.
 \end{enumerate}
@@ -89,8 +89,6 @@ The CPU- and GPU-based projectors are nearly identical (32-bit floating point pr
 
 There are three major layers in the architecture.  Users may interact with LEAP at any of these layers as each have their own API.  Each of these APIs is how we interact with it from a higher layer.  A diagram of the LEAP software architecture is shown in Figure \ref{fig:LEAParchitecture}.
 
-%There are two layers built on top of this layer to interfaces with Python.  The first interface uses torch and PyTorch, so that LEAP can be used as differentiable projectors in ML/DL applications.  Installation of this interface is achieved with a pip install command.  The second interface uses standard ANSI C and a simple ctypes Python binding.  This interface is for those that want to use LEAP as a library of tomographic functions and want a version of LEAP that does not require torch/PyTorch.  Installation of this interface is achieved with cmake.  Installation instructions are given in the github wiki page.  A diagram of the LEAP software architecture is shown in Figure \ref{fig:LEAParchitecture}.
-
 \begin{figure}[h!]
 \begin{center}
 \includegraphics[scale=0.65]{LEAPoverview.png}
@@ -98,26 +96,7 @@ There are three major layers in the architecture.  Users may interact with LEAP 
 \vspace{-10pt}\caption{Overview of LEAP software architecture.} \label{fig:LEAParchitecture}
 \end{figure}
 
-\begin{comment}
-\begin{figure}[h!]
-\psset{unit=0.5mm}
-\pspicture(-150,-40)(50,50)%
-\rput[c](-35,35){\psshadowbox[fillcolor=lightgray]{\;\, \quad leaptorch \quad \;}}
-\rput[c](35,35){\psshadowbox[fillcolor=lightgray]{\, \quad leapctypes \quad \,}}
-\rput[c](-35,20){\psshadowbox{Torch C Interface}}
-\rput[c](35,20){\psshadowbox{ANSI C Interface}}
-\pspolygon[shadow=true](-68, -40)(68, -40)(68, 10)(-68, 10)
-\rput(0,0){tomographicModels}
-\rput[c](-30,-15){\psshadowbox{parameters}}
-\rput[c](30,-15){\psshadowbox{projectors}}
-\rput[c](-32,-30){\psshadowbox{FBP}}
-\rput[c](30,-30){\psshadowbox{filters}}
-\endpspicture
-\caption{Overview of LEAP software architecture.  The gray boxes are Python and the white boxes are C/C++/CUDA.} \label{fig:LEAParchitecture}
-\end{figure}
-\end{comment}
-
-The bottom C++/CUDA layer (Tomographic Models Library) contains all the forward projection, backprojection, FBP reconstruction, and imaging denoising algorithms.  This layer contains all the multi-GPU and multi-core CPU functionality.  This is the dynamic library (\textit{libleap.so} on Linux and \textit{libLEAP.dll} on Windows) that get compiled.  The main class is called \texttt{tomographicModels}.  All calls to LEAP must go through this class.  This class also contains a class called \textit{parameters} which contains all the CT geometry, CT volume parameters, and other run-time parameters.
+The bottom C++/CUDA layer (Tomographic Models Library) contains all the forward projection, backprojection, FBP reconstruction, and imaging denoising algorithms.  This layer contains all the multi-GPU and multi-core CPU functionality.  This is the dynamic library (\textit{libleap.so} on Linux and \textit{libleap.dll} on Windows) that get compiled.  The main class is called \texttt{tomographicModels}.  All calls to LEAP must go through this class.  This class also contains a class called \textit{parameters} which contains all the CT geometry, CT volume parameters, and other run-time parameters.
 
 The next layer is the primary Python interface, \textit{leapctype.py} (which is a Python class that is also called \texttt{tomographicModels}).  This provides an API to all the functionality in the bottom C++/CUDA layer and contains the iterative reconstruction algorithms.  If PyTorch is available it can take either PyTorch tensors or numpy arrays as input.  If PyTorch is not available, all the functionality still works.
 
@@ -161,7 +140,7 @@ Setting the CT geometry parameters is done by running one of the functions below
 \item[] \texttt{set\_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)}
 \item[] \texttt{set\_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0)}
 \item[] \texttt{set\_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0)}
-\item[] \texttt{set\_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, detectorCenters, rowVecs, colVecs)}
+\item[] \texttt{set\_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)}
 \end{itemize}
 A description of these parameters can be found in Tables \ref{tab:stdGeometryParameters} and \ref{tab:modularParameters}.  The helical pitch is in units of mm/radian.  One can also set the normalized helical pitch (unitless) with the following function
 \begin{itemize}
@@ -199,7 +178,7 @@ Parameter Name & Type & Description \\
 \end{table}
 
 \begin{table}[h!]
-\caption{Modular-beam parameters.  Internally, LEAP maintains copies of \texttt{sourcePositions}, \texttt{detectorCenters}, \texttt{rowVecs}, and \texttt{colVecs}, so if you want to make changes to these, you must re-specify the modular-beam parameters.  More information can be found in Section \ref{sec:CTGeometries}.} \label{tab:modularParameters}
+\caption{Modular-beam parameters.  Internally, LEAP maintains copies of \texttt{sourcePositions}, \texttt{moduleCenters}, \texttt{rowVectors}, and \texttt{colVectors}, so if you want to make changes to these, you must re-specify the modular-beam parameters.  More information can be found in Section \ref{sec:CTGeometries}.} \label{tab:modularParameters}
 \begin{tabular}{l|l|p{9cm}}
 Parameter Name & Type & Description \\
 \hline
@@ -209,9 +188,9 @@ Parameter Name & Type & Description \\
 \texttt{pixelHeight} & float32 & detector pixel pitch between rows (mm) \\
 \texttt{pixelWidth} & float32 & detector pixel pitch between columns (mm) \\
 \texttt{sourcePositions} & float32 array & \texttt{numAngles} $\times$ 3 array of (x,y,z) coordinates of each source position \\
-\texttt{detectorCenters} & float32 array & \texttt{numAngles} $\times$ 3 array of (x,y,z) coordinates of each detector center position \\
-\texttt{rowVecs} & float32 array & \texttt{numAngles} $\times$ 3 array of vectors pointing in the positive detector row direction \\
-\texttt{colVecs} & float32 array & \texttt{numAngles} $\times$ 3 array of vectors pointing in the positive detector row direction
+\texttt{moduleCenters} & float32 array & \texttt{numAngles} $\times$ 3 array of (x,y,z) coordinates of each detector center position \\
+\texttt{rowVectors} & float32 array & \texttt{numAngles} $\times$ 3 array of vectors pointing in the positive detector row direction \\
+\texttt{colVectors} & float32 array & \texttt{numAngles} $\times$ 3 array of vectors pointing in the positive detector row direction
 \end{tabular}
 \end{table}
 
@@ -293,12 +272,12 @@ Thus, we define detector coordinates as digital image coordinates with the origi
 
 \begin{figure}[h]
 \input{coneBeamSketch.tex}
-\caption{LEAP provides forward and backprojectors and FBP reconstruction algorithms for a flexible cone-beam geometry.  Note that $(i,j)$ are detector column and row index coordinates, respectively, and \texttt{i_c = centerCol} and \texttt{j_c = centerRow}.} \label{fig:coneBeamSketch}
+\caption{LEAP provides forward and backprojectors and FBP reconstruction algorithms for a flexible cone-beam geometry.  Note that $(i,j)$ are detector column and row index coordinates, respectively, and \texttt{i\_c = centerCol} and \texttt{j\_c = centerRow}.} \label{fig:coneBeamSketch}
 \end{figure}
 
 \section{CT Geometries} \label{sec:CTGeometries}
 
-In this section we discuss the parameterization of the four LEAP scanner geometry types: parallel-, fan-, cone-, and modular-beam.  Cartoon sketches of the parallel-, fan-, cone-, and modular-beam geometries is shown in Figure \ref{fig:geometrySketches} and a detailed sketch of the cone-beam coordinates in Figure \ref{fig:coneBeamSketch}.  Except for the modular beam data set, we also give the mathematical expressions that link sets of parameterizations, state conjugate ray expressions, and the adjoint of the forward projection operators which are often refered to as backprojection operators.  Unless otherwise stated, all LEAP algorithms can be applied to any scanner geometry type.  This feature is made possible by the fact that data for all geometry types can be stored in contiguous 3D arrays (view number, detector row, detector column) and that most of the differences can be encapsulated in the implementation of the forward and back projectors.  Two-dimensional geometries can be achieved by setting the number of detector rows and number of z-slices to one.
+In this section we discuss the parameterization of the four LEAP scanner geometry types: parallel-, fan-, cone-, and modular-beam.  Cartoon sketches of the parallel-, fan-, cone-, and modular-beam geometries is shown in Figure \ref{fig:geometrySketches} and a detailed sketch of the cone-beam coordinates in Figure \ref{fig:coneBeamSketch}.  We also give the mathematical expressions that link sets of parameterizations, state conjugate ray expressions, and the adjoint of the forward projection operators which are often referred to as backprojection operators.  Unless otherwise stated, all LEAP algorithms can be applied to any scanner geometry type.  This feature is made possible by the fact that data for all geometry types can be stored in contiguous 3D arrays (view number, detector row, detector column) and that most of the differences can be encapsulated in the implementation of the forward and back projectors.  Two-dimensional geometries can be achieved by setting the number of detector rows and number of z-slices to one.
 
 \subsection{Detector Coordinates} \label{sec:DetectorCoordinates}
 
@@ -347,7 +326,11 @@ We note that there are some restrictions in the above volume parameters based on
     \begin{itemize}
     \item no restrictions
     \end{itemize}
-\item modular-beam
+\item modular-beam, when rowVectors is approximately equal to the z-axis
+    \begin{itemize}
+    \item no restrictions
+    \end{itemize}
+\item modular-beam, when rowVectors is not approximately equal to the z-axis
     \begin{itemize}
     \item voxelHeight must be equal to voxelWidth
     \end{itemize}
@@ -528,8 +511,8 @@ m(\alpha, \beta) &:=& \begin{cases} \sin^2\left( \frac{\pi}{4} \frac{\beta-\beta
 \end{eqnarray*}
 where $\alpha_{thres} = \frac{\beta_{end}-\beta_0 - \pi}{2}$.  For a full scan, i.e., when $\beta_{end}-\beta_0 = 2\pi$, we have $m(\alpha, \beta) = \frac{1}{2}$.
 
-\begin{comment}
-One may increase the transaxial field of view \cite{Gullberg_TMI_1986, Gregor_2003} by shifting the detector to one side or by deliberately giving the center of rotation a large offset, i.e.., $|\tau| \gg 0$; see Figure \ref{fig:offsetDetectorReconstruction}.  In this case one must acquire a full scan.  First we let
+%\begin{comment}
+One may increase the transaxial field of view \cite{Gullberg_TMI_1986, Gregor_ICI_2003} by shifting the detector to one side or by deliberately giving the center of rotation a large offset, i.e.., $|\tau| \gg 0$; see Figure \ref{fig:offsetScan}.  In this case one must acquire a full scan.  See Figure \ref{fig:offsetScan}.  First we let
 \begin{eqnarray*}
 \delta_{min} &=& \left| R\sin\alpha_{min}-\tau \cos\alpha_{min}\right| \\
 \delta_{max} &=& \left| R\sin\alpha_{max}-\tau \cos\alpha_{max}\right|.
@@ -542,8 +525,10 @@ and if $\delta_{max} < \delta_{min}$ the weight function is given by
 \begin{eqnarray*}
 m(\alpha) &=& \begin{cases} \sin^2\left( \frac{\pi}{4}\frac{s-\delta_{max}}{\delta_{max}} \right), & |s| \leq \delta_{max}, \\ 1, & s < -\delta_{max}, \\ 0, & s > \delta_{max}, \end{cases}
 \end{eqnarray*}
-where $s = R\sin\alpha-\tau \cos\alpha$ is the standard coordinate transform from curved fan beam to parallel beam coordinates.  Note that these equations are written in parallel beam coordinates and thus it should be apparent that this can be used in all data formats to enlarge the transaxial field of view.  One must only apply the coordinate transformation to that particular coordinate system.  When doing this type of filtering/ reconstruction one needs to pad the measured data with zeros before one applies the ramp filter to simulate a virtual detector that is symmetric about the center of the field of view.
+where $s = R\sin\alpha-\tau \cos\alpha$ is the standard coordinate transform from curved fan beam to parallel beam coordinates.  Note that these equations are written in parallel beam coordinates and thus it should be apparent that this can be used in all data formats to enlarge the transaxial field of view.  One must only apply the coordinate transformation to that particular coordinate system.  When doing this type of filtering/ reconstruction one needs to pad the measured data with zeros before one applies the ramp filter to simulate a virtual detector that is symmetric about the center of the field of view.  All of this is handled automatically in LEAP if one runs the following command prior to an FBP reconstruction: \texttt{set\_offsetScan(True)}.  See also Section \ref{sec:FBP} and Table \ref{tab:FBPparameters}.
+%\end{comment}
 
+\begin{comment}
 \begin{figure}[h]
 \hspace{150 pt}\includegraphics[scale=0.25]{analyticReconAndFiltering/offsetDetectorFOV}
 \caption{Increasing the imaging field of view with an offset detector reconstruction.} \label{fig:offsetDetectorReconstruction}
@@ -552,7 +537,9 @@ where $s = R\sin\alpha-\tau \cos\alpha$ is the standard coordinate transform fro
 
 \subsection{Modular Beam}
 
-The modular beam data type provides a flexible geometry format to specify systems that do not fall into one of the above coordinate systems.  Since the data is not necessarily given on a regular grid, one can only reconstruction these data sets with iterative techniques.  To use this type of geometry one must specify the location of every source and detector module pair along with the detector module orientation.  A sketch of an example system modeled by the modular beam geometry is shown in Figure \ref{fig:modularBeamSketch}.
+The modular beam data type provides a flexible geometry format to specify systems that do not fall into one of the above coordinate systems.  If the rowVectors is approximately equal to the z-axis (within a 5.732 degree rotation from the positive z-axis), then one may reconstruct the data with analytic (FBP) or iterative reconstruction algorithms.  Otherwise since the data is not necessarily given on a regular grid and projections can be from any orientation, one can only reconstruction these data sets with iterative techniques.  To use this type of geometry one must specify the location of every source and detector module pair along with the detector module orientation.  A sketch of an example system modeled by the modular beam geometry is shown in Figure \ref{fig:modularBeamSketch}.
+
+To know whether or not your modular-beam specifications are compatible with analytic reconstruction, run the \texttt{print\_parameters()} command.  If you see the text \textit{(axially aligned)}, then it is compatible with FBP, otherwise it is not.
 
 %\begin{comment}
 \begin{figure}[h]
@@ -562,6 +549,12 @@ The modular beam data type provides a flexible geometry format to specify system
 \caption{Sketch of a geometry built with the modular-beam framework.  The modules here lie on the perimeter of two sides of a rectangle as might exist for a carry-on luggage x-ray scanner.  This sketch was generated with the \texttt{sketch\_system()} Python function.  The  magenta box is the reconstruction volume, the gray rectangles are the detector panels, and the red lines trace from the source to each of the four corners of the detector.} \label{fig:modularBeamSketch}
 \end{figure}
 %\end{comment}
+
+Now let $\bm{y}$ be a location of \texttt{sourcePositions}, $\bm{c}$ be a location of \texttt{moduleCenters}, $\bm{\widehat{v}}$ be a \texttt{rowVectors} instance, and $\bm{\widehat{u}}$ be a \texttt{colVectors} instance, and $D := \|\B{c}-\B{y}\|$. Then the X-ray Transform in modular-beam coordinate is given by
+\begin{eqnarray*}
+Pf(s,t) &:=& \int_{\mathbb{R}} f\left( \bm{y} + \frac{l}{\sqrt{D^2 + s^2 + t^2}}\left[ \bm{c}-\bm{y} + s\bm{\widehat{u}} + t\bm{\widehat{v}} \right] \right) \, dl.
+\end{eqnarray*}
+
 
 \section{Attenuated Radon Transform} \label{sec:ART}
 
@@ -594,11 +587,11 @@ LEAP provides implementations of $R_\delta(f)$, $R_{\delta}'(f)$, and $<d, R_{\d
 
 \section{Matched Projector Models}
 
-The projectors for parallel-, fan-, and cone-beam geometries in LEAP are implemented by a method similar to the Separable Footprint (SF) method \cite{Long_TMI_2010}.  These projectors are matched, meaning that the backprojection operation is an exact transpose of the forward projection and they model the finite size of the voxel and detector pixels.  Our models are slightly faster than the original rectangle-rectangle SF method because they utilize the bilinear interpolation capabilities of texture memory, but are very, very slightly less accurate.
+The projectors for parallel-, fan-, cone-, and axially aligned modular-beam geometries in LEAP are implemented by a method similar to the Separable Footprint (SF) method \cite{Long_TMI_2010}.  These projectors are matched, meaning that the backprojection operation is an exact transpose of the forward projection and they model the finite size of the voxel and detector pixels.  Our models are slightly faster than the original rectangle-rectangle SF method because they utilize the bilinear interpolation capabilities of texture memory, but are very, very slightly less accurate.
 
-\section{Analytic Inversion Algorithms (FBP)}
+\section{Analytic Inversion Algorithms (FBP)} \label{sec:FBP}
 
-LEAP contains an extensive collection of analytic inversion algorithms for parallel-, fan-, and cone-beam geometries with arbtirary detector shifts, offset center of rotation, non-equispaced projections angles, different angular ranges (short scan, full scan, over scan), axial or helical source trajectories, different voxels sizes and arbitary shifts of the volume location, etc.  Inversion algorithms also exist for the Attenuated Radon Transform (ART) and objects with cylindrical symmetry (e.g., Abel Transform).  No matter the particular settings of any of these, the inversion algorithms in LEAP reconstruct quantitatively accurate volumes.  All of these algorithms are of Filtered Backprojection (FBP) type (e.g., FDK is an FBP type algorithm) algorithms and thus all one needs to do is specify the CT geometry and volume and then run the \textit{FBP} command to perform the reconstruction.  No need to know what the actual algorithm is called.
+LEAP contains an extensive collection of analytic inversion algorithms for parallel-, fan-, and cone-beam geometries with arbtirary detector shifts, offset center of rotation, non-equispaced projections angles, different angular ranges (short scan, full scan, over scan), axial or helical source trajectories, different voxels sizes and arbitary shifts of the volume location, etc.  Modular-beam geometries where the \texttt{rowVectors} are approximately equal to the positive z-axis can also be reconstruction with analytic inversion algorithms.  Inversion algorithms also exist for the Attenuated Radon Transform (ART) and objects with cylindrical symmetry (e.g., Abel Transform).  No matter the particular settings of any of these, the inversion algorithms in LEAP reconstruct quantitatively accurate volumes.  All of these algorithms are of Filtered Backprojection (FBP) type (e.g., FDK is an FBP type algorithm) algorithms and thus all one needs to do is specify the CT geometry and volume and then run the \texttt{FBP} command to perform the reconstruction.  No need to know what the actual algorithm is called.
 
 With all that said there are a few LEAP parameters that perform some special case reconstructions.  Some of these are listed in table \ref{tab:FBPparameters}.  An example of one of these algorithms is the \textit{offsetScan} where the user deliberately offsets the detector and/or rotation stage to double the reconstructable field of view diameter with an FBP algorithm \cite{Gullberg_TMI_1986, Gregor_ICI_2003}.  This scanning strategy is also sometimes referred to as \textit{half-fan} or \textit{half-cone}.  A sketch of this idea is shown in Figure \ref{fig:offsetScan}.
 
@@ -680,7 +673,7 @@ function name & usage \\
 \psline{->}(160,340)(160,390)
 \endpspicture
 \end{tabular}
-\caption{Increasing the imaging field of view with an \textit{offsetScan} FBP reconstruction. (left) Standard setup where the source, center of rotation, and detector are all centered. (middle) Offset scan setup where center of rotation is laterally translated.  This can be modeled in LEAP by shifting both the \texttt{tau} and \texttt{centerCol} parameters. (right) Offset scan (also can half-fan or half-cone) where the detector is laterally translated.  This can be modeled is LEAP by shfting the \texttt{centerCol} parameter.}
+\caption{Increasing the imaging field of view with an \textit{offsetScan} FBP reconstruction. (left) Standard setup where the source, center of rotation, and detector are all centered. (middle) Offset scan setup where center of rotation is laterally translated.  This can be modeled in LEAP by shifting both the \texttt{tau} and \texttt{centerCol} parameters. (right) Offset scan (also can half-fan or half-cone) where the detector is laterally translated.  This can be modeled is LEAP by shfting the \texttt{centerCol} parameter.} \label{fig:offsetScan}
 \end{figure}
 
 \input{rampFilter.tex}
