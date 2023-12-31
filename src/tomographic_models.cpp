@@ -699,7 +699,7 @@ bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
 
 bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 {
-	if (params.muSpecified() == true || params.isSymmetric() == true || params.geometry == parameters::MODULAR)
+	if (params.muSpecified() == true || params.isSymmetric() == true)
 	{
 		if (params.whichGPU < 0 || data_on_cpu == true)
 		{

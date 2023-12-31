@@ -22,8 +22,146 @@ bool sensitivity_CPU(float*& s, parameters* params)
         return sensitivity_fan_CPU(s, params);
     else if (params->geometry == parameters::PARALLEL)
         return sensitivity_parallel_CPU(s, params);
+    else if (params->geometry == parameters::MODULAR)
+        return sensitivity_modular_CPU(s, params);
     else
         return false;
+}
+
+bool sensitivity_modular_CPU(float*& s, parameters* params)
+{
+    if (s == NULL || params == NULL)
+        return false;
+
+    bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+    params->normalizeConeAndFanCoordinateFunctions = false;
+    float u_min = params->u(0);
+    float u_max = params->u(params->numCols - 1);
+
+    float v_min = params->v(0);
+    float v_max = params->v(params->numRows - 1);
+    params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+
+    //float magFactor = params->sod / params->sdd;
+    //float scalar = (params->voxelWidth * params->voxelWidth / (magFactor * params->pixelWidth)) * (params->voxelHeight / (magFactor * params->pixelHeight)) * params->sod * params->sod;
+
+    const float scalar = (params->voxelWidth * params->voxelWidth / params->pixelWidth) * (params->voxelHeight / params->pixelHeight);
+
+    if (params->volumeDimensionOrder == parameters::ZYX)
+    {
+        omp_set_num_threads(omp_get_num_procs());
+        #pragma omp parallel for schedule(dynamic)
+        for (int iz = 0; iz < params->numZ; iz++)
+        {
+            float z = iz * params->voxelHeight + params->z_0();
+            float* zSlice = &s[uint64(iz) * uint64(params->numY * params->numX)];
+            for (int iy = 0; iy < params->numY; iy++)
+            {
+                float y = iy * params->voxelWidth + params->y_0();
+                float* xLine = &zSlice[iy * params->numX];
+                for (int ix = 0; ix < params->numX; ix++)
+                {
+                    float x = ix * params->voxelWidth + params->x_0();
+                    double curVal = 0.0;
+                    for (int iphi = 0; iphi < params->numAngles; iphi++)
+                    {
+                        float* sourcePosition = &(params->sourcePositions[3 * iphi]);
+                        float* moduleCenter = &(params->moduleCenters[3 * iphi]);
+                        float* v_vec = &(params->rowVectors[3 * iphi]);
+                        float* u_vec = &(params->colVectors[3 * iphi]);
+                        float detNormal[3];
+                        detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
+                        detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+                        detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+                        float c_minus_s[3];
+                        c_minus_s[0] = moduleCenter[0] - sourcePosition[0];
+                        c_minus_s[1] = moduleCenter[1] - sourcePosition[1];
+                        c_minus_s[2] = moduleCenter[2] - sourcePosition[2];
+
+                        const float D_sq = c_minus_s[0] * c_minus_s[0] + c_minus_s[1] * c_minus_s[1] + c_minus_s[2] * c_minus_s[2];
+                        const float one_over_D = 1.0/sqrt(D_sq);
+
+                        const float c_minus_s_dot_u = c_minus_s[0] * u_vec[0] + c_minus_s[1] * u_vec[1] + c_minus_s[2] * u_vec[2];
+                        const float c_minus_s_dot_v = c_minus_s[0] * v_vec[0] + c_minus_s[1] * v_vec[1] + c_minus_s[2] * v_vec[2];
+                        const float c_minus_s_dot_n = c_minus_s[0] * detNormal[0] + c_minus_s[1] * detNormal[1] + c_minus_s[2] * detNormal[2];
+
+                        const float denom = (x - sourcePosition[0]) * detNormal[0] + (y - sourcePosition[1]) * detNormal[1] + (z - sourcePosition[2]) * detNormal[2];
+                        const float t_C = c_minus_s_dot_n / denom;
+
+                        const float u_arg = t_C * ((x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
+                        const float v_arg = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
+
+                        if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                            curVal += sqrtf(D_sq + u_arg * u_arg + v_arg * v_arg) * one_over_D * t_C * t_C;
+                    }
+                    if (curVal == 0.0)
+                        curVal = 1.0;
+                    else
+                        curVal *= scalar;
+                    xLine[ix] = float(curVal);
+                }
+            }
+        }
+    }
+    else
+    {
+        omp_set_num_threads(omp_get_num_procs());
+        #pragma omp parallel for schedule(dynamic)
+        for (int ix = 0; ix < params->numX; ix++)
+        {
+            float* xSlice = &s[uint64(ix) * uint64(params->numY * params->numZ)];
+            float x = ix * params->voxelWidth + params->x_0();
+            for (int iy = 0; iy < params->numY; iy++)
+            {
+                float* zLine = &xSlice[iy * params->numZ];
+                float y = iy * params->voxelWidth + params->y_0();
+                for (int iz = 0; iz < params->numZ; iz++)
+                {
+                    float z = iz * params->voxelHeight + params->z_0();
+                    double curVal = 0.0;
+                    for (int iphi = 0; iphi < params->numAngles; iphi++)
+                    {
+                        float* sourcePosition = &(params->sourcePositions[3 * iphi]);
+                        float* moduleCenter = &(params->moduleCenters[3 * iphi]);
+                        float* v_vec = &(params->rowVectors[3 * iphi]);
+                        float* u_vec = &(params->colVectors[3 * iphi]);
+                        float detNormal[3];
+                        detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
+                        detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+                        detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+                        float c_minus_s[3];
+                        c_minus_s[0] = moduleCenter[0] - sourcePosition[0];
+                        c_minus_s[1] = moduleCenter[1] - sourcePosition[1];
+                        c_minus_s[2] = moduleCenter[2] - sourcePosition[2];
+
+                        const float D_sq = c_minus_s[0] * c_minus_s[0] + c_minus_s[1] * c_minus_s[1] + c_minus_s[2] * c_minus_s[2];
+                        const float one_over_D = 1.0 / sqrt(D_sq);
+
+                        const float c_minus_s_dot_u = c_minus_s[0] * u_vec[0] + c_minus_s[1] * u_vec[1] + c_minus_s[2] * u_vec[2];
+                        const float c_minus_s_dot_v = c_minus_s[0] * v_vec[0] + c_minus_s[1] * v_vec[1] + c_minus_s[2] * v_vec[2];
+                        const float c_minus_s_dot_n = c_minus_s[0] * detNormal[0] + c_minus_s[1] * detNormal[1] + c_minus_s[2] * detNormal[2];
+
+                        const float denom = (x - sourcePosition[0]) * detNormal[0] + (y - sourcePosition[1]) * detNormal[1] + (z - sourcePosition[2]) * detNormal[2];
+                        const float t_C = c_minus_s_dot_n / denom;
+
+                        const float u_arg = t_C * ((x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
+                        const float v_arg = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
+
+                        if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                            curVal += sqrtf(D_sq + u_arg * u_arg + v_arg * v_arg) * one_over_D * t_C * t_C;
+                    }
+                    if (curVal == 0.0)
+                        curVal = 1.0;
+                    else
+                        curVal *= scalar;
+                    zLine[iz] = float(curVal);
+                }
+            }
+        }
+    }
+    return true;
 }
 
 bool sensitivity_cone_CPU(float*& s, parameters* params)

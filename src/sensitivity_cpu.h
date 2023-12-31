@@ -19,5 +19,6 @@ bool sensitivity_CPU(float*&, parameters*);
 bool sensitivity_cone_CPU(float*&, parameters*);
 bool sensitivity_fan_CPU(float*&, parameters*);
 bool sensitivity_parallel_CPU(float*&, parameters*);
+bool sensitivity_modular_CPU(float*& s, parameters* params);
 
 #endif

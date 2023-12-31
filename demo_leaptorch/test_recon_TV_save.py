@@ -18,7 +18,6 @@
 
 import os
 import sys
-from sys import platform as _platform
 sys.stdout.flush()
 import argparse
 import numpy as np
@@ -33,16 +32,28 @@ from TVGPUClass import TVGPUClass
 
 
 # program arguments
-# All of these arguments are optional.  If no input file names are given, then the data will be generated
-# by forward projecting the FORBILD head phantom using a parallel-beam geometry
 parser = argparse.ArgumentParser()
 parser.add_argument("--init-fn", default="", help="path to image file for initial guess (image prior)")
-parser.add_argument("--proj-fn", default="", help="path to input projection data file")
+parser.add_argument("--proj-fn", default="sample_data/FORBILD_head_64_sino.npy", help="path to input projection data file")
 parser.add_argument("--mask-fn", default="", help="path to input projection mask file")
-parser.add_argument("--param-fn", default="", help="path to projection geometry configuration file")
+parser.add_argument("--param-fn", default="sample_data/param_parallel64.cfg", help="path to projection geometry configuration file")
 parser.add_argument("--output-dir", default="sample_data", help="directory storing intermediate files")
 parser.add_argument("--use-fov", action='store_true', default=False, help="whether fov is used or not")
 args = parser.parse_args()
+
+
+
+def create_circular_mask(h, w, center=None, radius=None):
+    if center is None:
+        center = (int(h/2)-0.5, int(w/2)-0.5)
+    if radius is None:
+        radius = min(center[0], center[1], w-center[0], h-center[1])
+
+    y, x = np.ogrid[:h, :w]
+    dist_from_center = np.sqrt((x - center[0])**2 + (y-center[1])**2)
+
+    mask = dist_from_center <= radius
+    return mask
 
 
 # CT reconstruction solver 
@@ -51,7 +62,7 @@ class Reconstructor:
     Accelerated Proximal Gradient Descent with TV
     """
     def __init__(self, projector, device_name, learning_rate=1., use_decay=False,
-                 iter_count=2000//10, stop_criterion=1e-1, save_dir='.', save_freq=10, verbose=1):
+                 iter_count=2000, stop_criterion=1e-1, save_dir='.', save_freq=10, verbose=1):
 
         # set nn_model and projector
         self.projector = projector
@@ -71,7 +82,7 @@ class Reconstructor:
     def loss_func(self, input, target):
         return ((input - target) ** 2).mean()
         
-    def reconstruct(self, g, g_mask, f_init, fn_prefix="output"):
+    def reconstruct(self, g, g_mask, f_init, f_fov=None, fn_prefix="output"):
         # if no neural network is used, make f trainable
         self.projector.train()
         
@@ -123,22 +134,22 @@ class Reconstructor:
             if loss_val/self.firstLoss < self.stop_criterion:
                 break
             if i % self.save_freq == 0:
-                midZ = x.shape[1]//2
-                f_img = x.cpu().detach().numpy()[0,midZ,:,:]
+                f_img = x.cpu().detach().numpy()[0,0,:,:]
                 if np.max(f_img) == 0:
                     scaleVal = 1
                 else:
                     scaleVal = 255.0/np.max(f_img)
-                imageio.imsave(os.path.join(self.save_dir, "%s_LEAP_%s_%07d.png" % (fn_prefix, self.device_name.replace(':','_'), i)), np.uint8(scaleVal*f_img))
+                #imageio.imsave(os.path.join(self.save_dir, "%s_LEAP_%s_%07d.png" % (fn_prefix, self.device_name, i)), scaleVal*f_img)
 
         # eval mode to get final f
-        midZ = x.shape[1]//2
-        f_img = x.cpu().detach().numpy()[0,midZ,:,:]
+        if f_fov != None:
+            x = x * f_fov
+        f_img = x.cpu().detach().numpy()[0,0,:,:]
         if np.max(f_img) == 0:
             scaleVal = 1
         else:
             scaleVal = 255.0/np.max(f_img)
-        imageio.imsave(os.path.join(self.save_dir, "%s_LEAP_%s_final.png" % (fn_prefix, self.device_name.replace(':','_'))), np.uint8(scaleVal*f_img))
+        imageio.imsave(os.path.join(self.save_dir, "%s_LEAP_%s_final.png" % (fn_prefix, self.device_name)), scaleVal*f_img)
         return x
 
 
@@ -168,56 +179,20 @@ mask_fn = args.mask_fn
 param_fn = args.param_fn
 use_fov = args.use_fov
 
-if _platform == "win32":
-    output_dir = output_dir.replace("/","\\")
-    init_fn = init_fn.replace("/","\\")
-    proj_fn = proj_fn.replace("/","\\")
-    mask_fn = mask_fn.replace("/","\\")
-    param_fn = param_fn.replace("/","\\")
-
-if (len(proj_fn) > 0 and len(param_fn) == 0) or (len(proj_fn) == 0 and len(param_fn) > 0):
-    print('Error: must specify both proj-fn and param-fn or neither')
-    quit()
-
 # initialize projector and load parameters
 proj = Projector(use_static=False, use_gpu=use_cuda, gpu_device=device, batch_size=1)
-if len(param_fn) > 0:
-    proj.load_param(param_fn)
-else:
-    # Set the scanner geometry
-    numCols = 256
-    numAngles = 2*int(360*numCols/1024)
-    pixelSize = 0.5*512/numCols
-    numRows = 1
-    proj.leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), proj.leapct.setAngleArray(numAngles, 180.0))
-    proj.leapct.set_default_volume()
-    proj.allocate_batch_data()
+proj.load_param(param_fn)
+proj.set_projector(1)
 proj.print_param()
 
 # load g and initialize f
-if len(proj_fn) > 0:
-    # load projection data
-    g = proj.leapct.load_projections(proj_fn)
-    g = g.reshape((1, g.shape[0], g.shape[1], g.shape[2]))
-    if use_cuda:
-        g = torch.from_numpy(g).to(device)
-    else:
-        g = torch.from_numpy(g)
-    #g = g.unsqueeze(0)
-else:
-    # simulate projection data by forward projecting a voxelized phantom
-    f = proj.leapct.allocate_volume()
-    proj.leapct.set_FORBILD(f,True,3)
-    f = f.reshape((1, f.shape[0], f.shape[1], f.shape[2]))
-    f = torch.from_numpy(f).to(device)
-    #f = f.unsqueeze(0)
-    g = proj(f)
-    g = g.clone()
-
+g = np.load(proj_fn)
+g = g.reshape((1, g.shape[0], 1, g.shape[1]))
+g = torch.from_numpy(g)
 
 if len(mask_fn) > 0:
     g_mask = np.load(mask_fn)
-    g_mask = g_mask.reshape((1, g_mask.shape[0], g_mask.shape[1], g_mask.shape[2]))
+    g_mask = g_mask.reshape((1, g_mask.shape[0], 1, g_mask.shape[1]))
     g_mask = torch.from_numpy(g_mask)
 else:
     g_mask = None
@@ -227,7 +202,7 @@ mout = torch.zeros_like(g)
 mout[0:g.shape[0],...] = 1
 g = mout*g.clone()
 
-#g = g[:,None,:] # what is this?
+g = g[:,None,:]
 # g = torch.stack((g,g,g,g), dim=0) ## modified to simulate batch_size=4
 print("projection loaded: ", g.shape)
 
@@ -240,26 +215,28 @@ N = dimx
 # load image prior if available
 if len(init_fn) > 0:
     f_init = np.load(init_fn)
-    f_init = f_init.reshape((1,f_init.shape[0],f_init.shape[1],f_init.shape[2]))
+    f_init = f_init.reshape((1,1,f_init.shape[0],f_init.shape[1]))
 else:
     # initialize f to be solved, given g above
     f_init = np.ascontiguousarray(np.zeros((1, M, N, N)).astype(np.float32)) ## modified by jiaming to simulate batch_size=4
 f_init = torch.from_numpy(f_init).to(device)
 
-# turn off mask for field of view if specified
-if args.use_fov == False:
-    x_max = np.max(np.abs(proj.leapct.x_samples()))
-    y_max = np.max(np.abs(proj.leapct.y_samples()))
-    proj.leapct.set_diameterFOV(2.0*np.sqrt(x_max**2+y_max**2))
+# set mask for field of view
+if args.use_fov:
+    f_fov = create_circular_mask(N, N).reshape(1, M, N, N).astype(np.float32)
+    f_fov = torch.from_numpy(f_fov)
+    print("field of view masking is used")
+else:
+    f_fov = None
+    print("no field of view masking is used")
 
 # initialize and run reconstructor (solver)
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 solver = Reconstructor(proj, device_name, learning_rate=0.01, use_decay=False, stop_criterion=1e-7, save_dir=output_dir)
-f_final = solver.reconstruct(g, g_mask, f_init, "f")
+f_final = solver.reconstruct(g, g_mask, f_init, f_fov, "f")
 
 # save final reconstructed image
-midZ = f_final.shape[1]//2
-f_np = f_final[0,midZ,:,:].cpu().detach().numpy()
+f_np = f_final[0,0,:,:].cpu().detach().numpy()
 np.save(os.path.join(proj_fn[:-4]+"_TV.npy"), f_np)
-imageio.imsave(os.path.join(proj_fn[:-4]+"_TV.png"), np.uint8(f_np/np.max(f_np)*255))
+imageio.imsave(os.path.join(proj_fn[:-4]+"_TV.png"), f_np/np.max(f_np)*255)

@@ -913,16 +913,17 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 			float d_z = moduleCenters[3 * i + 2];
 
 			float sod_cur = sqrt(s_x * s_x + s_y * s_y + s_z * s_z);
-			float odd_cur = sqrt(d_x * d_x + d_y * d_y + d_z * d_z);
+			//float odd_cur = sqrt(d_x * d_x + d_y * d_y + d_z * d_z);
+			float sdd_cur = sqrt((d_x-s_x) * (d_x-s_x) + (d_y-s_y) * (d_y-s_y) + (d_z-s_z) * (d_z-s_z));
 
-			if (sod_cur <= 0.0 || odd_cur <= 0.0)
+			if (sod_cur <= 0.0 || sdd_cur <= 0.0)
 			{
 				printf("Error: invalid source/detector position!\n");
 				retVal = false;
 				break;
 			}
 			sod += sod_cur;
-			sdd += odd_cur;
+			sdd += sdd_cur;
 
 			// Set phis
 			//temp_phis[i] = atan2(sourcePositions[3 * i + 1], sourcePositions[3 * i + 0]);
@@ -943,7 +944,7 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 		}
 		sod = sod / float(numPairs);
 		sdd = sdd / float(numPairs);
-		sdd += sod;
+		//sdd += sod;
 
 		if (maxSourceZ - minSourceZ > 0.5 * numRows * pixelHeight)
 			isAxial = false;
@@ -1049,7 +1050,7 @@ float parameters::u(int i, int iphi)
 			return u_offs + u(i);
 	}
 	//*/
-	if (modularbeamIsAxiallyAligned())
+	if (modularbeamIsAxiallyAligned() && iphi >= 0 && iphi < numAngles)
 	{
 		float* u_vec = &colVectors[3 * iphi];
 		float colVec_dot_theta_perp = -u_vec[0] * sin(phis[iphi]) + u_vec[1] * cos(phis[iphi]);
@@ -1101,7 +1102,7 @@ float parameters::v(int i, int iphi)
 			return v_offs + v(i);
 	}
 	else */
-	if (modularbeamIsAxiallyAligned())
+	if (modularbeamIsAxiallyAligned() && iphi >= 0 && iphi < numAngles)
 	{
 		float* v_vec = &rowVectors[3 * iphi];
 		float rowVec_dot_z = v_vec[2];

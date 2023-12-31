@@ -504,6 +504,10 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS PROVIDE CONVENIENT ROUTINES TO MAKE THE PROJECTION DATA AND VOLUME DATA NUMPY ARRAYS
     ###################################################################################################################
     ###################################################################################################################
+    def allocate_projections(self, val=0.0, astensor=False):
+        """Alias for allocateProjections"""
+        return self.allocateProjections(val, astensor)
+    
     def allocateProjections(self, val=0.0, astensor=False):
         """Allocates projection data
         
@@ -585,6 +589,10 @@ class tomographicModels:
         """
         return np.array([self.get_numAngles(),self.get_numRows(),self.get_numCols()],dtype=np.int32)
         
+    def allocate_volume(self, val=0.0, astensor=False):
+        """Alias for allocateVolume"""
+        return self.allocateVolume(val, astensor)
+        
     def allocateVolume(self, val=0.0, astensor=False):
         """Allocates reconstruction volume data
         
@@ -650,7 +658,9 @@ class tomographicModels:
         
     def copyData(self, x):
         if has_torch == True and type(x) is torch.Tensor:
-            return x.clone()
+            x_copy = x.clone()
+            #x_copy.to(x.get_device())
+            return x_copy
         else:
             return x.copy()
     
@@ -962,6 +972,10 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.get_FBPscalar()
 
+    def fbp(self, g, f=None, inplace=False):
+        """Alias for FBP"""
+        return self.FBP(g, f, inplace)
+
     def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
         
@@ -988,6 +1002,7 @@ class tomographicModels:
         if has_torch == True and type(q) is torch.Tensor:
             if f is None:
                 f = self.allocateVolume(0.0,True)
+                f = f.to(g.get_device())
             self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
             self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
         else:
@@ -2910,7 +2925,7 @@ class tomographicModels:
                 print('file does not exist')
                 return None
             else:
-                return self.load(fileName)
+                return np.load(fileName)
         elif fileName.endswith('.nrrd'):
             if os.path.isfile(fileName) == False:
                 print('file does not exist')

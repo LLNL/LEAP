@@ -23,34 +23,15 @@ from leaptorch import Projector
 
 
 # program arguments
+# All of these arguments are optional.  If no input file names are given, then the data will be generated
+# by forward projecting the FORBILD head phantom using a parallel-beam geometry
 parser = argparse.ArgumentParser()
-parser.add_argument("--proj-fn", default="FORBILD_head_64_sino.npy", help="path to input projection data file")
-parser.add_argument("--param-fn", default="FORBILD_head_64_param.cfg", help="path to projection geometry configuration file")
+parser.add_argument("--proj-fn", default="", help="path to input projection data file")
+parser.add_argument("--param-fn", default="", help="path to projection geometry configuration file")
 parser.add_argument("--output-dir", default="./sample_data", help="directory storing intermediate/output files")
 parser.add_argument("--network-mode", type=int, default=0, help="0: no network used, 1: fully connected only, 2: convolutional with fully connected")
 parser.add_argument("--use-fov", action='store_true', default=True, help="whether fov is used or not")
 args = parser.parse_args()
-
-
-
-def load_param(param_fn):
-    pdic = {}
-    with open(param_fn, 'r') as f:
-        lines = f.readlines()
-        for line in lines:
-            key = line.split('=')[0].strip()
-            value = line.split('=')[1].strip()
-            if key == 'proj_phis' or key == 'proj_geometry':
-                pdic[key] = value
-            else:
-                pdic[key] = float(value)
-    phis_str = pdic['proj_phis']
-    if len(phis_str) > 0:
-        phis = torch.from_numpy(np.array([float(x.strip()) for x in phis_str.split(',')]))
-    else:
-        phis = np.array(range(int(pdic['proj_nangles']))).astype(np.float32)
-        phis = phis*pdic['proj_arange']/float(pdic['proj_nangles'])
-    return pdic, phis
 
 
 # Neural Network (weight and bias)
@@ -167,7 +148,7 @@ class Reconstructor:
             if self.nn != None:
                 f_estimated = self.nn(f_init)
             g_estimated = self.projector(f_estimated)
-        
+            
             # compute loss
             loss = self.loss_func(g_estimated.cpu().float(), g.cpu().float())
             
@@ -192,7 +173,8 @@ class Reconstructor:
             if loss_val/self.firstLoss < self.stop_criterion:
                 break
             if i == 0 or i % self.save_freq == 0:
-                f_img = f_estimated.cpu().detach().numpy()[0,0,:,:]
+                midZ = f_estimated.shape[1]//2
+                f_img = f_estimated.cpu().detach().numpy()[0,midZ,:,:]
                 if np.max(f_img) == 0:
                     scaleVal = 1
                 else:
@@ -204,7 +186,8 @@ class Reconstructor:
         if self.nn != None:
             self.nn.eval()
             f_estimated = self.nn(f_init)
-        f_img = f_estimated.cpu().detach().numpy()[0,0,:,:]
+        midZ = f_estimated.shape[1]//2
+        f_img = f_estimated.cpu().detach().numpy()[0,midZ,:,:]
         f_img[f_img<0.0] = 0.0
         if np.max(f_img) == 0:
             scaleVal = 1
@@ -239,11 +222,28 @@ param_fn = args.param_fn
 network_mode = args.network_mode
 use_fov = args.use_fov
 
+if _platform == "win32":
+    output_dir = output_dir.replace("/","\\")
+    proj_fn = proj_fn.replace("/","\\")
+    param_fn = param_fn.replace("/","\\")
+
+if (len(proj_fn) > 0 and len(param_fn) == 0) or (len(proj_fn) == 0 and len(param_fn) > 0):
+    print('Error: must specify both proj-fn and param-fn or neither')
+    quit()
 
 # initialize projector and load CT geometry and CT volume parameters
 proj = Projector(forward_project=True, use_static=True, use_gpu=use_cuda, gpu_device=device)
-proj.load_param(param_fn)
-#proj.allocate_batch_data()
+if len(param_fn) > 0:
+    proj.load_param(param_fn)
+else:
+    # Set the scanner geometry
+    numCols = 256
+    numAngles = 2*int(360*numCols/1024)
+    pixelSize = 0.5*512/numCols
+    numRows = 1
+    proj.leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), proj.leapct.setAngleArray(numAngles, 180.0))
+    proj.leapct.set_default_volume()
+    proj.allocate_batch_data()
 proj.print_param()
 
 # Get volume and projection data sizes
@@ -262,16 +262,24 @@ elif network_mode == 2:
     model.to(device)
 
 
-# load g
-g = np.load(proj_fn)
-if use_cuda:
-    g = torch.from_numpy(g).to(device)
+if len(proj_fn) > 0:
+    # load projection data
+    g = proj.leapct.load_projections(proj_fn)
+    if use_cuda:
+        g = torch.from_numpy(g).to(device)
+    else:
+        g = torch.from_numpy(g)
+    g = g.unsqueeze(0)
 else:
-    g = torch.from_numpy(g)
-g = g.unsqueeze(0)
-g = g.unsqueeze(2)
-print("projection loaded: ", g.shape)
+    # simulate projection data by forward projecting a voxelized phantom
+    f = proj.leapct.allocate_volume()
+    proj.leapct.set_FORBILD(f,True,3)
+    f = torch.from_numpy(f).to(device)
+    f = f.unsqueeze(0)
+    g = proj(f)
+    g = g.clone()
 
+print("projection loaded: ", g.shape)
 
 # initialize f to be solved, given g above
 f_init = np.zeros((1, dimz, dimy, dimx),dtype=np.float32)
@@ -283,14 +291,12 @@ else:
     
 # remove field of view mask if necessary
 if args.use_fov == False:
-    x_max = np.max(np.abs(proj.lct.x_samples()))
-    y_max = np.max(np.abs(proj.lct.y_samples()))
-    proj.lct.set_diameterFOV(2.0*np.sqrt(x_max**2+y_max**2))
+    x_max = np.max(np.abs(proj.leapct.x_samples()))
+    y_max = np.max(np.abs(proj.leapct.y_samples()))
+    proj.leapct.set_diameterFOV(2.0*np.sqrt(x_max**2+y_max**2))
 
 
 # initialize and run reconstructor (solver)
-if _platform == "win32":
-    output_dir = output_dir.replace("/","\\")
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 solver = Reconstructor(model, proj, None, device_name, learning_rate=0.01, use_decay=False, stop_criterion=1e-7, save_dir=output_dir)
@@ -299,5 +305,6 @@ f_final = solver.reconstruct(g, f_init, "f")
 
 # Display Result
 import matplotlib.pyplot as plt
-plt.imshow(np.squeeze(f_final.cpu().detach().numpy()[0,0,:,:]))
+midZ = f_final.shape[1]//2
+plt.imshow(np.squeeze(f_final.cpu().detach().numpy()[0,midZ,:,:]))
 plt.show()
