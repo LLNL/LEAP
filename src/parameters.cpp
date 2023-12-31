@@ -1610,7 +1610,6 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 			phis_new[i - firstProj] = phis_cur[i];
 		delete[] phis_cur;
 	}
-	//bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
 	if (geometry == MODULAR)
 	{
 		if (sourcePositions == NULL || moduleCenters == NULL || rowVectors == NULL || colVectors == NULL)

@@ -4,7 +4,8 @@ import time
 import numpy as np
 from LTTserver import LTTserver
 from leapctype import *
-sys.path.append(r'..\utils')
+#sys.path.append(r'..\utils')
+sys.path.append(r'C:\Users\champley\Documents\git_leap\LEAP\utils')
 from bridgeToLTT import *
 
 objfile = r'C:\Users\champley\Documents\tools\LTT\sampleScripts\FORBILD_head_noEar.pd'
@@ -12,7 +13,7 @@ objfile = r'C:\Users\champley\Documents\tools\LTT\sampleScripts\FORBILD_head_noE
 LTT = LTTserver()
 leapct = tomographicModels()
 
-test_cpu_methods = True
+test_cpu_methods = False
 
 for n in range(3):
     LTT.cmd('clearAll')
@@ -27,7 +28,7 @@ for n in range(3):
     if n == 0:
         print('********* CONE-BEAM *********')
         LTT.cmd(['geometry=cone','detectorShape=flat','sdd=1400','sod=1100','numAngles = ' + str(numAngles),'arange=360','pixelSize='+str(pixelSize),'numRows=340/'+str((pixelSize)),'numCols=320/'+str((pixelSize)),'centerRow=(numRows-1)/2','centerCol=(numCols-1)/2'])
-        LTT.cmd('detectorShape=curved')
+        #LTT.cmd('detectorShape=curved')
     elif n == 1:
         if LTT.unknown('axisOfSymmetry') == False:
             continue
@@ -65,13 +66,13 @@ for n in range(3):
 
     if test_cpu_methods:
         leapct.set_GPU(-1)
-    g_leap_CPU = leapct.allocateProjections()
-    startTime = time.time()
-    leapct.project(g_leap_CPU,f_true)
-    print('project CPU elapsed time: ' + str(time.time()-startTime))
+        g_leap_CPU = leapct.allocateProjections()
+        startTime = time.time()
+        leapct.project(g_leap_CPU,f_true)
+        print('project CPU elapsed time: ' + str(time.time()-startTime))
+        leapct.displayVolume((g_LTT-g_leap_CPU)/np.max(g_LTT))
 
     leapct.displayVolume((g_LTT-g_leap_GPU)/np.max(g_LTT))
-    leapct.displayVolume((g_LTT-g_leap_CPU)/np.max(g_LTT))
     #'''
     
     #'''
@@ -94,13 +95,13 @@ for n in range(3):
     
     if test_cpu_methods:
         leapct.set_GPU(-1)
-    f_leap_CPU = leapct.allocateVolume()
-    startTime = time.time()
-    leapct.backproject(g_true, f_leap_CPU)
-    print('backproject CPU elapsed time: ' + str(time.time()-startTime))
+        f_leap_CPU = leapct.allocateVolume()
+        startTime = time.time()
+        leapct.backproject(g_true, f_leap_CPU)
+        print('backproject CPU elapsed time: ' + str(time.time()-startTime))
+        leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
     
     leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))
-    leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
     #'''
     
     #'''
@@ -123,14 +124,14 @@ for n in range(3):
 
     if test_cpu_methods:
         leapct.set_GPU(-1)
-    f_leap_CPU = leapct.allocateVolume()
-    startTime = time.time()
-    leapct.FBP(g_true, f_leap_CPU)
-    print('FBP CPU elapsed time: ' + str(time.time()-startTime))
+        f_leap_CPU = leapct.allocateVolume()
+        startTime = time.time()
+        leapct.FBP(g_true, f_leap_CPU)
+        print('FBP CPU elapsed time: ' + str(time.time()-startTime))
+        leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
     
     leapct.displayVolume((f_LTT-f_leap_GPU)/np.max(f_LTT))
-    leapct.displayVolume((f_LTT-f_leap_CPU)/np.max(f_LTT))
     #'''
     
-    quit()
+    #quit()
     
