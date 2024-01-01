@@ -92,6 +92,117 @@ __global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, c
     f_filtered[uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i)] = val / ((float)N_phi);
 }
 
+__global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, const float threshold, const int windowRadius)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+
+    if (windowRadius == 1)
+    {
+        float v[9];
+        int ind = 0;
+        for (int dj = -windowRadius; dj <= windowRadius; dj++)
+        {
+            const int j_shift = max(0, min(j + dj, N.y - 1));
+            for (int dk = -windowRadius; dk <= windowRadius; dk++)
+            {
+                const int k_shift = max(0, min(k + dk, N.z - 1));
+                v[ind] = f[i * N.y * N.z + j_shift * N.z + k_shift];
+                ind += 1;
+            }
+        }
+        const float curVal = v[4];
+
+        // bubble-sort for first 5 samples
+        for (int i = 0; i < 5; i++)
+        {
+            for (int j = i + 1; j < 9; j++)
+            {
+                if (v[i] > v[j])
+                {  // swap?
+                    const float tmp = v[i];
+                    v[i] = v[j];
+                    v[j] = tmp;
+                }
+            }
+        }
+        if (fabs(curVal - v[4]) >= threshold * fabs(v[4]))
+            f_filtered[i * N.y * N.z + j * N.z + k] = v[4];
+        else
+            f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
+    }
+    else if (windowRadius == 2)
+    {
+        float v[25];
+        int ind = 0;
+        for (int dj = -windowRadius; dj <= windowRadius; dj++)
+        {
+            const int j_shift = max(0, min(j + dj, N.y - 1));
+            for (int dk = -windowRadius; dk <= windowRadius; dk++)
+            {
+                const int k_shift = max(0, min(k + dk, N.z - 1));
+                v[ind] = f[i * N.y * N.z + j_shift * N.z + k_shift];
+                ind += 1;
+            }
+        }
+        const float curVal = v[12];
+
+        // bubble-sort for first 13 samples
+        for (int i = 0; i < 13; i++)
+        {
+            for (int j = i + 1; j < 25; j++)
+            {
+                if (v[i] > v[j])
+                {  // swap?
+                    const float tmp = v[i];
+                    v[i] = v[j];
+                    v[j] = tmp;
+                }
+            }
+        }
+        if (fabs(curVal - v[12]) >= threshold * fabs(v[12]))
+            f_filtered[i * N.y * N.z + j * N.z + k] = v[12];
+        else
+            f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
+    }
+    else if (windowRadius == 3)
+    {
+        float v[49];
+        int ind = 0;
+        for (int dj = -windowRadius; dj <= windowRadius; dj++)
+        {
+            const int j_shift = max(0, min(j + dj, N.y - 1));
+            for (int dk = -windowRadius; dk <= windowRadius; dk++)
+            {
+                const int k_shift = max(0, min(k + dk, N.z - 1));
+                v[ind] = f[i * N.y * N.z + j_shift * N.z + k_shift];
+                ind += 1;
+            }
+        }
+        const float curVal = v[24];
+
+        // bubble-sort for first 25 samples
+        for (int i = 0; i < 25; i++)
+        {
+            for (int j = i + 1; j < 49; j++)
+            {
+                if (v[i] > v[j])
+                {  // swap?
+                    const float tmp = v[i];
+                    v[i] = v[j];
+                    v[j] = tmp;
+                }
+            }
+        }
+        if (fabs(curVal - v[24]) >= threshold * fabs(v[24]))
+            f_filtered[i * N.y * N.z + j * N.z + k] = v[24];
+        else
+            f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
+    }
+}
+
 __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -397,6 +508,62 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool dat
     {
         // copy dev_Df to dev_f
         cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1*N_2*N_3, cudaMemcpyDeviceToDevice);
+    }
+    if (dev_Df != 0)
+    {
+        cudaFree(dev_Df);
+    }
+
+    return true;
+}
+
+bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU)
+{
+    if (f == NULL) return false;
+
+    cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    if (data_on_cpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
+
+    // Allocate space on GPU for the gradient
+    float* dev_Df = 0;
+    if (cudaMalloc((void**)&dev_Df, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
+        return false;
+    }
+
+    int windowRadius = max(1, min(3, (w-1)/2));
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    medianFilter2DKernel << <dimGrid, dimBlock >> > (dev_f, dev_Df, N, threshold, windowRadius);
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+    else
+    {
+        // copy dev_Df to dev_f
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1 * N_2 * N_3, cudaMemcpyDeviceToDevice);
     }
     if (dev_Df != 0)
     {

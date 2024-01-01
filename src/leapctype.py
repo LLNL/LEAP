@@ -1650,7 +1650,8 @@ class tomographicModels:
         
         for n in range(numIter):
             print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
-            WPf_minus_g = self.copyData(Pf_minus_g)
+            #WPf_minus_g = self.copyData(Pf_minus_g)
+            WPf_minus_g = Pf_minus_g
             if W is not None:
                 WPf_minus_g *= W
             self.backproject(WPf_minus_g, grad)
@@ -1863,6 +1864,30 @@ class tomographicModels:
         else:
             self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+            
+    def BlurFilter2D(self, f, FWHM=2.0):
+        """Applies a 2D blurring filter to the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
+        This filter is very simular to a Gaussian filter, but is a FIR
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            FWHM (float): the full width at half maximum (in number of pixels) of the filter
+        
+        Returns:
+            f, the same as the input
+        """
+        #bool BlurFilter2D(float* f, int, int, int, float FWHM);
+        self.libprojectors.BlurFilter2D.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.BlurFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.BlurFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+        else:
+            self.libprojectors.BlurFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.BlurFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
     
     def MedianFilter(self, f, threshold=0.0):
         """Applies a thresholded 3D median filter (3x3x3) to the provided numpy array
@@ -1888,6 +1913,31 @@ class tomographicModels:
         else:
             self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, True)
+            
+    def MedianFilter2D(self, f, threshold=0.0, windowSize=3):
+        """Applies a thresholded 2D median filter (windowSize x windowSize) to the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This algorithm performs a 2D (windowSize x windowSize) median around each data value and then replaces this value only if
+        |original value - median value| >= threshold*|median value|
+        Note that if threshold is zero, then this is simply a median filter
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            threshold (float): the threshold of whether to use the filtered value or not
+        
+        Returns:
+            f, the same as the input
+        """
+        #bool MedianFilter2D(float* f, int, int, int, float threshold, int windowSize);
+        self.libprojectors.MedianFilter2D.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.MedianFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MedianFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, f.is_cuda == False)
+        else:
+            self.libprojectors.MedianFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MedianFilter2D(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
     
     def TVcost(self, f, delta, beta=0.0):
         """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array

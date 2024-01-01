@@ -19,6 +19,8 @@ class parameters;
 bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
 bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
 
+bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU = 0);
+
 bool azimuthalBlur(float* f, parameters* params, float filterWidth, bool data_on_cpu, float* f_out = NULL);
 
 #endif

@@ -560,6 +560,19 @@ public:
 	bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
 
 	/**
+	 * \fn          BlurFilter2D
+	 * \brief       applies a 2D low pass filter to the second two dimensions of a 3D array
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   FWHM full width at half maximum of the filter (measured in number of voxels)
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
+
+	/**
 	 * \fn          MedianFilter
 	 * \brief       applies a thresholded 3D median filter
 	 * \param[in]   f pointer to the 3D data (input and output)
@@ -572,6 +585,21 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool MedianFilter(float* f, int, int, int, float threshold, bool data_on_cpu);
+
+	/**
+	 * \fn          MedianFilter2D
+	 * \brief       applies a thresholded 2D median filter to the second two dimensions of a 3D array
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   threshold original value is only replaced by the median value
+	 *              if the relative difference is greater than this value
+	 * \param[in]   w the window size in each dimension (must 3, 5, or 7)
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, bool data_on_cpu);
 
 	// Anisotropic Total Variation for 3D data
 	/**
