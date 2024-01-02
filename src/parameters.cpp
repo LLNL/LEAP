@@ -275,7 +275,7 @@ float parameters::rFOV()
 	{
 		float r_max = furthestFromCenter();
 		if (r_max > 0.0)
-			return min(r_max, rFOVspecified);
+			return min(r_max, rFOVspecified); // this just helps with chunking calculations
 		else
 			return rFOVspecified;
 	}

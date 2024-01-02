@@ -2932,21 +2932,27 @@ class tomographicModels:
                 return False
         elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
             try:
-                from PIL import Image
+                #from PIL import Image
+                import imageio
                 
                 baseName, fileExtension = os.path.splitext(fileName)
                 
                 for i in range(x.shape[0]):
                     if has_torch == True and type(x) is torch.Tensor:
-                        im = Image.fromarray(x[i,:,:].numpy())
+                        #im = Image.fromarray(x[i,:,:].numpy())
+                        im = x[i,:,:].numpy()
                     else:
-                        im = Image.fromarray(x[i,:,:])
-                    im.save(baseName + '_' + str(int(i)) + fileExtension)
+                        #im = Image.fromarray(x[i,:,:])
+                        im = x[i,:,:]
+                    #im.save(baseName + '_' + str(int(i)) + fileExtension)
+                    imageio.imwrite(baseName + '_' + str(int(i)) + fileExtension, im)
                 return True
                 
             except:
-                print('Error: Failed to load PIL library!')
-                print('To install this package do: pip install Pillow')
+                #print('Error: Failed to load PIL library!')
+                #print('To install this package do: pip install Pillow')
+                print('Error: Failed to load imageio library!')
+                print('To install PIL do: pip install imageio')
                 return False
         else:
             print('Error: must be a tif, npy, or nrrd file!')
@@ -2992,12 +2998,15 @@ class tomographicModels:
         elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
             
             try:
-                from PIL import Image
+                #from PIL import Image
+                import imageio
                 import glob
                 hasPIL = True
             except:
-                print('Error: Failed to load PIL or glob library!')
-                print('To install PIL do: pip install Pillow')
+                #print('Error: Failed to load PIL or glob library!')
+                #print('To install PIL do: pip install Pillow')
+                print('Error: Failed to load imageio or glob library!')
+                print('To install PIL do: pip install imageio')
                 return None
             if hasPIL == True:
                 currentWorkingDirectory = os.getcwd()
@@ -3019,12 +3028,14 @@ class tomographicModels:
 
                 #print('found ' + str(len(fileList)) + ' images')
                 #print('reading first image: ' + str(fileList[0]))
-                firstImg = np.array(Image.open(fileList[0]))
+                #firstImg = np.array(Image.open(fileList[0]))
+                firstImg = np.array(imageio.imread(fileList[0]))
                 x = np.zeros((len(fileList), firstImg.shape[0], firstImg.shape[1]), dtype=np.float32)
                 print('found ' + str(x.shape[0]) + ' images of size ' + str(x.shape[1]) + ' x ' + str(x.shape[2]))
                 for i in range(len(fileList)):
-                    anImage = np.array(Image.open(fileList[ind[i]]))
+                    #anImage = np.array(Image.open(fileList[ind[i]]))
                     #anImage = np.array(Image.open(fileList[ind[i]]).rotate(-0.5))
+                    anImage = np.array(imageio.imread(fileList[ind[i]]))
                     x[i,:,:] = anImage[:,:]
                 os.chdir(currentWorkingDirectory)
                 return x

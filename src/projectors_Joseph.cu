@@ -698,7 +698,7 @@ __device__ float lineIntegral_Joseph_XYZ(cudaTextureObject_t mu, const int4 N, c
     }
 }
 
-__global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder)
+__global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -714,6 +714,13 @@ __global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t
 
     const float x = float(i) * T_f.x + startVals_f.x;
     const float y = float(j) * T_f.y + startVals_f.y;
+
+    if (x * x + y * y > rFOV_sq)
+    {
+        f[ind] = 0.0f;
+        return;
+    }
+
     const float z = float(k) * T_f.z + startVals_f.z;
 
     const float T_x_inv = 1.0f / T_f.x;
@@ -835,7 +842,7 @@ __global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t
     f[ind] = val * T_f.x;
 }
 
-__global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder)
+__global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -859,6 +866,12 @@ __global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4
     const double y = double(j) * double(T_f.y) + double(startVals_f.y);
     const double z = double(k) * double(T_f.z) + double(startVals_f.z);
     //*/
+
+    if (x * x + y * y > rFOV_sq)
+    {
+        f[ind] = 0.0f;
+        return;
+    }
 
     const float T_x_inv = 1.0f / T_f.x;
 
@@ -1332,23 +1345,25 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     double maxTravel = maxDivergence / params->voxelWidth;
     //printf("maxTravel = %f\n", maxTravel);
 
+    float rFOV_sq = params->rFOV() * params->rFOV();
+
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);
     dim3 dimGrid = setGridSize(N_f, dimBlock);
     if (params->modularbeamIsAxiallyAligned() == true && params->voxelSizeWorksForFastSF() == true)
     {
-        float rFOV_sq = params->rFOV() * params->rFOV();
+        //printf("SF backproject\n");
         modularBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
     }
     else if (maxTravel < 0.25 && params->truncatedScan == false)
     {
         //printf("executing parallel Joseph backprojector\n");
-        modularBeamParallelJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
+        modularBeamParallelJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
     }
     else
     {
         //printf("executing cone Joseph backprojector\n");
-        modularBeamJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
+        modularBeamJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
     }
 
     // pull result off GPU
