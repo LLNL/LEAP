@@ -5,10 +5,10 @@ This is a C/C++/CUDA library of 3D tomographic projectors (forward and back proj
   <img src=https://github.com/LLNL/LEAP/blob/main/documentation/LEAPoverview.png>
 </p>
 
-There are a lot of CT reconstruction packages out there, so why choose LEAP?
+There are a lot of CT reconstruction packages out there, so why choose LEAP?  In short, LEAP has more accurate projectors and FBP algorithms, more features, and most algorithms run faster than other popular CT reconstruction packages, but here is a more deailed list:
 1) **Seamless integration with PyTorch** using torch.nn.Module and torch.autograd.Function to enable differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 2) **Quantitatively accurate, matched (forward and back) projector pairs** that model the finite size of the voxel and detector pixel; very similar to the Separable Footprint method [Long, Fessler, and Balter, TMI, 2010].  These matched projectors ensure convergence and provide accurate, smooth results.  Unmatch projectors or those projectors that do not model the finite size of the voxel or detector pixel may produce artifacts when used over enough iterations [DeMan and Basu, PMB, 2004].
-3) **Multi-GPU and multi-core CPU implementations of all algorithms** that are as fast or faster than other popular CT packages.
+3) **Multi-GPU and multi-core CPU implementations of all algorithms** that are as fast or faster than other popular CT reconstruction packages.
 4) **Flexible 3D CT geometry** specification that allows users to specify arbitrary shifts of the source and detector positions, non-uniform angular spacing, and more.
 5) **Flexible 3D CT volume** specification.
 6) **Quantitatively accurate and flexible** analytic reconstruction algorithms, i.e., Filtered Backprojection (**FBP**).
@@ -16,10 +16,9 @@ There are a lot of CT reconstruction packages out there, so why choose LEAP?
 8) Special-case models such as the Attenuated Radon Transform (SPECT and VAM applications) and reconstruction of cylindrically-symmetric objects (flash x-ray applications).
 9) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, ML-TR.
 10) Fast multi-GPU 3D densoing methods.
-11) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
-12) Permissible license.
-
-If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT (https://www.sciencedirect.com/science/article/abs/pii/S0963869521001948)
+11) Easy-to-use, simple API.
+12) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
+13) Permissible license.
 
 
 ## Installation and Usage
