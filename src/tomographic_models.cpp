@@ -1870,6 +1870,16 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU);
 }
 
+bool tomographicModels::Laplacian(float* g, bool data_on_cpu)
+{
+	if (g == NULL || params.geometryDefined() == false)
+		return false;
+	if (data_on_cpu)
+		return Laplacian_cpu(g, &params, 1.0);
+	else
+		return Laplacian_gpu(g, &params, data_on_cpu, 1.0);
+}
+
 bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)

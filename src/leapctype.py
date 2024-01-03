@@ -950,6 +950,18 @@ class tomographicModels:
             self.libprojectors.rampFilterVolume(f, True)
         return f
         
+    def Laplacian(self, g):
+        """Applies a Laplacian operation to each projection"""
+        self.libprojectors.Laplacian.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.Laplacian.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.Laplacian(g.data_ptr(), f.is_cuda == False)
+        else:
+            self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.Laplacian(g, True)
+        return g
+        
     def AzimuthalBlur(self, f, FWHM):
         """Applies an low pass filter to the volume data in the azimuthal direction, f, for each z-slice
         
@@ -1720,6 +1732,130 @@ class tomographicModels:
             denomA = np.sum(Pd*Pd*W)
         else:
             denomA = np.sum(Pd**2)
+        denomB = 0.0;
+        if beta > 0.0:
+            denomB = self.TVquadForm(f, d, delta, beta)
+            #print('denomB = ' + str(denomA))
+        denom = denomA + denomB
+
+        stepSize = 0.0
+        if np.abs(denom) > 1.0e-16:
+            stepSize = num / denom
+        print('\tlambda = ' + str(stepSize))
+        return stepSize
+        
+    def RDLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditionerFWHM=1.0):
+        """Regularized Derivative Least Squares reconstruction
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function minimizes the Regularized Derivative Least Squares cost function using Preconditioned Conjugate Gradient.
+        The optional preconditioner is a 2D blurring for each z-slice
+        
+        Args:
+            g (C contiguous float32 numpy array): projection data
+            f (C contiguous float32 numpy array): volume data
+            numIter (int): number of iterations
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+            preconditionerFWHM (float): specifies the FWHM of the blur preconditioner
+        
+        Returns:
+            f, the same as the input with the same name
+        """
+        if has_torch == True and type(f) is torch.Tensor:
+            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+            print('Please convert to numpy array prior to running this algorithm.')
+            return f
+        conjGradRestart = 50
+        if f is None:
+            f = self.allocateVolume()
+        Pf = self.copyData(g)
+        if np.any(f):
+            # fix scaling
+            f[f<0.0] = 0.0
+            self.project(Pf,f)
+            Pf_dot_Pf = np.sum(Pf**2)
+            g_dot_Pf = np.sum(g*Pf)
+            if Pf_dot_Pf > 0.0 and g_dot_Pf > 0.0:
+                f *= g_dot_Pf / Pf_dot_Pf
+                Pf *= g_dot_Pf / Pf_dot_Pf
+        else:
+            Pf[:] = 0.0
+        Pf_minus_g = Pf
+        Pf_minus_g -= g
+        
+        LPf_minus_g = Pf.copy()
+        
+        grad = self.allocateVolume()
+        u = self.allocateVolume()
+        Pu = self.allocateProjections()
+        
+        d = self.allocateVolume()
+        Pd = self.allocateProjections()
+        
+        grad_old_dot_grad_old = 0.0
+        grad_old = self.allocateVolume()
+                
+        for n in range(numIter):
+            print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
+            LPf_minus_g[:] = Pf_minus_g[:]
+            self.Laplacian(LPf_minus_g)
+            LPf_minus_g *= -1.0
+            self.backproject(LPf_minus_g, grad)
+            if beta > 0.0:
+                Sf1 = self.TVgradient(f, delta, beta)
+                grad += Sf1
+
+            u[:] = grad[:]
+            if preconditionerFWHM > 1.0:
+                leapct.BlurFilter2D(u,preconditionerFWHM)
+            self.project(Pu, u)
+            
+            if n == 0 or (n % conjGradRestart) == 0:
+                d[:] = u[:]
+                Pd[:] = Pu[:]
+            else:
+                gamma = (np.sum(u*grad) - np.sum(u*grad_old)) / grad_old_dot_grad_old
+
+                d = u + gamma*d
+                Pd = Pu + gamma*Pd
+
+                if np.sum(d*grad) <= 0.0:
+                    print('\tRLWS-CG: CG descent condition violated, must use GD descent direction')
+                    d[:] = u[:]
+                    Pd[:] = Pu[:]
+            
+            grad_old_dot_grad_old = np.sum(u*grad)
+            grad_old[:] = grad[:]
+            
+            stepSize = self.RDLSstepSize(f, grad, d, Pd, delta, beta)
+            #if stepSize <= 0.0:
+            #    print('invalid step size; quitting!')
+            #    break
+            
+            f[:] = f[:] - stepSize*d[:]
+            Pf_minus_g[:] = Pf_minus_g[:] - stepSize*Pd[:]
+        return f
+
+    def RDLSstepSize(self, f, grad, d, Pd, delta, beta):
+        """Calculates the step size for an RDLS iteration
+
+        Args:
+            f (C contiguous float32 numpy array): volume data
+            grad (C contiguous float32 numpy array): gradient of the RWLS cost function
+            d (C contiguous float32 numpy array): descent direction of the RWLS cost function
+            Pd (C contiguous float32 numpy array): forward projection of d
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+        
+        Returns:
+            step size (float)
+        """
+        num = np.sum(d*grad)
+        LPd = Pd.copy()
+        self.Laplacian(LPd)
+        LPd *= -1.0
+        denomA = np.sum(LPd*Pd)
         denomB = 0.0;
         if beta > 0.0:
             denomB = self.TVquadForm(f, d, delta, beta)

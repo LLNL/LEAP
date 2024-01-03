@@ -25,6 +25,32 @@
 #include <cufft.h>
 #endif
 
+__global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float scalar)
+{
+    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int m = threadIdx.y + blockIdx.y * blockDim.y;
+    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    if (l >= N.x || m >= N.y || n >= N.z)
+        return;
+
+    float diff = 0.0f;
+    float* proj = &g[uint64(l) * uint64(N.z * N.y)];
+    if (N.z >= 3)
+    {
+        const int n_plus_one = min(n + 1, N.z - 1);
+        const int n_minus_one = max(n - 1, 0);
+        diff = proj[m * N.z + n_plus_one] + proj[m * N.z + n_minus_one] - 2.0f * proj[m * N.z + n];
+    }
+    if (N.y >= 3)
+    {
+        const int m_plus_one = min(m + 1, N.y - 1);
+        const int m_minus_one = max(m - 1, 0);
+        diff += proj[m_plus_one * N.z + n] + proj[m_minus_one * N.z + n] - 2.0f * proj[m * N.z + n];
+    }
+    
+    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = diff * scalar;
+}
+
 __global__ void ray_derivative_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float scalar, const float sampleShift)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
@@ -1099,6 +1125,53 @@ bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
     return false;
 }
 #endif
+
+bool Laplacian_gpu(float*& g, parameters* params, bool data_on_cpu, float scalar)
+{
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+
+    float* dev_g = 0;
+    float* dev_Dg = 0;
+    if (data_on_cpu)
+    {
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+        if (cudaSuccess != cudaMalloc((void**)&dev_Dg, params->projectionData_numberOfElements() * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+    }
+    else
+    {
+        dev_Dg = g;
+        if (cudaSuccess != cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+        equal(dev_g, dev_Dg, make_int3(N_g.x, N_g.y, N_g.z), params->whichGPU);
+    }
+
+    dim3 dimBlock = setBlockSize(N_g);
+    dim3 dimGrid = setGridSize(N_g, dimBlock);
+    Laplacian_kernel <<< dimGrid, dimBlock >>> (dev_g, dev_Dg, N_g, T_g, startVal_g, scalar);
+
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess)
+    {
+        fprintf(stderr, "kernel failed!\n");
+        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+    }
+
+    if (data_on_cpu)
+        pullProjectionDataFromGPU(g, params, dev_Dg, params->whichGPU);
+
+    if (data_on_cpu == true && dev_Dg != 0)
+        cudaFree(dev_Dg);
+    if (dev_g != 0)
+        cudaFree(dev_g);
+
+    return true;
+}
 
 bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scalar, float sampleShift)
 {

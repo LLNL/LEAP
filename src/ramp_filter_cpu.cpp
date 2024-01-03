@@ -477,6 +477,43 @@ bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* para
     return true;
 }
 
+bool Laplacian_cpu(float*& g, parameters* params, float scalar)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < params->numAngles; i++)
+    {
+        float* tempProj = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
+        float* aProj = &g[uint64(i) * uint64(params->numRows * params->numCols)];
+        for (int j = 0; j < params->numRows; j++)
+        {
+            // Copy data to new array
+            float* aLine = &aProj[j * params->numCols];
+            for (int k = 0; k < params->numCols; k++)
+                tempProj[j * params->numCols + k] = aLine[k];
+        }
+
+        for (int j = 0; j < params->numRows; j++)
+        {
+            int j_minus = std::max(j - 1, 0);
+            int j_plus = std::min(j + 1, params->numRows - 1);
+            float* aLine = &aProj[j * params->numCols];
+            for (int k = 0; k < params->numCols; k++)
+            {
+                int k_minus = std::max(k - 1, 0);
+                int k_plus = std::min(k + 1, params->numCols - 1);
+
+                float diff = tempProj[j * params->numCols + k_plus] + tempProj[j * params->numCols + k_minus] - 2.0 * tempProj[j * params->numCols + k];
+                diff += tempProj[j_plus * params->numCols + k] + tempProj[j_minus * params->numCols + k] - 2.0 * tempProj[j * params->numCols + k];
+
+                aLine[k] = diff * scalar;
+            }
+        }
+        free(tempProj);
+    }
+    return true;
+}
+
 bool ray_derivative_cpu(float* g, parameters* params, float sampleShift, float scalar)
 {
     float c = scalar / params->pixelWidth;

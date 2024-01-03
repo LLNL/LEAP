@@ -33,6 +33,8 @@ bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu);
 
 bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0, float sampleShift = 0.0);
 
+bool Laplacian_gpu(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0);
+
 bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar = 1.0);
 
 float* rampFilterFrequencyResponseMagnitude(int N, parameters* params);

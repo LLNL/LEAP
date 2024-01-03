@@ -127,6 +127,8 @@ extern "C" PROJECTOR_API float get_offsetY();
 extern "C" PROJECTOR_API float get_offsetZ();
 extern "C" PROJECTOR_API float get_z0();
 
+extern "C" PROJECTOR_API bool Laplacian(float* g, bool data_on_cpu);
+
 // Filters for 3D data
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, bool data_on_cpu);

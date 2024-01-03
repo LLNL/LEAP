@@ -467,6 +467,11 @@ float get_z0()
 	return tomo()->params.z_0();
 }
 
+bool Laplacian(float* g, bool data_on_cpu)
+{
+	return tomo()->Laplacian(g, data_on_cpu);
+}
+
 bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
 	return tomo()->BlurFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);
