@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.abspath('../../source'))
 
 LLNL = u'Lawrence Livermore National Laboratory'
 project = u'LEAP'
-copyright = u'2022-2024, ' + Argonne
+copyright = u'2022-2024, ' + LLNL
 
 release = os.popen('git log -1 --format="%H"').read().strip()
 
@@ -125,18 +125,3 @@ texinfo_documents = [
 
 # -- Options for Texinfo output -------------------------------------------
 # http://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html#confval-autodoc_mock_imports
-
-autodoc_mock_imports = [
-    'concurrent',
-    'DM3lib',
-    'libtomo',
-    'tomopy.util.extern',
-    'matplotlib',
-    'numexpr',
-    'numpy',
-    'pyfftw',
-    'pywt',
-    'scipy',
-    'skimage',
-    'tifffile',
-]
