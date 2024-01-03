@@ -1,3 +1,13 @@
+################################################################################
+# Copyright 2022-2024 Lawrence Livermore National Security, LLC and other 
+# LEAP project developers. See the LICENSE file for details.
+# SPDX-License-Identifier: MIT
+#
+# LivermorE AI Projector for tomographic reconstruction (LEAP)
+# The functions here set LEAP parameters from LTT parameter settings and vice-versa.
+# Some parameters mappings are not yet implemented, such as non equi-spaced
+# projection angles
+################################################################################
 import sys
 import os
 import numpy as np
@@ -8,13 +18,14 @@ from leapctype import *
 def setLEAPfromLTT(LTT,leapct):
 
     geometry = LTT.getParam('geometry')
-    #if geometry == 'MODULAR':
-    #    print('ERROR: Conversion of modular-beam not yet implemented!')
-    #    return
 
     numAngles = int(LTT.getParam('nangles'))
     numRows = int(LTT.getParam('numRows'))
     numCols = int(LTT.getParam('numCols'))
+    
+    if numAngles <= 0 or numRows <= 0 or numCols <= 0:
+        print('Error: LTT CT geometry not set')
+        return
     
     arange = float(LTT.getParam('arange'))
     pixelHeight = float(LTT.getParam('pixelHeight'))
@@ -44,7 +55,22 @@ def setLEAPfromLTT(LTT,leapct):
     elif geometry == 'PARALLEL':
         leapct.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, leapct.setAngleArray(numAngles, arange))
     elif geometry == 'MODULAR':
-        print('ERROR: Conversion of modular-beam not yet implemented!')
+        geometryDesc = LTT.getModularBeamGeometry()
+        if len(geometryDesc) > 0:
+            sourcePositions = np.zeros((numAngles,3),dtype=np.float32)
+            moduleCenters = np.zeros((numAngles,3),dtype=np.float32)
+            colVectors = np.zeros((numAngles,3),dtype=np.float32)
+            rowVectors = np.zeros((numAngles,3),dtype=np.float32)
+            for i in range(0,numAngles):
+                offset = 12*i
+                sourcePositions[i,:] = geometryDesc[offset:offset+3]
+                moduleCenters[i,:] = geometryDesc[offset+3:offset+6]
+                colVectors[i,:] = geometryDesc[offset+6:offset+9]
+                rowVectors[i,:] = geometryDesc[offset+9:offset+12]
+            leapct.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
+    else:
+        print('Error: unknown geometry')
+        return
     
     if LTT.unknown('axisOfSymmetry') == False:
         leapct.set_axisOfSymmetry(float(LTT.getParam('axisOfSymmetry')))

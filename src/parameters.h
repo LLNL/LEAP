@@ -267,6 +267,13 @@ public:
 	 */
 	bool set_normalizedHelicalPitch(float h_normalized);
 
+	/**
+	 * \fn          convert_conebeam_to_modularbeam
+	 * \brief       sets modular-beam parameters from a cone-beam specification
+	 * \return      true is successful, false otherwise
+	 */
+	bool convert_conebeam_to_modularbeam();
+
 	bool normalizeConeAndFanCoordinateFunctions;
 
 	int whichGPU;

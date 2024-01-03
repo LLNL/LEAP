@@ -269,6 +269,11 @@ bool set_cylindircalAttenuationMap(float c, float R)
 	return tomo()->set_attenuationMap(c, R);
 }
 
+bool convert_conebeam_to_modularbeam()
+{
+	return tomo()->params.convert_conebeam_to_modularbeam();
+}
+
 bool clear_attenuationMap()
 {
 	return tomo()->clear_attenuationMap();

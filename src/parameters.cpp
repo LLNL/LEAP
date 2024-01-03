@@ -1655,3 +1655,50 @@ bool parameters::modularbeamIsAxiallyAligned()
 	else
 		return false;
 }
+
+bool parameters::convert_conebeam_to_modularbeam()
+{
+	if (geometry != CONE || detectorType == CURVED)
+	{
+		printf("Error: input geometry must be flat-panel cone-beam");
+		return false;
+	}
+	if (geometryDefined() == false)
+	{
+		printf("Error: input geometry must be cone-beam");
+		return false;
+	}
+
+	float* s_pos = new float[3 * numAngles];
+	float* d_pos = new float[3 * numAngles];
+	float* v_vec = new float[3 * numAngles];
+	float* u_vec = new float[3 * numAngles];
+	for (int iphi = 0; iphi < numAngles; iphi++)
+	{
+		float cos_phi = cos(phis[iphi]);
+		float sin_phi = sin(phis[iphi]);
+
+		s_pos[3 * iphi + 0] = sod * cos_phi + tau * sin_phi;
+		s_pos[3 * iphi + 1] = sod * sin_phi - tau * cos_phi;
+		s_pos[3 * iphi + 2] = 0.0;
+
+		d_pos[3 * iphi + 0] = (sod - sdd) * cos_phi;
+		d_pos[3 * iphi + 1] = (sod - sdd) * sin_phi;
+		d_pos[3 * iphi + 2] = 0.0;
+
+		v_vec[3 * iphi + 0] = 0.0;
+		v_vec[3 * iphi + 1] = 0.0;
+		v_vec[3 * iphi + 2] = 1.0;
+
+		u_vec[3 * iphi + 0] = -sin_phi;
+		u_vec[3 * iphi + 1] = cos_phi;
+		u_vec[3 * iphi + 2] = 0.0;
+	}
+	if (set_sourcesAndModules(s_pos, d_pos, v_vec, u_vec, numAngles))
+		geometry = MODULAR;
+	delete[] s_pos;
+	delete[] d_pos;
+	delete[] v_vec;
+	delete[] u_vec;
+	return true;
+}

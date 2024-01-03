@@ -90,6 +90,7 @@ extern "C" PROJECTOR_API bool set_helicalPitch(float h);
 extern "C" PROJECTOR_API bool set_normalizedHelicalPitch(float h_normalized);
 extern "C" PROJECTOR_API bool set_attenuationMap(float*);
 extern "C" PROJECTOR_API bool set_cylindircalAttenuationMap(float, float);
+extern "C" PROJECTOR_API bool convert_conebeam_to_modularbeam();
 extern "C" PROJECTOR_API bool clear_attenuationMap();
 extern "C" PROJECTOR_API bool muSpecified();
 extern "C" PROJECTOR_API bool flipAttenuationMapSign(bool data_on_cpu);

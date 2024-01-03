@@ -410,6 +410,12 @@ class tomographicModels:
             return 'FLAT'
         else:
             return 'CURVED'
+            
+    def convert_conebeam_to_modularbeam(self):
+        """sets modular-beam parameters from a cone-beam specification"""
+        self.set_model()
+        self.libprojectors.convert_conebeam_to_modularbeam.restype = ctypes.c_bool
+        return self.libprojectors.convert_conebeam_to_modularbeam()
     
     ###################################################################################################################
     ###################################################################################################################
