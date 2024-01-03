@@ -27,6 +27,14 @@ There are a lot of CT reconstruction packages out there, so why choose LEAP?  In
 Installation and usage information is posted on the wiki page here: https://github.com/LLNL/LEAP/wiki
 
 
+## Example Results
+
+As a simple demonstration of the accuracy of our projectors we show below the results of FDK reconstructions using ASTRA and LEAP of the walnut CT data.  The LEAP reconstruction has 1.8 times higher SNR and reconstructed this data 3.6 times faster than ASTRA.
+<p align="center">
+  <img src=https://github.com/LLNL/LEAP/blob/main/results/walnut_comparison.png>
+</p>
+
+
 ## Authors
 Kyle Champley (champley@gmail.com)
 
