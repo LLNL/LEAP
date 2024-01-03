@@ -9,6 +9,7 @@
 #include "ramp_filter_cpu.h"
 #include "ray_weighting.cuh"
 #include "ray_weighting_cpu.h"
+#include "cpu_utils.h"
 #include <math.h>
 #include <stdlib.h>
 #include <algorithm>
@@ -76,7 +77,8 @@ bool Hilbert1D_cpu(float*& g, parameters* params, float scalar)
 
 bool conv1D_cpu(float*& g, parameters* params, float scalar, int whichFilter)
 {
-    int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
+    //int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
+    int N_H = optimalFFTsize(2 * params->numCols);
     //int N_H_over2 = N_H / 2 + 1;
     float* H_real = NULL;
     Complex* H_comp = NULL;

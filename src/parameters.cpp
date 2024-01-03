@@ -524,7 +524,7 @@ bool parameters::volumeDefined()
 				return false;
 			}
 			offsetX = 0.0;
-			offsetY = 0.0;
+			//offsetY = 0.0;
 		}
 		return true;
 	}

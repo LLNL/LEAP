@@ -203,7 +203,8 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 	double y_0 = params->y_0();
 	double z_0 = params->z_0();
 
-	int N_r = int(0.5 + 0.5*params->numY);
+	//int N_r = int(0.5 + 0.5*params->numY);
+	int N_r = int(0.5 - y_0 / params->voxelWidth);
 	double r_max = (params->numY - 1)*params->voxelWidth + y_0;
 
 	double Rcos_sq_plus_tau_sq = params->sod*params->sod*cos_beta*cos_beta + params->tau*params->tau;
@@ -489,7 +490,8 @@ bool CPUproject_AbelParallel(float* g, float* f, parameters* params)
 	double z_0 = params->z_0();
 	double T_z = params->voxelHeight;
 
-	int N_r = int(0.5 + 0.5*params->numY);
+	//int N_r = int(0.5 + 0.5*params->numY);
+	int N_r = int(0.5 - y_0 / params->voxelWidth);
 	double T_r = params->voxelWidth;
 
 	double r_max = (params->numY - 1)*params->voxelWidth + y_0;
