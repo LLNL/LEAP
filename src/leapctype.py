@@ -1537,7 +1537,7 @@ class tomographicModels:
         return f
         
         
-    def LS(self, g, f, numIter, SQS=False):
+    def LS(self, g, f, numIter, SQS=False, nonnegativityConstraint=True):
         """Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1554,9 +1554,9 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, SQS)
+        return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, SQS, nonnegativityConstraint)
         
-    def WLS(self, g, f, numIter, W=None, SQS=False):
+    def WLS(self, g, f, numIter, W=None, SQS=False, nonnegativityConstraint=True):
         """Weighted Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1574,9 +1574,9 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, 0.0, 0.0, W, SQS)
+        return self.RWLS(g, f, numIter, 0.0, 0.0, W, SQS, nonnegativityConstraint)
         
-    def RLS(self, g, f, numIter, delta=0.0, beta=0.0, SQS=False):
+    def RLS(self, g, f, numIter, delta=0.0, beta=0.0, SQS=False, nonnegativityConstraint=True):
         """Regularized Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1595,9 +1595,9 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, delta, beta, 1.0, SQS)
+        return self.RWLS(g, f, numIter, delta, beta, 1.0, SQS, nonnegativityConstraint)
         
-    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, SQS=False):
+    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, SQS=False, nonnegativityConstraint=True):
         """Regularized Weighted Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1630,7 +1630,8 @@ class tomographicModels:
         Pf = self.copyData(g)
         if np.any(f):
             # fix scaling
-            f[f<0.0] = 0.0
+            if nonnegativityConstraint:
+                f[f<0.0] = 0.0
             self.project(Pf,f)
             Pf_dot_Pf = np.sum(Pf**2)
             g_dot_Pf = np.sum(g*Pf)
@@ -1706,10 +1707,14 @@ class tomographicModels:
                 print('invalid step size; quitting!')
                 break
             
-            f -= stepSize*d
-            f[f<0.0] = 0.0
-            self.project(Pf,f)
-            Pf_minus_g = Pf-g
+            f[:] = f[:] - stepSize*d[:]
+            if nonnegativityConstraint:
+                f[f<0.0] = 0.0
+                self.project(Pf,f)
+            else:
+                Pf[:] = Pf[:] - stepSize*Pd[:]
+            Pf_minus_g[:] = Pf[:] - g[:]
+                
         return f
 
     def RWLSstepSize(self, f, grad, d, Pd, W, delta, beta):
@@ -1744,7 +1749,7 @@ class tomographicModels:
         print('\tlambda = ' + str(stepSize))
         return stepSize
         
-    def RDLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditionerFWHM=1.0):
+    def RDLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditionerFWHM=1.0, nonnegativityConstraint=False):
         """Regularized Derivative Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1772,7 +1777,8 @@ class tomographicModels:
         Pf = self.copyData(g)
         if np.any(f):
             # fix scaling
-            f[f<0.0] = 0.0
+            if nonnegativityConstraint:
+                f[f<0.0] = 0.0
             self.project(Pf,f)
             Pf_dot_Pf = np.sum(Pf**2)
             g_dot_Pf = np.sum(g*Pf)
@@ -1797,7 +1803,7 @@ class tomographicModels:
         grad_old = self.allocateVolume()
                 
         for n in range(numIter):
-            print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
+            print('RDLS iteration ' + str(n+1) + ' of ' + str(numIter))
             LPf_minus_g[:] = Pf_minus_g[:]
             self.Laplacian(LPf_minus_g)
             LPf_minus_g *= -1.0
@@ -1821,7 +1827,7 @@ class tomographicModels:
                 Pd = Pu + gamma*Pd
 
                 if np.sum(d*grad) <= 0.0:
-                    print('\tRLWS-CG: CG descent condition violated, must use GD descent direction')
+                    print('\tRLDS-CG: CG descent condition violated, must use GD descent direction')
                     d[:] = u[:]
                     Pd[:] = Pu[:]
             
@@ -1834,7 +1840,12 @@ class tomographicModels:
             #    break
             
             f[:] = f[:] - stepSize*d[:]
-            Pf_minus_g[:] = Pf_minus_g[:] - stepSize*Pd[:]
+            if nonnegativityConstraint:
+                f[f<0.0] = 0.0
+                self.project(Pf,f)
+                Pf_minus_g[:] = Pf[:] - g[:]
+            else:
+                Pf_minus_g[:] = Pf_minus_g[:] - stepSize*Pd[:]
         return f
 
     def RDLSstepSize(self, f, grad, d, Pd, delta, beta):
