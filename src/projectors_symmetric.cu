@@ -242,9 +242,15 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
 	const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
-	const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
-	const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
-	const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_center_ind = -startVals_f.y / T_f.y;
+	const int N_r_left = int(floor(r_center_ind)) + 1;
+	const int N_r_right = N_f.y - N_r_left;
+	const float r_max = max((N_f.y - 1) * T_f.y + startVals_f.y, fabs(startVals_f.y));
+
+	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
+	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
+	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (-R * sin_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta + v * cos_beta) / T_f.z;
@@ -262,23 +268,24 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 	if (rInd_min >= 1)
 	{
 		const float r_absoluteMinimum = sqrt(-disc_ti_shift / sec_sq_plus_u_sq);
-		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		//int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		int rInd_min_minus = max(0, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f)));
 		if (r_absoluteMinimum < r_max)
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
 
-	for (int ir = rInd_min; ir < N_r; ir++)
+	for (int ir = rInd_min; ir < N_r_left; ir++)
 	{
 		r_prev = (float)ir * T_f.y;
 		const float r_next = (float)(ir + 1) * T_f.y;
@@ -286,13 +293,13 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 
 		// update radius and sqrt for t calculation
@@ -329,9 +336,15 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
 	const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
-	const int rInd_floor = N_r; // first valid index
-	const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
-	const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_center_ind = -startVals_f.y / T_f.y;
+	const int N_r_left = int(floor(r_center_ind)) + 1;
+	const int N_r_right = N_f.y - N_r_left;
+	const float r_max = max((N_f.y - 1) * T_f.y + startVals_f.y, fabs(startVals_f.y));
+
+	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
+	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
+	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (-R * sin_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta + v * cos_beta) / T_f.z;
@@ -349,23 +362,24 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 	if (rInd_min >= 1)
 	{
 		const float r_absoluteMinimum = sqrt(-disc_ti_shift / sec_sq_plus_u_sq);
-		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		//int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		int rInd_min_minus = max(0, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f)));
 		if (r_absoluteMinimum < r_max)
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
 
-	for (int ir = rInd_min; ir < N_r; ir++)
+	for (int ir = rInd_min; ir < N_r_right; ir++)
 	{
 		r_prev = (float)ir * T_f.y;
 		const float r_next = (float)(ir + 1) * T_f.y;
@@ -373,13 +387,13 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 
 		// update radius and sqrt for t calculation
@@ -425,9 +439,15 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
 	const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
-	const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
-	const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
-	const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_center_ind = -startVals_f.y / T_f.y;
+	const int N_r_left = int(floor(r_center_ind)) + 1;
+	const int N_r_right = N_f.y - N_r_left;
+	const float r_max = max((N_f.y - 1) * T_f.y + startVals_f.y, fabs(startVals_f.y));
+
+	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
+	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
+	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (v * cos_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta) / T_f.z;
@@ -445,23 +465,24 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 	if (rInd_min >= 1)
 	{
 		const float r_absoluteMinimum = u;
-		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		//int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		int rInd_min_minus = max(0, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f)));
 		if (r_absoluteMinimum < r_max)
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
 
-	for (int ir = rInd_min; ir < N_r; ir++)
+	for (int ir = rInd_min; ir < N_r_left; ir++)
 	{
 		r_prev = ir * T_f.y;
 		disc_sqrt_prev = sqrt(disc_ti_shift + r_prev * r_prev);
@@ -470,13 +491,13 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 	}
 	return curVal;
@@ -504,9 +525,15 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
 	const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
-	const int rInd_floor = N_r; // first valid index
-	const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
-	const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_center_ind = -startVals_f.y / T_f.y;
+	const int N_r_left = int(floor(r_center_ind)) + 1;
+	const int N_r_right = N_f.y - N_r_left;
+	const float r_max = max((N_f.y - 1) * T_f.y + startVals_f.y, fabs(startVals_f.y));
+
+	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
+	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
+	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
+	const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (v * cos_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta) / T_f.z;
@@ -524,23 +551,24 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 	if (rInd_min >= 1)
 	{
 		const float r_absoluteMinimum = u;
-		int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		//int rInd_min_minus = max(0, min(N_r - 1, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f))));
+		int rInd_min_minus = max(0, (int)(ceil(r_absoluteMinimum / T_f.y - 1.0f)));
 		if (r_absoluteMinimum < r_max)
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
 
-	for (int ir = rInd_min; ir < N_r; ir++)
+	for (int ir = rInd_min; ir < N_r_right; ir++)
 	{
 		r_prev = ir * T_f.y;
 		disc_sqrt_prev = sqrt(disc_ti_shift + r_prev * r_prev);
@@ -549,13 +577,13 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 	}
 	return curVal;

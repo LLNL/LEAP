@@ -80,7 +80,7 @@ In addition to the projectors, we also provide a few other algorithms for tomogr
 \begin{enumerate}
 \item Quantitatively-accurate analytic inversion algorithms, i.e., Filtered Backprojection (FBP) for each geometry including modular-beam when the detector columns are roughly align with the z-axis.
 \item A GPU implementation of 3D anisotropic Total Variation (TV) functional, gradient, and quadratic form to be used in regularized reconstruction \cite{Yu_MIC_2006}.
-\item Python implementations of some iterative reconstruction algorithms: MLEM, OSEM, OS-SART, ASD-POCS \cite{ASDPOCS_PMB_2008}, RWLS \cite{Hager_Zhang_CG_2005, Fessler_TIP_1999, Yu_MIC_2006}, and ML-TR \cite{IMPACT_TMI_2001}.
+\item Python implementations of some iterative reconstruction algorithms: MLEM, OSEM, OS-SART, ASD-POCS \cite{ASDPOCS_PMB_2008}, RWLS \cite{Hager_Zhang_CG_2005, Fessler_TIP_1999, Yu_MIC_2006}, RDLS, and ML-TR \cite{IMPACT_TMI_2001}.
 \end{enumerate}
 
 The CPU- and GPU-based projectors are nearly identical (32-bit floating point precision) and are quantitatively accurate and thus can be used in conjuction with physics-based corrections, such as, scatter and beam hardening correction. If one is looking for a more general-purpose and full functioning CT software package (it does not, however, work with PyTorch and is closed-source), see LTT \cite{ChampleyLTT}.

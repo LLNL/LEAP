@@ -508,8 +508,11 @@ bool parameters::volumeDefined()
 		}
 		if (geometry == MODULAR && voxelWidth != voxelHeight)
 		{
-			voxelHeight = voxelWidth;
-			printf("Warning: for modular-beam data volume voxel height must equal voxel width (voxels must be cubic), so forcing voxel height to match voxel width!\n");
+			if (modularbeamIsAxiallyAligned() == false || voxelSizeWorksForFastSF() == false)
+			{
+				voxelHeight = voxelWidth;
+				printf("Warning: for (non axially-aligned) modular-beam data volume voxel height must equal voxel width (voxels must be cubic), so forcing voxel height to match voxel width!\n");
+			}
 		}
 		if (isSymmetric())
 		{
@@ -524,7 +527,10 @@ bool parameters::volumeDefined()
 				return false;
 			}
 			offsetX = 0.0;
-			//offsetY = 0.0;
+
+			// Shift offsetY so that y=0 occurs at the boundary of two pixels
+			int n = 2 * int(floor(0.5 + y_0() / voxelWidth - 0.5)) + 1;
+			offsetY = 0.5 * voxelWidth * float(numY + n - 1);
 		}
 		return true;
 	}

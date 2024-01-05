@@ -203,9 +203,15 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 	double y_0 = params->y_0();
 	double z_0 = params->z_0();
 
-	//int N_r = int(0.5 + 0.5*params->numY);
+
+	double r_center_ind = -y_0 / params->voxelWidth;
+	int N_r_left = int(floor(r_center_ind)) + 1;
+	int N_r_right = params->numY - N_r_left;
+
+	double r_max = max((params->numY - 1) * params->voxelWidth + y_0, fabs(y_0));
+
 	int N_r = int(0.5 - y_0 / params->voxelWidth);
-	double r_max = (params->numY - 1)*params->voxelWidth + y_0;
+	//double r_max = (params->numY - 1)*params->voxelWidth + y_0;
 
 	double Rcos_sq_plus_tau_sq = params->sod*params->sod*cos_beta*cos_beta + params->tau*params->tau;
 
@@ -228,17 +234,10 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 
 			int rInd_floor, rInd_max;
 			if (u_unbounded < 0.0)
-			{
-				rInd_floor = int(0.5 - y_0 / params->voxelWidth);
-				rInd_max = N_r;
-			}
+				rInd_max = N_r_left;
 			else
-			{
-				rInd_floor = N_r;
-				//rInd_max = params->numY;
-				rInd_max = N_r;
-			}
-			double r_min = fabs((float)(rInd_floor)*params->voxelWidth + y_0);
+				rInd_max = N_r_right;
+			double r_min = 0.5 * params->voxelWidth;// r_min = fabs((float)(rInd_floor)*params->voxelWidth + y_0);
 
 			double sec_sq_plus_u_sq = X * X + u * u;
 			double b_ti = X * params->sod*cos_beta + u * params->tau;
@@ -246,7 +245,10 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 			double disc_ti_shift = b_ti * b_ti - sec_sq_plus_u_sq * Rcos_sq_plus_tau_sq; // new
 
 			if (fabs(sec_sq_plus_u_sq) < 1.0e-8 || disc_ti_shift > 0.0)
+			{
+				projLine[k] = 0.0;
 				continue;
+			}
 
 			int rInd_min = (int)ceil((sqrt(-disc_ti_shift / sec_sq_plus_u_sq)) / params->voxelWidth);
 			double r_prev = double(rInd_min)*params->voxelWidth;
@@ -258,15 +260,16 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 			if (rInd_min >= 1)
 			{
 				double r_absoluteMinimum = sqrt(-disc_ti_shift / sec_sq_plus_u_sq);
-				int rInd_min_minus = max(0, min(N_r - 1, int(ceil((r_absoluteMinimum) / params->voxelWidth - 1.0))));
+				//int rInd_min_minus = max(0, min(N_r - 1, int(ceil((r_absoluteMinimum) / params->voxelWidth - 1.0))));
+				int rInd_min_minus = max(0, int(ceil((r_absoluteMinimum) / params->voxelWidth - 1.0)));
 
 				int ir_shifted_or_flipped;
 				if (u_unbounded < 0.0)
-					ir_shifted_or_flipped = N_r - 1 - rInd_min_minus;
+					ir_shifted_or_flipped = N_r_left - 1 - rInd_min_minus;
 				else
-					ir_shifted_or_flipped = N_r + rInd_min_minus;
+					ir_shifted_or_flipped = N_r_left + rInd_min_minus;
 
-				if (r_absoluteMinimum < r_max && disc_sqrt_prev > 0.0)
+				if (r_absoluteMinimum < r_max && disc_sqrt_prev > 0.0 && 0 <= ir_shifted_or_flipped && ir_shifted_or_flipped <= params->numY - 1)
 				{
 					double iz_arg_low = (b_ti - 0.5*(disc_sqrt_prev))*a_ti_inv*z_slope + z_shift;
 					if (0.0 <= iz_arg_low && iz_arg_low <= params->numZ - 1)
@@ -292,40 +295,43 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 			{
 				int ir_shifted_or_flipped;
 				if (u_unbounded < 0.0)
-					ir_shifted_or_flipped = N_r - 1 - ir;
+					ir_shifted_or_flipped = N_r_left - 1 - ir;
 				else
-					ir_shifted_or_flipped = N_r + ir;
+					ir_shifted_or_flipped = N_r_left + ir;
 
 				double r_next = r_prev + params->voxelWidth;
 				double disc_sqrt_next = sqrt(disc_ti_shift + r_next * r_next*sec_sq_plus_u_sq);
 
-				// Negative t interval
-				// low:  (b_ti - disc_sqrt_next) * a_ti_inv
-				// high: (b_ti - disc_sqrt_prev) * a_ti_inv
-
-				// Positive t interval
-				// low:  (b_ti + disc_sqrt_prev) * a_ti_inv
-				// high: (b_ti + disc_sqrt_next) * a_ti_inv
-
-				//(b_ti - disc_sqrt_next) * a_ti_inv + (b_ti - disc_sqrt_prev) * a_ti_inv
-				double iz_arg_low = (b_ti - 0.5*(disc_sqrt_next + disc_sqrt_prev))*a_ti_inv*z_slope + z_shift;
-				if (0.0 <= iz_arg_low && iz_arg_low <= params->numZ - 1)
+				if (0 <= ir_shifted_or_flipped && ir_shifted_or_flipped <= params->numY - 1)
 				{
-					int iz_arg_low_floor = int(iz_arg_low);
-					double dz = iz_arg_low - double(iz_arg_low_floor);
-					int iz_arg_low_ceil = min(iz_arg_low_floor + 1, params->numZ - 1);
+					// Negative t interval
+					// low:  (b_ti - disc_sqrt_next) * a_ti_inv
+					// high: (b_ti - disc_sqrt_prev) * a_ti_inv
 
-					curVal += (disc_sqrt_next - disc_sqrt_prev)*a_ti_inv*((1.0 - dz)*f[ir_shifted_or_flipped*params->numZ + iz_arg_low_floor] + dz * f[ir_shifted_or_flipped*params->numZ + iz_arg_low_ceil]);
-				}
+					// Positive t interval
+					// low:  (b_ti + disc_sqrt_prev) * a_ti_inv
+					// high: (b_ti + disc_sqrt_next) * a_ti_inv
 
-				double iz_arg_high = (b_ti + 0.5*(disc_sqrt_next + disc_sqrt_prev))*a_ti_inv*z_slope + z_shift;
-				if (0.0 <= iz_arg_high && iz_arg_high <= params->numZ - 1)
-				{
-					int iz_arg_high_floor = int(iz_arg_high);
-					double dz = iz_arg_high - double(iz_arg_high_floor);
-					int iz_arg_high_ceil = min(iz_arg_high_floor + 1, params->numZ - 1);
+					//(b_ti - disc_sqrt_next) * a_ti_inv + (b_ti - disc_sqrt_prev) * a_ti_inv
+					double iz_arg_low = (b_ti - 0.5 * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift;
+					if (0.0 <= iz_arg_low && iz_arg_low <= params->numZ - 1)
+					{
+						int iz_arg_low_floor = int(iz_arg_low);
+						double dz = iz_arg_low - double(iz_arg_low_floor);
+						int iz_arg_low_ceil = min(iz_arg_low_floor + 1, params->numZ - 1);
 
-					curVal += (disc_sqrt_next - disc_sqrt_prev)*a_ti_inv*((1.0 - dz)*f[ir_shifted_or_flipped*params->numZ + iz_arg_high_floor] + dz * f[ir_shifted_or_flipped*params->numZ + iz_arg_high_ceil]);
+						curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * ((1.0 - dz) * f[ir_shifted_or_flipped * params->numZ + iz_arg_low_floor] + dz * f[ir_shifted_or_flipped * params->numZ + iz_arg_low_ceil]);
+					}
+
+					double iz_arg_high = (b_ti + 0.5 * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift;
+					if (0.0 <= iz_arg_high && iz_arg_high <= params->numZ - 1)
+					{
+						int iz_arg_high_floor = int(iz_arg_high);
+						double dz = iz_arg_high - double(iz_arg_high_floor);
+						int iz_arg_high_ceil = min(iz_arg_high_floor + 1, params->numZ - 1);
+
+						curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * ((1.0 - dz) * f[ir_shifted_or_flipped * params->numZ + iz_arg_high_floor] + dz * f[ir_shifted_or_flipped * params->numZ + iz_arg_high_ceil]);
+					}
 				}
 
 				// update radius and sqrt for t calculation
@@ -494,7 +500,12 @@ bool CPUproject_AbelParallel(float* g, float* f, parameters* params)
 	int N_r = int(0.5 - y_0 / params->voxelWidth);
 	double T_r = params->voxelWidth;
 
-	double r_max = (params->numY - 1)*params->voxelWidth + y_0;
+	double r_center_ind = -y_0 / params->voxelWidth;
+	int N_r_left = int(floor(r_center_ind)) + 1;
+	int N_r_right = params->numY - N_r_left;
+	double r_max = max((params->numY - 1) * params->voxelWidth + y_0, fabs(y_0));
+
+	//double r_max = (params->numY - 1)*params->voxelWidth + y_0;
 
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for schedule(dynamic)
@@ -512,19 +523,12 @@ bool CPUproject_AbelParallel(float* g, float* f, parameters* params)
 			double u_unbounded = k * T_u + u_0;
 			double u = fabs(u_unbounded);
 
-			int rInd_floor, rInd_max;
+			int rInd_max;
 			if (u_unbounded < 0.0)
-			{
-				rInd_floor = int(0.5 - y_0 / params->voxelWidth);
-				rInd_max = N_r;
-			}
+				rInd_max = N_r_left;
 			else
-			{
-				rInd_floor = N_r;
-				//rInd_max = params->numY;
-				rInd_max = N_r;
-			}
-			double r_min = fabs((float)(rInd_floor)*params->voxelWidth + y_0);
+				rInd_max = N_r_right;
+			double r_min = 0.5 * T_r;
 
 			double b_ti = v * sin_beta;
 			double a_ti_inv = sec_beta;
@@ -544,15 +548,16 @@ bool CPUproject_AbelParallel(float* g, float* f, parameters* params)
 				double r_absoluteMinimum = u;
 				//double disc_sqrt_check = sqrt(disc_ti_shift + r_absoluteMinimum*r_absoluteMinimum*sec_sq_plus_u_sq);
 				//int rInd_min_minus = max(0, int(floor(0.5+r_absoluteMinimum/T_r)));
-				int rInd_min_minus = max(0, min(N_r - 1, int(ceil(r_absoluteMinimum / T_r - 1.0))));
+				//int rInd_min_minus = max(0, min(N_r - 1, int(ceil(r_absoluteMinimum / T_r - 1.0))));
+				int rInd_min_minus = max(0, int(ceil(r_absoluteMinimum / T_r - 1.0)));
 
 				int ir_shifted_or_flipped;
 				if (u_unbounded < 0.0)
-					ir_shifted_or_flipped = N_r - 1 - rInd_min_minus;
+					ir_shifted_or_flipped = N_r_left - 1 - rInd_min_minus;
 				else
-					ir_shifted_or_flipped = N_r + rInd_min_minus;
+					ir_shifted_or_flipped = N_r_left + rInd_min_minus;
 
-				if (r_absoluteMinimum < r_max)
+				if (r_absoluteMinimum < r_max && 0 <= ir_shifted_or_flipped && ir_shifted_or_flipped <= params->numY - 1)
 				{
 					double iz_arg_low = (b_ti - 0.5*(disc_sqrt_prev))*a_ti_inv*z_slope + z_shift;
 					if (0.0 <= iz_arg_low && iz_arg_low <= params->numZ - 1)
@@ -582,40 +587,43 @@ bool CPUproject_AbelParallel(float* g, float* f, parameters* params)
 			{
 				int ir_shifted_or_flipped;
 				if (u_unbounded < 0.0)
-					ir_shifted_or_flipped = N_r - 1 - ir;
+					ir_shifted_or_flipped = N_r_left - 1 - ir;
 				else
-					ir_shifted_or_flipped = N_r + ir;
+					ir_shifted_or_flipped = N_r_left + ir;
 
 				double r_next = r_prev + T_r;
 				double disc_sqrt_next = sqrt(disc_ti_shift + r_next * r_next);
 
-				// Negative t interval
-				// low:  (b_ti - disc_sqrt_next) * a_ti_inv
-				// high: (b_ti - disc_sqrt_prev) * a_ti_inv
-
-				// Positive t interval
-				// low:  (b_ti + disc_sqrt_prev) * a_ti_inv
-				// high: (b_ti + disc_sqrt_next) * a_ti_inv
-
-				//(b_ti - disc_sqrt_next) * a_ti_inv + (b_ti - disc_sqrt_prev) * a_ti_inv
-				double iz_arg_low = (b_ti - 0.5*(disc_sqrt_next + disc_sqrt_prev))*a_ti_inv*z_slope + z_shift;
-				if (0.0 <= iz_arg_low && iz_arg_low <= params->numZ - 1)
+				if (0 <= ir_shifted_or_flipped && ir_shifted_or_flipped <= params->numY - 1)
 				{
-					int iz_arg_low_floor = int(iz_arg_low);
-					double dz = iz_arg_low - double(iz_arg_low_floor);
-					int iz_arg_low_ceil = min(iz_arg_low_floor + 1, params->numZ - 1);
+					// Negative t interval
+					// low:  (b_ti - disc_sqrt_next) * a_ti_inv
+					// high: (b_ti - disc_sqrt_prev) * a_ti_inv
 
-					curVal += (disc_sqrt_next - disc_sqrt_prev)*a_ti_inv*((1.0 - dz)*f[ir_shifted_or_flipped*params->numZ + iz_arg_low_floor] + dz * f[ir_shifted_or_flipped*params->numZ + iz_arg_low_ceil]);
-				}
+					// Positive t interval
+					// low:  (b_ti + disc_sqrt_prev) * a_ti_inv
+					// high: (b_ti + disc_sqrt_next) * a_ti_inv
 
-				double iz_arg_high = (b_ti + 0.5*(disc_sqrt_next + disc_sqrt_prev))*a_ti_inv*z_slope + z_shift;
-				if (0.0 <= iz_arg_high && iz_arg_high <= params->numZ - 1)
-				{
-					int iz_arg_high_floor = int(iz_arg_high);
-					double dz = iz_arg_high - double(iz_arg_high_floor);
-					int iz_arg_high_ceil = min(iz_arg_high_floor + 1, params->numZ - 1);
+					//(b_ti - disc_sqrt_next) * a_ti_inv + (b_ti - disc_sqrt_prev) * a_ti_inv
+					double iz_arg_low = (b_ti - 0.5 * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift;
+					if (0.0 <= iz_arg_low && iz_arg_low <= params->numZ - 1)
+					{
+						int iz_arg_low_floor = int(iz_arg_low);
+						double dz = iz_arg_low - double(iz_arg_low_floor);
+						int iz_arg_low_ceil = min(iz_arg_low_floor + 1, params->numZ - 1);
 
-					curVal += (disc_sqrt_next - disc_sqrt_prev)*a_ti_inv*((1.0 - dz)*f[ir_shifted_or_flipped*params->numZ + iz_arg_high_floor] + dz * f[ir_shifted_or_flipped*params->numZ + iz_arg_high_ceil]);
+						curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * ((1.0 - dz) * f[ir_shifted_or_flipped * params->numZ + iz_arg_low_floor] + dz * f[ir_shifted_or_flipped * params->numZ + iz_arg_low_ceil]);
+					}
+
+					double iz_arg_high = (b_ti + 0.5 * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift;
+					if (0.0 <= iz_arg_high && iz_arg_high <= params->numZ - 1)
+					{
+						int iz_arg_high_floor = int(iz_arg_high);
+						double dz = iz_arg_high - double(iz_arg_high_floor);
+						int iz_arg_high_ceil = min(iz_arg_high_floor + 1, params->numZ - 1);
+
+						curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * ((1.0 - dz) * f[ir_shifted_or_flipped * params->numZ + iz_arg_high_floor] + dz * f[ir_shifted_or_flipped * params->numZ + iz_arg_high_ceil]);
+					}
 				}
 
 				// update radius and sqrt for t calculation
