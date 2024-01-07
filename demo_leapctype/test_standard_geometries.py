@@ -4,7 +4,6 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-# Make sure you add: .../LEAP/src to your python path
 
 '''
 All memory for data structures, e.g., the projection data and the volume data is managed in python.

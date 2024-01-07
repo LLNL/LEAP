@@ -51,8 +51,8 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
 
     const float n_minus_half = (float)n - 0.5f + startVals_g.z / T_g.z;
     const float n_plus_half = (float)n + 0.5f + startVals_g.z / T_g.z;
-    const float m_minus_half = (float)m - 0.5f;
-    const float m_plus_half = (float)m + 0.5f;
+    const float m_minus_half = (float)m - 0.5f -s_minus_c.z / (T_g.y);
+    const float m_plus_half = (float)m + 0.5f -s_minus_c.z / (T_g.y);
 
     const float T_v = T_g.y / D;
     const float T_u = T_g.z / D;
