@@ -1355,11 +1355,15 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 		printf("%f, %d\n", sampleRate, numSamples);
 		return false;
 	}
+
+	// This is a simple algorithm, so only run it on the GPU if the data is already there
 	if (data_on_cpu == false)
 	{
-		printf("Error: method currently only implemented for data on CPU!\n");
-		return false;
+		return applyTransferFunction_gpu(x, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, params.whichGPU, data_on_cpu);
+		//printf("Error: method currently only implemented for data on CPU!\n");
+		//return false;
 	}
+	//return applyTransferFunction_gpu(x, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, params.whichGPU, data_on_cpu);
 
 	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
 

@@ -78,7 +78,9 @@ BH_LUT, T_lut = physics.setBHlookupTable('H2O', s_total, Es, 0.0, 0, 63.9544)
 
 # Apply Beam Hardening
 g_save = g.copy()
+startTime = time.time()
 leapct.applyTransferFunction(g, BH_LUT, T_lut)
+print('Elapsed time: ' + str(time.time()-startTime))
 
 # The code below will remove the beam hardening, i.e., Beam Hardening Correction (BHC)
 # Applying these steps should just undo the BH you applied above, so isn't too exciting

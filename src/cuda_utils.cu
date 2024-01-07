@@ -10,6 +10,36 @@
 #include "cuda_runtime.h"
 #include <string.h>
 
+__global__ void TransferFunctionKernel(float* f, const float* LUT, const int3 N, const float firstSample, const float sampleRate, const int numSamples)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    const float lastSample = float(numSamples - 1) * sampleRate + firstSample;
+
+    uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+    const float curVal = f[ind];
+
+    if (curVal >= lastSample)
+    {
+        float slope = (LUT[numSamples - 1] - LUT[numSamples - 2]) / sampleRate;
+        f[ind] = LUT[numSamples - 1] + slope * (curVal - lastSample);
+    }
+    else if (curVal <= firstSample)
+        f[ind] = firstSample;
+    else
+    {
+        float arg = curVal / sampleRate - firstSample;
+        int arg_low = int(arg);
+        float d = arg - float(arg_low);
+        f[ind] = (1.0 - d) * LUT[arg_low] + d * LUT[arg_low + 1];
+    }
+}
+
 __global__ void windowFOVKernel(float* f, const int4 N, const float4 T, const float4 startVal, const float rFOVsq, const int volumeDimensionOrder)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
@@ -951,6 +981,56 @@ bool windowFOV_gpu(float* f, parameters* params)
     dim3 dimGrid = setGridSize(N, dimBlock);
     windowFOVKernel <<< dimGrid, dimBlock >>> (f, N, T, startVal, rFOVsq, params->volumeDimensionOrder);
     cudaStatus = cudaDeviceSynchronize();
+
+    return true;
+}
+
+bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu)
+{
+    if (x == NULL) return false;
+
+    cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    float* dev_LUT = 0;
+    if (data_on_cpu)
+    {
+        dev_f = copy3DdataToGPU(x, N, whichGPU);
+
+        if (cudaSuccess != cudaMalloc((void**)&dev_LUT, numSamples * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+        if (cudaMemcpy(dev_LUT, LUT, numSamples * sizeof(float), cudaMemcpyHostToDevice))
+            fprintf(stderr, "cudaMemcpy(LUT) failed!\n");
+    }
+    else
+    {
+        dev_f = x;
+        dev_LUT = LUT;
+    }
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    TransferFunctionKernel <<<dimGrid, dimBlock >>> (dev_f, dev_LUT, N, firstSample, sampleRate, numSamples);
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        pull3DdataFromGPU(x, N, dev_f, whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+        if (dev_LUT != 0)
+            cudaFree(dev_LUT);
+    }
 
     return true;
 }

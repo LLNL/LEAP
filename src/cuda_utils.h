@@ -68,4 +68,6 @@ extern float weightedInnerProduct(const float* dev_lhs, const float* dev_w, cons
 
 bool windowFOV_gpu(float* f, parameters* params);
 
+bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu);
+
 #endif
