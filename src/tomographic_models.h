@@ -13,6 +13,7 @@
 #pragma once
 #endif
 
+#define LEAP_VERSION "1.0"
 
 #include <stdlib.h>
 #include "parameters.h"
@@ -198,6 +199,12 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool print_parameters();
+
+	/**
+	 * \fn          about
+	 * \brief       prints info about LEAP, including the version number
+	 */
+	const char* about();
 
 	/**
 	 * \fn          set_conebeam

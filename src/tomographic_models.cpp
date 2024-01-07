@@ -46,6 +46,20 @@ bool tomographicModels::print_parameters()
 	return true;
 }
 
+const char* tomographicModels::about()
+{
+	printf("****************************************************************\n");
+	printf("LivermorE AI Projector for Computed Tomography (LEAP)\n");
+	printf("                     version %s\n", LEAP_VERSION);
+	printf("                   LLNL-CODE-848657\n");
+	printf("\n");
+	printf("             compiled: %s %s\n", __DATE__, __TIME__);
+	printf("        written by: Kyle Champley and Hyojin Kim\n");
+	printf("****************************************************************\n");
+
+	return LEAP_VERSION;
+}
+
 bool tomographicModels::reset()
 {
 	params.clearAll();

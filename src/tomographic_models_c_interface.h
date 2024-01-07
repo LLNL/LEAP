@@ -22,6 +22,7 @@
 extern "C" PROJECTOR_API bool set_model(int);
 extern "C" PROJECTOR_API int create_new_model();
 
+extern "C" PROJECTOR_API void about();
 extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
 

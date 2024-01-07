@@ -156,6 +156,11 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.reset()
 
+    def about(self):
+        """prints info about LEAP, including the version number"""
+        self.set_model()
+        return self.libprojectors.about()
+
     def printParameters(self):
         """printParameters
         prints all CT geometry and CT volume parameters to the screen

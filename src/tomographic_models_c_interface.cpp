@@ -44,6 +44,11 @@ tomographicModels* tomo()
 	return list_models.get(whichModel);
 }
 
+void about()
+{
+	tomo()->about();
+}
+
 bool print_parameters()
 {
 	return tomo()->print_parameters();
