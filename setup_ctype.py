@@ -19,6 +19,11 @@ if _platform == "linux" or _platform == "linux2":
 elif _platform == "win32":
     lib_fname = r'win_build\bin\Release\libleap.dll'
     os.system(r'.\etc\win_build.bat')
+    
+    import site
+    copy_text = 'copy ' + str(lib_fname) + ' ' + str(os.path.join(site.getsitepackages()[1], 'libleap.dll'))
+    os.system(copy_text)
+    
 elif _platform == "darwin":
     lib_fname = 'build/lib/libleap.dylib'
     os.system(r'sh ./etc/build.sh')

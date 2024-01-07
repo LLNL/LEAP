@@ -37,6 +37,11 @@ leapct.set_diameterFOV(leapct.get_numX()*leapct.get_voxelWidth())
 # This "detector dithering" method remove ring artifacts
 # If you comment out this section, no dithering will be done
 # and the reconstruction will have ring artifacts
+#
+# Alternatively, you can shift the rotation stage.  LEAP
+# does not have a method to shift the stage because the stage 
+# defines the fixed coordinate system, so instead you can
+# shift the detector and source to do the same thing as a stage shift
 sourcePositions = leapct.get_sourcePositions()
 moduleCenters = leapct.get_moduleCenters()
 rowVectors = leapct.get_rowVectors()
@@ -45,7 +50,8 @@ for i in range(numAngles):
     colShift = pixelSize*np.random.uniform(-4.0,4.0,1)
     rowShift = pixelSize*np.random.uniform(-4.0,4.0,1)
     
-    moduleCenters[i,:] = colShift*colVectors[i,:] + rowShift*rowVectors[i,:] 
+    moduleCenters[i,:] += colShift*colVectors[i,:] + rowShift*rowVectors[i,:]
+    #sourcePositions[i,:] += colShift*colVectors[i,:] + rowShift*rowVectors[i,:]
 
 leapct.set_modularbeam(numAngles, numRows, numCols, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
 #'''
@@ -62,7 +68,7 @@ leapct.set_FORBILD(f_true,True)
 
 # "Simulate" projection data
 leapct.project(g,f_true)
-
+leapct.display(g)
 
 # Add random detector gain to each pixel
 detectorGain = np.random.uniform(1.0-0.05,1.0+0.05,(numRows,numCols))
