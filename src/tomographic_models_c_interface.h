@@ -130,6 +130,8 @@ extern "C" PROJECTOR_API float get_z0();
 
 extern "C" PROJECTOR_API bool Laplacian(float* g, bool data_on_cpu);
 
+extern "C" PROJECTOR_API bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu);
+
 // Filters for 3D data
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, bool data_on_cpu);

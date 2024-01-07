@@ -1999,6 +1999,28 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS EXECUTE LEAP'S GPU DENOISING FILTERS
     ###################################################################################################################
     ###################################################################################################################
+    def applyTransferFunction(self, x,  LUT, sampleRate, firstSample=0.0):
+        """Applies a transfer function to arbitrary 3D data, i.e., x = LUT(x)
+        
+        Args:
+            x (C contiguous float32 numpy array or torch tensor): 3D data (input and output)
+            LUT (C contiguous float32 numpy array or torch tensor): lookup table with transfer function values
+            sampleRate (float): the step size between samples
+            firstSample (float): the value of the first sample in the lookup table
+
+        Returns:            
+            true if operation  was sucessful, false otherwise
+        """
+        #bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
+        self.libprojectors.applyTransferFunction.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(x) is torch.Tensor:
+            self.libprojectors.applyTransferFunction.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.applyTransferFunction(x.data_ptr(), x.shape[0], x.shape[1], x.shape[2], LUT.data_ptr(), firstSample, sampleRate, LUT.size, f.is_cuda == False)
+        else:
+            self.libprojectors.applyTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.applyTransferFunction(x, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.size, True)
+    
     def BlurFilter(self, f, FWHM=2.0):
         """Applies a blurring filter to the provided numpy array
         
