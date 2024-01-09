@@ -179,6 +179,16 @@ bool get_detectorType()
 	return tomo()->params.detectorType;
 }
 
+bool set_centerCol(float centerCol)
+{
+	return tomo()->set_centerCol(centerCol);
+}
+
+bool set_centerRow(float centerRow)
+{
+	return tomo()->set_centerRow(centerRow);
+}
+
 bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	return tomo()->set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);

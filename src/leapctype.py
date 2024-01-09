@@ -416,6 +416,20 @@ class tomographicModels:
         else:
             return 'CURVED'
             
+    def set_centerCol(self, centerCol):
+        """Set centerCol parameter"""
+        self.set_model()
+        self.libprojectors.set_centerCol.restype = ctypes.c_bool
+        self.libprojectors.set_centerCol.argtypes = [ctypes.c_float]
+        return self.libprojectors.set_centerCol(centerCol)
+        
+    def set_centerRow(self, centerRow):
+        """Set centerRow parameter"""
+        self.set_model()
+        self.libprojectors.set_centerRow.restype = ctypes.c_bool
+        self.libprojectors.set_centerRow.argtypes = [ctypes.c_float]
+        return self.libprojectors.set_centerRow(centerRow)
+        
     def convert_conebeam_to_modularbeam(self):
         """sets modular-beam parameters from a cone-beam specification"""
         self.set_model()
@@ -653,6 +667,25 @@ class tomographicModels:
             return f
         else:
             return None
+            
+    def allocateData(self, x, val=0.0):
+        if has_torch == True and type(x) is torch.Tensor:
+            if x.is_cuda:
+                if val == 0.0:
+                    y = torch.zeros([x.shape[0], x.shape[1], x.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                else:
+                    y = val*torch.ones([x.shape[0], x.shape[1], x.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+            else:
+                if val == 0.0:
+                    y = torch.zeros([x.shape[0], x.shape[1], x.shape[2]], dtype=torch.float32)
+                else:
+                    y = val*torch.ones([x.shape[0], x.shape[1], x.shape[2]], dtype=torch.float32)
+        else:
+            if val == 0.0:
+                y = np.ascontiguousarray(np.zeros((x.shape[0], x.shape[1], x.shape[2]),dtype=np.float32), dtype=np.float32)
+            else:
+                y = np.ascontiguousarray(val*np.ones((x.shape[0], x.shape[1], x.shape[2]),dtype=np.float32), dtype=np.float32)
+        return y
             
     def setAngleArray(self,numAngles,angularRange):
         """Sets the angle array, i.e., phis which specifies the projection angles for parallel-, fan-, and cone-beam data
@@ -961,7 +994,7 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.Laplacian.argtypes = [ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.Laplacian(g.data_ptr(), f.is_cuda == False)
+            self.libprojectors.Laplacian(g.data_ptr(), g.is_cuda == False)
         else:
             self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.Laplacian(g, True)
@@ -1215,6 +1248,30 @@ class tomographicModels:
     # THIS SECTION PROVIDES ITERATIVE RECONSTRUCTION ALGORITHM THAT USE THE LEAP FORWARD AND BACKPROJECTION OPERATIONS
     ###################################################################################################################
     ###################################################################################################################
+    def isAllZeros(self, f):
+        if has_torch == True and type(f) is torch.Tensor:
+            if torch.count_nonzero(f) == 0:
+                return True
+            else:
+                return False
+        else:
+            if not np.any(f):
+                return True
+            else:
+                return False
+        
+    def innerProd(self, x, y, w=None):
+        if has_torch == True and type(x) is torch.Tensor:
+            if w is None:
+                return torch.sum(x*y)
+            else:
+                return torch.sum(x*y*w)
+        else:
+            if w is None:
+                return np.sum(x*y)
+            else:
+                return np.sum(x*y*w)
+    
     def breakIntoSubsets(self, g, numSubsets):
         if numSubsets <= 0 or len(g.shape) != 3:
             return None
@@ -1222,11 +1279,25 @@ class tomographicModels:
             g_subsets = []
             for m in range(numSubsets):
                 if m == g.shape[0]-1:
-                    g_subset = np.zeros((1,g.shape[1],g.shape[2]),dtype=np.float32)
+                    if has_torch == True and type(g) is torch.Tensor:
+                        if g.is_cuda:
+                            g_subset = torch.zeros([1, g.shape[1], g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                        else:
+                            g_subset = torch.zeros([1, g.shape[1], g.shape[2]], dtype=torch.float32)
+                    else:
+                        g_subset = np.zeros((1,g.shape[1],g.shape[2]),dtype=np.float32)
                     g_subset[0,:,:] = g[m,:,:]
                     g_subsets.append(g_subset)
                 else:
-                    g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
+                    if has_torch == True and type(g) is torch.Tensor:
+                        dim1 = g[m:-1:numSubsets,0,0].shape[0]
+                        if g.is_cuda:
+                            g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                        else:
+                            g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32)
+                        g_subset[:,:,:] = g[m:-1:numSubsets,:,:]
+                    else:
+                        g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
                     g_subsets.append(g_subset)
             return g_subsets
     
@@ -1246,19 +1317,19 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if has_torch == True and type(f) is torch.Tensor:
-            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
-            print('Please convert to numpy array prior to running this algorithm.')
-            return f
-        if not np.any(f):
+        #if has_torch == True and type(f) is torch.Tensor:
+        #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+        #    print('Please convert to numpy array prior to running this algorithm.')
+        #    return f
+        if self.isAllZeros(f) == True:
             f[:] = 1.0
         else:
             f[f<0.0] = 0.0
  
-        Pstar1 = self.sensitivity()
+        Pstar1 = self.sensitivity(self.copyData(f))
         Pstar1[Pstar1==0.0] = 1.0
-        d = self.allocateVolume()
-        Pd = self.allocateProjections()
+        d = self.allocateData(f)
+        Pd = self.allocateData(g)
         
         for n in range(numIter):
             print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
@@ -1286,11 +1357,11 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if has_torch == True and type(f) is torch.Tensor:
-            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
-            print('Please convert to numpy array prior to running this algorithm.')
-            return f
-        if not np.any(f):
+        #if has_torch == True and type(f) is torch.Tensor:
+        #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+        #    print('Please convert to numpy array prior to running this algorithm.')
+        #    return f
+        if self.isAllZeros(f) == True:
             f[:] = 1.0
         else:
             f[f<0.0] = 0.0
@@ -1307,7 +1378,7 @@ class tomographicModels:
             subsetParams = subsetParameters(self, numSubsets)
             g_subsets = self.breakIntoSubsets(g, numSubsets)
                 
-            d = self.allocateVolume()
+            d = self.allocateData(f)
             for n in range(numIter):
                 print('OSEM iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
@@ -1316,10 +1387,10 @@ class tomographicModels:
                     #self.set_angles(phis_subsets[m])
                     subsetParams.setSubset(m)
                     
-                    Pstar1 = self.sensitivity()
+                    Pstar1 = self.sensitivity(self.copyData(f))
                     #Pstar1[Pstar1==0.0] = 1.0
 
-                    Pd = self.allocateProjections()
+                    Pd = self.allocateData(g_subsets[m])
                     self.project(Pd,f)
                     ind = Pd != 0.0
                     Pd[ind] = g_subsets[m][ind]/Pd[ind]
@@ -1342,24 +1413,24 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if has_torch == True and type(f) is torch.Tensor:
-            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
-            print('Please convert to numpy array prior to running this algorithm.')
-            return f
+        #if has_torch == True and type(f) is torch.Tensor:
+        #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+        #    print('Please convert to numpy array prior to running this algorithm.')
+        #    return f
         numSubsets = min(numSubsets, self.get_numAngles())
         #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
         #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
         #    numSubsets = 1
         if numSubsets <= 1:
-            P1 = self.allocateProjections()
-            self.project(P1,self.allocateVolume(1.0))
+            P1 = self.allocateData(g)
+            self.project(P1,self.allocateData(f,1.0))
             P1[P1<=0.0] = 1.0
             
-            Pstar1 = self.sensitivity()
+            Pstar1 = self.sensitivity(self.allocateData(f))
             Pstar1[Pstar1<=0.0] = 1.0
             
-            Pd = self.allocateProjections()
-            d = self.allocateVolume()
+            Pd = self.allocateData(g)
+            d = self.allocateData(f)
 
             for n in range(numIter):
                 print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
@@ -1370,8 +1441,8 @@ class tomographicModels:
                 f[f<0.0] = 0.0
             return f
         else:
-            P1 = self.allocateProjections()
-            self.project(P1,self.allocateVolume(1.0))
+            P1 = self.allocateData(g)
+            self.project(P1,self.allocateData(f,1.0))
             P1[P1<=0.0] = 1.0
             
             # divide g, P1, and phis
@@ -1379,7 +1450,7 @@ class tomographicModels:
             g_subsets = self.breakIntoSubsets(g, numSubsets)
             P1_subsets = self.breakIntoSubsets(P1, numSubsets)
             
-            d = self.allocateVolume()
+            d = self.allocateData(f)
             for n in range(numIter):
                 print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
@@ -1389,10 +1460,10 @@ class tomographicModels:
                     subsetParams.setSubset(m)
                     #self.print_parameters()
                     
-                    Pstar1 = self.sensitivity()
+                    Pstar1 = self.sensitivity(self.allocateData(f))
                     #Pstar1[Pstar1<=0.0] = 1.0
 
-                    Pd = self.allocateProjections()
+                    Pd = self.allocateData(g_subsets[m])
                     #print(self.get_numAngles())
                     #print(Pd.shape)
                     self.project(Pd,f)
@@ -1429,10 +1500,10 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if has_torch == True and type(f) is torch.Tensor:
-            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
-            print('Please convert to numpy array prior to running this algorithm.')
-            return f
+        #if has_torch == True and type(f) is torch.Tensor:
+        #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
+        #    print('Please convert to numpy array prior to running this algorithm.')
+        #    return f
         if numTV <= 0:
             return self.SART(g,f,numIter,numSubsets)
         numSubsets = min(numSubsets, self.get_numAngles())
@@ -1440,8 +1511,8 @@ class tomographicModels:
         #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
         #    numSubsets = 1
         omega = 0.8
-        P1 = self.allocateProjections()
-        self.project(P1,self.allocateVolume(1.0))
+        P1 = self.allocateData(g)
+        self.project(P1,self.allocateData(f,1.0))
         P1[P1==0.0] = 1.0
 
         subsetParams = subsetParameters(self, numSubsets)
@@ -1451,19 +1522,19 @@ class tomographicModels:
             g_subsets = self.breakIntoSubsets(g, numSubsets)
             P1_subsets = self.breakIntoSubsets(P1, numSubsets)
         else:
-            Pstar1 = self.sensitivity()
+            Pstar1 = self.sensitivity(self.allocateData(f))
             Pstar1[Pstar1==0.0] = 1.0
         
         #Pd = self.allocateProjections()
-        Pf_minus_g = self.allocateProjections()
-        Pf_TV_minus_g = self.allocateProjections()
-        d = self.allocateVolume()
-        f_TV = self.allocateVolume()
+        Pf_minus_g = self.allocateData(g)
+        Pf_TV_minus_g = self.allocateData(g)
+        d = self.allocateData(f)
+        f_TV = self.allocateData(f)
 
         self.project(Pf_minus_g, f)
         Pf_minus_g -= g
         
-        curCost = np.sum(Pf_minus_g**2)
+        curCost = self.innerProd(Pf_minus_g, Pf_minus_g)
         
         for n in range(numIter):
             print('ASDPOCS iteration ' + str(n+1) + ' of ' + str(numIter))
@@ -1478,10 +1549,10 @@ class tomographicModels:
                 for m in range(numSubsets):
                     #self.set_angles(phis_subsets[m])
                     subsetParams.setSubset(m)
-                    Pstar1 = self.sensitivity()
+                    Pstar1 = self.sensitivity(self.allocateData(f))
                     #Pstar1[Pstar1==0.0] = 1.0
 
-                    Pd = self.allocateProjections()
+                    Pd = self.allocateData(g_subsets[m])
                     self.project(Pd,f)
                     Pd = (g_subsets[m]-Pd) / P1_subsets[m]
                     self.backproject(Pd,d)
@@ -1492,7 +1563,8 @@ class tomographicModels:
             # Calculate SART error sinogram and calculate cost            
             self.project(Pf_minus_g, f)
             Pf_minus_g = Pf_minus_g - g
-            epsilon_SART = np.sum(Pf_minus_g**2)
+            
+            epsilon_SART = self.innerProd(Pf_minus_g, Pf_minus_g)
 
             #'''            
             # TV step(s)
@@ -1501,14 +1573,22 @@ class tomographicModels:
             #self.displayVolume(f_TV)
             self.project(Pf_TV_minus_g, f_TV)
             Pf_TV_minus_g = Pf_TV_minus_g - g
-            epsilon_TV = np.sum(Pf_TV_minus_g**2)
+            
+            epsilon_TV = self.innerProd(Pf_TV_minus_g, Pf_TV_minus_g)
             
             # Combine SART and TV Steps
-            temp = np.sum(Pf_minus_g*Pf_TV_minus_g)
+            temp = self.innerProd(Pf_minus_g, Pf_TV_minus_g)
             a = epsilon_SART - 2.0 * temp + epsilon_TV
             b = temp - epsilon_SART
             c = epsilon_SART - ((1.0 - omega) * epsilon_SART + omega * curCost)
+            
+            if has_torch == True and type(f) is torch.Tensor:
+                a = a.cpu().detach().numpy()
+                b = b.cpu().detach().numpy()
+                c = c.cpu().detach().numpy()
+            
             disc = b * b - a * c
+            
             alpha = 0.0
             alpha_1 = 0.0
             alpha_2 = 0.0
@@ -1536,7 +1616,8 @@ class tomographicModels:
             # Do Update
             f[:] = (1.0-alpha)*f[:] + alpha*f_TV[:]
             Pf_minus_g[:] = (1.0-alpha)*Pf_minus_g[:] + alpha*Pf_TV_minus_g[:]
-            curCost = np.sum(Pf_minus_g**2)
+            
+            curCost = self.innerProd(Pf_minus_g, Pf_minus_g)
             #'''
                         
         return f
@@ -1601,7 +1682,7 @@ class tomographicModels:
             f, the same as the input with the same name
         """
         return self.RWLS(g, f, numIter, delta, beta, 1.0, SQS, nonnegativityConstraint)
-        
+       
     def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, SQS=False, nonnegativityConstraint=True):
         """Regularized Weighted Least Squares reconstruction
         
@@ -1622,24 +1703,25 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if has_torch == True and type(f) is torch.Tensor:
-            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
-            print('Please convert to numpy array prior to running this algorithm.')
-            return f
+        #if has_torch == True and type(f) is torch.Tensor:
+        #    print('ERROR: RWLS reconstruction algorithms not implemented for torch tensors!')
+        #    print('Please convert to numpy array prior to running this algorithm.')
+        #    return f
         conjGradRestart = 50
         if W is None:
             W = self.copyData(g)
-            W = np.exp(-W)
-        if f is None:
-            f = self.allocateVolume()
+            if has_torch == True and type(g) is torch.Tensor:
+                W = torch.exp(-W)
+            else:
+                W = np.exp(-W)
         Pf = self.copyData(g)
-        if np.any(f):
+        if self.isAllZeros(f) == False:
             # fix scaling
             if nonnegativityConstraint:
                 f[f<0.0] = 0.0
             self.project(Pf,f)
-            Pf_dot_Pf = np.sum(Pf**2)
-            g_dot_Pf = np.sum(g*Pf)
+            Pf_dot_Pf = self.innerProd(Pf,Pf)
+            g_dot_Pf = self.innerProd(g,Pf)
             if Pf_dot_Pf > 0.0 and g_dot_Pf > 0.0:
                 f *= g_dot_Pf / Pf_dot_Pf
                 Pf *= g_dot_Pf / Pf_dot_Pf
@@ -1648,21 +1730,21 @@ class tomographicModels:
         Pf_minus_g = Pf
         Pf_minus_g -= g
         
-        grad = self.allocateVolume()
-        u = self.allocateVolume()
-        Pu = self.allocateProjections()
+        grad = self.allocateData(f)
+        u = self.allocateData(f)
+        Pu = self.allocateData(g)
         
-        d = self.allocateVolume()
-        Pd = self.allocateProjections()
+        d = self.allocateData(f)
+        Pd = self.allocateData(g)
         
         grad_old_dot_grad_old = 0.0
-        grad_old = self.allocateVolume()
+        grad_old = self.allocateData(f)
         
         if SQS == True:
             # Calculate the SQS preconditioner
             # Reuse some of the memory allocated above
             #Q = 1.0 / P*WP1
-            Q = self.allocateVolume()
+            Q = self.allocateData(f)
             Q[:] = 1.0
             self.project(Pu,Q)
             Pu *= W
@@ -1694,17 +1776,17 @@ class tomographicModels:
                 d[:] = u[:]
                 Pd[:] = Pu[:]
             else:
-                gamma = (np.sum(u*grad) - np.sum(u*grad_old)) / grad_old_dot_grad_old
+                gamma = (self.innerProd(u,grad) - self.innerProd(u,grad_old)) / grad_old_dot_grad_old
 
                 d = u + gamma*d
                 Pd = Pu + gamma*Pd
 
-                if np.sum(d*grad) <= 0.0:
+                if self.innerProd(d,grad) <= 0.0:
                     print('\tRLWS-CG: CG descent condition violated, must use GD descent direction')
                     d[:] = u[:]
                     Pd[:] = Pu[:]
             
-            grad_old_dot_grad_old = np.sum(u*grad)
+            grad_old_dot_grad_old = self.innerProd(u,grad)
             grad_old[:] = grad[:]
             
             stepSize = self.RWLSstepSize(f, grad, d, Pd, W, delta, beta)
@@ -1737,16 +1819,19 @@ class tomographicModels:
         Returns:
             step size (float)
         """
-        num = np.sum(d*grad)
+        num = self.innerProd(d,grad)
         if W is not None:
-            denomA = np.sum(Pd*Pd*W)
+            denomA = self.innerProd(Pd,Pd,W)
         else:
-            denomA = np.sum(Pd**2)
+            denomA = self.innerProd(Pd,Pd)
         denomB = 0.0;
         if beta > 0.0:
             denomB = self.TVquadForm(f, d, delta, beta)
             #print('denomB = ' + str(denomA))
         denom = denomA + denomB
+        if has_torch == True and type(denom) is torch.Tensor:
+            denom = denom.cpu().detach().numpy()
+            num = num.cpu().detach().numpy()
 
         stepSize = 0.0
         if np.abs(denom) > 1.0e-16:
@@ -1772,21 +1857,19 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if has_torch == True and type(f) is torch.Tensor:
-            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
-            print('Please convert to numpy array prior to running this algorithm.')
-            return f
+        #if has_torch == True and type(f) is torch.Tensor:
+        #    print('ERROR: RDLS reconstruction algorithms not implemented for torch tensors!')
+        #    print('Please convert to numpy array prior to running this algorithm.')
+        #    return f
         conjGradRestart = 50
-        if f is None:
-            f = self.allocateVolume()
         Pf = self.copyData(g)
-        if np.any(f):
+        if self.isAllZeros(f) == False:
             # fix scaling
             if nonnegativityConstraint:
                 f[f<0.0] = 0.0
             self.project(Pf,f)
-            Pf_dot_Pf = np.sum(Pf**2)
-            g_dot_Pf = np.sum(g*Pf)
+            Pf_dot_Pf = self.innerProd(Pf,Pf)
+            g_dot_Pf = self.innerProd(g,Pf)
             if Pf_dot_Pf > 0.0 and g_dot_Pf > 0.0:
                 f *= g_dot_Pf / Pf_dot_Pf
                 Pf *= g_dot_Pf / Pf_dot_Pf
@@ -1795,17 +1878,17 @@ class tomographicModels:
         Pf_minus_g = Pf
         Pf_minus_g -= g
         
-        LPf_minus_g = Pf.copy()
+        LPf_minus_g = self.copyData(Pf)
         
-        grad = self.allocateVolume()
-        u = self.allocateVolume()
-        Pu = self.allocateProjections()
+        grad = self.allocateData(f)
+        u = self.allocateData(f)
+        Pu = self.allocateData(g)
         
-        d = self.allocateVolume()
-        Pd = self.allocateProjections()
+        d = self.allocateData(f)
+        Pd = self.allocateData(g)
         
         grad_old_dot_grad_old = 0.0
-        grad_old = self.allocateVolume()
+        grad_old = self.allocateData(f)
                 
         for n in range(numIter):
             print('RDLS iteration ' + str(n+1) + ' of ' + str(numIter))
@@ -1819,24 +1902,24 @@ class tomographicModels:
 
             u[:] = grad[:]
             if preconditionerFWHM > 1.0:
-                leapct.BlurFilter2D(u,preconditionerFWHM)
+                self.BlurFilter2D(u,preconditionerFWHM)
             self.project(Pu, u)
             
             if n == 0 or (n % conjGradRestart) == 0:
                 d[:] = u[:]
                 Pd[:] = Pu[:]
             else:
-                gamma = (np.sum(u*grad) - np.sum(u*grad_old)) / grad_old_dot_grad_old
+                gamma = (self.innerProd(u,grad) - self.innerProd(u,grad_old)) / grad_old_dot_grad_old
 
                 d = u + gamma*d
                 Pd = Pu + gamma*Pd
 
-                if np.sum(d*grad) <= 0.0:
+                if self.innerProd(d,grad) <= 0.0:
                     print('\tRLDS-CG: CG descent condition violated, must use GD descent direction')
                     d[:] = u[:]
                     Pd[:] = Pu[:]
             
-            grad_old_dot_grad_old = np.sum(u*grad)
+            grad_old_dot_grad_old = self.innerProd(u,grad)
             grad_old[:] = grad[:]
             
             stepSize = self.RDLSstepSize(f, grad, d, Pd, delta, beta)
@@ -1867,16 +1950,20 @@ class tomographicModels:
         Returns:
             step size (float)
         """
-        num = np.sum(d*grad)
-        LPd = Pd.copy()
+        num = self.innerProd(d,grad)
+        LPd = self.copyData(Pd)
         self.Laplacian(LPd)
         LPd *= -1.0
-        denomA = np.sum(LPd*Pd)
+        denomA = self.innerProd(LPd,Pd)
         denomB = 0.0;
         if beta > 0.0:
             denomB = self.TVquadForm(f, d, delta, beta)
             #print('denomB = ' + str(denomA))
         denom = denomA + denomB
+
+        if has_torch == True and type(denom) is torch.Tensor:
+            denom = denom.cpu().detach().numpy()
+            num = num.cpu().detach().numpy()
 
         stepSize = 0.0
         if np.abs(denom) > 1.0e-16:
@@ -1902,36 +1989,45 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        if has_torch == True and type(f) is torch.Tensor:
-            print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
-            print('Please convert to numpy array prior to running this algorithm.')
-            return f
+        #if has_torch == True and type(f) is torch.Tensor:
+        #    print('ERROR: MLTR reconstruction algorithms not implemented for torch tensors!')
+        #    print('Please convert to numpy array prior to running this algorithm.')
+        #    return f
         beta = max(0.0, beta/float(numSubsets))
     
-        t = np.exp(-g)
-        if np.any(f):
+        if has_torch == True and type(g) is torch.Tensor:
+            t = torch.exp(-g)
+        else:
+            t = np.exp(-g)
+
+        if self.isAllZeros(f) == False:
             f[f<=0.0] = 0.0
         
-        d = self.allocateVolume()
+        d = self.allocateData(f)
         
         d[:] = 1.0
-        P1 = self.allocateProjections()
+        P1 = self.allocateData(g)
         self.project(P1,d)
         P1[P1<=0.0] = 1.0
 
-        SQS = self.allocateVolume()
+        SQS = self.allocateData(f)
         if numSubsets <= 1:
-            Pf = self.allocateProjections()
+            Pf = self.allocateData(g)
             
-            transDiff = self.allocateProjections()
+            transDiff = self.allocateData(g)
             for n in range(numIter):
                 print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
                 self.project(Pf,f)
-                transDiff[:] = np.exp(-Pf[:])
+                
+                if has_torch == True and type(g) is torch.Tensor:
+                    transDiff[:] = torch.exp(-Pf[:])
+                else:
+                    transDiff[:] = np.exp(-Pf[:])
                 
                 transDiff[:] = transDiff[:] * P1[:]
                 self.backproject(transDiff, SQS)
                 SQS[SQS<=0.0] = 1.0
+                SQS[:] = 1.0 / SQS[:]
                 
                 transDiff[:] = transDiff[:]/P1[:] - t[:]
                 self.backproject(transDiff, d)
@@ -1941,13 +2037,13 @@ class tomographicModels:
                 if beta > 0.0:
                     Sf1 = self.TVgradient(f, delta, beta)
                     d[:] -= Sf1[:]
-                    grad_dot_descent = np.sum(d*d/SQS)
+                    grad_dot_descent = self.innerProd(d,d,SQS)
                 
-                    d[:] = d[:] / SQS[:]
+                    d[:] = d[:] * SQS[:]
                 
                     stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
                 else:
-                    d[:] = d[:] / SQS[:]
+                    d[:] = d[:] * SQS[:]
                 
                 f[:] = f[:] + stepMultiplier*d[:]
                 f[f<0.0] = 0.0
@@ -1960,15 +2056,20 @@ class tomographicModels:
                 print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
                     subsetParams.setSubset(m)
-                    transDiff = self.allocateProjections()
-                    Pf = self.allocateProjections()
+                    transDiff = self.allocateData(t_subsets[m])
+                    Pf = self.allocateData(t_subsets[m])
                     
                     self.project(Pf,f)
-                    transDiff[:] = np.exp(-Pf[:])
+                    
+                    if has_torch == True and type(g) is torch.Tensor:
+                        transDiff[:] = torch.exp(-Pf[:])
+                    else:
+                        transDiff[:] = np.exp(-Pf[:])
                     
                     transDiff[:] = transDiff[:] * P1_subsets[m][:]
                     self.backproject(transDiff, SQS)
                     SQS[SQS<=0.0] = 1.0
+                    SQS[:] = 1.0 / SQS[:]
                     
                     transDiff[:] = transDiff[:]/P1_subsets[m][:] - t_subsets[m][:]
                     self.backproject(transDiff, d)
@@ -1978,19 +2079,24 @@ class tomographicModels:
                     if beta > 0.0:
                         Sf1 = self.TVgradient(f, delta, beta)
                         d[:] -= Sf1[:]
-                        grad_dot_descent = np.sum(d*d/SQS)
+                        grad_dot_descent = self.innerProd(d,d,SQS)
                     
-                        d[:] = d[:] / SQS[:]
+                        d[:] = d[:] * SQS[:]
                     
                         stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
                     else:
-                        d[:] = d[:] / SQS[:]
+                        d[:] = d[:] * SQS[:]
                     
                     f[:] = f[:] + stepMultiplier*d[:]
                     f[f<0.0] = 0.0
         
             subsetParams.setSubset(-1)
-        g = -np.log(t)
+        
+        if has_torch == True and type(g) is torch.Tensor:
+            g = -torch.log(t)
+        else:
+            g = -np.log(t)
+        
         return f
             
 
@@ -2217,7 +2323,7 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.Diffuse.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, f.is_cuda == False)
+            self.libprojectors.Diffuse(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, numIter, f.is_cuda == False)
         else:
             self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, True)

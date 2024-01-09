@@ -291,6 +291,20 @@ public:
 	bool set_curvedDetector();
 
 	/**
+	 * \fn          set_centerCol
+	 * \brief       sets the centerCol parameter
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_centerCol(float);
+
+	/**
+	 * \fn          set_centerCol
+	 * \brief       sets the centerCol parameter
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_centerRow(float);
+
+	/**
 	 * \fn          set_volume
 	 * \brief       sets the CT volume parameters
 	 * \param[in]   numX number of voxels in the x-dimension

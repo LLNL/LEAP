@@ -60,6 +60,9 @@ extern "C" PROJECTOR_API bool set_flatDetector();
 extern "C" PROJECTOR_API bool set_curvedDetector();
 extern "C" PROJECTOR_API bool get_detectorType();
 
+extern "C" PROJECTOR_API bool set_centerCol(float);
+extern "C" PROJECTOR_API bool set_centerRow(float);
+
 extern "C" PROJECTOR_API bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool set_volumeDimensionOrder(int which);
 extern "C" PROJECTOR_API int get_volumeDimensionOrder();

@@ -894,6 +894,34 @@ bool tomographicModels::set_curvedDetector()
 	}
 }
 
+bool tomographicModels::set_centerCol(float centerCol)
+{
+	if (params.geometry == parameters::MODULAR)
+	{
+		printf("Error: centerCol not defined for modular-beam geometry.  Move moduleCenters instead\n");
+		return false;
+	}
+	else
+	{
+		params.centerCol = centerCol;
+		return true;
+	}
+}
+
+bool tomographicModels::set_centerRow(float centerRow)
+{
+	if (params.geometry == parameters::MODULAR)
+	{
+		printf("Error: centerRow not defined for modular-beam geometry.  Move moduleCenters instead\n");
+		return false;
+	}
+	else
+	{
+		params.centerRow = centerRow;
+		return true;
+	}
+}
+
 bool tomographicModels::set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	if (voxelWidth <= 0.0)
