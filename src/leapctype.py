@@ -2766,7 +2766,7 @@ class tomographicModels:
 
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        if whichView is None or len(whichView) == 1:
+        if whichView is None or isinstance(whichView, int):
             self.drawCT(ax,whichView)
         else:
             for i in range(len(whichView)):
