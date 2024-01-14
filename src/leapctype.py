@@ -148,6 +148,13 @@ class tomographicModels:
     def create_new_model(self):
         self.libprojectors.create_new_model.restype = ctypes.c_int
         return self.libprojectors.create_new_model()
+        
+    def copy_parameters(self, leapct):
+        """Copies the parameters from another instance of this class"""
+        self.set_model()
+        self.libprojectors.copy_parameters.restype = ctypes.c_bool
+        self.libprojectors.copy_parameters.argtypes = [ctypes.c_int]
+        return self.libprojectors.copy_parameters(leapct.param_id)
 
     def reset(self):
         """reset
@@ -423,6 +430,18 @@ class tomographicModels:
         self.libprojectors.set_centerCol.argtypes = [ctypes.c_float]
         return self.libprojectors.set_centerCol(centerCol)
         
+    def find_centerCol(self, g, iRow=-1):
+        """Find the centerCol parameter"""
+        self.libprojectors.find_centerCol.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.find_centerCol.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.find_centerCol(g.data_ptr(), iRow, g.is_cuda == False)
+        else:
+            self.libprojectors.find_centerCol.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.find_centerCol(g, iRow, True)
+        return g
+        
     def set_centerRow(self, centerRow):
         """Set centerRow parameter"""
         self.set_model()
@@ -435,6 +454,30 @@ class tomographicModels:
         self.set_model()
         self.libprojectors.convert_conebeam_to_modularbeam.restype = ctypes.c_bool
         return self.libprojectors.convert_conebeam_to_modularbeam()
+        
+    def convert_parallelbeam_to_modularbeam(self):
+        """sets modular-beam parameters from a parallel-beam specification"""
+        self.set_model()
+        self.libprojectors.convert_parallelbeam_to_modularbeam.restype = ctypes.c_bool
+        return self.libprojectors.convert_parallelbeam_to_modularbeam()
+        
+    def rotate_detector(self, alpha):
+        """rotates modular-beam detector by alpha degrees"""
+        if self.get_geometry() != 'MODULAR':
+            print('Error: can only rotate modular-beam detectors')
+            print('Use convert_conebeam_to_modularbeam first')
+            return False
+        self.set_model()
+        self.libprojectors.rotate_detector.restype = ctypes.c_bool
+        self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
+        return self.libprojectors.rotate_detector(alpha)
+        
+    def shift_detector(self, r, c):
+        """shifts the detector by r mm in the row direction and c mm in the column direction"""
+        self.set_model()
+        self.libprojectors.shift_detector.restype = ctypes.c_bool
+        self.libprojectors.shift_detector.argtypes = [ctypes.c_float, ctypes.c_float]
+        return self.libprojectors.shift_detector(r, c)
     
     ###################################################################################################################
     ###################################################################################################################
@@ -988,16 +1031,16 @@ class tomographicModels:
             self.libprojectors.rampFilterVolume(f, True)
         return f
         
-    def Laplacian(self, g):
+    def Laplacian(self, g, numDims=2):
         """Applies a Laplacian operation to each projection"""
         self.libprojectors.Laplacian.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.Laplacian.argtypes = [ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.Laplacian(g.data_ptr(), g.is_cuda == False)
+            self.libprojectors.Laplacian.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.Laplacian(g.data_ptr(), numDims, g.is_cuda == False)
         else:
-            self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.Laplacian(g, True)
+            self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.Laplacian(g, numDims, True)
         return g
         
     def AzimuthalBlur(self, f, FWHM):
@@ -1145,6 +1188,46 @@ class tomographicModels:
             self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
             self.set_model()
             self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
+        return f
+        
+    def inconsistencyReconstruction(self, g, f=None, inplace=False):
+        """Performs an Inconsistency Reconstruction of the projection data, g, and stores the result in f
+        
+        An Inconsistency Reconstruction is an FBP reconstruction except it replaces the ramp filter with
+        a derivative.  For scans with angular ranges of 360 or more this will result in a pure noise
+        reconstruction if the geometry is calibrated and there are no biases in the data.  This can
+        be used as a robust way to find the centerCol parameter or estimate detector tilt.
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        
+        # Make a copy of g if necessary
+        if inplace == False:
+            q = self.copyData(g)
+        else:
+            q = g
+        
+        self.libprojectors.inconsistencyReconstruction.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(q) is torch.Tensor:
+            if f is None:
+                f = self.allocateVolume(0.0,True)
+                f = f.to(g.get_device())
+            self.libprojectors.inconsistencyReconstruction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.inconsistencyReconstruction(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
+        else:
+            if f is None:
+                f = self.allocateVolume()
+            self.libprojectors.inconsistencyReconstruction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.inconsistencyReconstruction(q, f, True)
         return f
         
     def BPF(self, g, f):
@@ -1398,6 +1481,10 @@ class tomographicModels:
                     f *= d/Pstar1
             subsetParams.setSubset(-1)
             return f
+        
+    def SIRT(self, g, f, numIter):
+        """Simultaneous Iterative Reconstruction Technique reconstruction"""
+        return self.SART(g, f, numIter, self.get_numAngles())
         
     def SART(self, g, f, numIter, numSubsets=1):
         """Simultaneous Algebraic Reconstruction Technique reconstruction
@@ -1839,7 +1926,11 @@ class tomographicModels:
         print('\tlambda = ' + str(stepSize))
         return stepSize
         
-    def RDLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditionerFWHM=1.0, nonnegativityConstraint=False):
+    def DLS(self, g, f, numIter, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=2):
+        """Derivative Least Squares reconstruction"""
+        return self.RDLS(g, f, numIter, 0.0, 0.0, preconditionerFWHM, nonnegativityConstraint, dimDeriv)
+        
+    def RDLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=1):
         """Regularized Derivative Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1853,6 +1944,8 @@ class tomographicModels:
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
             preconditionerFWHM (float): specifies the FWHM of the blur preconditioner
+            nonnegativityConstraint (bool): whether to apply a nonnegativity constraint
+            dimDeriv (int): number of dimensions to apply the Laplacian derivative
         
         Returns:
             f, the same as the input with the same name
@@ -1893,7 +1986,7 @@ class tomographicModels:
         for n in range(numIter):
             print('RDLS iteration ' + str(n+1) + ' of ' + str(numIter))
             LPf_minus_g[:] = Pf_minus_g[:]
-            self.Laplacian(LPf_minus_g)
+            self.Laplacian(LPf_minus_g, dimDeriv)
             LPf_minus_g *= -1.0
             self.backproject(LPf_minus_g, grad)
             if beta > 0.0:
@@ -1922,7 +2015,7 @@ class tomographicModels:
             grad_old_dot_grad_old = self.innerProd(u,grad)
             grad_old[:] = grad[:]
             
-            stepSize = self.RDLSstepSize(f, grad, d, Pd, delta, beta)
+            stepSize = self.RDLSstepSize(f, grad, d, Pd, delta, beta, dimDeriv)
             #if stepSize <= 0.0:
             #    print('invalid step size; quitting!')
             #    break
@@ -1936,7 +2029,7 @@ class tomographicModels:
                 Pf_minus_g[:] = Pf_minus_g[:] - stepSize*Pd[:]
         return f
 
-    def RDLSstepSize(self, f, grad, d, Pd, delta, beta):
+    def RDLSstepSize(self, f, grad, d, Pd, delta, beta, dimDeriv):
         """Calculates the step size for an RDLS iteration
 
         Args:
@@ -1952,7 +2045,7 @@ class tomographicModels:
         """
         num = self.innerProd(d,grad)
         LPd = self.copyData(Pd)
-        self.Laplacian(LPd)
+        self.Laplacian(LPd, dimDeriv)
         LPd *= -1.0
         denomA = self.innerProd(LPd,Pd)
         denomB = 0.0;

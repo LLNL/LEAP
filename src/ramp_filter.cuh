@@ -31,9 +31,11 @@ bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu, float scalar = 1
 bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0);
 bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu);
 
+bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* H, int N_H);
+
 bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0, float sampleShift = 0.0);
 
-bool Laplacian_gpu(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0);
+bool Laplacian_gpu(float*& g, int numDims, parameters* params, bool data_on_cpu, float scalar = 1.0);
 
 bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar = 1.0);
 

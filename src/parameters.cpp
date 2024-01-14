@@ -17,6 +17,7 @@
 #include <omp.h>
 #include "parameters.h"
 #include "cuda_utils.h"
+#include "cpu_utils.h"
 
 using namespace std;
 
@@ -53,6 +54,7 @@ void parameters::initialize()
 	rowShiftFromFilter = 0.0;
 	offsetScan = false;
 	truncatedScan = false;
+	inconsistencyReconstruction = false;
 
 	geometry = CONE;
 	detectorType = FLAT;
@@ -146,6 +148,7 @@ void parameters::assign(const parameters& other)
 	this->rowShiftFromFilter = other.rowShiftFromFilter;
 	this->offsetScan = other.offsetScan;
 	this->truncatedScan = other.truncatedScan;
+	this->inconsistencyReconstruction = other.inconsistencyReconstruction;
 	this->mu = other.mu;
 	this->muCoeff = other.muCoeff;
 	this->muRadius = other.muRadius;
@@ -974,6 +977,62 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 	}
 }
 
+bool parameters::rotateDetector(float alpha)
+{
+	if (geometry == MODULAR && colVectors != NULL && rowVectors != NULL)
+	{
+		for (int i = 0; i < numAngles; i++)
+		{
+			float* u_vec = &colVectors[3 * i];
+			float* v_vec = &rowVectors[3 * i];
+
+			float u_cross_v[3];
+			u_cross_v[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
+			u_cross_v[2] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+			u_cross_v[1] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+			rotateAroundAxis(u_cross_v, alpha * PI / 180.0, u_vec);
+			rotateAroundAxis(u_cross_v, alpha * PI / 180.0, v_vec);
+		}
+		return true;
+	}
+	else
+	{
+		printf("Error: can only rotate modular-beam detectors\n");
+		return false;
+	}
+}
+
+bool parameters::shiftDetector(float r, float c)
+{
+	if (geometry == MODULAR)
+	{
+		if (colVectors != NULL && rowVectors != NULL)
+		{
+			for (int i = 0; i < numAngles; i++)
+			{
+				float* u_vec = &colVectors[3 * i];
+				float* v_vec = &rowVectors[3 * i];
+
+				float* modCenter = &moduleCenters[3 * i];
+
+				modCenter[0] += u_vec[0] * c + v_vec[0] * r;
+				modCenter[1] += u_vec[1] * c + v_vec[1] * r;
+				modCenter[2] += u_vec[2] * c + v_vec[2] * r;
+			}
+			return true;
+		}
+		else
+			return false;
+	}
+	else
+	{
+		centerRow -= r/pixelHeight;
+		centerCol -= c/pixelWidth;
+		return true;
+	}
+}
+
 bool parameters::set_offsetScan(bool aFlag)
 {
 	if (aFlag == false)
@@ -1311,6 +1370,10 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice ,
 				r[2] = (z_lo - s[2]);
 				t_lo = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
 				v_lo = (s[0]+t_lo*r[0] - c[0]) * v_vec[0] + (s[1]+t_lo *r[1] - c[1]) * v_vec[1] + (s[2]+t_lo *r[2] - c[2]) * v_vec[2];
+
+				//const float denom = (x - sourcePosition[0]) * detNormal.x + (y - sourcePosition[1]) * detNormal.y + (z - sourcePosition[2]) * detNormal.z;
+				//const float t_C = c_minus_s_dot_n / denom;
+				//const float v_phi_x = (t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v - startVals_g.y) * Tv_inv;
 
 				if (doDebug && iphi == 0)
 				{
@@ -1690,6 +1753,83 @@ bool parameters::convert_conebeam_to_modularbeam()
 
 		s_pos[3 * iphi + 0] = sod * cos_phi + tau * sin_phi;
 		s_pos[3 * iphi + 1] = sod * sin_phi - tau * cos_phi;
+		s_pos[3 * iphi + 2] = z_source(iphi);
+
+		d_pos[3 * iphi + 0] = (sod - sdd) * cos_phi;
+		d_pos[3 * iphi + 1] = (sod - sdd) * sin_phi;
+		d_pos[3 * iphi + 2] = z_source(iphi);
+
+		v_vec[3 * iphi + 0] = 0.0;
+		v_vec[3 * iphi + 1] = 0.0;
+		v_vec[3 * iphi + 2] = 1.0;
+
+		u_vec[3 * iphi + 0] = -sin_phi;
+		u_vec[3 * iphi + 1] = cos_phi;
+		u_vec[3 * iphi + 2] = 0.0;
+
+		d_pos[3 * iphi + 0] += horizontalDetectorShift * u_vec[3 * iphi + 0];
+		d_pos[3 * iphi + 1] += horizontalDetectorShift * u_vec[3 * iphi + 1];
+		d_pos[3 * iphi + 2] += horizontalDetectorShift * u_vec[3 * iphi + 2];
+
+		d_pos[3 * iphi + 0] += verticalDetectorShift * v_vec[3 * iphi + 0];
+		d_pos[3 * iphi + 1] += verticalDetectorShift * v_vec[3 * iphi + 1];
+		d_pos[3 * iphi + 2] += verticalDetectorShift * v_vec[3 * iphi + 2];
+	}
+	centerRow = 0.5 * float(numRows - 1);
+	centerCol = 0.5 * float(numCols - 1);
+	if (set_sourcesAndModules(s_pos, d_pos, v_vec, u_vec, numAngles))
+		geometry = MODULAR;
+	delete[] s_pos;
+	delete[] d_pos;
+	delete[] v_vec;
+	delete[] u_vec;
+	return true;
+}
+
+bool parameters::convert_parallelbeam_to_modularbeam()
+{
+	if (geometry != PARALLEL)
+	{
+		printf("Error: input geometry must be parallel-beam");
+		return false;
+	}
+	if (geometryDefined() == false)
+	{
+		printf("Error: input geometry must be cone-beam");
+		return false;
+	}
+
+	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + u_0();
+	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + v_0();
+	//printf("horizontalDetectorShift = %f\n", horizontalDetectorShift);
+
+	double rFOV_max = max(double(furthestFromCenter()), max(double(fabs(z_0())), double(fabs(z_samples(numZ - 1)))));
+	float odd = 4.0 * rFOV_max;
+
+	sdd = 10.0 * odd;
+	while (sdd / odd < 1.0e20)
+	{
+		double alpha = max(atan(0.5 * (numCols - 1) * pixelWidth / sdd), atan(0.5 * (numRows - 1) * pixelHeight / sdd));
+		double maxDivergence = tan(alpha) * (sdd + rFOV_max) - tan(alpha) * (sdd - rFOV_max);
+		double maxTravel = maxDivergence / voxelWidth;
+
+		if (maxTravel < 0.25)
+			break;
+		sdd *= 10.0;
+	}
+	sod = sdd - odd;
+
+	float* s_pos = new float[3 * numAngles];
+	float* d_pos = new float[3 * numAngles];
+	float* v_vec = new float[3 * numAngles];
+	float* u_vec = new float[3 * numAngles];
+	for (int iphi = 0; iphi < numAngles; iphi++)
+	{
+		float cos_phi = cos(phis[iphi]);
+		float sin_phi = sin(phis[iphi]);
+
+		s_pos[3 * iphi + 0] = sod * cos_phi;// +tau * sin_phi;
+		s_pos[3 * iphi + 1] = sod * sin_phi;// -tau * cos_phi;
 		s_pos[3 * iphi + 2] = 0.0;
 
 		d_pos[3 * iphi + 0] = (sod - sdd) * cos_phi;

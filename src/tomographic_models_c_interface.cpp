@@ -44,6 +44,20 @@ tomographicModels* tomo()
 	return list_models.get(whichModel);
 }
 
+bool copy_parameters(int param_id)
+{
+	if (0 <= param_id && param_id < list_models.size())
+	{
+		if (whichModel != param_id)
+		{
+			list_models.get(param_id)->params.assign(tomo()->params);
+		}
+		return true;
+	}
+	else
+		return false;
+}
+
 void about()
 {
 	tomo()->about();
@@ -129,6 +143,14 @@ bool FBP(float* g, float* f, bool data_on_cpu)
 	return tomo()->doFBP(g, f, data_on_cpu);
 }
 
+bool inconsistencyReconstruction(float* g, float* f, bool data_on_cpu)
+{
+	tomo()->params.inconsistencyReconstruction = true;
+	bool retVal = FBP(g, f, data_on_cpu);
+	tomo()->params.inconsistencyReconstruction = false;
+	return retVal;
+}
+
 bool sensitivity(float* f, bool data_on_cpu)
 {
 	return tomo()->sensitivity(f, data_on_cpu);
@@ -162,6 +184,16 @@ bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight
 bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
 {
 	return tomo()->set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
+}
+
+bool rotate_detector(float alpha)
+{
+	return tomo()->params.rotateDetector(alpha);
+}
+
+bool shift_detector(float r, float c)
+{
+	return tomo()->params.shiftDetector(r, c);
 }
 
 bool set_flatDetector()
@@ -287,6 +319,11 @@ bool set_cylindircalAttenuationMap(float c, float R)
 bool convert_conebeam_to_modularbeam()
 {
 	return tomo()->params.convert_conebeam_to_modularbeam();
+}
+
+bool convert_parallelbeam_to_modularbeam()
+{
+	return tomo()->params.convert_parallelbeam_to_modularbeam();
 }
 
 bool clear_attenuationMap()
@@ -482,9 +519,14 @@ float get_z0()
 	return tomo()->params.z_0();
 }
 
-bool Laplacian(float* g, bool data_on_cpu)
+bool find_centerCol(float* g, int iRow, bool data_on_cpu)
 {
-	return tomo()->Laplacian(g, data_on_cpu);
+	return tomo()->find_centerCol(g, iRow, data_on_cpu);
+}
+
+bool Laplacian(float* g, int numDims, bool data_on_cpu)
+{
+	return tomo()->Laplacian(g, numDims, data_on_cpu);
 }
 
 bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)

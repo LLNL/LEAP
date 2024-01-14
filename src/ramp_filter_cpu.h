@@ -39,7 +39,7 @@ Complex* HilbertTransformFrequencyResponse_cpu(int N, parameters* params);
 bool splitLeftAndRight(float* g, float* g_left, float* g_right, parameters* params);
 bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* params);
 
-bool Laplacian_cpu(float*& g, parameters* params, float scalar = 1.0);
+bool Laplacian_cpu(float*& g, int numDims, parameters* params, float scalar = 1.0);
 
 bool ray_derivative_cpu(float* g, parameters* params, float sampleShift = 0.0, float scalar = 1.0);
 

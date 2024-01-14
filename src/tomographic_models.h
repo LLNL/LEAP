@@ -557,12 +557,24 @@ public:
 	bool flipAttenuationMapSign(bool data_on_cpu);
 
 	/**
+	 * \fn          find_centerCol
+	 * \brief       finds centerCol of parallel-, fan-, or cone-beam data using conjugate rays
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   iRow the detector row index to use the estimate centerCol
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool find_centerCol(float* g, int iRow, bool data_on_cpu);
+
+	/**
 	 * \fn          Laplacian
 	 * \brief       Applies the 2D Laplacian to each projection
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   numDims the number of dimensions of the Laplacian
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool Laplacian(float* g, bool data_on_cpu);
+	bool Laplacian(float* g, int numDims, bool data_on_cpu);
 
 	/**
 	 * \fn          AzimuthalBlur

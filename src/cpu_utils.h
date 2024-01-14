@@ -39,4 +39,6 @@ bool replaceZeros_cpu(float*, int N_1, int N_2, int N_3, float newVal = 1.0);
 
 bool windowFOV_cpu(float* f, parameters* params);
 
+float* rotateAroundAxis(float* theAxis, float phi, float* aVec);
+
 #endif

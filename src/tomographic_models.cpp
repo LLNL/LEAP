@@ -18,6 +18,8 @@
 #include "sensitivity_cpu.h"
 #include "sensitivity.cuh"
 #include "ramp_filter_cpu.h"
+#include "find_center_cpu.h"
+#include "projectors_Joseph_cpu.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -508,7 +510,13 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	}
 
 	if (numChunks <= 1)
-		return false;
+	{
+		bool retVal = false;
+		if (params.numZ == 1 && params.numRows > 1)
+			retVal = true;
+		if (retVal == false)
+			return false;
+	}
 
 	//if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
 	//	return false;
@@ -540,6 +548,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		//chunk_params.offsetZ = params.offsetZ + (firstSlice - rowRange[0]) * params.voxelHeight;
 		//if (params.geometry == parameters::MODULAR)
 		//	chunk_params.offsetZ += 0.5*(chunk_params.numZ - params.numZ)* params.voxelHeight;
+
 		chunk_params.centerRow = params.centerRow - rowRange[0];
 		if (params.mu != NULL)
 			chunk_params.mu = &params.mu[uint64(firstSlice) * uint64(params.numX * params.numY)];
@@ -713,7 +722,7 @@ bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
 
 bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 {
-	if (params.muSpecified() == true || params.isSymmetric() == true)
+	if (params.muSpecified() == true || params.isSymmetric() == true || (params.geometry == parameters::MODULAR && usingSFprojectorsForModularBeam(&params) == false))
 	{
 		if (params.whichGPU < 0 || data_on_cpu == true)
 		{
@@ -1964,14 +1973,25 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU);
 }
 
-bool tomographicModels::Laplacian(float* g, bool data_on_cpu)
+bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
+{
+	if (data_on_cpu)
+		return findCenter_cpu(g, &params, iRow);
+	else
+	{
+		printf("Error: find_centerCol not yet implemented for data on the GPU\n");
+		return false;
+	}
+}
+
+bool tomographicModels::Laplacian(float* g, int numDims, bool data_on_cpu)
 {
 	if (g == NULL || params.geometryDefined() == false)
 		return false;
 	if (data_on_cpu)
-		return Laplacian_cpu(g, &params, 1.0);
+		return Laplacian_cpu(g, numDims, &params, 1.0);
 	else
-		return Laplacian_gpu(g, &params, data_on_cpu, 1.0);
+		return Laplacian_gpu(g, numDims, &params, data_on_cpu, 1.0);
 }
 
 bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)

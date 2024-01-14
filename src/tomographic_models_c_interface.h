@@ -22,6 +22,8 @@
 extern "C" PROJECTOR_API bool set_model(int);
 extern "C" PROJECTOR_API int create_new_model();
 
+extern "C" PROJECTOR_API bool copy_parameters(int);
+
 extern "C" PROJECTOR_API void about();
 extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
@@ -46,6 +48,7 @@ extern "C" PROJECTOR_API bool rampFilterVolume(float* f, bool data_on_cpu);
 extern "C" PROJECTOR_API float get_FBPscalar();
 
 extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool data_on_cpu);
+extern "C" PROJECTOR_API bool inconsistencyReconstruction(float* g, float* f, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool sensitivity(float* f, bool data_on_cpu);
 
@@ -55,6 +58,9 @@ extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCo
 extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
 extern "C" PROJECTOR_API bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
 extern "C" PROJECTOR_API bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float*, float*, float*, float*);
+
+extern "C" PROJECTOR_API bool rotate_detector(float alpha);
+extern "C" PROJECTOR_API bool shift_detector(float r, float c);
 
 extern "C" PROJECTOR_API bool set_flatDetector();
 extern "C" PROJECTOR_API bool set_curvedDetector();
@@ -95,6 +101,7 @@ extern "C" PROJECTOR_API bool set_normalizedHelicalPitch(float h_normalized);
 extern "C" PROJECTOR_API bool set_attenuationMap(float*);
 extern "C" PROJECTOR_API bool set_cylindircalAttenuationMap(float, float);
 extern "C" PROJECTOR_API bool convert_conebeam_to_modularbeam();
+extern "C" PROJECTOR_API bool convert_parallelbeam_to_modularbeam();
 extern "C" PROJECTOR_API bool clear_attenuationMap();
 extern "C" PROJECTOR_API bool muSpecified();
 extern "C" PROJECTOR_API bool flipAttenuationMapSign(bool data_on_cpu);
@@ -131,7 +138,9 @@ extern "C" PROJECTOR_API float get_offsetY();
 extern "C" PROJECTOR_API float get_offsetZ();
 extern "C" PROJECTOR_API float get_z0();
 
-extern "C" PROJECTOR_API bool Laplacian(float* g, bool data_on_cpu);
+extern "C" PROJECTOR_API bool find_centerCol(float* g, int iRow, bool data_on_cpu);
+
+extern "C" PROJECTOR_API bool Laplacian(float* g, int numDims, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu);
 

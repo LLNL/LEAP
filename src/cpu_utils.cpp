@@ -386,3 +386,28 @@ bool windowFOV_cpu(float* f, parameters* params)
         return true;
     }
 }
+
+float* rotateAroundAxis(float* theAxis, float phi, float* aVec)
+{
+    // assume vectors in R^3 and theAxis is a unit vector
+    // reference: http://inside.mines.edu/fs_home/gmurray/ArbitraryAxisRotation/, section 5.2
+
+    float cos_phi = cos(phi);
+    float sin_phi = sin(phi);
+
+    float axis_dot_vector = theAxis[0] * aVec[0] + theAxis[1] * aVec[1] + theAxis[2] * aVec[2];
+
+    float u = theAxis[0];
+    float v = theAxis[1];
+    float w = theAxis[2];
+
+    float x = aVec[0];
+    float y = aVec[1];
+    float z = aVec[2];
+
+    aVec[0] = u * axis_dot_vector * (1.0 - cos_phi) + x * cos_phi + (-w * y + v * z) * sin_phi;
+    aVec[1] = v * axis_dot_vector * (1.0 - cos_phi) + y * cos_phi + (w * x - u * z) * sin_phi;
+    aVec[2] = w * axis_dot_vector * (1.0 - cos_phi) + z * cos_phi + (-v * x + u * y) * sin_phi;
+
+    return aVec;
+}

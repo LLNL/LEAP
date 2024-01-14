@@ -147,6 +147,26 @@ def setLTTfromLEAP(leapct,LTT):
     LTT.cmd(['angularRange = ' + str(angularRange), 'pixelHeight = ' + str(pixelHeight), 'pixelWidth = ' + str(pixelWidth)])
     LTT.cmd(['centerRow = ' + str(centerRow), 'centerCol = ' + str(centerCol)])
 
+def parseGeomFile(infile):
+    import re
+    sources=[]
+    dets=[]
+    rowVector=[]
+    colVector=[]
+    with open(infile) as fp:
+        for result in re.findall('sourcePosition=\((.*?)\)', fp.read(), re.S):
+            sources.append(list(eval(result)))
+    with open(infile) as fp:
+        for result in re.findall('moduleCenter=\((.*?)\)', fp.read(), re.S):
+            dets.append(list(eval(result)))
+    with open(infile) as fp:
+        for result in re.findall('rowVector=\((.*?)\)', fp.read(), re.S):
+             rowVector.append(list(eval(result)))
+    with open(infile) as fp:
+        for result in re.findall('columnVector=\((.*?)\)', fp.read(), re.S):
+             colVector.append(list(eval(result)))
+    return sources, dets, rowVector, colVector
+
 ''' Example Usage
 leapct = tomographicModels()
 LTT = LTTserver()

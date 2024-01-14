@@ -25,7 +25,7 @@
 #include <cufft.h>
 #endif
 
-__global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float scalar)
+__global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const int numDims, const float scalar)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -41,7 +41,7 @@ __global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4
         const int n_minus_one = max(n - 1, 0);
         diff = proj[m * N.z + n_plus_one] + proj[m * N.z + n_minus_one] - 2.0f * proj[m * N.z + n];
     }
-    if (N.y >= 3)
+    if (N.y >= 3 && numDims >= 2)
     {
         const int m_plus_one = min(m + 1, N.y - 1);
         const int m_minus_one = max(m - 1, 0);
@@ -914,6 +914,161 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
     return retVal;
 }
 
+bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* H, int N_H)
+{
+    if (data_on_cpu == false)
+    {
+        printf("Error: current implementation of transmissionFilter requires that data reside on the CPU\n");
+        return false;
+    }
+
+    int N_x = params->numCols;
+    int N_y = params->numRows;
+    int N_z = params->numAngles;
+
+    if (N_H < max(N_x, N_y))
+    {
+        printf("Error: invalid filter size\n");
+        return false;
+    }
+
+    // Pad and then find next power of 2
+    //int N_H1 = int(pow(2.0, ceil(log2(2 * max(N_y, N_x)))));
+    //int N_H1 = optimalFFTsize(2 * max(N_y, N_x));
+    int N_H1 = N_H;
+    int N_H2 = N_H1;
+    int N_H2_over2 = N_H2 / 2 + 1;
+
+    cudaSetDevice(params->whichGPU);
+    bool retVal = true;
+
+    int smoothingLevel = 0;
+
+    // Make cuFFT Plans
+    cufftResult result;
+    cufftHandle forward_plan;
+    if (CUFFT_SUCCESS != cufftPlan2d(&forward_plan, N_H1, N_H2, CUFFT_R2C))
+    {
+        fprintf(stderr, "Failed to plan 2d r2c fft");
+        return false;
+    }
+    cufftHandle backward_plan;
+    if (CUFFT_SUCCESS != cufftPlan2d(&backward_plan, N_H1, N_H2, CUFFT_C2R))  // do I use N_H_over2?
+    {
+        fprintf(stderr, "Failed to plan 2d c2r ifft");
+        return false;
+    }
+
+    float* paddedProj = (float*)malloc(sizeof(float) * N_H1 * N_H2);
+    // Make zero-padded array, copy data to 1st half of array and set remaining slots to zero
+    cudaError_t cudaStatus;
+    float* dev_g_pad = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_g_pad, N_H1 * N_H2 * sizeof(float)))
+    {
+        fprintf(stderr, "cudaMalloc(padded volume data) failed!\n");
+        retVal = false;
+    }
+
+    // Make data for the result of the FFT
+    cufftComplex* dev_G = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_G, N_H1 * N_H2_over2 * sizeof(cufftComplex)))
+    {
+        fprintf(stderr, "cudaMalloc(Fourier transform of padded volume data) failed!\n");
+        retVal = false;
+    }
+
+    // Copy filter to device
+    float* dev_H = 0;
+    if (cudaSuccess != cudaMalloc((void**)&dev_H, N_H1 * N_H2_over2 * sizeof(float)))
+        fprintf(stderr, "cudaMalloc failed!\n");
+    cudaStatus = cudaMemcpy(dev_H, H, N_H1 * N_H2_over2 * sizeof(float), cudaMemcpyHostToDevice);
+    if (cudaSuccess != cudaStatus)
+    {
+        fprintf(stderr, "cudaMemcpy(H) failed!\n");
+        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+        retVal = false;
+    }
+
+    for (int k = 0; k < N_z; k++)
+    {
+        float* aProj = &g[uint64(k) * uint64(N_x * N_y)];
+        for (int j = 0; j < N_H1; j++)
+        {
+            int j_source = j;
+            if (j >= N_y)
+            {
+                if (j - N_y < N_H1 - j)
+                    j_source = N_y - 1;
+                else
+                    j_source = 0;
+            }
+            for (int i = 0; i < N_H2; i++)
+            {
+                int i_source = i;
+                if (i >= N_x)
+                {
+                    if (i - N_x < N_H2 - i)
+                        i_source = N_x - 1;
+                    else
+                        i_source = 0;
+                }
+                paddedProj[j * N_H2 + i] = aProj[j_source * N_x + i_source];
+            }
+        }
+        if (cudaMemcpy(dev_g_pad, paddedProj, N_H1 * N_H2 * sizeof(float), cudaMemcpyHostToDevice))
+        {
+            fprintf(stderr, "cudaMemcpy(padded volume data) failed!\n");
+            retVal = false;
+        }
+
+        // FFT
+        result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);
+
+        // Multiply Filter
+        int3 dataSize;
+        dataSize.z = N_z;
+        dataSize.y = N_H1;
+        dataSize.x = N_H2_over2;
+        multiply2DRampFilterKernel <<< 1, 1 >>> (dev_G, dev_H, dataSize);
+
+        // IFFT
+        result = cufftExecC2R(backward_plan, (cufftComplex*)dev_G, (cufftReal*)dev_g_pad);
+
+        // Copy result back to host
+        if (retVal)
+        {
+            cudaStatus = cudaMemcpy(paddedProj, dev_g_pad, N_H1 * N_H2 * sizeof(float), cudaMemcpyDeviceToHost);
+            if (cudaSuccess != cudaStatus)
+            {
+                fprintf(stderr, "failed to copy result back to host!\n");
+                fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+                fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+                retVal = false;
+            }
+            
+            float* aProj = &g[uint64(k) * uint64(N_x * N_y)];
+            for (int j = 0; j < N_y; j++)
+            {
+                for (int i = 0; i < N_x; i++)
+                {
+                    aProj[j * N_x + i] = paddedProj[j * N_H2 + i] / float(N_H1 * N_H2);
+                }
+            }
+        }
+    }
+
+    // Clean up
+    cufftDestroy(forward_plan);
+    cufftDestroy(backward_plan);
+    cudaFree(dev_g_pad);
+    cudaFree(dev_H);
+    cudaFree(dev_G);
+    free(paddedProj);
+
+    return retVal;
+}
+
 bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
 {
     if (data_on_cpu == false)
@@ -1126,7 +1281,7 @@ bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
 }
 #endif
 
-bool Laplacian_gpu(float*& g, parameters* params, bool data_on_cpu, float scalar)
+bool Laplacian_gpu(float*& g, int numDims, parameters* params, bool data_on_cpu, float scalar)
 {
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1152,7 +1307,7 @@ bool Laplacian_gpu(float*& g, parameters* params, bool data_on_cpu, float scalar
 
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
-    Laplacian_kernel <<< dimGrid, dimBlock >>> (dev_g, dev_Dg, N_g, T_g, startVal_g, scalar);
+    Laplacian_kernel <<< dimGrid, dimBlock >>> (dev_g, dev_Dg, N_g, T_g, startVal_g, numDims, scalar);
 
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess)
