@@ -1209,7 +1209,8 @@ float parameters::z_0()
 		return offsetZ - 0.5*float(numZ-1) * voxelHeight;
 	else
 	{
-		float rzref = -centerRow * ((sod / sdd * pixelHeight) / voxelHeight) * voxelHeight;
+		//float rzref = -centerRow * ((sod / sdd * pixelHeight) / voxelHeight) * voxelHeight;
+		float rzref = -centerRow * (sod / sdd * pixelHeight);
 		if (helicalPitch != 0.0)
 		{
 			rzref = (0.5 * float(numRows - 1) - centerRow) * (sod / sdd * pixelHeight) / voxelHeight;

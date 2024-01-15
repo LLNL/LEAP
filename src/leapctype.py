@@ -449,6 +449,17 @@ class tomographicModels:
         self.libprojectors.set_centerRow.argtypes = [ctypes.c_float]
         return self.libprojectors.set_centerRow(centerRow)
         
+    def convert_to_modularbeam(self):
+        if self.get_geometry() == 'PARALLEL':
+            return self.convert_parallelbeam_to_modularbeam()
+        elif self.get_geometry() == 'CONE':
+            return self.convert_conebeam_to_modularbeam()
+        elif self.get_geometry() == 'MODULAR':
+            return True
+        else:
+            print('Error: transformations to modular-beam not defined for this geometry')
+            return False
+        
     def convert_conebeam_to_modularbeam(self):
         """sets modular-beam parameters from a cone-beam specification"""
         self.set_model()

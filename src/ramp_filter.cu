@@ -1013,7 +1013,7 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
                     else
                         i_source = 0;
                 }
-                paddedProj[j * N_H2 + i] = aProj[j_source * N_x + i_source];
+                paddedProj[j * N_H2 + i] = exp(-aProj[j_source * N_x + i_source]);
             }
         }
         if (cudaMemcpy(dev_g_pad, paddedProj, N_H1 * N_H2 * sizeof(float), cudaMemcpyHostToDevice))
@@ -1052,7 +1052,7 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
             {
                 for (int i = 0; i < N_x; i++)
                 {
-                    aProj[j * N_x + i] = paddedProj[j * N_H2 + i] / float(N_H1 * N_H2);
+                    aProj[j * N_x + i] = -log(paddedProj[j * N_H2 + i] / float(N_H1 * N_H2));
                 }
             }
         }
