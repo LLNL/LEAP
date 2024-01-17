@@ -598,6 +598,31 @@ bool parameters::set_default_volume(float scale)
 		}
 	}
 
+	if (geometry == CONE)
+	{
+		if (helicalPitch != 0.0)
+		{
+			offsetZ = (0.5 * float(numRows - 1) - centerRow) * (sod / sdd * pixelHeight);
+		}
+		else
+		{
+			// want: z_0 = -centerRow * (sod / sdd * pixelHeight)
+			// have: z_0 = offsetZ - 0.5 * float(numZ - 1) * voxelHeight
+			offsetZ = 0.5 * float(numZ - 1) * voxelHeight - centerRow * (sod / sdd * pixelHeight);
+		}
+		/* old specification of z_0
+		float rzref = -centerRow * (sod / sdd * pixelHeight);
+		if (helicalPitch != 0.0)
+		{
+			rzref = (0.5 * float(numRows - 1) - centerRow) * (sod / sdd * pixelHeight) / voxelHeight;
+			rzref -= 0.5 * float(numZ - 1);
+			rzref *= voxelHeight;
+		}
+		return offsetZ + rzref;
+		//*/
+		//return offsetZ - 0.5 * float(numZ - 1) * voxelHeight; // current specification of z_0
+	}
+
 	if (offsetScan)
 	{
 		numX = 2 * int(ceil(rFOV() / voxelWidth));
@@ -1204,12 +1229,16 @@ float parameters::z_0()
 {
 	//return offsetZ - 0.5*float(numZ - 1)*voxelHeight;
 	if (geometry == PARALLEL || geometry == FAN)
-		return offsetZ - centerRow * (pixelHeight / voxelHeight) * voxelHeight;
+	{
+		//return offsetZ - centerRow * (pixelHeight / voxelHeight) * voxelHeight;
+		return offsetZ - centerRow * pixelHeight; // note that offsetZ is always forced to zero
+	}
 	else if (geometry == MODULAR)
-		return offsetZ - 0.5*float(numZ-1) * voxelHeight;
+		return offsetZ - 0.5 * float(numZ - 1) * voxelHeight;
 	else
 	{
 		//float rzref = -centerRow * ((sod / sdd * pixelHeight) / voxelHeight) * voxelHeight;
+		/*
 		float rzref = -centerRow * (sod / sdd * pixelHeight);
 		if (helicalPitch != 0.0)
 		{
@@ -1218,6 +1247,8 @@ float parameters::z_0()
 			rzref *= voxelHeight;
 		}
 		return offsetZ + rzref;
+		//*/
+		return offsetZ - 0.5 * float(numZ - 1) * voxelHeight;
 	}
 }
 

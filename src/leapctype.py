@@ -578,6 +578,20 @@ class tomographicModels:
         """
         return self.libprojectors.get_volumeDimensionOrder()
         
+    def set_numZ(self, numZ):
+        """Set the number of voxels in the z-dimension"""
+        self.libprojectors.set_numZ.argtypes = [ctypes.c_int]
+        self.libprojectors.set_numZ.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_numZ(numZ)
+        
+    def set_offsetZ(self, offsetZ):
+        """Set offsetZ parameter which defines the central z-slice location (mm) of the volume"""
+        self.libprojectors.set_offsetZ.argtypes = [ctypes.c_float]
+        self.libprojectors.set_offsetZ.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_offsetZ(offsetZ)
+        
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS PROVIDE CONVENIENT ROUTINES TO MAKE THE PROJECTION DATA AND VOLUME DATA NUMPY ARRAYS

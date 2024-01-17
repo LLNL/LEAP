@@ -88,7 +88,6 @@ elif whichDemo == 2:
 
     leapct_chunk = tomographicModels()
 
-    # THIS DEMO DOES NOT YET WORK CORRECTLY AND NEEDS SOME RESTRUCTURING OF HOW THE VOLUME Z-SLICES ARE DEFINED
     for n in range(numChunks):
         print('*************************************************************')
         leapct_chunk.copy_parameters(leapct)
@@ -98,20 +97,10 @@ elif whichDemo == 2:
         numZ = sliceEnd - sliceStart + 1
         if numZ <= 0:
             break
-        
-        #leapct_chunk.set_volume(leapct.get_numX(), leapct.get_numY(), numZ, leapct.get_voxelWidth(), leapct.get_voxelHeight(), 0.0, 0.0, z[sliceStart]-z[0])
-        #leapct_chunk.print_parameters()
-        
-        #'''
-        # Bottom half
-        #leapct.set_volume(leapct.get_numX(), leapct.get_numY(), chunkSize, leapct.get_voxelWidth(), leapct.get_voxelHeight())
-        
-        # Top half
-        #leapct.set_volume(leapct.get_numX(), leapct.get_numY(), chunkSize, leapct.get_voxelWidth(), leapct.get_voxelHeight(), 0.0, 0.0, z[chunkSize]-z[0])
-        #leapct.print_parameters()
-        
-        #leapct_chunk.set_volume(leapct.get_numX(), leapct.get_numY(), numZ, leapct.get_voxelWidth(), leapct.get_voxelHeight(), 0.0, 0.0, z[sliceStart]-z[0])
-        leapct_chunk.set_volume(leapct.get_numX(), leapct.get_numY(), numZ, leapct.get_voxelWidth(), leapct.get_voxelHeight(), 0.0, 0.0, 0.0)
+
+        # Set the number of z-slices for this chunk and the shift the volume to the next slab location        
+        leapct_chunk.set_numZ(numZ)
+        leapct_chunk.set_offsetZ(leapct_chunk.get_offsetZ() + z[sliceStart]-leapct_chunk.get_z0())
         
         # This function determines the detector row indices that you need to perform reconstruction with the
         # CT volume parameters that are currently defined.  We will use this to determine how to crop the projections

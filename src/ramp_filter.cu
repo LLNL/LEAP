@@ -435,7 +435,7 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
     }
 
     for (int k = N.z; k < N_pad; k++)
-        data_padded_block[k] = 0.0;
+        data_padded_block[k] = 0.0f;
 
     if (numExtrapolate > 0)
     {
@@ -450,6 +450,7 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
 
 __global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N)
 {
+    /*
     int j = threadIdx.x;
     int i = blockIdx.x;
     if (i > N.x - 1 || j > N.y - 1)
@@ -460,10 +461,21 @@ __global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N
         aProj[j * N.z + k].x *= H[k];
         aProj[j * N.z + k].y *= H[k];
     }
+    //*/
+
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+    uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+    G[ind].x *= H[k];
+    G[ind].y *= H[k];
 }
 
 __global__ void multiplyComplexFilterKernel(cufftComplex* G, const cufftComplex* H, int3 N)
 {
+    /*
     int j = threadIdx.x;
     int i = blockIdx.x;
     if (i > N.x - 1 || j > N.y - 1)
@@ -476,6 +488,20 @@ __global__ void multiplyComplexFilterKernel(cufftComplex* G, const cufftComplex*
         G_row[k].x = realPart;
         G_row[k].y = imagPart;
     }
+    //*/
+
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+    uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+
+    const float realPart = G[ind].x * H[k].x - G[ind].y * H[k].y;
+    const float imagPart = G[ind].x * H[k].y + G[ind].y * H[k].x;
+
+    G[ind].x = realPart;
+    G[ind].y = imagPart;
 }
 
 __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, const float4 T, const float4 startVals, const float R, const float helicalPitch)
@@ -727,6 +753,7 @@ bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu, float scalar, fl
 
 bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
 {
+    //return true;
     bool retVal = true;
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -855,6 +882,9 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
 
     if (retVal == true)
     {
+        dim3 dimBlock_viewChunk = setBlockSize(dataSize);
+        dim3 dimGrid_viewChunk = setGridSize(dataSize, dimBlock_viewChunk);
+
         for (int iChunk = 0; iChunk < numChunks; iChunk++)
         {
             int startView = iChunk * N_viewChunk;
@@ -867,11 +897,20 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
             // FFT
             result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);
 
+            /*
             // Multiply Filter
             if (dev_H != 0)
                 multiplyRampFilterKernel <<< N_viewChunk, numRows >>> (dev_G, dev_H, dataSize);
             else if (dev_cH != 0)
                 multiplyComplexFilterKernel <<< N_viewChunk, numRows >>> (dev_G, dev_cH, dataSize);
+            //*/
+            //*
+            // Multiply Filter
+            if (dev_H != 0)
+                multiplyRampFilterKernel <<< dimGrid_viewChunk, dimBlock_viewChunk >>> (dev_G, dev_H, dataSize);
+            else if (dev_cH != 0)
+                multiplyComplexFilterKernel <<< dimGrid_viewChunk, dimBlock_viewChunk >>> (dev_G, dev_cH, dataSize);
+            //*/
             //cudaDeviceSynchronize();
 
             // IFFT
