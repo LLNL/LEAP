@@ -66,6 +66,9 @@ extern "C" PROJECTOR_API bool set_flatDetector();
 extern "C" PROJECTOR_API bool set_curvedDetector();
 extern "C" PROJECTOR_API bool get_detectorType();
 
+extern "C" PROJECTOR_API bool set_numCols(int);
+extern "C" PROJECTOR_API bool set_numRows(int);
+
 extern "C" PROJECTOR_API bool set_centerCol(float);
 extern "C" PROJECTOR_API bool set_centerRow(float);
 
@@ -73,6 +76,9 @@ extern "C" PROJECTOR_API bool set_volume(int numX, int numY, int numZ, float vox
 extern "C" PROJECTOR_API bool set_volumeDimensionOrder(int which);
 extern "C" PROJECTOR_API int get_volumeDimensionOrder();
 extern "C" PROJECTOR_API bool set_default_volume(float scale);
+
+extern "C" PROJECTOR_API bool set_numZ(int numZ);
+extern "C" PROJECTOR_API bool set_offsetZ(float offsetZ);
 
 extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

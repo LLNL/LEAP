@@ -1329,13 +1329,92 @@ class tomographicModels:
             rowsNeeded, a 2X1 numpy array where the values are the first and last detector row index needed to reconstruct the volume.
         
         """
-        rowsNeeded = np.zeros((2,1),dtype=np.float32)
+        rowsNeeded = np.zeros(2,dtype=np.int32)
         rowsNeeded[1] = self.get_numRows()-1
-        self.libprojectors.rowRangeNeededForBackprojection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.rowRangeNeededForBackprojection.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
         self.libprojectors.rowRangeNeededForBackprojection.restype = ctypes.c_bool
         self.set_model()
         self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
         return rowsNeeded
+        
+    def cropCols(self, colRange, g=None):
+        if colRange is None:
+            return None
+        if len(colRange) != 2 or colRange[0] < 0 or colRange[1] < colRange[0] or colRange[1] > self.get_numCols()-1:
+            print('Error: cropCols invalid argument!')
+            return None
+        numCols = self.get_numCols()
+        self.set_numCols(colRange[1]-colRange[0]+1)
+        self.shift_detector(0.0, self.get_pixelWidth()*colRange[0])
+        if g is not None:
+        
+            if has_torch == True and type(g) is torch.Tensor:
+                dim3 = colRange[1]-colRange[0]+1
+                if g.is_cuda:
+                    g_crop = torch.zeros([g.shape[0], g.shape[1], dim3], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                else:
+                    g_crop = torch.zeros([g.shape[0], g.shape[1], dim3], dtype=torch.float32)
+                g_crop[:,:,:] = g[:, :, colRange[0]:colRange[1]+1]
+            else:
+                g_crop = np.ascontiguousarray(g[:, :, colRange[0]:colRange[1]+1], np.float32)
+        else:
+            g_crop = None
+        return g_crop
+        
+    def cropRows(self, rowRange, g=None):
+        if rowRange is None:
+            return None
+        if len(rowRange) != 2 or rowRange[0] < 0 or rowRange[1] < rowRange[0] or rowRange[1] > self.get_numRows()-1:
+            print('Error: cropRows invalid argument!')
+            return None
+        numRows = self.get_numRows()
+        self.set_numRows(rowRange[1]-rowRange[0]+1)
+        self.shift_detector(self.get_pixelHeight()*rowRange[0], 0.0)
+        if g is not None:
+        
+            if has_torch == True and type(g) is torch.Tensor:
+                dim2 = rowRange[1]-rowRange[0]+1
+                if g.is_cuda:
+                    g_crop = torch.zeros([g.shape[0], dim2, g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                else:
+                    g_crop = torch.zeros([g.shape[0], dim2, g.shape[2]], dtype=torch.float32)
+                g_crop[:,:,:] = g[:, rowRange[0]:rowRange[1]+1, :]
+            else:
+                g_crop = np.ascontiguousarray(g[:, rowRange[0]:rowRange[1]+1, :], np.float32)
+        else:
+            g_crop = None
+        return g_crop
+        
+    def cropProjections(self, rowRange, colRange=None, g=None):
+        if colRange is None:
+            return self.cropRows(rowRange, g)
+        if rowRange is None:
+            return self.cropCols(colRange, g)
+        numCols = self.get_numCols()
+        numRows = self.get_numRows()
+        if len(colRange) != 2 or colRange[0] < 0 or colRange[1] < colRange[0] or colRange[1] > self.get_numCols()-1:
+            print('Error: cropProjections invalid argument!')
+            return None
+        if len(rowRange) != 2 or rowRange[0] < 0 or rowRange[1] < rowRange[0] or rowRange[1] > self.get_numRows()-1:
+            print('Error: cropProjections invalid argument!')
+            return None
+        self.cropRows(rowRange)
+        self.cropCols(colRange)
+        if g is not None:
+            #g_crop = g[:, rowRange[0]:rowRange[1]+1, colRange[0]:colRange[1]+1]
+            if has_torch == True and type(g) is torch.Tensor:
+                dim2 = rowRange[1]-rowRange[0]+1
+                dim3 = colRange[1]-colRange[0]+1
+                if g.is_cuda:
+                    g_crop = torch.zeros([g.shape[0], dim2, dim3], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                else:
+                    g_crop = torch.zeros([g.shape[0], dim2, dim3], dtype=torch.float32)
+                g_crop[:,:,:] = g[:, rowRange[0]:rowRange[1]+1, colRange[0]:colRange[1]+1]
+            else:
+                g_crop = np.ascontiguousarray(g[:, rowRange[0]:rowRange[1]+1, colRange[0]:colRange[1]+1], np.float32)
+        else:
+            g_crop = None
+        return g_crop
     
     ###################################################################################################################
     ###################################################################################################################
@@ -2593,6 +2672,20 @@ class tomographicModels:
         self.libprojectors.set_angles.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_angles(phis, int(phis.size))
+        
+    def set_numCols(self, numCols):
+        """Set the number of detector columns"""
+        self.libprojectors.set_numCols.argtypes = [ctypes.c_int]
+        self.libprojectors.set_numCols.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_numCols(numCols)
+        
+    def set_numRows(self, numRows):
+        """Set the number of detector rows"""
+        self.libprojectors.set_numRows.argtypes = [ctypes.c_int]
+        self.libprojectors.set_numRows.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_numRows(numRows)
 
     ###################################################################################################################
     ###################################################################################################################

@@ -50,7 +50,9 @@ bool copy_parameters(int param_id)
 	{
 		if (whichModel != param_id)
 		{
-			list_models.get(param_id)->params.assign(tomo()->params);
+			//printf("copy %d => %d\n", param_id, whichModel);
+			//list_models.get(param_id)->params.assign(tomo()->params);
+			tomo()->params.assign(list_models.get(param_id)->params);
 		}
 		return true;
 	}
@@ -211,6 +213,28 @@ bool get_detectorType()
 	return tomo()->params.detectorType;
 }
 
+bool set_numCols(int numCols)
+{
+	if (numCols >= 1)
+	{
+		tomo()->params.numCols = numCols;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_numRows(int numRows)
+{
+	if (numRows >= 1)
+	{
+		tomo()->params.numRows = numRows;
+		return true;
+	}
+	else
+		return false;
+}
+
 bool set_centerCol(float centerCol)
 {
 	return tomo()->set_centerCol(centerCol);
@@ -229,6 +253,23 @@ bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeigh
 bool set_default_volume(float scale)
 {
 	return tomo()->set_default_volume(scale);
+}
+
+bool set_numZ(int numZ)
+{
+	if (numZ > 0)
+	{
+		tomo()->params.numZ = numZ;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_offsetZ(float offsetZ)
+{
+	tomo()->params.offsetZ = offsetZ;
+	return true;
 }
 
 bool set_volumeDimensionOrder(int which)
