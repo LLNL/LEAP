@@ -146,8 +146,14 @@ bool tomographicModels::weightedBackproject(float* g, float* f, bool data_on_cpu
 {
 	bool doWeight_save = params.doWeightedBackprojection;
 	params.doWeightedBackprojection = true;
+
+	bool doExtrapolation_save = params.doExtrapolation;
+	if (params.geometry != parameters::CONE || params.helicalPitch == 0.0)
+		params.doExtrapolation = true;
+
 	bool retVal = backproject(g, f, data_on_cpu);
 	params.doWeightedBackprojection = doWeight_save;
+	params.doExtrapolation = doExtrapolation_save;
 	return retVal;
 }
 

@@ -1116,10 +1116,16 @@ class tomographicModels:
         """
         
         # Make a copy of g if necessary
-        if inplace == False:
-            q = self.copyData(g)
+        if has_torch == True and type(g) is torch.Tensor:
+            if inplace == False:
+                q = self.copyData(g)
+            else:
+                q = g
         else:
-            q = g
+            if self.get_gpu() < 0 and inplace == False:
+                q = self.copyData(g)
+            else:
+                q = g
         
         self.libprojectors.FBP.restype = ctypes.c_bool
         self.set_model()
