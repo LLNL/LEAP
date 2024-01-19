@@ -373,6 +373,7 @@ __global__ void mergeLeftAndRight(float* g, const float* g_left, const float* g_
 
 __global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3 N)
 {
+    /*
     // int k = threadIdx.x;
     int k = blockIdx.x * blockDim.x + threadIdx.x;
     //if (k > 0) return;
@@ -387,6 +388,18 @@ __global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3
             F_slice[j * N.x + i].y *= H[j * N.x + i];
         }
     }
+    //*/
+
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    const uint64 offset = uint64(j * N.x + i);
+    const uint64 ind = uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i);
+    F[ind].x *= H[offset];
+    F[ind].y *= H[offset];
 }
 
 __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, int numExtrapolate, const float4 T, const float4 startVals, const float R, const float helicalPitch)
@@ -953,7 +966,7 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
     return retVal;
 }
 
-bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* H, int N_H)
+bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
 {
     if (data_on_cpu == false)
     {
@@ -965,7 +978,8 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
     int N_y = params->numRows;
     int N_z = params->numAngles;
 
-    if (N_H < max(N_x, N_y))
+    //if (N_H < max(N_x, N_y))
+    if (N_H1 < N_y || N_H2 < N_x)
     {
         printf("Error: invalid filter size\n");
         return false;
@@ -974,9 +988,18 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
     // Pad and then find next power of 2
     //int N_H1 = int(pow(2.0, ceil(log2(2 * max(N_y, N_x)))));
     //int N_H1 = optimalFFTsize(2 * max(N_y, N_x));
-    int N_H1 = N_H;
-    int N_H2 = N_H1;
+    //int N_H1 = N_H;
+    //int N_H2 = N_H1;
     int N_H2_over2 = N_H2 / 2 + 1;
+
+    float* H = new float[N_H1 * N_H2_over2];
+    for (int j = 0; j < N_H1; j++)
+    {
+        for (int i = 0; i < N_H2_over2; i++)
+        {
+            H[j * N_H2_over2 + i] = H_full[j * N_H2 + i];
+        }
+    }
 
     cudaSetDevice(params->whichGPU);
     bool retVal = true;
@@ -1052,7 +1075,10 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
                     else
                         i_source = 0;
                 }
-                paddedProj[j * N_H2 + i] = exp(-aProj[j_source * N_x + i_source]);
+                if (isAttenuationData)
+                    paddedProj[j * N_H2 + i] = exp(-aProj[j_source * N_x + i_source]);
+                else
+                    paddedProj[j * N_H2 + i] = aProj[j_source * N_x + i_source];
             }
         }
         if (cudaMemcpy(dev_g_pad, paddedProj, N_H1 * N_H2 * sizeof(float), cudaMemcpyHostToDevice))
@@ -1067,9 +1093,14 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
         // Multiply Filter
         int3 dataSize;
         dataSize.z = N_z;
+        dataSize.z = 1;
         dataSize.y = N_H1;
         dataSize.x = N_H2_over2;
-        multiply2DRampFilterKernel <<< 1, 1 >>> (dev_G, dev_H, dataSize);
+
+        dim3 dimBlock_mult = setBlockSize(dataSize);
+        dim3 dimGrid_mult = setGridSize(dataSize, dimBlock_mult);
+
+        multiply2DRampFilterKernel <<< dimGrid_mult, dimBlock_mult >>> (dev_G, dev_H, dataSize);
 
         // IFFT
         result = cufftExecC2R(backward_plan, (cufftComplex*)dev_G, (cufftReal*)dev_g_pad);
@@ -1091,7 +1122,10 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
             {
                 for (int i = 0; i < N_x; i++)
                 {
-                    aProj[j * N_x + i] = -log(paddedProj[j * N_H2 + i] / float(N_H1 * N_H2));
+                    if (isAttenuationData)
+                        aProj[j * N_x + i] = -log(paddedProj[j * N_H2 + i] / float(N_H1 * N_H2));
+                    else
+                        aProj[j * N_x + i] = paddedProj[j * N_H2 + i] / float(N_H1 * N_H2);
                 }
             }
         }
@@ -1104,6 +1138,7 @@ bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* 
     cudaFree(dev_H);
     cudaFree(dev_G);
     free(paddedProj);
+    delete[] H;
 
     return retVal;
 }
@@ -1247,7 +1282,12 @@ bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
         dataSize.z = N_z;
         dataSize.y = N_H1;
         dataSize.x = N_H2_over2;
-        multiply2DRampFilterKernel<<<1, 1>>>(dev_F, dev_H, dataSize);
+        //multiply2DRampFilterKernel<<<1, 1>>>(dev_F, dev_H, dataSize);
+
+        dataSize.z = 1;
+        dim3 dimBlock_mult = setBlockSize(dataSize);
+        dim3 dimGrid_mult = setGridSize(dataSize, dimBlock_mult);
+        multiply2DRampFilterKernel <<< dimGrid_mult, dimBlock_mult >>> (dev_F, dev_H, dataSize);
 
         // IFFT
         result = cufftExecC2R(backward_plan, (cufftComplex*)dev_F, (cufftReal*)dev_f_pad);

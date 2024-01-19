@@ -577,6 +577,19 @@ public:
 	bool Laplacian(float* g, int numDims, bool data_on_cpu);
 
 	/**
+	 * \fn          transmissionFilter
+	 * \brief       Applies a 2D Filter to each transmission projection
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   H pointer to the magnitude of the frequency response of the filter
+	 * \param[in]   N_H1 number of samples of H in the first dimension
+	 * \param[in]   N_H1 number of samples of H in the second dimension
+	 * \param[in]   isAttenuationData true if data (g) is attenuation (post-log), false otherwise
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu);
+
+	/**
 	 * \fn          AzimuthalBlur
 	 * \brief       applies a low pass filter in the azimuthal angle
 	 * \param[in]   f pointer to the 3D data (input and output)

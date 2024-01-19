@@ -112,7 +112,10 @@ def setLTTfromLEAP(leapct,LTT):
     helicalPitch = leapct.get_helicalPitch()
     phis = leapct.get_angles()
     #angularRange = (phis[1]-phis[0])*phis.size
-    angularRange = (phis[-1]-phis[0]) + phis[1]-phis[0]
+    if phis.size > 1:
+        angularRange = (phis[-1]-phis[0]) + phis[1]-phis[0]
+    else:
+        angularRange = 360.0
     
     numX = leapct.get_numX()
     numY = leapct.get_numY()

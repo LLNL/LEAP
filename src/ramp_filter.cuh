@@ -31,7 +31,7 @@ bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu, float scalar = 1
 bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0);
 bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu);
 
-bool transmissionFilter(float*& g, parameters* params, bool data_on_cpu, float* H, int N_H);
+bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H, int N_H1, int N_H2, bool isAttenuationData);
 
 bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0, float sampleShift = 0.0);
 

@@ -1068,6 +1068,18 @@ class tomographicModels:
             self.libprojectors.Laplacian(g, numDims, True)
         return g
         
+    def transmission_filter(self, g, H, isAttenuationData=True):
+        """Applies a 2D Filter to each transmission projection"""
+        self.libprojectors.transmissionFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.transmissionFilter.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.transmissionFilter(g.data_ptr(), H.data_ptr(), H.shape[0], H.shape[1], isAttenuationData, g.is_cuda == False)
+        else:
+            self.libprojectors.transmissionFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.transmissionFilter(g, H, H.shape[0], H.shape[1], isAttenuationData, True)
+        return g
+        
     def AzimuthalBlur(self, f, FWHM):
         """Applies an low pass filter to the volume data in the azimuthal direction, f, for each z-slice
         

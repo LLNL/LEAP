@@ -74,6 +74,36 @@ def outlierCorrection_highEnergy(leapct, g):
     return g
     
 
+def detectorDeblur_FourierDeconv(leapct, g, H, isAttenuationData=True, WienerParam=0.0):
+    if np.min(np.abs(H)) < 1.0/100.0:
+        WienerParam = max(2.5e-5, WienerParam)
+    if 0 < WienerParam and WienerParam <= 1.0:
+        H = (1.0+WienerParam)*H/(H*H+WienerParam)
+    else:
+        H = 1.0 / H
+    H = H / H[0,0]
+    return leapct.transmission_filter(g, H, isAttenuationData)
+    
+def detectorDeblur_RichardsonLucy(leapct, g, H, isAttenuationData=True, numIter=10):
+    H = H / H[0,0]
+    if isAttenuationData:
+        t = np.exp(-g)
+    else:
+        t = g
+    t_0 = t.copy()
+    Ht = t.copy()
+    for n in range(numIter):
+        Ht[:] = t[:]
+        Ht = leapct.transmission_filter(Ht, H, False)
+        Ht[:] = t_0[:] / Ht[:]
+        Ht = leapct.transmission_filter(Ht, H, False)
+        t[:] = t[:] * Ht[:]
+    if isAttenuationData:
+        g[:] = -np.log(t[:])
+    else:
+        g[:] = t[:]
+    return g
+
 def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     
@@ -148,3 +178,20 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     
     return g
     
+def optimalFFTsize(N):
+    # returns smallest number = 2^(n+1)*3^m such that 2^(n+1)*3^m >= N and n,m >= 0
+    if N <= 2:
+        return 2
+
+    c1 = np.log2(float(N) / 2.0) / np.log2(3.0);
+    c2 = 1.0 / np.log2(3.0);
+    #2^x*3^y = N ==> y = c1-c2*x
+    xbar = np.log2(float(N) / 2.0);
+    minValue = 2**(int(np.ceil(xbar)) + 1)
+    for x in range(int(np.ceil(xbar))):
+        y = int(np.ceil(c1 - c2 * float(x)))
+        newValue = 2.0**(x + 1) * (3.0**y)
+        if newValue < minValue and 0 <= y:
+            minValue = newValue
+
+    return int(minValue)

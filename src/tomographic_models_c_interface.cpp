@@ -570,6 +570,11 @@ bool Laplacian(float* g, int numDims, bool data_on_cpu)
 	return tomo()->Laplacian(g, numDims, data_on_cpu);
 }
 
+bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)
+{
+	return tomo()->transmissionFilter(g, H, N_H1, N_H2, isAttenuationData, data_on_cpu);
+}
+
 bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
 {
 	return tomo()->applyTransferFunction(x, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, data_on_cpu);
