@@ -974,6 +974,8 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
         return false;
     }
 
+    float minValue = pow(2.0, -24.0);
+
     int N_x = params->numCols;
     int N_y = params->numRows;
     int N_z = params->numAngles;
@@ -1123,9 +1125,9 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
                 for (int i = 0; i < N_x; i++)
                 {
                     if (isAttenuationData)
-                        aProj[j * N_x + i] = -log(paddedProj[j * N_H2 + i] / float(N_H1 * N_H2));
+                        aProj[j * N_x + i] = -log(max(minValue, paddedProj[j * N_H2 + i] / float(N_H1 * N_H2)));
                     else
-                        aProj[j * N_x + i] = paddedProj[j * N_H2 + i] / float(N_H1 * N_H2);
+                        aProj[j * N_x + i] = max(minValue, paddedProj[j * N_H2 + i] / float(N_H1 * N_H2));
                 }
             }
         }

@@ -1073,6 +1073,8 @@ class tomographicModels:
         self.libprojectors.transmissionFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
+            if has_torch == True and type(H) is torch.Tensor:
+                H = H.cpu().detach().numpy()
             self.libprojectors.transmissionFilter.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
             self.libprojectors.transmissionFilter(g.data_ptr(), H.data_ptr(), H.shape[0], H.shape[1], isAttenuationData, g.is_cuda == False)
         else:
@@ -1476,6 +1478,18 @@ class tomographicModels:
                 return np.sum(x*y)
             else:
                 return np.sum(x*y*w)
+                
+    def expNeg(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.exp(-x)
+        else:
+            return np.exp(-x)
+            
+    def negLog(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            return -torch.log(x)
+        else:
+            return -np.log(x)
     
     def breakIntoSubsets(self, g, numSubsets):
         if numSubsets <= 0 or len(g.shape) != 3:
@@ -1863,7 +1877,7 @@ class tomographicModels:
             g (C contiguous float32 numpy array): projection data
             f (C contiguous float32 numpy array): volume data
             numIter (int): number of iterations
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=np.exp(-g)
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
             SQS (bool): specifies whether or not to use the SQS preconditioner
         
         Returns:
@@ -1906,7 +1920,7 @@ class tomographicModels:
             numIter (int): number of iterations
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=np.exp(-g)
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
             SQS (bool): specifies whether or not to use the SQS preconditioner
         
         Returns:
@@ -1919,10 +1933,8 @@ class tomographicModels:
         conjGradRestart = 50
         if W is None:
             W = self.copyData(g)
-            if has_torch == True and type(g) is torch.Tensor:
-                W = torch.exp(-W)
-            else:
-                W = np.exp(-W)
+            W = self.expNeg(W)
+
         Pf = self.copyData(g)
         if self.isAllZeros(f) == False:
             # fix scaling
@@ -2021,7 +2033,7 @@ class tomographicModels:
             grad (C contiguous float32 numpy array): gradient of the RWLS cost function
             d (C contiguous float32 numpy array): descent direction of the RWLS cost function
             Pd (C contiguous float32 numpy array): forward projection of d
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=np.exp(-g)
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
         
@@ -2210,10 +2222,7 @@ class tomographicModels:
         #    return f
         beta = max(0.0, beta/float(numSubsets))
     
-        if has_torch == True and type(g) is torch.Tensor:
-            t = torch.exp(-g)
-        else:
-            t = np.exp(-g)
+        t = self.expNeg(g)
 
         if self.isAllZeros(f) == False:
             f[f<=0.0] = 0.0
@@ -2234,10 +2243,7 @@ class tomographicModels:
                 print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
                 self.project(Pf,f)
                 
-                if has_torch == True and type(g) is torch.Tensor:
-                    transDiff[:] = torch.exp(-Pf[:])
-                else:
-                    transDiff[:] = np.exp(-Pf[:])
+                transDiff[:] = self.expNeg(Pf)
                 
                 transDiff[:] = transDiff[:] * P1[:]
                 self.backproject(transDiff, SQS)
@@ -2276,10 +2282,7 @@ class tomographicModels:
                     
                     self.project(Pf,f)
                     
-                    if has_torch == True and type(g) is torch.Tensor:
-                        transDiff[:] = torch.exp(-Pf[:])
-                    else:
-                        transDiff[:] = np.exp(-Pf[:])
+                    transDiff[:] = self.expNeg(Pf)
                     
                     transDiff[:] = transDiff[:] * P1_subsets[m][:]
                     self.backproject(transDiff, SQS)
@@ -2307,10 +2310,7 @@ class tomographicModels:
         
             subsetParams.setSubset(-1)
         
-        if has_torch == True and type(g) is torch.Tensor:
-            g = -torch.log(t)
-        else:
-            g = -np.log(t)
+        g = self.negLog(t)
         
         return f
             

@@ -7,6 +7,12 @@ leapct = tomographicModels()
 sys.path.append(r'..\utils')
 from preprocessing_algorithms import *
 
+'''
+This demo script shows how LEAP can be used to model and deconvole detector blur.  Flat panel x-ray detectors
+have a point spread function (psf) with very long tails.  The strength of this blur usually gets worse with higher energies.
+If not correct for, this blur can cause reconstruction artifacts similar to those caused by beam hardening or scatter.
+'''
+
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
@@ -28,6 +34,7 @@ leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numR
 leapct.set_default_volume()
 
 # Set Blur Kernel
+# The example we use here is an analytic approximation to a typical detector psf
 N_H1 = optimalFFTsize(2*numRows)
 N_H2 = optimalFFTsize(2*numCols)
 y = (np.array(range(N_H1), dtype=np.float32)-N_H1//2)
@@ -63,6 +70,7 @@ leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
 
+
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
 #g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
@@ -73,9 +81,10 @@ g = leapct.transmission_filter(g, H, True)
 print('Filtering Elapsed Time: ' + str(time.time()-startTime))
 
 # Deconvolve Detector Blur
+# We implement two different methods to choose
 startTime = time.time()
-#g = detectorDeblur_FourierDeconv(leapct, g, H, isAttenuationData=True, WienerParam=0.0)
-g = detectorDeblur_RichardsonLucy(leapct, g, H, isAttenuationData=True, numIter=10)
+g = detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True)
+#g = detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True)
 print('Deblur Elapsed Time: ' + str(time.time()-startTime))
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations

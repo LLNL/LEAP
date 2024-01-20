@@ -90,7 +90,8 @@ def setLEAPfromLTT(LTT,leapct):
     if geometry == 'PARALLEL' or geometry == 'FAN':
         offsetZ = (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref')))*float(LTT.getParam('rzsize')) + float(centerRow)*float(LTT.getParam('pzsize'))
     elif geometry == 'CONE':
-        offsetZ = centerRow * sod/sdd * pixelHeight + (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref'))) * float(LTT.getParam('rzsize'))
+        #offsetZ = centerRow * sod/sdd * pixelHeight + (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref'))) * float(LTT.getParam('rzsize'))
+        offsetZ = 0.5*float(numZ-1)*float(LTT.getParam('rzsize')) + (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref'))) * float(LTT.getParam('rzsize'))
     else:
         offsetZ = 0.0
     
@@ -130,7 +131,8 @@ def setLTTfromLEAP(leapct,LTT):
     if geometry == 'PARALLEL' or geometry == 'FAN':
         rzref = centerRow - offsetZ/voxelHeight
     else:
-        rzref = (centerRow*(sod/sdd)*pixelHeight) / voxelHeight
+        #rzref = (centerRow*(sod/sdd)*pixelHeight) / voxelHeight
+        rzref = (0.5*float(numZ-1)*voxelHeight - offsetZ) / voxelHeight
     LTT.cmd(['rxelements = ' + str(numX), 'ryelements = ' + str(numY), 'rzelements = ' + str(numZ)])
     LTT.cmd(['rxsize = ' + str(voxelWidth), 'rysize = ' + str(voxelWidth), 'rzsize = ' + str(voxelHeight)])
     LTT.cmd(['rxref = ' + str(rxref), 'ryref = ' + str(ryref), 'rzref = ' + str(rzref)])

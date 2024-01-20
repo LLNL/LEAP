@@ -1,20 +1,16 @@
 ################################################################################
-# Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
+# Copyright 2022-2024 Lawrence Livermore National Security, LLC and other 
 # LEAP project developers. See the LICENSE file for details.
 # SPDX-License-Identifier: MIT
 #
 # LivermorE AI Projector for Computed Tomography (LEAP)
 #
 # This file contains preprocessing algorithms for CT projection data
-# All algorithms assume the input data is in attenuation space (-log of transmission)
 # If one does not have enough CPU memory to process the entire data set, then we
 # recommend splitting the data across projections for the outlierCorrection
 # algorithms and splitting the data across detector rows for the ringRemoval
 # algorithms.
 # For beam hardening correction, see the demo_leapctype/test_beam_hardening.py
-#
-# Unfortunately at this time these routines only work with numpy arrays.
-# Please submit a feature request if you want these to work for PyTorch tensors.
 ################################################################################
 
 import sys
@@ -23,7 +19,34 @@ import time
 import numpy as np
 from leapctype import *
 
-def outlierCorrection(leapct, g, threshold=0.03, windowSize=3):
+def makeAttenuationRadiographs(g, air_scan=None, dark_scan=None, ROI=None):
+    """Converts data to attenuation radiographs (flat fielding and negative log)
+    
+    Args:
+        g (C contiguous float32 numpy array or torch tensor): radiograph data
+        air_scan (C contiguous float32 numpy array or torch tensor): air scan radiograph data
+        dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data
+        ROI (4-element integer array): specifies a bounding box for which to estimate a mean value for flux correction
+    
+    """
+    if dark_scan is not None:
+        if air_scan is not None:
+            g = (g - dark_scan) / (air_scan - dark_scan)
+        else:
+            g = g - dark_scan
+    else:
+        if air_scan is not None:
+            g = g / air_scan
+    if ROI is not None:
+        if has_torch == True and type(g) is torch.Tensor:
+            postageStamp = torch.mean(g[:,ROI[0]:ROI[1], ROI[2]:ROI[3]], axis=(1,2))
+        else:
+            postageStamp = np.mean(g[:,ROI[0]:ROI[1], ROI[2]:ROI[3]], axis=(1,2))
+        g = g / postageStamp[:,None,None]
+    g = leapct.negLog(g)
+    return g
+
+def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData=True):
     """Removes outliers (zingers) from CT projections
     
     Assumes the input data is in attenuation space.
@@ -34,20 +57,23 @@ def outlierCorrection(leapct, g, threshold=0.03, windowSize=3):
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
-        g (contiguous float32 numpy array): attenuation projection data
+        g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
         threshold (float): A pixel will be replaced by the median of its neighbors if |g - median(g)|/median(g) > threshold
         windowSize (int): The window size of the median filter applied is windowSize x windowSize
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
         
     Returns:
         The corrected data
     """
     # This algorithm processes each transmission
-    g = np.exp(-g)
+    if isAttenuationData:
+        g = leapct.expNeg(g)
     leapct.MedianFilter2D(g, threshold, windowSize)
-    g = -np.log(g)
+    if isAttenuationData:
+        g = leapct.negLog(g)
     return g
 
-def outlierCorrection_highEnergy(leapct, g):
+def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     """Removes outliers (zingers) from CT projections
     
     Assumes the input data is in attenuation space.
@@ -61,20 +87,35 @@ def outlierCorrection_highEnergy(leapct, g):
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
-        g (contiguous float32 numpy array): attenuation projection data
+        g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
         
     Returns:
         The corrected data
     """
-    g = np.exp(-g)
+    
+    if isAttenuationData:
+        g = leapct.expNeg(g)
     leapct.MedianFilter2D(g, 0.08, 7)
     leapct.MedianFilter2D(g, 0.024, 5)
     leapct.MedianFilter2D(g, 0.0032, 3)
-    g = -np.log(g)
+    if isAttenuationData:
+        g = leapct.negLog(g)
     return g
     
 
-def detectorDeblur_FourierDeconv(leapct, g, H, isAttenuationData=True, WienerParam=0.0):
+def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True):
+    """Removes detector blur by fourier deconvolution
+    
+    Args:
+        g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
+        H (contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
+        WienerParam (float): Parameter for Wiener deconvolution, number should be between 0.0 and 1.0
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
+    
+    """
+    if has_torch == True and type(H) is torch.Tensor:
+        H = H.cpu().detach().numpy()
     if np.min(np.abs(H)) < 1.0/100.0:
         WienerParam = max(2.5e-5, WienerParam)
     if 0 < WienerParam and WienerParam <= 1.0:
@@ -84,14 +125,26 @@ def detectorDeblur_FourierDeconv(leapct, g, H, isAttenuationData=True, WienerPar
     H = H / H[0,0]
     return leapct.transmission_filter(g, H, isAttenuationData)
     
-def detectorDeblur_RichardsonLucy(leapct, g, H, isAttenuationData=True, numIter=10):
+def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True):
+    """Removes detector blur by Richardson-Lucy iterative deconvolution
+    
+    Richardson-Lucy iterative deconvolution is developed for Poisson-distributed data
+    and inherently preserve the non-negativity of the input
+    
+    Args:
+        g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
+        H (contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
+        numIter (int): Number of iterations
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
+    
+    """
     H = H / H[0,0]
     if isAttenuationData:
-        t = np.exp(-g)
+        t = leapct.expNeg(g)
     else:
         t = g
-    t_0 = t.copy()
-    Ht = t.copy()
+    t_0 = leapct.copyData(t)
+    Ht = leapct.copyData(t)
     for n in range(numIter):
         Ht[:] = t[:]
         Ht = leapct.transmission_filter(Ht, H, False)
@@ -99,7 +152,7 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, isAttenuationData=True, numIter=
         Ht = leapct.transmission_filter(Ht, H, False)
         t[:] = t[:] * Ht[:]
     if isAttenuationData:
-        g[:] = -np.log(t[:])
+        g[:] = leapct.negLog(t)
     else:
         g[:] = t[:]
     return g
@@ -115,7 +168,7 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
-        g (contiguous float32 numpy array): attenuation projection data
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
         delta (float): The delta parameter of the Total Variation Functional
         numIter (int): Number of iterations
         maxChange (float): An upper limit on the maximum difference that can be applied to a detector pixels
@@ -123,9 +176,13 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     Returns:
         The corrected data
     """
-    g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
-    g_sum[0,:] = np.mean(g,axis=0)
-    g_sum_save = g_sum.copy()
+    if has_torch == True and type(g) is torch.Tensor:
+        g_sum = torch.zeros((1,g.shape[1],g.shape[2]), dtype=torch.float32)
+        g_sum[0,:] = torch.mean(g,axis=0)
+    else:
+        g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
+        g_sum[0,:] = np.mean(g,axis=0)
+    g_sum_save = leapct.copyData(g_sum)
     leapct.diffuse(g_sum,delta,numIter)
     gainMap = g_sum - g_sum_save
     
@@ -145,7 +202,7 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
-        g (contiguous float32 numpy array): attenuation projection data
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
         delta (float): The delta parameter of the Total Variation Functional
         beta (float): The strength of the regularization
         numIter (int): Number of iterations
@@ -153,11 +210,13 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     Returns:
         The corrected data
     """
-    g_0 = g.copy()
-    #Dg_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
+    g_0 = leapct.copyData(g)
     for n in range(numIter):
         Dg = leapct.TVgradient(g, delta, beta)
-        Dg_sum = np.mean(Dg,axis=0)
+        if has_torch == True and type(Dg) is torch.Tensor:
+            Dg_sum = torch.mean(Dg,axis=0)
+        else:
+            Dg_sum = np.mean(Dg,axis=0)
         Dg[:] = Dg_sum[None,:,:]
 
         Dg[:] = g[:] - g_0[:] + Dg[:]
@@ -180,6 +239,7 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     
 def optimalFFTsize(N):
     # returns smallest number = 2^(n+1)*3^m such that 2^(n+1)*3^m >= N and n,m >= 0
+    # This gives a more optimal value for an FFT because it samples the number line more finely
     if N <= 2:
         return 2
 

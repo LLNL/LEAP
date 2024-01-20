@@ -50,8 +50,8 @@ ind = np.abs(np.random.normal(0,1,g.shape)) > 3.0
 g[ind] = 0.0
 
 # Choose which method you'd like to test
-#whichMethod = 1
-whichMethod = 2
+whichMethod = 1
+#whichMethod = 2
 
 if whichMethod == 1:
     # Perform median filter based outlier correction
