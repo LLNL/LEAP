@@ -1075,8 +1075,8 @@ class tomographicModels:
         if has_torch == True and type(g) is torch.Tensor:
             if has_torch == True and type(H) is torch.Tensor:
                 H = H.cpu().detach().numpy()
-            self.libprojectors.transmissionFilter.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
-            self.libprojectors.transmissionFilter(g.data_ptr(), H.data_ptr(), H.shape[0], H.shape[1], isAttenuationData, g.is_cuda == False)
+            self.libprojectors.transmissionFilter.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.transmissionFilter(g.data_ptr(), H, H.shape[0], H.shape[1], isAttenuationData, g.is_cuda == False)
         else:
             self.libprojectors.transmissionFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
             self.libprojectors.transmissionFilter(g, H, H.shape[0], H.shape[1], isAttenuationData, True)

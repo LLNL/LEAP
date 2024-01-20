@@ -25,6 +25,85 @@
 #include <cufft.h>
 #endif
 
+__global__ void setPaddedDataFor2DFilter_reverse(float* g, float* g_pad, const int numRows, const int numCols, const int N_H1, const int N_H2, const float minValue, const bool isAttenuationData)
+{
+    const int j = threadIdx.x + blockIdx.x * blockDim.x; // rows
+    const int i = threadIdx.y + blockIdx.y * blockDim.y; // columns
+
+    if (j >= numRows || i >= numCols)
+        return;
+
+    if (isAttenuationData)
+        g[j * numCols + i] = -log(max(minValue, g_pad[j * N_H2 + i] / float(N_H1 * N_H2)));
+    else
+        g[j * numCols + i] = max(minValue, g_pad[j * N_H2 + i] / float(N_H1 * N_H2));
+}
+
+__global__ void setPaddedDataFor2DFilter(float* g, float* g_pad, const int numRows, const int numCols, const int N_H1, const int N_H2, const bool isAttenuationData)
+{
+    const int j = threadIdx.x + blockIdx.x * blockDim.x; // rows
+    const int i = threadIdx.y + blockIdx.y * blockDim.y; // columns
+
+    if (j >= N_H1 || i >= N_H2)
+        return;
+
+    int j_source = j;
+    if (j >= numRows)
+    {
+        if (j - numRows < N_H1 - j)
+            j_source = numRows - 1;
+        else
+            j_source = 0;
+    }
+
+    int i_source = i;
+    if (i >= numCols)
+    {
+        if (i - numCols < N_H2 - i)
+            i_source = numCols - 1;
+        else
+            i_source = 0;
+    }
+
+    if (isAttenuationData)
+        g_pad[j * N_H2 + i] = expf(-g[j_source * numCols + i_source]);
+    else
+        g_pad[j * N_H2 + i] = g[j_source * numCols + i_source];
+
+    //int N_x = params->numCols;
+    //int N_y = params->numRows;
+    //int N_z = params->numAngles;
+
+    /*
+    for (int j = 0; j < N_H1; j++)
+    {
+        int j_source = j;
+        if (j >= N_y)
+        {
+            if (j - N_y < N_H1 - j)
+                j_source = N_y - 1;
+            else
+                j_source = 0;
+        }
+        for (int i = 0; i < N_H2; i++)
+        {
+            int i_source = i;
+            if (i >= N_x)
+            {
+                if (i - N_x < N_H2 - i)
+                    i_source = N_x - 1;
+                else
+                    i_source = 0;
+            }
+            if (isAttenuationData)
+                paddedProj[j * N_H2 + i] = exp(-aProj[j_source * N_x + i_source]);
+            else
+                paddedProj[j * N_H2 + i] = aProj[j_source * N_x + i_source];
+        }
+    }
+    //*/
+}
+
 __global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const int numDims, const float scalar)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
@@ -968,11 +1047,13 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
 
 bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
 {
+    /*
     if (data_on_cpu == false)
     {
         printf("Error: current implementation of transmissionFilter requires that data reside on the CPU\n");
         return false;
     }
+    //*/
 
     float minValue = pow(2.0, -24.0);
 
@@ -1006,7 +1087,11 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
     cudaSetDevice(params->whichGPU);
     bool retVal = true;
 
-    int smoothingLevel = 0;
+    float* dev_g = 0;
+    if (data_on_cpu)
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+    else
+        dev_g = g;
 
     // Make cuFFT Plans
     cufftResult result;
@@ -1023,7 +1108,7 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
         return false;
     }
 
-    float* paddedProj = (float*)malloc(sizeof(float) * N_H1 * N_H2);
+    //float* paddedProj = (float*)malloc(sizeof(float) * N_H1 * N_H2);
     // Make zero-padded array, copy data to 1st half of array and set remaining slots to zero
     cudaError_t cudaStatus;
     float* dev_g_pad = 0;
@@ -1056,6 +1141,7 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
 
     for (int k = 0; k < N_z; k++)
     {
+        /*
         float* aProj = &g[uint64(k) * uint64(N_x * N_y)];
         for (int j = 0; j < N_H1; j++)
         {
@@ -1088,6 +1174,13 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
             fprintf(stderr, "cudaMemcpy(padded volume data) failed!\n");
             retVal = false;
         }
+        //*/
+
+        float* dev_proj = &dev_g[uint64(k) * uint64(params->numRows * params->numCols)];
+
+        dim3 dimBlock_padding(8, 8);
+        dim3 dimGrid_padding(int(ceil(double(N_H1) / double(dimBlock_padding.x))), int(ceil(double(N_H2) / double(dimBlock_padding.y))));
+        setPaddedDataFor2DFilter <<< dimGrid_padding, dimBlock_padding >>> (dev_proj, dev_g_pad, params->numRows, params->numCols, N_H1, N_H2, isAttenuationData);
 
         // FFT
         result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);
@@ -1110,6 +1203,11 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
         // Copy result back to host
         if (retVal)
         {
+            dimGrid_padding.x = int(ceil(double(params->numRows) / double(dimBlock_padding.x)));
+            dimGrid_padding.y = int(ceil(double(params->numCols) / double(dimBlock_padding.x)));
+            setPaddedDataFor2DFilter_reverse <<< dimGrid_padding, dimBlock_padding >>> (dev_proj, dev_g_pad, params->numRows, params->numCols, N_H1, N_H2, minValue, isAttenuationData);
+
+            /*
             cudaStatus = cudaMemcpy(paddedProj, dev_g_pad, N_H1 * N_H2 * sizeof(float), cudaMemcpyDeviceToHost);
             if (cudaSuccess != cudaStatus)
             {
@@ -1130,8 +1228,10 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
                         aProj[j * N_x + i] = max(minValue, paddedProj[j * N_H2 + i] / float(N_H1 * N_H2));
                 }
             }
+            //*/
         }
     }
+    cudaStatus = cudaDeviceSynchronize();
 
     // Clean up
     cufftDestroy(forward_plan);
@@ -1139,8 +1239,15 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
     cudaFree(dev_g_pad);
     cudaFree(dev_H);
     cudaFree(dev_G);
-    free(paddedProj);
+    //free(paddedProj);
     delete[] H;
+
+    if (data_on_cpu)
+    {
+        pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+        if (dev_g != 0)
+            cudaFree(dev_g);
+    }
 
     return retVal;
 }

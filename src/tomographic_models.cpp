@@ -2017,8 +2017,8 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 
 	int N_1 = params.numAngles;
 
-	//uint64 numElements = uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols);
-	uint64 numElements = uint64(2) * uint64(N_H1) * uint64(N_H2);
+	uint64 numElements = uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols);
+	//uint64 numElements_filter = uint64(N_H1) * uint64(N_H2);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 

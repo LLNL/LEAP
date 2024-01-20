@@ -75,6 +75,16 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 I_0 = 50000.0
 #g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
+# Copy data to GPU
+'''
+# Comment this section out to revert back to multi-GPU solution
+# with CPU-GPU data transfers to see when easy case is advantageous
+device_name = "cuda:" + str(leapct.get_gpu())
+device = torch.device(device_name)
+g = torch.from_numpy(g).to(device)
+f = torch.from_numpy(f).to(device)
+#'''
+
 # Apply Detector Blur
 startTime = time.time()
 g = leapct.transmission_filter(g, H, True)
@@ -98,4 +108,8 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 
 # Display the result with napari
+#if type(f) is torch.Tensor:
+#    leapct.display(f.cpu().detach().numpy())
+#else:
+#    leapct.display(f)
 leapct.display(f)
