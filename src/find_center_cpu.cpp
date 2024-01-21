@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <cstring>
 #include <math.h>
+#include <stdio.h>
 #include "find_center_cpu.h"
 
 using namespace std;
