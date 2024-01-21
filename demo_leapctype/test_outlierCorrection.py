@@ -41,24 +41,45 @@ leapct.set_FORBILD(f_true,True)
 leapct.project(g,f_true)
 
 
-# Add random detector gain to each pixel which will create ring artifacts in the reconstruction
-detectorGain = np.random.uniform(1.0-0.04,1.0+0.04,(numRows,numCols))
-g[:] = g[:] - np.log(detectorGain[None,:,:])
-
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
 g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
+# Make some of the detector pixels have zero value
+ind = np.abs(np.random.normal(0,1,g.shape)) > 3.0
+g[ind] = 0.0
 
-# Perform ring removal
-#g = ringRemoval_fast(leapct, g, 1.0-0.99, 30, 0.05)
-g = ringRemoval(leapct, g, 1.0-0.99, 1.0e3, 30)
+# Choose which method you'd like to test
+whichMethod = 1
+#whichMethod = 2
+
+if whichMethod == 1:
+    # Perform median filter based outlier correction
+    # This is a very fast method which is good for isolated bad pixels
+    g = outlierCorrection(leapct,g)
 
 
-# Reconstruct the data
-f = leapct.allocateVolume()
-leapct.FBP(g,f)
+    # Reconstruct the data
+    f = leapct.allocateVolume()
+    leapct.FBP(g,f)
+else:
+    # Perform RWLS reconstruction where we set the weights to be zero where there are bad pixels
+    # This method is computationally expensive, but is good when you have large regions of bad pixels
+    # or want to perform so-called Metal Artifact Reduction (MAR)
+    # For the data we simulated here, this is definitely an overkill.
+    
+    # First identify the outliers/ bad pixels
+    # You can use any method you want; we just use a simple method here
+    g_filtered = g.copy()
+    g_filtered = outlierCorrection(leapct,g_filtered)
+    W = g.copy()
+    W[:] = 1.0
+    W[np.abs(g-g_filtered)>0.5] = 0.0
 
-
+    
+    # Reconstruct the data with RWLS
+    f = leapct.allocateVolume()
+    leapct.RWLS(g,f,50, 0.0, 0.0, W, True, True)
+    
 # Display the result with napari
 leapct.display(f)

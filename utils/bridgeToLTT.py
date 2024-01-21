@@ -90,7 +90,8 @@ def setLEAPfromLTT(LTT,leapct):
     if geometry == 'PARALLEL' or geometry == 'FAN':
         offsetZ = (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref')))*float(LTT.getParam('rzsize')) + float(centerRow)*float(LTT.getParam('pzsize'))
     elif geometry == 'CONE':
-        offsetZ = centerRow * sod/sdd * pixelHeight + (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref'))) * float(LTT.getParam('rzsize'))
+        #offsetZ = centerRow * sod/sdd * pixelHeight + (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref'))) * float(LTT.getParam('rzsize'))
+        offsetZ = 0.5*float(numZ-1)*float(LTT.getParam('rzsize')) + (float(LTT.getParam('rzoffset')) - float(LTT.getParam('rzref'))) * float(LTT.getParam('rzsize'))
     else:
         offsetZ = 0.0
     
@@ -112,7 +113,10 @@ def setLTTfromLEAP(leapct,LTT):
     helicalPitch = leapct.get_helicalPitch()
     phis = leapct.get_angles()
     #angularRange = (phis[1]-phis[0])*phis.size
-    angularRange = (phis[-1]-phis[0]) + phis[1]-phis[0]
+    if phis.size > 1:
+        angularRange = (phis[-1]-phis[0]) + phis[1]-phis[0]
+    else:
+        angularRange = 360.0
     
     numX = leapct.get_numX()
     numY = leapct.get_numY()
@@ -127,7 +131,8 @@ def setLTTfromLEAP(leapct,LTT):
     if geometry == 'PARALLEL' or geometry == 'FAN':
         rzref = centerRow - offsetZ/voxelHeight
     else:
-        rzref = (centerRow*(sod/sdd)*pixelHeight) / voxelHeight
+        #rzref = (centerRow*(sod/sdd)*pixelHeight) / voxelHeight
+        rzref = (0.5*float(numZ-1)*voxelHeight - offsetZ) / voxelHeight
     LTT.cmd(['rxelements = ' + str(numX), 'ryelements = ' + str(numY), 'rzelements = ' + str(numZ)])
     LTT.cmd(['rxsize = ' + str(voxelWidth), 'rysize = ' + str(voxelWidth), 'rzsize = ' + str(voxelHeight)])
     LTT.cmd(['rxref = ' + str(rxref), 'ryref = ' + str(ryref), 'rzref = ' + str(rzref)])
@@ -146,6 +151,26 @@ def setLTTfromLEAP(leapct,LTT):
     LTT.cmd(['numAngles = ' + str(numAngles), 'numRows = ' + str(numRows), 'numCols = ' + str(numCols)])
     LTT.cmd(['angularRange = ' + str(angularRange), 'pixelHeight = ' + str(pixelHeight), 'pixelWidth = ' + str(pixelWidth)])
     LTT.cmd(['centerRow = ' + str(centerRow), 'centerCol = ' + str(centerCol)])
+
+def parseGeomFile(infile):
+    import re
+    sources=[]
+    dets=[]
+    rowVector=[]
+    colVector=[]
+    with open(infile) as fp:
+        for result in re.findall('sourcePosition=\((.*?)\)', fp.read(), re.S):
+            sources.append(list(eval(result)))
+    with open(infile) as fp:
+        for result in re.findall('moduleCenter=\((.*?)\)', fp.read(), re.S):
+            dets.append(list(eval(result)))
+    with open(infile) as fp:
+        for result in re.findall('rowVector=\((.*?)\)', fp.read(), re.S):
+             rowVector.append(list(eval(result)))
+    with open(infile) as fp:
+        for result in re.findall('columnVector=\((.*?)\)', fp.read(), re.S):
+             colVector.append(list(eval(result)))
+    return sources, dets, rowVector, colVector
 
 ''' Example Usage
 leapct = tomographicModels()

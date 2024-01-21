@@ -274,6 +274,13 @@ public:
 	 */
 	bool convert_conebeam_to_modularbeam();
 
+	/**
+	 * \fn          convert_parallelbeam_to_modularbeam
+	 * \brief       sets modular-beam parameters from a parallel-beam specification
+	 * \return      true is successful, false otherwise
+	 */
+	bool convert_parallelbeam_to_modularbeam();
+
 	bool normalizeConeAndFanCoordinateFunctions;
 
 	int whichGPU;
@@ -316,6 +323,23 @@ public:
 	bool set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs);
 
 	/**
+	 * \fn          rotateDetector
+	 * \brief       rotates modular-beam detector
+	 * \param[in]   alpha the rotation angle in degrees
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool rotateDetector(float alpha);
+
+	/**
+	 * \fn          shiftDetector
+	 * \brief       shifts the detector
+	 * \param[in]   r the shift in the row direction (mm)
+	 * \param[in]   c the shift in the col direction (mm)
+	 * \return      true is operation  was sucessful, false otherwise
+	 */
+	bool shiftDetector(float r, float c);
+
+	/**
 	 * \fn          modularbeamIsAxiallyAligned
 	 * \brief       returns whether or not the modular-beam data detectors are aligned with the z-axis
 	 * \return      true if the modular-beam data detectors are aligned with the z-axis, false otherwise
@@ -349,6 +373,7 @@ public:
 	float chunkingMemorySizeThreshold;
 	bool offsetScan;
 	bool truncatedScan;
+	bool inconsistencyReconstruction;
     
 	/**
 	 * \fn          T_phi
@@ -525,13 +550,13 @@ public:
 	float get_phi_start();
 	float get_phi_end();
 
-private:
-
 	/**
 	 * \fn          assign
 	 * \brief       makes a deep copy of the given parameter object
 	 */
 	void assign(const parameters& other);
+
+private:
 
 	/**
 	 * \fn          clearModularBeamParameters

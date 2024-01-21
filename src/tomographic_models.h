@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.0"
+#define LEAP_VERSION "1.1"
 
 #include <stdlib.h>
 #include "parameters.h"
@@ -291,6 +291,20 @@ public:
 	bool set_curvedDetector();
 
 	/**
+	 * \fn          set_centerCol
+	 * \brief       sets the centerCol parameter
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_centerCol(float);
+
+	/**
+	 * \fn          set_centerCol
+	 * \brief       sets the centerCol parameter
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_centerRow(float);
+
+	/**
 	 * \fn          set_volume
 	 * \brief       sets the CT volume parameters
 	 * \param[in]   numX number of voxels in the x-dimension
@@ -543,12 +557,37 @@ public:
 	bool flipAttenuationMapSign(bool data_on_cpu);
 
 	/**
+	 * \fn          find_centerCol
+	 * \brief       finds centerCol of parallel-, fan-, or cone-beam data using conjugate rays
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   iRow the detector row index to use the estimate centerCol
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool find_centerCol(float* g, int iRow, bool data_on_cpu);
+
+	/**
 	 * \fn          Laplacian
 	 * \brief       Applies the 2D Laplacian to each projection
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   numDims the number of dimensions of the Laplacian
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool Laplacian(float* g, bool data_on_cpu);
+	bool Laplacian(float* g, int numDims, bool data_on_cpu);
+
+	/**
+	 * \fn          transmissionFilter
+	 * \brief       Applies a 2D Filter to each transmission projection
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   H pointer to the magnitude of the frequency response of the filter
+	 * \param[in]   N_H1 number of samples of H in the first dimension
+	 * \param[in]   N_H1 number of samples of H in the second dimension
+	 * \param[in]   isAttenuationData true if data (g) is attenuation (post-log), false otherwise
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu);
 
 	/**
 	 * \fn          AzimuthalBlur

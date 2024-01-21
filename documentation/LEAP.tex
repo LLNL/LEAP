@@ -13,7 +13,7 @@
     linkcolor=blue,  %choose some color if you want links to stand out
 }
 
-\title{LEAP Technical Manual \\ Version 1.0}
+\title{LEAP Technical Manual \\ Version 1.1}
 \author{Kyle Champley}
 \date{\today}
 
@@ -294,17 +294,9 @@ The location of the 3D voxels are specified by seven parameters as follows
 \begin{eqnarray*}
 x[i] &=& \text{voxelWidth}*(i - 0.5*(\text{numX}-1)) + \text{offsetX}, \text{ for } i = 0, \dots, \text{numX}-1, \\
 y[j] &=& \text{voxelWidth}*(j - 0.5*(\text{numY}-1)) + \text{offsetY}, \text{ for } j = 0, \dots, \text{numY}-1, \\
-z[k] &=& \text{voxelHeight}*(k - 0.5*(\text{numZ}-1)) + \text{offsetZ} + z_s, \text{ for } k = 0, \dots, \text{numZ}-1,
+z[k] &=& \text{voxelHeight}*(k - 0.5*(\text{numZ}-1)) + \text{offsetZ}, \text{ for } k = 0, \dots, \text{numZ}-1
 \end{eqnarray*}
-where
-\begin{eqnarray*}
-z_s &=& -\text{centerRow} * \text{pixelHeight}
-\end{eqnarray*}
-for parallel- and fan-beam geometries and
-\begin{eqnarray*}
-z_s &=& -\text{centerRow} * \frac{\text{sod}}{\text{sdd}} * \text{pixelHeight}.
-\end{eqnarray*}
-for cone-beam geometries.  This is specified to place the origin of the coordinate system with the centerRow of the detector.  Here, voxelWidth, voxelHeight, offsetX, offsetY, and offsetZ are assumed to be in length units, e.g., mm or cm.  Make sure that whatever units of length you choose that you stay consistent across all parameters.  The units of the voxelized volume (i.e., the reconstruction volume) are assumed to be in inverse length, e.g., mm$^{-1}$ or cm$^{-1}$.  We make this distinction because LEAP is fairly unique in it's quantitatively-accurate algorithms which we believe is very useful.
+Here, voxelWidth, voxelHeight, offsetX, offsetY, and offsetZ are assumed to be in length units, e.g., mm or cm.  Make sure that whatever units of length you choose that you stay consistent across all parameters.  The units of the voxelized volume (i.e., the reconstruction volume) are assumed to be in inverse length, e.g., mm$^{-1}$ or cm$^{-1}$.  We make this distinction because LEAP is fairly unique in it's quantitatively-accurate algorithms which we believe is very useful.
 
 As a reminder, one can be the \texttt{x\_samples()}, \texttt{y\_samples()}, and \texttt{z\_samples()} functions to retrieve numpy arrays of the volume coordinate loctions.
 

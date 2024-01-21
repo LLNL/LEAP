@@ -44,6 +44,22 @@ tomographicModels* tomo()
 	return list_models.get(whichModel);
 }
 
+bool copy_parameters(int param_id)
+{
+	if (0 <= param_id && param_id < list_models.size())
+	{
+		if (whichModel != param_id)
+		{
+			//printf("copy %d => %d\n", param_id, whichModel);
+			//list_models.get(param_id)->params.assign(tomo()->params);
+			tomo()->params.assign(list_models.get(param_id)->params);
+		}
+		return true;
+	}
+	else
+		return false;
+}
+
 void about()
 {
 	tomo()->about();
@@ -129,6 +145,14 @@ bool FBP(float* g, float* f, bool data_on_cpu)
 	return tomo()->doFBP(g, f, data_on_cpu);
 }
 
+bool inconsistencyReconstruction(float* g, float* f, bool data_on_cpu)
+{
+	tomo()->params.inconsistencyReconstruction = true;
+	bool retVal = FBP(g, f, data_on_cpu);
+	tomo()->params.inconsistencyReconstruction = false;
+	return retVal;
+}
+
 bool sensitivity(float* f, bool data_on_cpu)
 {
 	return tomo()->sensitivity(f, data_on_cpu);
@@ -164,6 +188,16 @@ bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight,
 	return tomo()->set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
 }
 
+bool rotate_detector(float alpha)
+{
+	return tomo()->params.rotateDetector(alpha);
+}
+
+bool shift_detector(float r, float c)
+{
+	return tomo()->params.shiftDetector(r, c);
+}
+
 bool set_flatDetector()
 {
 	return tomo()->set_flatDetector();
@@ -179,6 +213,38 @@ bool get_detectorType()
 	return tomo()->params.detectorType;
 }
 
+bool set_numCols(int numCols)
+{
+	if (numCols >= 1)
+	{
+		tomo()->params.numCols = numCols;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_numRows(int numRows)
+{
+	if (numRows >= 1)
+	{
+		tomo()->params.numRows = numRows;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_centerCol(float centerCol)
+{
+	return tomo()->set_centerCol(centerCol);
+}
+
+bool set_centerRow(float centerRow)
+{
+	return tomo()->set_centerRow(centerRow);
+}
+
 bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	return tomo()->set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);
@@ -187,6 +253,23 @@ bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeigh
 bool set_default_volume(float scale)
 {
 	return tomo()->set_default_volume(scale);
+}
+
+bool set_numZ(int numZ)
+{
+	if (numZ > 0)
+	{
+		tomo()->params.numZ = numZ;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_offsetZ(float offsetZ)
+{
+	tomo()->params.offsetZ = offsetZ;
+	return true;
 }
 
 bool set_volumeDimensionOrder(int which)
@@ -277,6 +360,11 @@ bool set_cylindircalAttenuationMap(float c, float R)
 bool convert_conebeam_to_modularbeam()
 {
 	return tomo()->params.convert_conebeam_to_modularbeam();
+}
+
+bool convert_parallelbeam_to_modularbeam()
+{
+	return tomo()->params.convert_parallelbeam_to_modularbeam();
 }
 
 bool clear_attenuationMap()
@@ -472,9 +560,19 @@ float get_z0()
 	return tomo()->params.z_0();
 }
 
-bool Laplacian(float* g, bool data_on_cpu)
+bool find_centerCol(float* g, int iRow, bool data_on_cpu)
 {
-	return tomo()->Laplacian(g, data_on_cpu);
+	return tomo()->find_centerCol(g, iRow, data_on_cpu);
+}
+
+bool Laplacian(float* g, int numDims, bool data_on_cpu)
+{
+	return tomo()->Laplacian(g, numDims, data_on_cpu);
+}
+
+bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)
+{
+	return tomo()->transmissionFilter(g, H, N_H1, N_H2, isAttenuationData, data_on_cpu);
 }
 
 bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)

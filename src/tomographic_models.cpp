@@ -18,6 +18,8 @@
 #include "sensitivity_cpu.h"
 #include "sensitivity.cuh"
 #include "ramp_filter_cpu.h"
+#include "find_center_cpu.h"
+#include "projectors_Joseph_cpu.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -144,8 +146,14 @@ bool tomographicModels::weightedBackproject(float* g, float* f, bool data_on_cpu
 {
 	bool doWeight_save = params.doWeightedBackprojection;
 	params.doWeightedBackprojection = true;
+
+	bool doExtrapolation_save = params.doExtrapolation;
+	if (params.geometry != parameters::CONE || params.helicalPitch == 0.0)
+		params.doExtrapolation = true;
+
 	bool retVal = backproject(g, f, data_on_cpu);
 	params.doWeightedBackprojection = doWeight_save;
+	params.doExtrapolation = doExtrapolation_save;
 	return retVal;
 }
 
@@ -508,7 +516,13 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	}
 
 	if (numChunks <= 1)
-		return false;
+	{
+		bool retVal = false;
+		if (params.numZ == 1 && params.numRows > 1)
+			retVal = true;
+		if (retVal == false)
+			return false;
+	}
 
 	//if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
 	//	return false;
@@ -540,6 +554,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		//chunk_params.offsetZ = params.offsetZ + (firstSlice - rowRange[0]) * params.voxelHeight;
 		//if (params.geometry == parameters::MODULAR)
 		//	chunk_params.offsetZ += 0.5*(chunk_params.numZ - params.numZ)* params.voxelHeight;
+
 		chunk_params.centerRow = params.centerRow - rowRange[0];
 		if (params.mu != NULL)
 			chunk_params.mu = &params.mu[uint64(firstSlice) * uint64(params.numX * params.numY)];
@@ -713,7 +728,7 @@ bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
 
 bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 {
-	if (params.muSpecified() == true || params.isSymmetric() == true)
+	if (params.muSpecified() == true || params.isSymmetric() == true || (params.geometry == parameters::MODULAR && usingSFprojectorsForModularBeam(&params) == false))
 	{
 		if (params.whichGPU < 0 || data_on_cpu == true)
 		{
@@ -890,6 +905,34 @@ bool tomographicModels::set_curvedDetector()
 	else
 	{
 		params.detectorType = parameters::CURVED;
+		return true;
+	}
+}
+
+bool tomographicModels::set_centerCol(float centerCol)
+{
+	if (params.geometry == parameters::MODULAR)
+	{
+		printf("Error: centerCol not defined for modular-beam geometry.  Move moduleCenters instead\n");
+		return false;
+	}
+	else
+	{
+		params.centerCol = centerCol;
+		return true;
+	}
+}
+
+bool tomographicModels::set_centerRow(float centerRow)
+{
+	if (params.geometry == parameters::MODULAR)
+	{
+		printf("Error: centerRow not defined for modular-beam geometry.  Move moduleCenters instead\n");
+		return false;
+	}
+	else
+	{
+		params.centerRow = centerRow;
 		return true;
 	}
 }
@@ -1936,14 +1979,98 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU);
 }
 
-bool tomographicModels::Laplacian(float* g, bool data_on_cpu)
+bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
+{
+	if (data_on_cpu)
+		return findCenter_cpu(g, &params, iRow);
+	else
+	{
+		printf("Error: find_centerCol not yet implemented for data on the GPU\n");
+		return false;
+	}
+}
+
+bool tomographicModels::Laplacian(float* g, int numDims, bool data_on_cpu)
 {
 	if (g == NULL || params.geometryDefined() == false)
 		return false;
 	if (data_on_cpu)
-		return Laplacian_cpu(g, &params, 1.0);
+		return Laplacian_cpu(g, numDims, &params, 1.0);
 	else
-		return Laplacian_gpu(g, &params, data_on_cpu, 1.0);
+		return Laplacian_gpu(g, numDims, &params, data_on_cpu, 1.0);
+}
+
+bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)
+{
+	if (g == NULL || H == NULL || N_H1 <= 0 || N_H2 <= 0 || params.geometryDefined() == false)
+		return false;
+	if (params.whichGPU < 0)
+		return false;
+	//return transmissionFilter_gpu(g, &params, data_on_cpu, H, N_H1, N_H2);
+	
+	//#####################################################################################################
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+
+	int N_1 = params.numAngles;
+
+	uint64 numElements = uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols);
+	//uint64 numElements_filter = uint64(N_H1) * uint64(N_H2);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < dataSize || numElements > maxElements)
+	{
+		if (data_on_cpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* g_chunk = &g[uint64(sliceStart) * uint64(params.numRows * params.numCols)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				parameters params_chunk = params;
+				params_chunk.numAngles = sliceEnd - sliceStart + 1;
+				params_chunk.whichGPU = whichGPU;
+
+				transmissionFilter_gpu(g_chunk, &params_chunk, data_on_cpu, H, N_H1, N_H2, isAttenuationData);
+			}
+
+			return true;
+		}
+	}
+	else
+	{
+		return transmissionFilter_gpu(g, &params, data_on_cpu, H, N_H1, N_H2, isAttenuationData);
+	}
+	//#####################################################################################################
 }
 
 bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)

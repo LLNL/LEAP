@@ -129,7 +129,15 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			applyPreRampFilterWeights(g, params, data_on_cpu);
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, false, false);
-			rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
+			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
+			{
+				if (params->whichGPU < 0)
+					ray_derivative_cpu(g, params);
+				else
+					ray_derivative(g, params, data_on_cpu);
+			}
+			else
+				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, false, true);
 			return applyPostRampFilterWeights(g, params, data_on_cpu);

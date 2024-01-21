@@ -37,6 +37,11 @@ int listOfTomographicModels::append()
     return int(list.size()-1);
 }
 
+int listOfTomographicModels::size()
+{
+    return int(list.size());
+}
+
 tomographicModels* listOfTomographicModels::get(int i)
 {
     if (list.size() == 0)

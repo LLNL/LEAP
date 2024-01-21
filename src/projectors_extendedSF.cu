@@ -17,6 +17,30 @@
 #include "projectors.h"
 #include "cuda_utils.h"
 
+__global__ void applyPolarWeight2(float* g, int4 N_g, float4 T_g, float4 startVals_g)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N_g.x || j >= N_g.y || k >= N_g.z)
+        return;
+
+    const float v = j * T_g.y + startVals_g.y;
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrtf(1.0f + v * v);
+}
+
+__global__ void applyInversePolarWeight2(float* g, int4 N_g, float4 T_g, float4 startVals_g)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N_g.x || j >= N_g.y || k >= N_g.z)
+        return;
+
+    const float v = j * T_g.y + startVals_g.y;
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrtf(1.0f + v * v);
+}
+
 __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -49,8 +73,8 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
 
         const float x_dot_theta_perp = cos_phi * y - sin_phi * x;
 
-        const float u_c = x_dot_theta_perp;
-        const int iu_c = (u_c - startVals_g.z) / T_g.z;
+        //const float u_c = x_dot_theta_perp;
+        //const int iu_c = (u_c - startVals_g.z) / T_g.z;
         const float l_phi = T_f.x / max(fabs(cos_phi), fabs(sin_phi));
 
         if (fabs(sin_phi) >= fabs(cos_phi))
@@ -58,18 +82,36 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
             // x determines the width
             const float u_A = (x_dot_theta_perp - 0.5f * T_f.x * fabs(sin_phi) - startVals_g.z) / T_g.z;
             const float u_B = (x_dot_theta_perp + 0.5f * T_f.x * fabs(sin_phi) - startVals_g.z) / T_g.z;
-            const int diu = max(1, int(ceil(T_f.x * fabs(sin_phi) / (0.5f * T_g.z))));
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
-                val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
+
+            const int iu_min = int(ceil(u_A - 0.5f));
+            const int iu_max = int(floor(u_B + 0.5f));
+
+            //const int diu = max(1, int(ceil(T_f.x * fabs(sin_phi) / (0.5f * T_g.z))));
+            for (int iu = iu_min; iu <= iu_max; iu++)
+            {
+                const float uWeight = min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A);
+                if (uWeight > 0.0f)
+                    val += tex3D<float>(g, iu, iv, l) * l_phi * uWeight;
+                //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
+            }
         }
         else
         {
             // y determines the width
             const float u_A = (x_dot_theta_perp - 0.5f * T_f.x * fabs(cos_phi) - startVals_g.z) / T_g.z;
             const float u_B = (x_dot_theta_perp + 0.5f * T_f.x * fabs(cos_phi) - startVals_g.z) / T_g.z;
-            const int diu = max(1, int(ceil(T_f.x * fabs(cos_phi) / (0.5f * T_g.z))));
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
-                val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
+
+            const int iu_min = int(ceil(u_A - 0.5f));
+            const int iu_max = int(floor(u_B + 0.5f));
+
+            //const int diu = max(1, int(ceil(T_f.x * fabs(cos_phi) / (0.5f * T_g.z))));
+            for (int iu = iu_min; iu <= iu_max; iu++)
+            {
+                const float uWeight = min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A);
+                if (uWeight > 0.0f)
+                    val += tex3D<float>(g, iu, iv, l) * l_phi * uWeight;
+                //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
+            }
         }
 
     }
@@ -224,15 +266,18 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
         u_c = atan(u_c);
 
         const int iv_c = (v_c - startVals_g.y) / T_g.y;
-        const int iu_c = (u_c - startVals_g.z) / T_g.z;
+        //const int iu_c = (u_c - startVals_g.z) / T_g.z;
 
         //const float v_A = ((z - voxz_half) * R_minus_x_dot_theta_inv - startVals_g.y) / T_g.y;
         //const float v_B = ((z + voxz_half) * R_minus_x_dot_theta_inv - startVals_g.y) / T_g.y;
         const float v_A = (v_c - voxz_half * dist_from_source_inv - startVals_g.y) / T_g.y;
         const float v_B = (v_c + voxz_half * dist_from_source_inv - startVals_g.y) / T_g.y;
 
+        const int iv_min = int(ceil(v_A - 0.5f));
+        const int iv_max = int(floor(v_B + 0.5f));
+
         //const int div = max(1, int(ceil(0.5f*T_g.y * R_minus_x_dot_theta * T_z_inv))); // FIXME
-        const int div = max(1, int(ceil(dist_from_source_inv * T_f.z / (0.5f * T_g.y)))); // FIXME
+        //const int div = max(1, int(ceil(dist_from_source_inv * T_f.z / (0.5f * T_g.y)))); // FIXME
 
         if (x_denom > y_denom)
         {
@@ -241,28 +286,28 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
             const float u_A = (atan((x_dot_theta_perp + sin_phi * vox_half) / (R_minus_x_dot_theta + vox_half * cos_phi)) - startVals_g.z) / T_g.z;
             const float u_B = (atan((x_dot_theta_perp - sin_phi * vox_half) / (R_minus_x_dot_theta - vox_half * cos_phi)) - startVals_g.z) / T_g.z;
 
+            const float u_min = min(u_A, u_B);
+            const float u_max = max(u_A, u_B);
+
             //const int diu = max(1, int(ceil(0.5f * T_g.z / (T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi)))));
-            const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi) / (0.5f * T_g.z))));
+            //const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi) / (0.5f * T_g.z))));
+            const int iu_min = int(ceil(u_min - 0.5f));
+            const int iu_max = int(floor(u_max + 0.5f));
 
-            // use x_lo, x_hi
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu++)
             {
-                const float u = iu * T_g.z + startVals_g.z;
-
-                // calculate x index for u-0.5*T_g.z and u+0.5*T_g.z
-                // u-0.5f*T_g.z = x_dot_theta_perp * R_minus_x_dot_theta_inv
-
-                const float uWeight = l_phi * max(0.0, min(float(iu) + 0.5f, max(u_A, u_B)) - max(float(iu) - 0.5f, min(u_A, u_B)));
-                if (uWeight == 0.0f)
+                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                if (uWeight <= 0.0f)
                     continue;
-                for (int iv = iv_c - div; iv <= iv_c + div; iv++)
+                for (int iv = iv_min; iv <= iv_max; iv++)
                 {
-                    const float v = iv * T_g.y + startVals_g.y;
-
                     // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
 
-                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrt(1.0f + v * v);
+                    if (vWeight > 0.0f)
+                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
                 }
             }
         }
@@ -272,27 +317,28 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
             const float u_A = (atan((x_dot_theta_perp - cos_phi * vox_half) / (R_minus_x_dot_theta + vox_half * sin_phi)) - startVals_g.z) / T_g.z;
             const float u_B = (atan((x_dot_theta_perp + cos_phi * vox_half) / (R_minus_x_dot_theta - vox_half * sin_phi)) - startVals_g.z) / T_g.z;
 
+            const float u_min = min(u_A, u_B);
+            const float u_max = max(u_A, u_B);
+
             //const int diu = max(1, int(ceil(0.5f * T_g.z / (T_f.x * R_minus_x_dot_theta_inv * fabs(cos_phi)))));
-            const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(cos_phi) / (0.5f * T_g.z))));
+            //const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(cos_phi) / (0.5f * T_g.z))));
+            const int iu_min = int(ceil(u_min - 0.5f));
+            const int iu_max = int(floor(u_max + 0.5f));
 
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu++)
             {
-                const float u = iu * T_g.z + startVals_g.z;
-
-                // calculate x index for u-0.5*T_g.z and u+0.5*T_g.z
-                // u-0.5f*T_g.z = x_dot_theta_perp * R_minus_x_dot_theta_inv
-
-                const float uWeight = l_phi * max(0.0, min(float(iu) + 0.5f, max(u_A, u_B)) - max(float(iu) - 0.5f, min(u_A, u_B)));
-                if (uWeight == 0.0f)
+                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                if (uWeight <= 0.0f)
                     continue;
-                for (int iv = iv_c - div; iv <= iv_c + div; iv++)
+                for (int iv = iv_min; iv <= iv_max; iv++)
                 {
-                    const float v = iv * T_g.y + startVals_g.y;
-
                     // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
 
-                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrt(1.0f + v * v);
+                    if (vWeight > 0.0f)
+                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
                 }
             }
         }
@@ -353,15 +399,18 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
         const float l_phi = T_f.x * sqrt(1.0f + u_c * u_c) / max(x_denom, y_denom);// *sqrt(1.0f + v_c * v_c);
 
         const int iv_c = (v_c - startVals_g.y) / T_g.y;
-        const int iu_c = (u_c - startVals_g.z) / T_g.z;
+        //const int iu_c = (u_c - startVals_g.z) / T_g.z;
 
         //const float v_A = ((z - voxz_half) * R_minus_x_dot_theta_inv - startVals_g.y) / T_g.y;
         //const float v_B = ((z + voxz_half) * R_minus_x_dot_theta_inv - startVals_g.y) / T_g.y;
         const float v_A = (v_c - voxz_half * R_minus_x_dot_theta_inv - startVals_g.y) / T_g.y;
         const float v_B = (v_c + voxz_half * R_minus_x_dot_theta_inv - startVals_g.y) / T_g.y;
 
+        const int iv_min = int(ceil(v_A - 0.5f));
+        const int iv_max = int(floor(v_B + 0.5f));
+
         //const int div = max(1, int(ceil(0.5f*T_g.y * R_minus_x_dot_theta * T_z_inv))); // FIXME
-        const int div = max(1, int(ceil(R_minus_x_dot_theta_inv * T_f.z / (0.5f * T_g.y)))); // FIXME
+        //const int div = max(1, int(ceil(R_minus_x_dot_theta_inv * T_f.z / (0.5f * T_g.y)))); // FIXME
 
         if (x_denom > y_denom)
         {
@@ -370,28 +419,28 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
             const float u_A = ((x_dot_theta_perp + sin_phi * vox_half) / (R_minus_x_dot_theta + vox_half * cos_phi) - startVals_g.z) / T_g.z;
             const float u_B = ((x_dot_theta_perp - sin_phi * vox_half) / (R_minus_x_dot_theta - vox_half * cos_phi) - startVals_g.z) / T_g.z;
 
+            const float u_min = min(u_A, u_B);
+            const float u_max = max(u_A, u_B);
+
             //const int diu = max(1, int(ceil(0.5f * T_g.z / (T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi)))));
-            const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi) / (0.5f * T_g.z))));
+            //const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi) / (0.5f * T_g.z))));
+            const int iu_min = int(ceil(u_min - 0.5f));
+            const int iu_max = int(floor(u_max + 0.5f));
 
-            // use x_lo, x_hi
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu++)
             {
-                const float u = iu * T_g.z + startVals_g.z;
-
-                // calculate x index for u-0.5*T_g.z and u+0.5*T_g.z
-                // u-0.5f*T_g.z = x_dot_theta_perp * R_minus_x_dot_theta_inv
-
-                const float uWeight = l_phi * max(0.0, min(float(iu)+0.5f, max(u_A, u_B)) - max(float(iu)-0.5f, min(u_A, u_B)));
-                if (uWeight == 0.0f)
+                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                if (uWeight <= 0.0f)
                     continue;
-                for (int iv = iv_c - div; iv <= iv_c + div; iv++)
+                for (int iv = iv_min; iv <= iv_max; iv++)
                 {
-                    const float v = iv * T_g.y + startVals_g.y;
-
                     // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                
-                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrt(1.0f + v * v);
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+
+                    if (vWeight > 0.0f)
+                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
                 }
             }
         }
@@ -401,27 +450,28 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
             const float u_A = ((x_dot_theta_perp - cos_phi * vox_half) / (R_minus_x_dot_theta + vox_half * sin_phi) - startVals_g.z) / T_g.z;
             const float u_B = ((x_dot_theta_perp + cos_phi * vox_half) / (R_minus_x_dot_theta - vox_half * sin_phi) - startVals_g.z) / T_g.z;
 
+            const float u_min = min(u_A, u_B);
+            const float u_max = max(u_A, u_B);
+
             //const int diu = max(1, int(ceil(0.5f * T_g.z / (T_f.x * R_minus_x_dot_theta_inv * fabs(cos_phi)))));
-            const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(cos_phi) / (0.5f * T_g.z))));
+            //const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(cos_phi) / (0.5f * T_g.z))));
+            const int iu_min = int(ceil(u_min - 0.5f));
+            const int iu_max = int(floor(u_max + 0.5f));
 
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu++)
             {
-                const float u = iu * T_g.z + startVals_g.z;
-
-                // calculate x index for u-0.5*T_g.z and u+0.5*T_g.z
-                // u-0.5f*T_g.z = x_dot_theta_perp * R_minus_x_dot_theta_inv
-
-                const float uWeight = l_phi * max(0.0, min(float(iu) + 0.5f, max(u_A, u_B)) - max(float(iu) - 0.5f, min(u_A, u_B)));
-                if (uWeight == 0.0f)
+                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                if (uWeight <= 0.0f)
                     continue;
-                for (int iv = iv_c - div; iv <= iv_c + div; iv++)
+                for (int iv = iv_min; iv <= iv_max; iv++)
                 {
-                    const float v = iv * T_g.y + startVals_g.y;
-
                     // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
 
-                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrt(1.0f + v * v);
+                    if (vWeight > 0.0f)
+                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
                 }
             }
         }
@@ -1058,6 +1108,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
+    //printf("backproject_eSF\n");
 
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1090,6 +1141,13 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
     else
         dev_g = g;
+
+    dim3 dimBlock_g = setBlockSize(N_g);
+    dim3 dimGrid_g = setGridSize(N_g, dimBlock_g);
+    if (params->geometry == parameters::CONE)
+    {
+        applyInversePolarWeight2 <<< dimGrid_g, dimBlock_g >>> (dev_g, N_g, T_g, startVal_g);
+    }
 
     cudaTextureObject_t d_data_txt = NULL;
     //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, false);
@@ -1134,6 +1192,11 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
             cudaFree(dev_g);
         if (dev_f != 0)
             cudaFree(dev_f);
+    }
+    else if (params->geometry == parameters::CONE)
+    {
+        applyPolarWeight2 <<< dimGrid_g, dimBlock_g >>> (dev_g, N_g, T_g, startVal_g);
+        cudaStatus = cudaDeviceSynchronize();
     }
 
     return true;

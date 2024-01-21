@@ -17,6 +17,19 @@
 
 using namespace std;
 
+bool usingSFprojectorsForModularBeam(parameters* params)
+{
+    if (params->whichGPU < 0)
+        return false;
+    else
+    {
+        if (params->modularbeamIsAxiallyAligned() == true /* && params->voxelSizeWorksForFastSF() == true*/)
+            return true;
+        else
+            return false;
+    }
+}
+
 bool project_Joseph_cpu(float* g, float* f, parameters* params)
 {
     if (params->geometry == parameters::MODULAR)
@@ -112,7 +125,7 @@ bool backproject_Joseph_modular_cpu(float* g, float* f, parameters* params)
     bool doParallel = false;
     if (maxTravel < 0.25 && params->truncatedScan == false)
     {
-        printf("do parallel!\n");
+        //printf("do parallel!\n");
         doParallel = true;
     }
 

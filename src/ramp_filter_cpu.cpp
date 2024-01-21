@@ -479,7 +479,7 @@ bool mergeLeftAndRight(float* g, float* g_left, float* g_right, parameters* para
     return true;
 }
 
-bool Laplacian_cpu(float*& g, parameters* params, float scalar)
+bool Laplacian_cpu(float*& g, int numDims, parameters* params, float scalar)
 {
     omp_set_num_threads(omp_get_num_procs());
     #pragma omp parallel for
@@ -506,7 +506,8 @@ bool Laplacian_cpu(float*& g, parameters* params, float scalar)
                 int k_plus = std::min(k + 1, params->numCols - 1);
 
                 float diff = tempProj[j * params->numCols + k_plus] + tempProj[j * params->numCols + k_minus] - 2.0 * tempProj[j * params->numCols + k];
-                diff += tempProj[j_plus * params->numCols + k] + tempProj[j_minus * params->numCols + k] - 2.0 * tempProj[j * params->numCols + k];
+                if (numDims >= 2)
+                    diff += tempProj[j_plus * params->numCols + k] + tempProj[j_minus * params->numCols + k] - 2.0 * tempProj[j * params->numCols + k];
 
                 aLine[k] = diff * scalar;
             }

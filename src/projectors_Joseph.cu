@@ -327,27 +327,6 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
                     + tex3D<float>(g, u_ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two);
             }
             //*/
-
-            /* Weights for v
-            const float v_arg_A = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - half_T_z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
-            const float v_arg_B = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z + half_T_z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
-
-            const float xi_low = (min(v_arg_A, v_arg_B) - startVals_g.y) * Tv_inv;
-            const float xi_high = (max(v_arg_A, v_arg_B) - startVals_g.y) * Tv_inv;
-
-            float v_ind_first = floor(xi_low + 0.5f); // first detector index
-
-            const float verticalWeights_0_A = (min(xi_high, v_ind_first + 1.5f) - xi_low);
-            const float verticalWeights_1_A = (xi_high - xi_low) - verticalWeights_0_A;
-
-            const float v_ind_last = v_ind_first + 2.5f;
-            v_ind_first = v_ind_first + 0.5f + max(0.0f, min(xi_high - v_ind_first - 0.5f, 1.0f)) / verticalWeights_0_A;
-
-            val += tex3D<float>(g, u_ind_first, v_ind_first, L) * horizontalWeights_0_A * verticalWeights_0_A
-                + tex3D<float>(g, u_ind_last, v_ind_first, L) * horizontalWeights_1_A * verticalWeights_0_A
-                + tex3D<float>(g, u_ind_first, v_ind_last, L) * horizontalWeights_0_A * verticalWeights_1_A
-                    + tex3D<float>(g, u_ind_last, v_ind_last, L) * horizontalWeights_1_A * verticalWeights_1_A;
-            //*/
         }
         else
         {
@@ -398,27 +377,140 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
                     + tex3D<float>(g, u_ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two);
             }
             //*/
+        }
+    }
+    f[ind] = val * T_f.x;
+}
 
-            /* Weights for v
-            const float v_arg_A = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - half_T_x - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
-            const float v_arg_B = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z + half_T_x - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
+__global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+        return;
 
-            const float xi_low = (min(v_arg_A, v_arg_B) - startVals_g.y) * Tv_inv;
-            const float xi_high = (max(v_arg_A, v_arg_B) - startVals_g.y) * Tv_inv;
+    uint64 ind;
+    if (volumeDimensionOrder == 0)
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
+    else
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
-            float v_ind_first = floor(xi_low + 0.5f); // first detector index
+    const float x = float(i) * T_f.x + startVals_f.x;
+    const float y = float(j) * T_f.y + startVals_f.y;
 
-            const float verticalWeights_0_A = (min(xi_high, v_ind_first + 1.5f) - xi_low);
-            const float verticalWeights_1_A = (xi_high - xi_low) - verticalWeights_0_A;
+    if (x * x + y * y > rFOV_sq)
+    {
+        f[ind] = 0.0f;
+        return;
+    }
 
-            const float v_ind_last = v_ind_first + 2.5f;
-            v_ind_first = v_ind_first + 0.5f + max(0.0f, min(xi_high - v_ind_first - 0.5f, 1.0f)) / verticalWeights_0_A;
+    const float z = float(k) * T_f.z + startVals_f.z;
 
-            val += tex3D<float>(g, u_ind_first, v_ind_first, L) * horizontalWeights_0_A * verticalWeights_0_A
-                + tex3D<float>(g, u_ind_last, v_ind_first, L) * horizontalWeights_1_A * verticalWeights_0_A
-                + tex3D<float>(g, u_ind_first, v_ind_last, L) * horizontalWeights_0_A * verticalWeights_1_A
-                + tex3D<float>(g, u_ind_last, v_ind_last, L) * horizontalWeights_1_A * verticalWeights_1_A;
-            //*/
+    const float T_x_inv = 1.0f / T_f.x;
+    const float Tu_inv = 1.0f / T_g.z;
+    const float Tv_inv = 1.0f / T_g.y;
+    const float half_T_x = 0.5f * T_f.x;
+    const float half_T_z = 0.5f * T_f.z;
+
+    float val = 0.0f;
+    for (int iphi = 0; iphi < N_g.x; iphi++)
+    {
+        const float L = (float)iphi + 0.5f;
+
+        float* sourcePosition = &sourcePositions[3 * iphi];
+        float* moduleCenter = &moduleCenters[3 * iphi];
+        float* v_vec = &rowVectors[3 * iphi];
+        float* u_vec = &colVectors[3 * iphi];
+        const float3 detNormal = make_float3(u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1],
+            u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
+            u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
+
+        const float c_minus_s_dot_u = (moduleCenter[0] - sourcePosition[0]) * u_vec[0] + (moduleCenter[1] - sourcePosition[1]) * u_vec[1] + (moduleCenter[2] - sourcePosition[2]) * u_vec[2];
+        const float c_minus_s_dot_v = (moduleCenter[0] - sourcePosition[0]) * v_vec[0] + (moduleCenter[1] - sourcePosition[1]) * v_vec[1] + (moduleCenter[2] - sourcePosition[2]) * v_vec[2];
+        const float c_minus_s_dot_n = (moduleCenter[0] - sourcePosition[0]) * detNormal.x + (moduleCenter[1] - sourcePosition[1]) * detNormal.y + (moduleCenter[2] - sourcePosition[2]) * detNormal.z;
+
+        const float denom = (x - sourcePosition[0]) * detNormal.x + (y - sourcePosition[1]) * detNormal.y + (z - sourcePosition[2]) * detNormal.z;
+        const float t_C = c_minus_s_dot_n / denom;
+
+        const float v_c = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
+        const int iv_c = int(0.5f+(v_c - startVals_g.y) * Tv_inv);
+        const int div = max(1, int(ceil(half_T_z*v_vec[2]*t_C * Tv_inv)));
+
+        const float v_A = (v_c - half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
+        const float v_B = (v_c + half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
+        const int iv_min = int(ceil(v_A - 0.5f));
+        const int iv_max = int(floor(v_B + 0.5f));
+
+        //const int iu_c = int(0.5f+(t_C * ((x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv);
+
+        if (fabs(x - sourcePosition[0]) > fabs(y - sourcePosition[1]))
+        {
+            const float t_A = c_minus_s_dot_n / (denom - half_T_x * detNormal.y);
+            const float t_B = c_minus_s_dot_n / (denom + half_T_x * detNormal.y);
+
+            const float u_A = (t_A * ((x - sourcePosition[0]) * u_vec[0] + (y - half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+            const float u_B = (t_B * ((x - sourcePosition[0]) * u_vec[0] + (y + half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+
+            const float u_min = min(u_A, u_B);
+            const float u_max = max(u_A, u_B);
+
+            //const float diu = max(1, int(ceil(half_T_x * u_vec[1] * t_C * Tu_inv)));
+            const int iu_min = int(ceil(u_min-0.5f));
+            const int iu_max = int(floor(u_max+0.5f));
+
+            const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
+
+            for (int iu = iu_min; iu <= iu_max; iu++)
+            {
+                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                if (uWeight <= 0.0f)
+                    continue;
+                for (int iv = iv_min; iv <= iv_max; iv++)
+                {
+                    // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+
+                    if (vWeight > 0.0f)
+                        val += tex3D<float>(g, iu, iv, iphi) * uWeight * vWeight;
+                }
+            }
+        }
+        else
+        {
+            const float t_A = c_minus_s_dot_n / (denom - half_T_x * detNormal.x);
+            const float t_B = c_minus_s_dot_n / (denom + half_T_x * detNormal.x);
+
+            const float u_A = (t_A * ((x - half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+            const float u_B = (t_B * ((x + half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+
+            const float u_min = min(u_A, u_B);
+            const float u_max = max(u_A, u_B);
+
+            //const float diu = max(1, int(ceil(half_T_x * u_vec[0] * t_C * Tu_inv)));
+            const int iu_min = int(ceil(u_min - 0.5f));
+            const int iu_max = int(floor(u_max + 0.5f));
+
+            const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
+
+            for (int iu = iu_min; iu <= iu_max; iu++)
+            {
+                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                if (uWeight <= 0.0f)
+                    continue;
+                for (int iv = iv_min; iv <= iv_max; iv++)
+                {
+                    // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+
+                    if (vWeight > 0.0f)
+                        val += tex3D<float>(g, iu, iv, iphi) * uWeight * vWeight;
+                }
+            }
         }
     }
     f[ind] = val * T_f.x;
@@ -1214,10 +1306,17 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
 
+    bool useSF = true;
+    if (params->voxelSizeWorksForFastSF() == false)
+    {
+        if (params->voxelWidth < params->default_voxelWidth() || params->voxelHeight < params->default_voxelHeight())
+            useSF = false;
+    }
+
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
-    if (params->modularbeamIsAxiallyAligned() == true && params->voxelSizeWorksForFastSF() == true)
+    if (params->modularbeamIsAxiallyAligned() == true && useSF == true)
     {
         //printf("s = %f, %f, %f\n", params->sourcePositions[0], params->sourcePositions[1], params->sourcePositions[2]);
         //printf("c = %f, %f, %f\n", params->moduleCenters[0], params->moduleCenters[1], params->moduleCenters[2]);
@@ -1328,9 +1427,16 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     dim3 dimBlock_g = setBlockSize(N_g);
     dim3 dimGrid_g = setGridSize(N_g, dimBlock_g);
     float* w_polar = NULL;
-    if (params->modularbeamIsAxiallyAligned() == true && params->voxelSizeWorksForFastSF() == true)
+    if (params->modularbeamIsAxiallyAligned() == true)
     {
-        doLinearInterpolation = true;
+        if (params->voxelSizeWorksForFastSF() == true)
+        {
+            doLinearInterpolation = true;
+        }
+        else
+        {
+            doLinearInterpolation = false;
+        }
         w_polar = setViewDependentPolarWeights(params);
         applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, true, false);
     }
@@ -1350,10 +1456,13 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);
     dim3 dimGrid = setGridSize(N_f, dimBlock);
-    if (params->modularbeamIsAxiallyAligned() == true && params->voxelSizeWorksForFastSF() == true)
+    if (params->modularbeamIsAxiallyAligned() == true)
     {
         //printf("SF backproject\n");
-        modularBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+        if (params->voxelSizeWorksForFastSF() == true)
+            modularBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+        else
+            modularBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
     }
     else if (maxTravel < 0.25 && params->truncatedScan == false)
     {
@@ -1375,7 +1484,7 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (params->modularbeamIsAxiallyAligned() == true && params->voxelSizeWorksForFastSF() == true && data_on_cpu == false)
+    if (params->modularbeamIsAxiallyAligned() == true && data_on_cpu == false /* && params->voxelSizeWorksForFastSF() == true */ )
     {
         applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, true, true);
     }

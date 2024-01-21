@@ -41,8 +41,8 @@ leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numR
 #leapct.set_curvedDetector()
 
 # Set the helical pitch.
-leapct.set_normalizedHelicalPitch(0.5)
-#leapct.set_normalizedHelicalPitch(1.0)
+#leapct.set_normalizedHelicalPitch(0.5)
+leapct.set_normalizedHelicalPitch(1.0)
 
 # Set the volume parameters
 leapct.set_default_volume()

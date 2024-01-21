@@ -43,6 +43,7 @@ set(HEADER
   ray_weighting_cpu.h
   noise_filters.cuh
   total_variation.cuh
+  find_center_cpu.h
   cuda_utils.h
   cpu_utils.h
   phantom.h
@@ -63,6 +64,7 @@ set(SRC_CPP
   sensitivity_cpu.cpp
   ramp_filter_cpu.cpp
   ray_weighting_cpu.cpp
+  find_center_cpu.cpp
   cpu_utils.cpp
   phantom.cpp
 )

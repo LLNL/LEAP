@@ -25,6 +25,7 @@ public:
 
     void clear();
     int append();
+    int size();
     tomographicModels* get(int);
     
 private:
