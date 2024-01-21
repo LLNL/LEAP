@@ -30,7 +30,7 @@ Installation and usage information is posted on the wiki page here: https://gith
 
 ## Example Results
 
-As a simple demonstration of the accuracy of our projectors we show below the results of FDK reconstructions using ASTRA and LEAP of the walnut CT data.  The LEAP reconstruction has 1.8 times higher SNR and reconstructed this data 3.6 times faster than ASTRA.
+As a simple demonstration of the accuracy of our projectors we show below the results of FDK reconstructions using ASTRA and LEAP of the walnut CT data.  The LEAP reconstruction has 1.7 times higher SNR and reconstructed this data 5.5 times faster than ASTRA.
 <p align="center">
   <img src=https://github.com/LLNL/LEAP/blob/main/results/walnut_comparison.png>
 </p>
