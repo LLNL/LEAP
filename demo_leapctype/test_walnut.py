@@ -95,7 +95,7 @@ f = np.flip(f,axis=2)
 
 
 # Save results as a tif sequence
-outputDir = os.path.join(dataPath,'FBP')
+outputDir = os.path.join(dataPath,'FBP_eSF')
 if not os.path.exists(outputDir):
     os.makedirs(outputDir)
 leapct.save_volume(os.path.join(outputDir,'rec.tif'), f)

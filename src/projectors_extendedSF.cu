@@ -389,9 +389,9 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
                     const float v = iv * T_g.y + startVals_g.y;
 
                     // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
                 
-                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrt(1.0f + v * v);
+                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrtf(1.0f + v * v);
                 }
             }
         }
@@ -419,9 +419,9 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
                     const float v = iv * T_g.y + startVals_g.y;
 
                     // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                    const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
 
-                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrt(1.0f + v * v);
+                    val += tex3D<float>(g, iu, iv, l) * vWeight * uWeight * sqrtf(1.0f + v * v);
                 }
             }
         }

@@ -23,7 +23,7 @@ bool usingSFprojectorsForModularBeam(parameters* params)
         return false;
     else
     {
-        if (params->modularbeamIsAxiallyAligned() == true && params->voxelSizeWorksForFastSF() == true)
+        if (params->modularbeamIsAxiallyAligned() == true /* && params->voxelSizeWorksForFastSF() == true*/)
             return true;
         else
             return false;
