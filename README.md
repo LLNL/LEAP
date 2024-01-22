@@ -1,5 +1,5 @@
 # LivermorE AI Projector for Computed Tomography (LEAP)
-This is a C/C++/CUDA library of 3D tomographic projectors (forward and back projection) implemented for both multi-GPU and multi-core CPU.  We provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
+This is a C++/CUDA library of 3D tomographic algorithms with a Python interface.  The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
 <p align="center">
   <img src=https://github.com/LLNL/LEAP/blob/main/documentation/LEAPoverview.png>
@@ -13,13 +13,15 @@ There are a lot of CT reconstruction packages out there, so why choose LEAP?  In
 5) **Flexible 3D CT geometry** specification that allows users to specify arbitrary shifts of the source and detector positions, non-uniform angular spacing, and more.
 6) **Flexible 3D CT volume** specification.
 7) **Quantitatively accurate and flexible** analytic reconstruction algorithms, i.e., Filtered Backprojection (**FBP**).
-8) Special-case FBP algorithms that are rarely included in other packages, such as helical, truncated projections, offset detector scan, and Attenuated Radon Transform.
-9) Special-case models such as the Attenuated Radon Transform (SPECT and VAM applications) and reconstruction of cylindrically-symmetric objects (flash x-ray applications).
-10) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, RDLS, ML-TR.
-11) Fast multi-GPU 3D densoing methods.
-12) Easy-to-use, simple API.
-13) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
-14) Permissible license.
+8) Can avoid costly CPU-to-GPU data transfers by performing operations on data already on a GPU. 
+9) Special-case FBP algorithms that are rarely included in other packages, such as helical, truncated projections, offset detector scan, and Attenuated Radon Transform.
+10) Special-case models such as the Attenuated Radon Transform (SPECT and VAM applications) and reconstruction of cylindrically-symmetric objects (flash x-ray applications).
+11) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, RDLS, ML-TR.
+12) Fast multi-GPU 3D densoing methods.
+13) Pre-processing algorithms.
+14) Easy-to-use, simple API.
+15) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
+16) Permissible license.
 
 Physics-based modeling and correction algorithms (e.g., beam hardening correction (BHC)) be applied when used with the [XrayPhysics](https://github.com/kylechampley/XrayPhysics) package.
 
