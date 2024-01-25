@@ -623,10 +623,17 @@ class SymmetricProjectors:
         return (i - 0.5*(self.numR-1))*self.sizeR + self.offsetR
 
     def z(self, i):
+        '''
         if self.geometry == self.CONE:
             return i*self.sizeZ - self.centerRow*(self.sod/self.sdd)*self.pixelHeight + self.offsetZ
         else:
             return i*self.sizeZ - self.centerRow*self.pixelHeight + self.offsetZ
+        '''
+        if self.geometry == self.CONE:
+            z_0 = self.offsetZ - 0.5 * float(self.numZ - 1) * self.sizeZ
+        else:
+            z_0 = self.offsetZ - self.centerRow * self.pixelHeight
+        return i*self.sizeZ + z_0
         
     
     def set_parallelbeam(self, numRows, numCols, pixelHeight, pixelWidth, axisOfSymmetry=0.0, centerRow=None, centerCol=None, numZ=0, numR=0, sizeZ=0.0, sizeR=0.0, offsetZ=0.0, offsetR=0.0):
@@ -664,7 +671,7 @@ class SymmetricProjectors:
         self.offsetR = offsetR
         
     
-    def set_conebeam(self, numRows, numCols, pixelHeight, pixelWidth, sod, sdd, axisOfSymmetry=0.0, centerRow=None, centerCol=None, numZ=0, numR=0, sizeZ=0.0, sizeR=0.0, offsetZ=0.0, offsetR=0.0):
+    def set_conebeam(self, numRows, numCols, pixelHeight, pixelWidth, sod, sdd, axisOfSymmetry=0.0, centerRow=None, centerCol=None, numZ=0, numR=0, sizeZ=0.0, sizeR=0.0, offsetZ=None, offsetR=None):
         self.geometry = self.CONE
         self.numRows = numRows
         self.numCols = numCols
@@ -697,6 +704,11 @@ class SymmetricProjectors:
             self.sizeR = self.pixelWidth * self.sod / self.sdd
         else:
             self.sizeR = sizeR
+        if offsetR is None:
+            offsetR = 0.0
+        if offsetZ is None:
+            offsetZ = 0.5 * float(self.numZ - 1) * self.sizeZ - self.centerRow * (self.sod / self.sdd * self.pixelHeight)
+
         self.offsetZ = offsetZ
         self.offsetR = offsetR
         
