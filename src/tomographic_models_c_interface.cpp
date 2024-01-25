@@ -580,6 +580,11 @@ bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, floa
 	return tomo()->applyTransferFunction(x, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, data_on_cpu);
 }
 
+bool applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
+{
+	return tomo()->applyDualTransferFunction(x, y, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, data_on_cpu);
+}
+
 bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
 	return tomo()->BlurFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);

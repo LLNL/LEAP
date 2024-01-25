@@ -10,6 +10,79 @@
 #include "cuda_runtime.h"
 #include <string.h>
 
+__global__ void DualTransferFunctionKernel(float* x, float* y, const float* LUT, const int3 N, const float firstSample, const float sampleRate, const int numSamples)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    const float lastSample = float(numSamples - 1) * sampleRate + firstSample;
+
+    const uint64 sample_ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+    
+    const float curVal_1 = x[sample_ind];
+    const float curVal_2 = y[sample_ind];
+
+    const float* LUT_1 = &LUT[0];
+    const float* LUT_2 = &LUT[numSamples * numSamples];
+
+    int ind_lo_1, ind_hi_1;
+    float d_1;
+    if (curVal_1 >= lastSample)
+    {
+        ind_lo_1 = numSamples - 1;
+        ind_hi_1 = numSamples - 1;
+        d_1 = 0.0;
+    }
+    else if (curVal_1 <= firstSample)
+    {
+        ind_lo_1 = 0;
+        ind_hi_1 = 0;
+        d_1 = 0.0;
+    }
+    else
+    {
+        float ind = curVal_1 / sampleRate - firstSample;
+        ind_lo_1 = int(ind);
+        ind_hi_1 = ind_lo_1 + 1;
+        d_1 = ind - float(ind_lo_1);
+    }
+
+    int ind_lo_2, ind_hi_2;
+    float d_2;
+    if (curVal_2 >= lastSample)
+    {
+        ind_lo_2 = numSamples - 1;
+        ind_hi_2 = numSamples - 1;
+        d_2 = 0.0;
+    }
+    else if (curVal_2 <= firstSample)
+    {
+        ind_lo_2 = 0;
+        ind_hi_2 = 0;
+        d_2 = 0.0;
+    }
+    else
+    {
+        float ind = curVal_2 / sampleRate - firstSample;
+        ind_lo_2 = int(ind);
+        ind_hi_2 = ind_lo_2 + 1;
+        d_2 = ind - float(ind_lo_2);
+    }
+
+    const float partA_1 = (1.0 - d_2) * LUT_1[ind_lo_1 * numSamples + ind_lo_2] + d_2 * LUT_1[ind_lo_1 * numSamples + ind_hi_2];
+    const float partB_1 = (1.0 - d_2) * LUT_1[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_1[ind_hi_1 * numSamples + ind_hi_2];
+
+    const float partA_2 = (1.0 - d_2) * LUT_2[ind_lo_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_lo_1 * numSamples + ind_hi_2];
+    const float partB_2 = (1.0 - d_2) * LUT_2[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_hi_1 * numSamples + ind_hi_2];
+
+    x[sample_ind] = (1.0 - d_1) * partA_1 + d_1 * partB_1;
+    y[sample_ind] = (1.0 - d_1) * partA_2 + d_1 * partB_2;
+}
+
 __global__ void TransferFunctionKernel(float* f, const float* LUT, const int3 N, const float firstSample, const float sampleRate, const int numSamples)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -1028,6 +1101,62 @@ bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, 
 
         if (dev_f != 0)
             cudaFree(dev_f);
+        if (dev_LUT != 0)
+            cudaFree(dev_LUT);
+    }
+
+    return true;
+}
+
+bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu)
+{
+    if (x == NULL || y == NULL) return false;
+
+    cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_x = 0;
+    float* dev_y = 0;
+    float* dev_LUT = 0;
+    if (data_on_cpu)
+    {
+        dev_x = copy3DdataToGPU(x, N, whichGPU);
+        dev_y = copy3DdataToGPU(y, N, whichGPU);
+
+        if (cudaSuccess != cudaMalloc((void**)&dev_LUT, 2*numSamples*numSamples * sizeof(float)))
+            fprintf(stderr, "cudaMalloc failed!\n");
+        if (cudaMemcpy(dev_LUT, LUT, 2 * numSamples * numSamples * sizeof(float), cudaMemcpyHostToDevice))
+            fprintf(stderr, "cudaMemcpy(LUT) failed!\n");
+    }
+    else
+    {
+        dev_x = x;
+        dev_y = y;
+        dev_LUT = LUT;
+    }
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    DualTransferFunctionKernel <<< dimGrid, dimBlock >>> (dev_x, dev_y, dev_LUT, N, firstSample, sampleRate, numSamples);
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        pull3DdataFromGPU(x, N, dev_x, whichGPU);
+        pull3DdataFromGPU(y, N, dev_y, whichGPU);
+
+        if (dev_x != 0)
+            cudaFree(dev_x);
+        if (dev_y != 0)
+            cudaFree(dev_y);
         if (dev_LUT != 0)
             cudaFree(dev_LUT);
     }

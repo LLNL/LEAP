@@ -1441,6 +1441,120 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 	return true;
 }
 
+bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
+{
+	if (x == NULL || y == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || LUT == NULL || sampleRate <= 0.0 || numSamples <= 0)
+	{
+		printf("Error: invalid input!\n");
+		printf("%d, %d, %d\n", N_1, N_2, N_3);
+		printf("%f, %d\n", sampleRate, numSamples);
+		return false;
+	}
+
+	// This is a simple algorithm, so only run it on the GPU if the data is already there
+	if (data_on_cpu == false)
+	{
+		return applyDualTransferFunction_gpu(x, y, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, params.whichGPU, data_on_cpu);
+		//printf("Error: method currently only implemented for data on CPU!\n");
+		//return false;
+	}
+	//return applyDualTransferFunction_gpu(x, y, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, params.whichGPU, data_on_cpu);
+
+	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
+
+	float* LUT_1 = &LUT[0];
+	float* LUT_2 = &LUT[numSamples * numSamples];
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int i = 0; i < N_1; i++)
+	{
+		float* x_2D = &x[uint64(i) * uint64(N_2) * uint64(N_3)];
+		float* y_2D = &y[uint64(i) * uint64(N_2) * uint64(N_3)];
+		for (int j = 0; j < N_2; j++)
+		{
+			float* x_1D = &x_2D[uint64(j) * uint64(N_3)];
+			float* y_1D = &y_2D[uint64(j) * uint64(N_3)];
+			for (int k = 0; k < N_3; k++)
+			{
+				float curVal_1 = x_1D[k];
+				float curVal_2 = y_1D[k];
+
+				int ind_lo_1, ind_hi_1;
+				float d_1;
+				if (curVal_1 >= lastSample)
+				{
+					ind_lo_1 = numSamples - 1;
+					ind_hi_1 = numSamples - 1;
+					d_1 = 0.0;
+				}
+				else if (curVal_1 <= firstSample)
+				{
+					ind_lo_1 = 0;
+					ind_hi_1 = 0;
+					d_1 = 0.0;
+				}
+				else
+				{
+					float ind = curVal_1 / sampleRate - firstSample;
+					ind_lo_1 = int(ind);
+					ind_hi_1 = ind_lo_1 + 1;
+					d_1 = ind - float(ind_lo_1);
+				}
+
+				int ind_lo_2, ind_hi_2;
+				float d_2;
+				if (curVal_2 >= lastSample)
+				{
+					ind_lo_2 = numSamples - 1;
+					ind_hi_2 = numSamples - 1;
+					d_2 = 0.0;
+				}
+				else if (curVal_2 <= firstSample)
+				{
+					ind_lo_2 = 0;
+					ind_hi_2 = 0;
+					d_2 = 0.0;
+				}
+				else
+				{
+					float ind = curVal_2 / sampleRate - firstSample;
+					ind_lo_2 = int(ind);
+					ind_hi_2 = ind_lo_2 + 1;
+					d_2 = ind - float(ind_lo_2);
+				}
+
+				float partA_1 = (1.0 - d_2)* LUT_1[ind_lo_1 * numSamples + ind_lo_2] + d_2* LUT_1[ind_lo_1 * numSamples + ind_hi_2];
+				float partB_1 = (1.0 - d_2) * LUT_1[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_1[ind_hi_1 * numSamples + ind_hi_2];
+
+				float partA_2 = (1.0 - d_2) * LUT_2[ind_lo_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_lo_1 * numSamples + ind_hi_2];
+				float partB_2 = (1.0 - d_2) * LUT_2[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_hi_1 * numSamples + ind_hi_2];
+
+				x_1D[k] = (1.0 - d_1) * partA_1 + d_1 * partB_1;
+				y_1D[k] = (1.0 - d_1) * partA_2 + d_1 * partB_2;
+
+				/*
+				if (curVal_1 >= lastSample)
+				{
+					float slope = (LUT[numSamples - 1] - LUT[numSamples - 2]) / sampleRate;
+					x_1D[k] = LUT[numSamples - 1] + slope * (curVal - lastSample);
+				}
+				else if (curVal <= firstSample)
+					x_1D[k] = firstSample;
+				else
+				{
+					float ind = curVal / sampleRate - firstSample;
+					int ind_low = int(ind);
+					float d = ind - float(ind_low);
+					x_1D[k] = (1.0 - d) * LUT[ind_low] + d * LUT[ind_low + 1];
+				}
+				//*/
+			}
+		}
+	}
+	return true;
+}
+
 bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)
