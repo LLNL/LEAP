@@ -18,12 +18,12 @@ There are a lot of CT reconstruction packages out there, so why choose LEAP?  In
 10) Special-case models such as the Attenuated Radon Transform (SPECT and VAM applications) and reconstruction of cylindrically-symmetric objects (flash x-ray applications).
 11) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, RDLS, ML-TR.
 12) Fast multi-GPU 3D densoing methods.
-13) Pre-processing algorithms.
+13) Pre-processing algorithms: outlier correction, detector deblur, ring removal, beam hardening correction (BHC), dual energy decomposition, and SIRZ
 14) Easy-to-use, simple API.
 15) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
 16) Permissible license.
 
-Physics-based modeling and correction algorithms (e.g., beam hardening correction (BHC)) be applied when used with the [XrayPhysics](https://github.com/kylechampley/XrayPhysics) package.
+Physics-based modeling and correction algorithms (e.g., beam hardening correction (BHC), dual energy decomposition, and SIRZ) can be applied when used with the [XrayPhysics](https://github.com/kylechampley/XrayPhysics) package.
 
 ## Installation and Usage
 
@@ -50,4 +50,6 @@ See [LICENSE](LICENSE) for more details.
 SPDX-License-Identifier: MIT  
 LLNL-CODE-848657  
 
-Please cite our work by referencing this github page and citing our article: Hyojin Kim and Kyle Champley, "Differentiable Forward Projector for X-ray Computed Tomography”, ICML, 2023
+Please cite our work by referencing this github page and citing our [article](https://arxiv.org/abs/2307.05801):
+
+Hyojin Kim and Kyle Champley, "Differentiable Forward Projector for X-ray Computed Tomography”, ICML, 2023
