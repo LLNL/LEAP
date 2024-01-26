@@ -755,8 +755,10 @@ class SymmetricProjectors:
         s_conj_ind = s_conj / self.pixelWidth + self.centerCol
         s_lo = np.array(np.floor(s_conj_ind), dtype=np.int32)
         s_lo[s_lo<0] = 0
+        s_lo[s_lo>self.numCols - 1] = self.numCols - 1
         s_hi = s_lo + 1
         s_hi[s_hi>self.numCols - 1] = self.numCols - 1
+        s_hi[s_hi<0] = 0
         s_hi = np.array(s_hi, dtype=np.int32)
         ds = s_conj_ind - np.array(s_lo,dtype=np.float32)
         
