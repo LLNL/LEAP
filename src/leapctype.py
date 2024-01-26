@@ -2360,10 +2360,23 @@ class tomographicModels:
         self.set_model()
         if has_torch == True and type(x) is torch.Tensor:
             self.libprojectors.applyDualTransferFunction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.applyDualTransferFunction(x.data_ptr(), y.data_ptr(), x.shape[0], x.shape[1], x.shape[2], LUT.data_ptr(), firstSample, sampleRate, LUT.shape[1], f.is_cuda == False)
+            return self.libprojectors.applyDualTransferFunction(x.data_ptr(), y.data_ptr(), x.shape[0], x.shape[1], x.shape[2], LUT.data_ptr(), firstSample, sampleRate, LUT.shape[1], x.is_cuda == False)
         else:
             self.libprojectors.applyDualTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.applyDualTransferFunction(x, y, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.shape[1], True)
+    
+    def convertToRhoeZe(self, f_L, f_H, sigma_L, sigma_H):
+        """transforms a low and high energy pair to electron density and effective atomic number"""
+        #bool convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu)
+        self.libprojectors.convertToRhoeZe.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f_L) is torch.Tensor:
+            self.libprojectors.convertToRhoeZe.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.convertToRhoeZe(f_L.data_ptr(), f_H.data_ptr(), f_L.shape[0], f_L.shape[1], f_L.shape[2], sigma_L.data_ptr(), sigma_H.data_ptr(), f_L.is_cuda == False)
+        else:
+            self.libprojectors.convertToRhoeZe.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.convertToRhoeZe(f_L, f_H, f_L.shape[0], f_L.shape[1], f_L.shape[2], sigma_L, sigma_H, True)
+        return f_L, f_H
     
     def BlurFilter(self, f, FWHM=2.0):
         """Applies a blurring filter to the provided numpy array

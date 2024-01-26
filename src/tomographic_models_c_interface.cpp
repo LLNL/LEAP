@@ -585,6 +585,11 @@ bool applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, fl
 	return tomo()->applyDualTransferFunction(x, y, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, data_on_cpu);
 }
 
+bool convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu)
+{
+	return tomo()->convertToRhoeZe(f_L, f_H, N_1, N_2, N_3, sigma_L, sigma_H, data_on_cpu);
+}
+
 bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
 	return tomo()->BlurFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);

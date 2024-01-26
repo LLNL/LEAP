@@ -17,12 +17,18 @@ using namespace std;
 
 bool findCenter_cpu(float* g, parameters* params, int iRow)
 {
+	if (params->offsetScan == true)
+		printf("Warning: findCenter may not work for offsetScan\n");
     if (params->geometry == parameters::PARALLEL)
         return findCenter_parallel_cpu(g, params, iRow);
     else if (params->geometry == parameters::FAN)
         return findCenter_fan_cpu(g, params, iRow);
-    else if (params->geometry == parameters::CONE)
-        return findCenter_cone_cpu(g, params, iRow); 
+	else if (params->geometry == parameters::CONE)
+	{
+		if (params->helicalPitch != 0.0)
+			printf("Warning: findCenter will likely not work for helical data\n");
+		return findCenter_cone_cpu(g, params, iRow);
+	}
     else
     {
         printf("Error: currently findCenter only works for parallel-, fan-, or cone-beam data\n");

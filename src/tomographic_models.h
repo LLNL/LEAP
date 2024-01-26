@@ -632,6 +632,21 @@ public:
 	 */
 	bool applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu);
 
+	/**
+	 * \fn          convertToRhoeZe
+	 * \brief       transforms a low and high energy pair to electron density and effective atomic number
+	 * \param[in]   f_L pointer to the 3D low energy channel (input and output)
+	 * \param[in]   f_H pointer to the 3D high energy channel (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   sigma_L pointer to the cross section values of the elements and the low energy
+	 * \param[in]   sigma_H pointer to the cross section values of the elements and the high energy
+	 * \param[in]   data_on_cpu true if data (x, y, and LUT) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu);
+
 	// Filters for 3D data
 	/**
 	 * \fn          BlurFilter

@@ -1555,6 +1555,87 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 	return true;
 }
 
+bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu)
+{
+	if (f_L == NULL || f_H == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || sigma_L == NULL || sigma_H == NULL)
+	{
+		printf("Error: invalid input!\n");
+		return false;
+	}
+
+	// This is a simple algorithm, so only run it on the GPU if the data is already there
+	if (data_on_cpu == false)
+	{
+		printf("Error: method currently only implemented for data on CPU!\n");
+		return false;
+	}
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int i = 0; i < N_1; i++)
+	{
+		float* slice_L = &f_L[uint64(i) * uint64(N_2) * uint64(N_3)];
+		float* slice_H = &f_H[uint64(i) * uint64(N_2) * uint64(N_3)];
+		for (int j = 0; j < N_2; j++)
+		{
+			float* line_L = &slice_L[uint64(j) * uint64(N_3)];
+			float* line_H = &slice_H[uint64(j) * uint64(N_3)];
+			for (int k = 0; k < N_3; k++)
+			{
+				float mu_L = line_L[k];
+				float mu_H = line_H[k];
+
+				float theRatio = mu_L / mu_H;
+
+				float prevError = theRatio - sigma_L[0] / sigma_H[0];
+				float curError;
+				int Z;
+				for (Z = 2; Z <= 100; Z++)
+				{
+					curError = theRatio - sigma_L[Z - 1] / sigma_H[Z - 1];
+					if (prevError * curError <= 0.0) // change of sign, so must have root between Z-1 and Z
+						break;
+					else if (fabs(prevError) < fabs(curError)) // getting worse, so just quit
+						break;
+					prevError = curError;
+				}
+				Z = std::min(100 - 2, std::max(1, Z - 1)); // min(98, max(1,Z-1))
+
+				// Now solution is between Z and Z+1
+
+				// Original Calculation
+				//double d = (theRatio*sigma(Z+1,ref_H) - sigma(Z+1,ref_L)) / (sigma(Z,ref_L) - sigma(Z+1,ref_L) - theRatio*( sigma(Z,ref_H) - sigma(Z+1,ref_H) ));
+
+				// Revised calculation
+				float d;
+				if (Z == 1 || 0.5 * (sigma_L[Z - 1 - 1] / sigma_H[Z - 1 - 1] + sigma_L[Z + 1 - 1] / sigma_H[Z + 1 - 1]) > sigma_L[Z - 1] / sigma_H[Z - 1])
+					d = (theRatio - sigma_L[Z + 1-1] / sigma_H[Z + 1 - 1]) / (sigma_L[Z - 1] / sigma_H[Z - 1] - sigma_L[Z + 1 - 1] / sigma_H[Z + 1-1]);
+				else
+					d = (theRatio * sigma_H[Z + 1-1] - sigma_L[Z + 1 - 1]) / (sigma_L[Z - 1] - sigma_L[Z + 1 - 1] - theRatio * (sigma_H[Z - 1] - sigma_H[Z + 1 - 1]));
+
+				d = std::max(float(0.0), std::min(float(1.0), d));
+				float Ze = float(Z) + 1.0 - d;
+
+				int Z_lo = int(Ze);
+				int Z_hi = Z_lo + 1;
+				d = Ze - float(Z_lo);
+
+				float sigma_Ze_L = (1.0 - d) * sigma_L[Z_lo - 1] + d * sigma_L[Z_hi - 1];
+				float sigma_Ze_H = (1.0 - d) * sigma_H[Z_lo - 1] + d * sigma_H[Z_hi - 1];
+				float rhoe = (sigma_Ze_L * mu_L + sigma_Ze_H * mu_H) / (sigma_Ze_L * sigma_Ze_L + sigma_Ze_H * sigma_Ze_H);
+				if (mu_L == 0.0 || mu_H == 0.0)
+					rhoe = 0.0;
+				else if (isnan(rhoe) == 1)
+					rhoe = 0.0;
+
+				line_L[k] = Ze;
+				line_H[k] = rhoe;
+			}
+		}
+	}
+	return true;
+}
+
 bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)

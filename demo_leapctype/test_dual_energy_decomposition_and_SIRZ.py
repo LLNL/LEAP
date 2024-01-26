@@ -135,5 +135,17 @@ print('DED time: ' + str(time.time()-startTime) + ' seconds')
 
 f_L = leapct.FBP(g_L)
 f_H = leapct.FBP(g_H)
-leapct.display(f_L)
-leapct.display(f_H)
+#leapct.display(f_L)
+#leapct.display(f_H)
+
+# Now let's convert to rhoe and Ze (electron density and effective atomic number)
+sigmae_L = np.zeros((100),dtype=np.float32)
+sigmae_H = sigmae_L.copy()
+for n in range(100):
+    Z = n+1
+    sigmae_L[n] = 1.0e2*physics.sigma_e(Z, referenceEnergy_L)
+    sigmae_H[n] = 1.0e2*physics.sigma_e(Z, referenceEnergy_H)
+    
+f_Ze, f_rhoe = leapct.convertToRhoeZe(f_L, f_H, sigmae_L, sigmae_H)
+leapct.display(f_Ze) # Ze volume
+leapct.display(f_rhoe) # rhoe volume
