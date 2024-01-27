@@ -1520,7 +1520,7 @@ class tomographicModels:
                     g_subsets.append(g_subset)
             return g_subsets
     
-    def MLEM(self, g, f, numIter):
+    def MLEM(self, g, f, numIter, mask=None):
         """Maximum Likelihood-Expectation Maximization reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1529,9 +1529,11 @@ class tomographicModels:
         CT projection data is not Poisson distributed because of the application of the -log
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            
         
         Returns:
             f, the same as the input with the same name
@@ -1540,12 +1542,19 @@ class tomographicModels:
         #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
         #    print('Please convert to numpy array prior to running this algorithm.')
         #    return f
+        if mask is not None and mask.shape != g.shape:
+            print('Error: mask must be the same shape as the projection data!')
+            return None
         if self.isAllZeros(f) == True:
             f[:] = 1.0
         else:
             f[f<0.0] = 0.0
  
-        Pstar1 = self.sensitivity(self.copyData(f))
+        if mask is not None:
+            Pstar1 = self.copyData(f)
+            self.backproject(mask,Pstar1)
+        else:
+            Pstar1 = self.sensitivity(self.copyData(f))
         Pstar1[Pstar1==0.0] = 1.0
         d = self.allocateData(f)
         Pd = self.allocateData(g)
@@ -1555,11 +1564,13 @@ class tomographicModels:
             self.project(Pd,f)
             ind = Pd != 0.0
             Pd[ind] = g[ind]/Pd[ind]
+            if mask is not None:
+                Pd[:] = Pd[:] * mask[:]
             self.backproject(Pd,d)
             f *= d/Pstar1
         return f
     
-    def OSEM(self, g, f, numIter, numSubsets=1):
+    def OSEM(self, g, f, numIter, numSubsets=1, mask=None):
         """Ordered Subsets-Expectation Maximization reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1568,10 +1579,11 @@ class tomographicModels:
         CT projection data is not Poisson distributed because of the application of the -log
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
             f, the same as the input with the same name
@@ -1580,6 +1592,9 @@ class tomographicModels:
         #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
         #    print('Please convert to numpy array prior to running this algorithm.')
         #    return f
+        if mask is not None and mask.shape != g.shape:
+            print('Error: mask must be the same shape as the projection data!')
+            return None
         if self.isAllZeros(f) == True:
             f[:] = 1.0
         else:
@@ -1590,12 +1605,16 @@ class tomographicModels:
         #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
         #    numSubsets = 1
         if numSubsets <= 1:
-            return self.MLEM(g,f,numIter)
+            return self.MLEM(g, f, numIter, mask)
         else:
         
             # divide g and phis
             subsetParams = subsetParameters(self, numSubsets)
             g_subsets = self.breakIntoSubsets(g, numSubsets)
+            if mask is not None:
+                mask_subsets = self.breakIntoSubsets(mask, numSubsets)
+            else:
+                mask_subsets = None
                 
             d = self.allocateData(f)
             for n in range(numIter):
@@ -1606,32 +1625,40 @@ class tomographicModels:
                     #self.set_angles(phis_subsets[m])
                     subsetParams.setSubset(m)
                     
-                    Pstar1 = self.sensitivity(self.copyData(f))
+                    if mask is not None:
+                        Pstar1 = self.copyData(f)
+                        self.backproject(mask_subsets[m],Pstar1)
+                        Pstar1[Pstar1==0.0] = 1.0
+                    else:
+                        Pstar1 = self.sensitivity(self.copyData(f))
                     #Pstar1[Pstar1==0.0] = 1.0
 
                     Pd = self.allocateData(g_subsets[m])
                     self.project(Pd,f)
                     ind = Pd != 0.0
                     Pd[ind] = g_subsets[m][ind]/Pd[ind]
+                    if mask_subsets is not None:
+                        Pd[:] = Pd[:] * mask_subsets[m][:]
                     self.backproject(Pd,d)
                     f *= d/Pstar1
             subsetParams.setSubset(-1)
             return f
         
-    def SIRT(self, g, f, numIter):
+    def SIRT(self, g, f, numIter, mask=None):
         """Simultaneous Iterative Reconstruction Technique reconstruction"""
-        return self.SART(g, f, numIter, self.get_numAngles())
+        return self.SART(g, f, numIter, self.get_numAngles(), mask)
         
-    def SART(self, g, f, numIter, numSubsets=1):
+    def SART(self, g, f, numIter, numSubsets=1, mask=None):
         """Simultaneous Algebraic Reconstruction Technique reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
             f, the same as the input with the same name
@@ -1640,10 +1667,10 @@ class tomographicModels:
         #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
         #    print('Please convert to numpy array prior to running this algorithm.')
         #    return f
+        if mask is not None and mask.shape != g.shape:
+            print('Error: mask must be the same shape as the projection data!')
+            return None
         numSubsets = min(numSubsets, self.get_numAngles())
-        #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
-        #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
-        #    numSubsets = 1
         if numSubsets <= 1:
             P1 = self.allocateData(g)
             self.project(P1,self.allocateData(f,1.0))
@@ -1658,7 +1685,10 @@ class tomographicModels:
             for n in range(numIter):
                 print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
                 self.project(Pd,f)
-                Pd = (g-Pd) / P1
+                if mask is not None:
+                    Pd = (g-Pd) / P1 * mask
+                else:
+                    Pd = (g-Pd) / P1
                 self.backproject(Pd,d)
                 f += 0.9*d / Pstar1
                 f[f<0.0] = 0.0
@@ -1672,6 +1702,10 @@ class tomographicModels:
             subsetParams = subsetParameters(self, numSubsets)
             g_subsets = self.breakIntoSubsets(g, numSubsets)
             P1_subsets = self.breakIntoSubsets(P1, numSubsets)
+            if mask is not None:
+                mask_subsets = self.breakIntoSubsets(mask, numSubsets)
+            else:
+                mask_subsets = None
             
             d = self.allocateData(f)
             for n in range(numIter):
@@ -1691,7 +1725,10 @@ class tomographicModels:
                     #print(Pd.shape)
                     self.project(Pd,f)
                     
-                    Pd = (g_subsets[m]-Pd) / P1_subsets[m]
+                    if mask_subsets is not None:
+                        Pd = (g_subsets[m]-Pd) / P1_subsets[m] * mask_subsets[m]
+                    else:
+                        Pd = (g_subsets[m]-Pd) / P1_subsets[m]
                     self.backproject(Pd,d)
                     #print('P1 range: ' + str(np.min(P1_subsets[m])) + ' to ' + str(np.max(P1_subsets[m])))
                     #print('d range: ' + str(np.min(d)) + ' to ' + str(np.max(d)))
@@ -1700,7 +1737,7 @@ class tomographicModels:
             subsetParams.setSubset(-1)
             return f
             
-    def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0):
+    def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0, mask=None):
         """Adaptive Steepest Descent-Projection onto Convex Subsets reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1713,12 +1750,13 @@ class tomographicModels:
         In Medical Imaging 2011: Physics of Medical Imaging, vol. 7961, pp. 786-798. SPIE, 2011.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             numTV (int): number of TV diffusion steps
             delta (float): parameter for the Huber-like loss function used in TV
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
             f, the same as the input with the same name
@@ -1727,12 +1765,12 @@ class tomographicModels:
         #    print('ERROR: Iterative reconstruction algorithms not implemented for torch tensors!')
         #    print('Please convert to numpy array prior to running this algorithm.')
         #    return f
+        if mask is not None and mask.shape != g.shape:
+            print('Error: mask must be the same shape as the projection data!')
+            return None
         if numTV <= 0:
-            return self.SART(g,f,numIter,numSubsets)
+            return self.SART(g,f,numIter,numSubsets,W)
         numSubsets = min(numSubsets, self.get_numAngles())
-        #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
-        #    print('WARNING: Subsets not yet implemented for modular-beam geometry, setting to 1.')
-        #    numSubsets = 1
         omega = 0.8
         P1 = self.allocateData(g)
         self.project(P1,self.allocateData(f,1.0))
@@ -1741,9 +1779,12 @@ class tomographicModels:
         subsetParams = subsetParameters(self, numSubsets)
         g_subsets = []
         P1_subsets = []
+        mask_subsets = None
         if numSubsets > 1:
             g_subsets = self.breakIntoSubsets(g, numSubsets)
             P1_subsets = self.breakIntoSubsets(P1, numSubsets)
+            if mask is not None:
+                mask_subsets = self.breakIntoSubsets(mask, numSubsets)
         else:
             Pstar1 = self.sensitivity(self.allocateData(f))
             Pstar1[Pstar1==0.0] = 1.0
@@ -1764,7 +1805,10 @@ class tomographicModels:
             
             # SART Update
             if numSubsets <= 1:
-                Pf_minus_g = Pf_minus_g / P1
+                if mask is not None:
+                    Pf_minus_g = Pf_minus_g / P1 * mask
+                else:
+                    Pf_minus_g = Pf_minus_g / P1
                 self.backproject(Pf_minus_g,d)
                 f -= 0.9*d / Pstar1
                 f[f<0.0] = 0.0
@@ -1777,7 +1821,10 @@ class tomographicModels:
 
                     Pd = self.allocateData(g_subsets[m])
                     self.project(Pd,f)
-                    Pd = (g_subsets[m]-Pd) / P1_subsets[m]
+                    if mask_subsets is not None:
+                        Pd = (g_subsets[m]-Pd) / P1_subsets[m] * mask_subsets[m]
+                    else:
+                        Pd = (g_subsets[m]-Pd) / P1_subsets[m]
                     self.backproject(Pd,d)
                     f += 0.9*d / Pstar1
                     f[f<0.0] = 0.0
@@ -1855,8 +1902,8 @@ class tomographicModels:
         which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             SQS (bool): specifies whether or not to use the SQS preconditioner
         
@@ -1874,8 +1921,8 @@ class tomographicModels:
         which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
             SQS (bool): specifies whether or not to use the SQS preconditioner
@@ -1894,8 +1941,8 @@ class tomographicModels:
         which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
@@ -1915,8 +1962,8 @@ class tomographicModels:
         which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
@@ -2029,11 +2076,11 @@ class tomographicModels:
         """Calculates the step size for an RWLS iteration
 
         Args:
-            f (C contiguous float32 numpy array): volume data
-            grad (C contiguous float32 numpy array): gradient of the RWLS cost function
-            d (C contiguous float32 numpy array): descent direction of the RWLS cost function
-            Pd (C contiguous float32 numpy array): forward projection of d
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
+            f (C contiguous float32 numpy or torch array): volume data
+            grad (C contiguous float32 numpy or torch array): gradient of the RWLS cost function
+            d (C contiguous float32 numpy or torch array): descent direction of the RWLS cost function
+            Pd (C contiguous float32 numpy or torch array): forward projection of d
+            W (C contiguous float32 numpy or torch array): weights, should be the same size as g, if not given, W=exp(-g)
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
         
@@ -2072,8 +2119,8 @@ class tomographicModels:
         The optional preconditioner is a 2D blurring for each z-slice
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
@@ -2167,10 +2214,10 @@ class tomographicModels:
         """Calculates the step size for an RDLS iteration
 
         Args:
-            f (C contiguous float32 numpy array): volume data
-            grad (C contiguous float32 numpy array): gradient of the RWLS cost function
-            d (C contiguous float32 numpy array): descent direction of the RWLS cost function
-            Pd (C contiguous float32 numpy array): forward projection of d
+            f (C contiguous float32 numpy or torch array): volume data
+            grad (C contiguous float32 numpy or torch array): gradient of the RWLS cost function
+            d (C contiguous float32 numpy or torch array): descent direction of the RWLS cost function
+            Pd (C contiguous float32 numpy or torch array): forward projection of d
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
         
@@ -2198,7 +2245,7 @@ class tomographicModels:
         print('\tlambda = ' + str(stepSize))
         return stepSize
 
-    def MLTR(self, g, f, numIter, numSubsets=1, delta=0.0, beta=0.0):
+    def MLTR(self, g, f, numIter, numSubsets=1, delta=0.0, beta=0.0, mask=None):
         """Maximum Likelihood Transmission reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2206,12 +2253,13 @@ class tomographicModels:
         This algorithm best models the noise for very low transmission/ low count rate data.
         
         Args:
-            g (C contiguous float32 numpy array): projection data
-            f (C contiguous float32 numpy array): volume data
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
             f, the same as the input with the same name
@@ -2220,6 +2268,9 @@ class tomographicModels:
         #    print('ERROR: MLTR reconstruction algorithms not implemented for torch tensors!')
         #    print('Please convert to numpy array prior to running this algorithm.')
         #    return f
+        if mask is not None and mask.shape != g.shape:
+            print('Error: mask must be the same shape as the projection data!')
+            return None
         beta = max(0.0, beta/float(numSubsets))
     
         t = self.expNeg(g)
@@ -2245,12 +2296,18 @@ class tomographicModels:
                 
                 transDiff[:] = self.expNeg(Pf)
                 
-                transDiff[:] = transDiff[:] * P1[:]
+                if mask is not None:
+                    transDiff[:] = transDiff[:] * P1[:] * mask[:]
+                else:
+                    transDiff[:] = transDiff[:] * P1[:]
                 self.backproject(transDiff, SQS)
                 SQS[SQS<=0.0] = 1.0
                 SQS[:] = 1.0 / SQS[:]
                 
-                transDiff[:] = transDiff[:]/P1[:] - t[:]
+                if mask is not None:
+                    transDiff[:] = transDiff[:]/P1[:] - t[:]*mask[:]
+                else:
+                    transDiff[:] = transDiff[:]/P1[:] - t[:]
                 self.backproject(transDiff, d)
                 
                 # Regularizer and divide by SQS
@@ -2273,6 +2330,10 @@ class tomographicModels:
             subsetParams = subsetParameters(self, numSubsets)
             t_subsets = self.breakIntoSubsets(t, numSubsets)
             P1_subsets = self.breakIntoSubsets(P1, numSubsets)
+            if mask is not None:
+                mask_subsets = self.breakIntoSubsets(mask, numSubsets)
+            else:
+                mask_subsets = None
             for n in range(numIter):
                 print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
@@ -2284,12 +2345,18 @@ class tomographicModels:
                     
                     transDiff[:] = self.expNeg(Pf)
                     
-                    transDiff[:] = transDiff[:] * P1_subsets[m][:]
+                    if mask_subsets is not None:
+                        transDiff[:] = transDiff[:] * P1_subsets[m][:] * mask_subsets[m][:]
+                    else:
+                        transDiff[:] = transDiff[:] * P1_subsets[m][:]
                     self.backproject(transDiff, SQS)
                     SQS[SQS<=0.0] = 1.0
                     SQS[:] = 1.0 / SQS[:]
                     
-                    transDiff[:] = transDiff[:]/P1_subsets[m][:] - t_subsets[m][:]
+                    if mask_subsets is not None:
+                        transDiff[:] = transDiff[:]/P1_subsets[m][:] - t_subsets[m][:] * mask_subsets[m][:]
+                    else:
+                        transDiff[:] = transDiff[:]/P1_subsets[m][:] - t_subsets[m][:]
                     self.backproject(transDiff, d)
                     
                     # Regularizer and divide by SQS

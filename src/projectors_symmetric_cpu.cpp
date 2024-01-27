@@ -50,9 +50,15 @@ bool CPUinverse_symmetric(float* g, float* f, parameters* params)
 	float T_phi = 2.0f * 3.1415926535897932385f / float(N_phi);
 	float R_sq = params->sod * params->sod;
 
-	float scaling = params->pixelWidth * 0.25 * PI / (2.0 * float(N_phi));
+	float undoFBPscaling = 1.0;
 	if (params->geometry == parameters::PARALLEL)
-		scaling = params->pixelWidth / (2.0 * float(N_phi));
+		undoFBPscaling = params->voxelWidth * params->voxelWidth / (params->pixelWidth);
+	else
+		undoFBPscaling = params->voxelWidth * params->voxelWidth * params->voxelHeight / (params->sod*params->sod*T_u*T_v);
+	float scaling = undoFBPscaling / (2.0 * float(N_phi));
+	//float scaling = params->pixelWidth * 0.25 * PI / (2.0 * float(N_phi));
+	//if (params->geometry == parameters::PARALLEL)
+	//	scaling = params->pixelWidth / (2.0 * float(N_phi));
 
 	params->setToZero(f, params->numZ * params->numY * params->numX);
 

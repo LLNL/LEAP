@@ -50,9 +50,7 @@ def inverse_transform(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0, sod, t
     T_phi = 2.0 * np.pi / float(N_phi)
     R_sq = sod * sod
 
-    scaling = T_u * 0.25 * np.pi / (2.0 * float(N_phi))
-    if sod == 0.0:
-        scaling = T_u / (2.0 * float(N_phi))
+    scaling = 1.0 / (2.0 * float(N_phi))
 
     f[:,:] = 0.0
     for j in prange(numR):
@@ -743,7 +741,7 @@ class SymmetricProjectors:
             u = self.col(np.array(range(self.numCols)))/self.sdd
             v = self.row(np.array(range(self.numRows)))/self.sdd
             v,u = np.meshgrid(v,u)
-            g = g * (self.sdd) * (1.0+self.tau/self.sod)/(1.0 + u**2 + v**2)
+            g = g * (1.0+self.tau/self.sod)/(1.0 + u**2 + v**2)
         return g
         
     def splitLeftAndRight(self, g):
