@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.2"
+#define LEAP_VERSION "1.3"
 
 #include <stdlib.h>
 #include "parameters.h"

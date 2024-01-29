@@ -92,10 +92,27 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 # with the true result which is cheating
 f[:] = 0.0
 
+# Copy data to GPU
+#'''
+# Comment this section out to revert back to multi-GPU solution
+# with CPU-GPU data transfers to see when each case is advantageous
+if has_torch:
+    device_name = "cuda:" + str(leapct.get_gpu())
+    device = torch.device(device_name)
+    g = torch.from_numpy(g).to(device)
+    f = torch.from_numpy(f).to(device)
+#'''
+
+
 # Reconstruct the data
 # This is a lot of iterations but should take us close to full convergence
 startTime = time.time()
-leapct.ASDPOCS(g,f,400,15,5,1.0/20.0)
+#leapct.backproject(g,f)
+#leapct.ASDPOCS(g,f,400,15,5,0.02/40.0)
+leapct.RLS(g,f,400,0.02/40.0,1e1, True)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-leapct.display(f)
+if has_torch and type(f) is torch.Tensor:
+    leapct.display(f.cpu().detach().numpy())
+else:
+    leapct.display(f)

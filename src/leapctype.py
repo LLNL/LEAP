@@ -2176,7 +2176,7 @@ class tomographicModels:
 
             u[:] = grad[:]
             if preconditionerFWHM > 1.0:
-                self.BlurFilter2D(u,preconditionerFWHM)
+                self.BlurFilter(u,preconditionerFWHM)
             self.project(Pu, u)
             
             if n == 0 or (n % conjGradRestart) == 0:
