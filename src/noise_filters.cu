@@ -268,17 +268,23 @@ __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM
     const int pixelRadius = int(floor(FWHM));
     const float denom = 1.0f / FWHM;
 
-    float val = 0.0;
-    float sum = 0.0;
+    float val = 0.0f;
+    float sum = 0.0f;
     for (int di = -pixelRadius; di <= pixelRadius; di++)
     {
         const int i_shift = max(0, min(i + di, N.x - 1));
+        //if (i + di < 0 || i + di > N.x - 1)
+        //    continue;
         for (int dj = -pixelRadius; dj <= pixelRadius; dj++)
         {
             const int j_shift = max(0, min(j + dj, N.y - 1));
+            //if (j + dj < 0 || j + dj > N.y - 1)
+            //    continue;
             for (int dk = -pixelRadius; dk <= pixelRadius; dk++)
             {
                 const int k_shift = max(0, min(k + dk, N.z - 1));
+                //if (k + dk < 0 || k + dk > N.z - 1)
+                //    continue;
 
                 const float theWeight = 0.5f +
                     0.5f * cosf(3.141592653589793f* min(sqrtf(float(di * di + dj * dj + dk * dk)) * denom, 1.0f));
@@ -437,6 +443,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     {
         // copy dev_Df to dev_f
         cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1 * N_2 * N_3, cudaMemcpyDeviceToDevice);
+        //cudaDeviceSynchronize();
     }
     if (dev_Df != 0)
     {

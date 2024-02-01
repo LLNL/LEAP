@@ -571,10 +571,11 @@ public:
 	 * \brief       Applies the 2D Laplacian to each projection
 	 * \param[in]   g pointer to the projection data
 	 * \param[in]   numDims the number of dimensions of the Laplacian
+	 * \param[in]   smooth if true uses a smooth finite difference
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool Laplacian(float* g, int numDims, bool data_on_cpu);
+	bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu);
 
 	/**
 	 * \fn          transmissionFilter

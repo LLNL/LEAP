@@ -2185,14 +2185,15 @@ bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
 	}
 }
 
-bool tomographicModels::Laplacian(float* g, int numDims, bool data_on_cpu)
+bool tomographicModels::Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu)
 {
 	if (g == NULL || params.geometryDefined() == false)
 		return false;
+	//BlurFilter2D(g, params.numAngles, params.numRows, params.numCols, 2.0, data_on_cpu);
 	if (data_on_cpu)
-		return Laplacian_cpu(g, numDims, &params, 1.0);
+		return Laplacian_cpu(g, numDims, smooth, &params, 1.0);
 	else
-		return Laplacian_gpu(g, numDims, &params, data_on_cpu, 1.0);
+		return Laplacian_gpu(g, numDims, smooth, &params, data_on_cpu, 1.0);
 }
 
 bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)

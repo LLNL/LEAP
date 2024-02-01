@@ -1056,16 +1056,16 @@ class tomographicModels:
             self.libprojectors.rampFilterVolume(f, True)
         return f
         
-    def Laplacian(self, g, numDims=2):
+    def Laplacian(self, g, numDims=2, smoothLaplacian=False):
         """Applies a Laplacian operation to each projection"""
         self.libprojectors.Laplacian.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.Laplacian.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Laplacian(g.data_ptr(), numDims, g.is_cuda == False)
+            self.libprojectors.Laplacian.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.Laplacian(g.data_ptr(), numDims, smoothLaplacian, g.is_cuda == False)
         else:
-            self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Laplacian(g, numDims, True)
+            self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.Laplacian(g, numDims, smoothLaplacian, True)
         return g
         
     def transmission_filter(self, g, H, isAttenuationData=True):
@@ -2000,7 +2000,7 @@ class tomographicModels:
         
         grad = self.allocateData(f)
         u = self.allocateData(f)
-        Pu = self.allocateData(g)
+        #Pu = self.allocateData(g)
         
         d = self.allocateData(f)
         Pd = self.allocateData(g)
@@ -2014,9 +2014,9 @@ class tomographicModels:
             #Q = 1.0 / P*WP1
             Q = self.allocateData(f)
             Q[:] = 1.0
-            self.project(Pu,Q)
-            Pu *= W
-            self.backproject(Pu,Q)
+            self.project(Pd,Q)
+            Pd *= W
+            self.backproject(Pd,Q)
             Q[Q==0.0] = 1.0
             Q = 1.0 / Q
         else:
@@ -2038,24 +2038,26 @@ class tomographicModels:
                 
             u[:] = grad[:]
             u = Q*u
-            self.project(Pu, u)
+            #self.project(Pu, u)
             
             if n == 0 or (n % conjGradRestart) == 0:
                 d[:] = u[:]
-                Pd[:] = Pu[:]
+                #Pd[:] = Pu[:]
             else:
                 gamma = (self.innerProd(u,grad) - self.innerProd(u,grad_old)) / grad_old_dot_grad_old
 
                 d = u + gamma*d
-                Pd = Pu + gamma*Pd
+                #Pd = Pu + gamma*Pd
 
                 if self.innerProd(d,grad) <= 0.0:
                     print('\tRLWS-CG: CG descent condition violated, must use GD descent direction')
                     d[:] = u[:]
-                    Pd[:] = Pu[:]
+                    #Pd[:] = Pu[:]
             
             grad_old_dot_grad_old = self.innerProd(u,grad)
             grad_old[:] = grad[:]
+            
+            self.project(Pd, d)
             
             stepSize = self.RWLSstepSize(f, grad, d, Pd, W, delta, beta)
             if stepSize <= 0.0:
@@ -2135,6 +2137,12 @@ class tomographicModels:
         #    print('ERROR: RDLS reconstruction algorithms not implemented for torch tensors!')
         #    print('Please convert to numpy array prior to running this algorithm.')
         #    return f
+        if preconditionerFWHM > 1.0:
+            smoothLaplacian = True
+            #print('The preconditionerFWHM feature does not seem to be working, so this parameter will be disabled until we resolve the issue.')
+        else:
+            smoothLaplacian = False
+        #preconditionerFWHM = 1.0
         conjGradRestart = 50
         Pf = self.copyData(g)
         if self.isAllZeros(f) == False:
@@ -2150,13 +2158,13 @@ class tomographicModels:
         else:
             Pf[:] = 0.0
         Pf_minus_g = Pf
-        Pf_minus_g -= g
+        Pf_minus_g[:] -= g[:]
         
         LPf_minus_g = self.copyData(Pf)
         
         grad = self.allocateData(f)
         u = self.allocateData(f)
-        Pu = self.allocateData(g)
+        #Pu = self.allocateData(g)
         
         d = self.allocateData(f)
         Pd = self.allocateData(g)
@@ -2167,36 +2175,38 @@ class tomographicModels:
         for n in range(numIter):
             print('RDLS iteration ' + str(n+1) + ' of ' + str(numIter))
             LPf_minus_g[:] = Pf_minus_g[:]
-            self.Laplacian(LPf_minus_g, dimDeriv)
+            self.Laplacian(LPf_minus_g, dimDeriv, smoothLaplacian)
             LPf_minus_g *= -1.0
             self.backproject(LPf_minus_g, grad)
             if beta > 0.0:
                 Sf1 = self.TVgradient(f, delta, beta)
-                grad += Sf1
+                grad[:] += Sf1[:]
 
             u[:] = grad[:]
-            if preconditionerFWHM > 1.0:
-                self.BlurFilter(u,preconditionerFWHM)
-            self.project(Pu, u)
+            #if preconditionerFWHM > 1.0:
+            #    self.BlurFilter(u, preconditionerFWHM)
+            #self.project(Pu, u)
             
             if n == 0 or (n % conjGradRestart) == 0:
                 d[:] = u[:]
-                Pd[:] = Pu[:]
+                #Pd[:] = Pu[:]
             else:
                 gamma = (self.innerProd(u,grad) - self.innerProd(u,grad_old)) / grad_old_dot_grad_old
 
-                d = u + gamma*d
-                Pd = Pu + gamma*Pd
+                d[:] = u[:] + gamma*d[:]
+                #Pd[:] = Pu[:] + gamma*Pd[:]
 
                 if self.innerProd(d,grad) <= 0.0:
-                    print('\tRLDS-CG: CG descent condition violated, must use GD descent direction')
+                    print('\tRDLS-CG: CG descent condition violated, must use gradient descent direction')
                     d[:] = u[:]
-                    Pd[:] = Pu[:]
+                    #Pd[:] = Pu[:]
             
             grad_old_dot_grad_old = self.innerProd(u,grad)
             grad_old[:] = grad[:]
             
-            stepSize = self.RDLSstepSize(f, grad, d, Pd, delta, beta, dimDeriv)
+            self.project(Pd, d)
+            
+            stepSize = self.RDLSstepSize(f, grad, d, Pd, delta, beta, dimDeriv, smoothLaplacian)
             #if stepSize <= 0.0:
             #    print('invalid step size; quitting!')
             #    break
@@ -2210,7 +2220,7 @@ class tomographicModels:
                 Pf_minus_g[:] = Pf_minus_g[:] - stepSize*Pd[:]
         return f
 
-    def RDLSstepSize(self, f, grad, d, Pd, delta, beta, dimDeriv):
+    def RDLSstepSize(self, f, grad, d, Pd, delta, beta, dimDeriv, smoothLaplacian):
         """Calculates the step size for an RDLS iteration
 
         Args:
@@ -2226,7 +2236,7 @@ class tomographicModels:
         """
         num = self.innerProd(d,grad)
         LPd = self.copyData(Pd)
-        self.Laplacian(LPd, dimDeriv)
+        self.Laplacian(LPd, dimDeriv, smoothLaplacian)
         LPd *= -1.0
         denomA = self.innerProd(LPd,Pd)
         denomB = 0.0;
@@ -2242,7 +2252,10 @@ class tomographicModels:
         stepSize = 0.0
         if np.abs(denom) > 1.0e-16:
             stepSize = num / denom
-        print('\tlambda = ' + str(stepSize))
+        if stepSize < 0.0:
+            print('\tlambda = ' + str(stepSize) + ' = ' + str(num) + ' / ' + str(denom))
+        else:
+            print('\tlambda = ' + str(stepSize))
         return stepSize
 
     def MLTR(self, g, f, numIter, numSubsets=1, delta=0.0, beta=0.0, mask=None):

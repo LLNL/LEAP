@@ -104,7 +104,7 @@ __global__ void setPaddedDataFor2DFilter(float* g, float* g_pad, const int numRo
     //*/
 }
 
-__global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const int numDims, const float scalar)
+__global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4 T, const float4 startVal, const int numDims, const bool smooth, const float scalar)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -114,17 +114,35 @@ __global__ void Laplacian_kernel(float* g, float* Dg, const int4 N, const float4
 
     float diff = 0.0f;
     float* proj = &g[uint64(l) * uint64(N.z * N.y)];
-    if (N.z >= 3)
+    if (smooth)
     {
-        const int n_plus_one = min(n + 1, N.z - 1);
-        const int n_minus_one = max(n - 1, 0);
-        diff = proj[m * N.z + n_plus_one] + proj[m * N.z + n_minus_one] - 2.0f * proj[m * N.z + n];
+        if (N.z >= 3)
+        {
+            const int n_plus_two = min(n + 2, N.z - 1);
+            const int n_minus_two = max(n - 2, 0);
+            diff = 0.25f * (proj[m * N.z + n_plus_two] + proj[m * N.z + n_minus_two]) - 0.5f * proj[m * N.z + n];
+        }
+        if (N.y >= 3 && numDims >= 2)
+        {
+            const int m_plus_two = min(m + 2, N.y - 1);
+            const int m_minus_two = max(m - 2, 0);
+            diff += 0.25f * (proj[m_plus_two * N.z + n] + proj[m_minus_two * N.z + n]) - 0.5f * proj[m * N.z + n];
+        }
     }
-    if (N.y >= 3 && numDims >= 2)
+    else
     {
-        const int m_plus_one = min(m + 1, N.y - 1);
-        const int m_minus_one = max(m - 1, 0);
-        diff += proj[m_plus_one * N.z + n] + proj[m_minus_one * N.z + n] - 2.0f * proj[m * N.z + n];
+        if (N.z >= 3)
+        {
+            const int n_plus_one = min(n + 1, N.z - 1);
+            const int n_minus_one = max(n - 1, 0);
+            diff = proj[m * N.z + n_plus_one] + proj[m * N.z + n_minus_one] - 2.0f * proj[m * N.z + n];
+        }
+        if (N.y >= 3 && numDims >= 2)
+        {
+            const int m_plus_one = min(m + 1, N.y - 1);
+            const int m_minus_one = max(m - 1, 0);
+            diff += proj[m_plus_one * N.z + n] + proj[m_minus_one * N.z + n] - 2.0f * proj[m * N.z + n];
+        }
     }
     
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = diff * scalar;
@@ -1469,7 +1487,7 @@ bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
 }
 #endif
 
-bool Laplacian_gpu(float*& g, int numDims, parameters* params, bool data_on_cpu, float scalar)
+bool Laplacian_gpu(float*& g, int numDims, bool smooth, parameters* params, bool data_on_cpu, float scalar)
 {
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1495,7 +1513,7 @@ bool Laplacian_gpu(float*& g, int numDims, parameters* params, bool data_on_cpu,
 
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
-    Laplacian_kernel <<< dimGrid, dimBlock >>> (dev_g, dev_Dg, N_g, T_g, startVal_g, numDims, scalar);
+    Laplacian_kernel <<< dimGrid, dimBlock >>> (dev_g, dev_Dg, N_g, T_g, startVal_g, numDims, smooth, scalar);
 
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess)

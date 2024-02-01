@@ -1581,12 +1581,25 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     else
         dev_g = g;
 
+    double alpha = max(atan(0.5 * (params->numCols - 1) * params->pixelWidth / params->sdd), atan(0.5 * (params->numRows - 1) * params->pixelHeight / params->sdd));
+    double rFOV = max(params->furthestFromCenter(), max(fabs(params->z_0()), fabs(params->z_samples(params->numZ - 1))));
+    double maxDivergence = tan(alpha) * (params->sdd + rFOV) - tan(alpha) * (params->sdd - rFOV);
+    //double maxTravel = maxDivergence / min(params->pixelWidth, params->pixelHeight);
+    double maxTravel = maxDivergence / params->voxelWidth;
+    //printf("maxTravel = %f\n", maxTravel);
+    bool isParallel = false;
+    if (maxTravel < 0.25 && params->truncatedScan == false)
+        isParallel = true;
+
     bool doLinearInterpolation = false;
 
     dim3 dimBlock_g = setBlockSize(N_g);
     dim3 dimGrid_g = setGridSize(N_g, dimBlock_g);
     float* w_polar = NULL;
-    if (params->modularbeamIsAxiallyAligned() == true)
+    bool modularbeamIsAxiallyAligned = params->modularbeamIsAxiallyAligned();
+    if (isParallel)
+        modularbeamIsAxiallyAligned = false;
+    if (modularbeamIsAxiallyAligned == true)
     {
         if (params->voxelSizeWorksForFastSF() == true)
         {
@@ -1603,30 +1616,23 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
 
-    double alpha = max(atan(0.5 * (params->numCols - 1) * params->pixelWidth / params->sdd), atan(0.5 * (params->numRows - 1) * params->pixelHeight / params->sdd));
-    double rFOV = max(params->furthestFromCenter(), max(fabs(params->z_0()), fabs(params->z_samples(params->numZ - 1))));
-    double maxDivergence = tan(alpha) * (params->sdd + rFOV) - tan(alpha) * (params->sdd - rFOV);
-    //double maxTravel = maxDivergence / min(params->pixelWidth, params->pixelHeight);
-    double maxTravel = maxDivergence / params->voxelWidth;
-    //printf("maxTravel = %f\n", maxTravel);
-
     float rFOV_sq = params->rFOV() * params->rFOV();
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);
     dim3 dimGrid = setGridSize(N_f, dimBlock);
-    if (params->modularbeamIsAxiallyAligned() == true)
+    if (isParallel)
+    {
+        //printf("executing parallel Joseph backprojector\n");
+        modularBeamParallelJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+    }
+    else if (modularbeamIsAxiallyAligned == true)
     {
         //printf("SF backproject\n");
         if (params->voxelSizeWorksForFastSF() == true)
             modularBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
         else
             modularBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
-    }
-    else if (maxTravel < 0.25 && params->truncatedScan == false)
-    {
-        //printf("executing parallel Joseph backprojector\n");
-        modularBeamParallelJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
     }
     else
     {
@@ -1643,7 +1649,7 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (params->modularbeamIsAxiallyAligned() == true && data_on_cpu == false /* && params->voxelSizeWorksForFastSF() == true */ )
+    if (modularbeamIsAxiallyAligned == true && data_on_cpu == false /* && params->voxelSizeWorksForFastSF() == true */ )
     {
         applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, true, true);
     }

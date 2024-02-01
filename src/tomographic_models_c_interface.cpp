@@ -565,9 +565,9 @@ bool find_centerCol(float* g, int iRow, bool data_on_cpu)
 	return tomo()->find_centerCol(g, iRow, data_on_cpu);
 }
 
-bool Laplacian(float* g, int numDims, bool data_on_cpu)
+bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu)
 {
-	return tomo()->Laplacian(g, numDims, data_on_cpu);
+	return tomo()->Laplacian(g, numDims, smooth, data_on_cpu);
 }
 
 bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)
