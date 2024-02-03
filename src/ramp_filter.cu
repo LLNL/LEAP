@@ -290,7 +290,7 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
-    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (4.0f * epsilon); // ? 1.0f / T_phi
+    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
 }
 
 __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis)
@@ -392,7 +392,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
-    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (4.0f * epsilon); // ? 1.0f / T_phi
+    Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
 }
 
 #ifdef INCLUDE_CUFFT

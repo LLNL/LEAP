@@ -840,6 +840,61 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
   return d_data_array;
 }
 
+cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int N_txt, bool useExtrapolation, bool useLinearInterpolation)
+{
+    if (data == nullptr)
+        return nullptr;
+    cudaArray* d_data_array = nullptr;
+
+    // Allocate 3D array memory
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+    cudaMallocArray(&d_data_array, &channelDesc, N_txt, 1);
+
+    // Bind 1D array to texture object
+    cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = (cudaArray_t)d_data_array;
+
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.normalizedCoords = false;  // Texture coordinates normalization
+
+    if (useExtrapolation)
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeClamp;
+    }
+    else
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
+    }
+
+    if (useLinearInterpolation)
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
+    }
+    else
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
+    }
+    cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr);
+
+    cudaMemcpyToArray(d_data_array, 0, 0, data, sizeof(float) * N_txt, cudaMemcpyHostToDevice);
+
+    /* Update the texture memory
+    cudaMemcpy3DParms cudaparams = { 0 };
+    cudaparams.extent = make_cudaExtent(N_txt.z, N_txt.y, N_txt.x);
+    cudaparams.kind = cudaMemcpyDeviceToDevice;
+    cudaparams.srcPos = make_cudaPos(0, 0, 0);
+    cudaparams.srcPtr = make_cudaPitchedPtr(dev_data, N_txt.z * sizeof(float), N_txt.z, N_txt.y);
+    cudaparams.dstPos = make_cudaPos(0, 0, 0);
+    cudaparams.dstArray = (cudaArray_t)d_data_array;
+    cudaMemcpy3D(&cudaparams);
+    //*/
+    return d_data_array;
+}
+
 float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
 {
 	cudaSetDevice(whichGPU);
