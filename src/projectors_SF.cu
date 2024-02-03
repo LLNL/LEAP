@@ -585,7 +585,7 @@ __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 s
     g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrt(1.0f + v * v);
 }
 
-__global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, cudaTextureObject_t v_weights)
+__global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -601,12 +601,12 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
-    const float z = k * T_f.z + startVals_f.z;
     if (x * x + y * y > rFOVsq)
     {
         f[ind] = 0.0f;
         return;
     }
+    const float z = k * T_f.z + startVals_f.z;
 
     const float T_x_over_2 = 0.5f * T_f.x;
     const float v0_over_Tv = startVals_g.y / T_g.y;
@@ -616,14 +616,20 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
     const float Tu_inv = 1.0f / T_g.z;
 
     const float atan_term = atan(2.0f * tau * R / (R * R - tau * tau));
-    const int maxTurns = int(ceil((1.0f / d_v_max_inv - 1.0f / d_v_min_inv) * (R + sqrt(x * x + y * y)) / fabs(PI * T_g.w)));
+    //const int maxTurns = int(ceil((1.0f / d_v_max_inv - 1.0f / d_v_min_inv) * (R + sqrt(x * x + y * y)) / fabs(PI * T_g.w)));
+
+    const float twoPI_inv = 1.0f / (2.0f * PI);
+    const float neg_twoPI_pitch = -2.0f * PI * T_g.w;
+    const float neg_twoPI_pitch_inv = 1.0f / neg_twoPI_pitch;
+
+    const float v_min = 1.0f / d_v_min_inv;
+    const float v_max = 1.0f / d_v_max_inv;
 
     float val = 0.0f;
 
     for (int l = 0; l < N_g.x; l++)
     {
         const float phi_cur = phis[l];
-        const float L = (float)l + 0.5f;
         const float z_source = (phi_cur * T_g.w + startVals_g.w);
         const float z_source_over_T_v = z_source * Tv_inv;
         const float sin_phi = sin(phi_cur);
@@ -638,6 +644,8 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
         const float centralWeight = helicalConeWeight(v_arg);
         if (centralWeight > 0.0f)
         {
+            const float L = (float)l + 0.5f;
+
             float B_x = (sin_phi < 0.0f) ? -cos_phi * T_x_over_2 : cos_phi * T_x_over_2;
             const float B_y = (cos_phi < 0.0f) ? sin_phi * T_x_over_2 : -sin_phi * T_x_over_2;
 
@@ -679,10 +687,9 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
             const float z_high_A = v_phi_x + 0.5f * v_phi_x_step_A - row_high_A;
 
             // Calculate the View Redundancy Weight
-            const float phi_conj_shift = -2.0f * atan(u_arg) + atan_term;
-            //const float R_minus_x_dot_theta_inv_conj = 1.0f / (R - x * cos(phi_cur + phi_conj_shift + PI) - y * sin(phi_cur + phi_conj_shift + PI));
-            const float cos_phi_conj = cos(phi_cur + phi_conj_shift + PI);
-            const float sin_phi_conj = sin(phi_cur + phi_conj_shift + PI);
+            const float phi_cur_conj = phi_cur - 2.0f * atan(u_arg) + atan_term + PI;
+            const float cos_phi_conj = cos(phi_cur_conj);
+            const float sin_phi_conj = sin(phi_cur_conj);
             const float dist_from_source_components_x_conj = fabs(R * cos_phi_conj + tau * sin_phi_conj - x);
             const float dist_from_source_components_y_conj = fabs(R * sin_phi_conj - tau * cos_phi_conj - y);
             const float dist_from_source_conj = sqrt(dist_from_source_components_x_conj * dist_from_source_components_x_conj + dist_from_source_components_y_conj * dist_from_source_components_y_conj);
@@ -690,6 +697,34 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
 
             float sumWeights = 0.0f;
 
+            //* NEW METHOD
+            const float v_arg_shift = neg_twoPI_pitch * dist_from_source_inv;
+
+            const float v_bound_A = (v_arg_shift > 0.0f) ? (v_min - v_arg) * dist_from_source * neg_twoPI_pitch_inv : (v_max - v_arg) * dist_from_source * neg_twoPI_pitch_inv;
+            const float v_bound_B = (v_arg_shift < 0.0f) ? (v_min - v_arg) * dist_from_source * neg_twoPI_pitch_inv : (v_max - v_arg) * dist_from_source * neg_twoPI_pitch_inv;
+
+            const int N_turns_below = max(int(ceil((d_phi_start - phi_cur) * twoPI_inv)), int(ceil(v_bound_A)));
+            const int N_turns_above = min(int(floor((d_phi_end - phi_cur) * twoPI_inv)), int(floor(v_bound_B)));
+            for (int iturn = N_turns_below; iturn <= N_turns_above; iturn++)
+            {
+                if (iturn != 0)
+                    sumWeights += helicalConeWeight(v_arg + iturn * v_arg_shift);
+            }
+
+            const float v_arg_conj = (z - (phi_cur_conj * T_g.w + startVals_g.w)) * dist_from_source_inv_conj;
+            const float v_arg_shift_conj = neg_twoPI_pitch * dist_from_source_inv_conj;
+
+            const float v_bound_A_conj = (v_arg_shift_conj > 0.0f) ? (v_min - v_arg_conj) * dist_from_source_conj * neg_twoPI_pitch_inv : (v_max - v_arg_conj) * dist_from_source_conj * neg_twoPI_pitch_inv;
+            const float v_bound_B_conj = (v_arg_shift_conj < 0.0f) ? (v_min - v_arg_conj) * dist_from_source_conj * neg_twoPI_pitch_inv : (v_max - v_arg_conj) * dist_from_source_conj * neg_twoPI_pitch_inv;
+
+            const int N_turns_below_conj = max(int(ceil((d_phi_start - phi_cur_conj) * twoPI_inv)), int(ceil(v_bound_A_conj)));
+            const int N_turns_above_conj = min(int(floor((d_phi_end - phi_cur_conj) * twoPI_inv)), int(floor(v_bound_B_conj)));
+            for (int iturn = N_turns_below_conj; iturn <= N_turns_above_conj; iturn++)
+            {
+                sumWeights += helicalConeWeight(v_arg_conj + iturn * v_arg_shift_conj);
+            }
+
+            /*
             const int N_turns_below = min(maxTurns, int(ceil((phi_cur - d_phi_start) * PIINV))) + 1;
             const int N_turns_above = min(maxTurns, int(ceil((d_phi_end - phi_cur) * PIINV))) + 1;
 
@@ -727,6 +762,7 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
                     sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * dist_from_source_inv_conj);
                 }
             }
+            //*/
             // End-Calculate the View Redundancy Weight
             //sumWeights = centralWeight;
 
@@ -752,7 +788,7 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
     f[ind] = val;
 }
 
-__global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, cudaTextureObject_t v_weights)
+__global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -768,12 +804,12 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
-    const float z = k * T_f.z + startVals_f.z;
     if (x * x + y * y > rFOVsq)
     {
         f[ind] = 0.0f;
         return;
     }
+    const float z = k * T_f.z + startVals_f.z;
 
     const float T_x_over_2 = 0.5f * T_f.x;
     const float v0_over_Tv = startVals_g.y / T_g.y;
@@ -808,7 +844,6 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
     for (int l = 0; l < N_g.x; l++)
     {
         const float phi_cur = phis[l];
-        const float L = (float)l + 0.5f;
         const float z_source = (phi_cur * T_g.w + startVals_g.w);
         const float sin_phi = sin(phi_cur);
         const float cos_phi = cos(phi_cur);
@@ -820,6 +855,8 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
         const float centralWeight = helicalConeWeight(v_arg);
         if (centralWeight > 0.0f)
         {   
+            const float L = (float)l + 0.5f;
+
             float B_x = (sin_phi < 0.0f) ? -cos_phi * T_x_over_2 : cos_phi * T_x_over_2;
             const float B_y = (cos_phi < 0.0f) ? sin_phi * T_x_over_2 : -sin_phi * T_x_over_2;
 
@@ -882,7 +919,10 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
                 //if (d_phi_start <= phi_turn && phi_turn <= d_phi_end)
                 //sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv);
                 if (iturn != 0)
-                    sumWeights += helicalConeWeight(v_arg + iturn*v_arg_shift);
+                {
+                    sumWeights += helicalConeWeight(v_arg + iturn * v_arg_shift);
+                    //sumWeights += tex1D<float>(v_weights, (v_arg + iturn * v_arg_shift - startVals_g.y) * Tv_inv + 0.5f);
+                }
             }
 
             const float v_arg_conj = (z - (phi_cur_conj * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv_conj;
@@ -899,6 +939,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
                 //if (d_phi_start <= phi_turn && phi_turn <= d_phi_end)
                 //sumWeights += helicalConeWeight((z - (phi_turn * T_g.w + startVals_g.w)) * R_minus_x_dot_theta_inv_conj);
                 sumWeights += helicalConeWeight(v_arg_conj + iturn * v_arg_shift_conj);
+                //sumWeights += tex1D<float>(v_weights, (v_arg_conj + iturn * v_arg_shift_conj - startVals_g.y) * Tv_inv + 0.5f);
             }
             //sumWeights -= centralWeight;
             //*/
@@ -1822,6 +1863,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
             float phi_start = params->get_phi_start();
             float phi_end = params->get_phi_end();
 
+            /*
             float* v_weights = new float[params->numRows];
             for (int i = 0; i < params->numRows; i++)
             {
@@ -1841,6 +1883,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
             }
             cudaTextureObject_t d_v_weights_txt = NULL;
             cudaArray* d_v_weights_array = loadTexture1D(d_v_weights_txt, v_weights, params->numRows, false, true);
+            //*/
 
             //printf("v_min/max = %f, %f\n", v_min, v_max);
             //printf("weight params: %f, %f\n", weightFcnParameter, weightFcnTransition);
@@ -1854,13 +1897,13 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
             cudaMemcpyToSymbol(d_phi_end, &phi_end, sizeof(float));
 
             if (params->detectorType == parameters::FLAT)
-                coneBeamHelicalWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, d_v_weights_txt);
+                coneBeamHelicalWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
             else
-                curvedConeBeamHelicalWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, d_v_weights_txt);
+                curvedConeBeamHelicalWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
 
-            cudaFreeArray(d_v_weights_array);
-            cudaDestroyTextureObject(d_v_weights_txt);
-            delete[] v_weights;
+            //cudaFreeArray(d_v_weights_array);
+            //cudaDestroyTextureObject(d_v_weights_txt);
+            //delete[] v_weights;
         }
         else
         {
