@@ -4,6 +4,7 @@ test_ART_save.py
 # data files
 *.dat
 *.raw
+*.sct
 demo_leaptorch/sample_data/*.png
 LTT.log
 

@@ -30,7 +30,7 @@ in poor computational performance.
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
 numTurns = 3
-numAngles = 2*int(360*numCols/1024)*numTurns
+numAngles = 2*2*int(360*numCols/1024)*numTurns
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
