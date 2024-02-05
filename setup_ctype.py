@@ -30,7 +30,7 @@ elif _platform == "darwin":
 
 setup(
     name='leapct',
-    version='1.1', 
+    version='1.3', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 
