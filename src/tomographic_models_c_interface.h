@@ -124,6 +124,7 @@ extern "C" PROJECTOR_API float get_centerRow();
 extern "C" PROJECTOR_API float get_centerCol();
 extern "C" PROJECTOR_API float get_tau();
 extern "C" PROJECTOR_API float get_helicalPitch();
+extern "C" PROJECTOR_API float get_normalizedHelicalPitch();
 extern "C" PROJECTOR_API float get_z_source_offset();
 
 extern "C" PROJECTOR_API bool get_sourcePositions(float*);
@@ -133,6 +134,7 @@ extern "C" PROJECTOR_API bool get_colVectors(float*);
 
 extern "C" PROJECTOR_API bool set_angles(float* phis_in, int numAngles_in);
 extern "C" PROJECTOR_API bool get_angles(float*);
+extern "C" PROJECTOR_API float get_angularRange();
 
 extern "C" PROJECTOR_API int get_numX();
 extern "C" PROJECTOR_API int get_numY();

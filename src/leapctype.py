@@ -402,6 +402,13 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_normalizedHelicalPitch(normalizedHelicalPitch)
         
+    def get_normalizedHelicalPitch(self):
+        """Get the normalized helical pitch"""
+        #self.libprojectors.get_normalizedHelicalPitch.argtypes = []
+        self.libprojectors.get_normalizedHelicalPitch.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_normalizedHelicalPitch()
+        
     def set_flatDetector(self):
         """Set the detectorType to FLAT"""
         self.set_model()
@@ -1893,7 +1900,7 @@ class tomographicModels:
         return f
         
         
-    def LS(self, g, f, numIter, SQS=False, nonnegativityConstraint=True):
+    def LS(self, g, f, numIter, preconditioner=None, nonnegativityConstraint=True):
         """Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1905,14 +1912,14 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            SQS (bool): specifies whether or not to use the SQS preconditioner
+            preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, SQS, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, preconditioner, nonnegativityConstraint)
         
-    def WLS(self, g, f, numIter, W=None, SQS=False, nonnegativityConstraint=True):
+    def WLS(self, g, f, numIter, W=None, preconditioner=None, nonnegativityConstraint=True):
         """Weighted Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1925,14 +1932,14 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
-            SQS (bool): specifies whether or not to use the SQS preconditioner
+            preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, 0.0, 0.0, W, SQS, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, 0.0, 0.0, W, preconditioner, nonnegativityConstraint)
         
-    def RLS(self, g, f, numIter, delta=0.0, beta=0.0, SQS=False, nonnegativityConstraint=True):
+    def RLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditioner=None, nonnegativityConstraint=True):
         """Regularized Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1946,14 +1953,14 @@ class tomographicModels:
             numIter (int): number of iterations
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
-            SQS (bool): specifies whether or not to use the SQS preconditioner
+            preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, delta, beta, 1.0, SQS, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, delta, beta, 1.0, preconditioner, nonnegativityConstraint)
        
-    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, SQS=False, nonnegativityConstraint=True):
+    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, preconditioner=None, nonnegativityConstraint=True):
         """Regularized Weighted Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1968,7 +1975,7 @@ class tomographicModels:
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): regularization strength
             W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
-            SQS (bool): specifies whether or not to use the SQS preconditioner
+            preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
             f, the same as the input with the same name
@@ -2008,7 +2015,9 @@ class tomographicModels:
         grad_old_dot_grad_old = 0.0
         grad_old = self.allocateData(f)
         
-        if SQS == True:
+        if preconditioner == True:
+            preconditioner = 'SQS'
+        if preconditioner == 'SQS':
             # Calculate the SQS preconditioner
             # Reuse some of the memory allocated above
             #Q = 1.0 / P*WP1
@@ -2028,9 +2037,19 @@ class tomographicModels:
             WPf_minus_g = Pf_minus_g
             if W is not None:
                 WPf_minus_g *= W
-            self.backproject(WPf_minus_g, grad)
+            if preconditioner == 'SARR':
+                self.FBP(WPf_minus_g, grad)
+            else:
+                self.backproject(WPf_minus_g, grad)
             if beta > 0.0:
                 Sf1 = self.TVgradient(f, delta, beta)
+                if preconditioner == 'SARR':
+                    self.rampFilterVolume(Sf1)
+                    pitchHat = self.get_normalizedHelicalPitch()
+                    if pitchHat > 0.0:
+                        Sf1 *= leapct.get_FBPscalar() * 0.5*pitchHat
+                    else:
+                        Sf1 *= leapct.get_FBPscalar() * 180.0/leapct.get_angularRange()
                 grad += Sf1
 
                 #f[:] = grad[:] # FIXME
@@ -2038,6 +2057,9 @@ class tomographicModels:
                 
             u[:] = grad[:]
             u = Q*u
+            if preconditioner == 'RAMP':
+                self.rampFilterVolume(u)
+                self.windowFOV(u)
             #self.project(Pu, u)
             
             if n == 0 or (n % conjGradRestart) == 0:
@@ -2059,7 +2081,14 @@ class tomographicModels:
             
             self.project(Pd, d)
             
-            stepSize = self.RWLSstepSize(f, grad, d, Pd, W, delta, beta)
+            num = 0.0
+            if preconditioner == 'SARR':
+                num = self.innerProd(Pd,WPf_minus_g)
+                if beta > 0.0:
+                    num += self.innerProd(d,Sf1)
+            else:
+                num = self.innerProd(d,grad)
+            stepSize = self.RWLSstepSize(f, grad, d, Pd, W, delta, beta, num)
             if stepSize <= 0.0:
                 print('invalid step size; quitting!')
                 break
@@ -2071,10 +2100,11 @@ class tomographicModels:
             else:
                 Pf[:] = Pf[:] - stepSize*Pd[:]
             Pf_minus_g[:] = Pf[:] - g[:]
+            print('\tcost = ' + str(0.5*self.innerProd(Pf_minus_g,Pf_minus_g,W)))
                 
         return f
 
-    def RWLSstepSize(self, f, grad, d, Pd, W, delta, beta):
+    def RWLSstepSize(self, f, grad, d, Pd, W, delta, beta, num=None):
         """Calculates the step size for an RWLS iteration
 
         Args:
@@ -2089,7 +2119,8 @@ class tomographicModels:
         Returns:
             step size (float)
         """
-        num = self.innerProd(d,grad)
+        if num is None:
+            num = self.innerProd(d,grad)
         if W is not None:
             denomA = self.innerProd(Pd,Pd,W)
         else:
@@ -2813,6 +2844,13 @@ class tomographicModels:
         self.set_model()
         self.libprojectors.get_angles(phis)
         return phis
+        
+    def get_angularRange(self):
+        """Get the angular range of the projection angles (degrees)"""
+        #self.libprojectors.get_angularRange.argtypes = []
+        self.libprojectors.get_angularRange.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_angularRange()
         
     def set_angles(self,phis):
         """Set the projection angles"""

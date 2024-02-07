@@ -480,6 +480,11 @@ float get_helicalPitch()
 	return tomo()->get_helicalPitch();
 }
 
+float get_normalizedHelicalPitch()
+{
+	return tomo()->params.normalizedHelicalPitch();
+}
+
 float get_z_source_offset()
 {
 	return tomo()->get_z_source_offset();
@@ -513,6 +518,11 @@ bool set_angles(float* phis, int N)
 bool get_angles(float* phis)
 {
 	return tomo()->params.get_angles(phis);
+}
+
+float get_angularRange()
+{
+	return tomo()->params.angularRange;
 }
 
 int get_numX()

@@ -179,7 +179,60 @@ bool tomographicModels::rampFilterVolume(float* f, bool data_on_cpu)
 		printf("Error: 2D ramp filter only implemented for GPU\n");
 		return false;
 	}
-	return rampFilter2D(f, &params, data_on_cpu);
+	if (params.volumeDimensionOrder == parameters::XYZ)
+		return rampFilter2D_XYZ(f, &params, data_on_cpu);
+	else
+	{
+		// copies the whole volume onto the GPU and then applies the ramp filter one slice at a time
+		// thus very, very little extra memory is required
+		int N_1 = params.numZ;
+
+		uint64 numElements = uint64(params.numZ) * uint64(params.numY) * uint64(params.numX);
+		double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+		uint64 maxElements = 2147483646; // 2^31 = 2*1024^3-2
+
+		if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize /*|| numElements > maxElements*/))
+		{ // if data is on the cpu and there is not enough memory to process the whole thing, then process in chunks
+			
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* f_chunk = &f[uint64(sliceStart) * uint64(params.numY * params.numX)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				parameters params_chunk = params;
+				params_chunk.numAngles = sliceEnd - sliceStart + 1;
+				params_chunk.whichGPU = whichGPU;
+
+				rampFilter2D(f_chunk, &params_chunk, data_on_cpu);
+			}
+
+			return true;
+		}
+		else
+		{
+			return rampFilter2D(f, &params, data_on_cpu);
+		}
+	}
 }
 
 bool tomographicModels::windowFOV(float* f, bool data_on_cpu)
@@ -1653,7 +1706,7 @@ bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float 
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{
@@ -1714,7 +1767,7 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false || FWHM > 2.0)
 		{
@@ -1788,7 +1841,7 @@ bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, floa
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{
@@ -1849,7 +1902,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{
@@ -2200,8 +2253,6 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 {
 	if (g == NULL || H == NULL || N_H1 <= 0 || N_H2 <= 0 || params.geometryDefined() == false)
 		return false;
-	if (params.whichGPU < 0)
-		return false;
 	//return transmissionFilter_gpu(g, &params, data_on_cpu, H, N_H1, N_H2);
 	
 	//#####################################################################################################
@@ -2218,49 +2269,41 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < dataSize || numElements > maxElements)
+	if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize /*|| numElements > maxElements*/))
 	{
-		if (data_on_cpu == false)
+		// do chunking
+		int numSlices = std::min(N_1, maxSlicesForChunking);
+		while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
 		{
-			printf("Error: Insufficient GPU memory for this operation!\n");
-			return false;
+			numSlices = numSlices / 2;
+			if (numSlices < 1)
+			{
+				numSlices = 1;
+				break;
+			}
 		}
-		else
+		int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+		//printf("number of slices per chunk: %d\n", numSlices);
+
+		omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+		#pragma omp parallel for schedule(dynamic)
+		for (int ichunk = 0; ichunk < numChunks; ichunk++)
 		{
-			// do chunking
-			int numSlices = std::min(N_1, maxSlicesForChunking);
-			while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
-			{
-				numSlices = numSlices / 2;
-				if (numSlices < 1)
-				{
-					numSlices = 1;
-					break;
-				}
-			}
-			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+			int sliceStart = ichunk * numSlices;
+			int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
 
-			//printf("number of slices per chunk: %d\n", numSlices);
+			float* g_chunk = &g[uint64(sliceStart) * uint64(params.numRows * params.numCols)];
+			int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
-			#pragma omp parallel for schedule(dynamic)
-			for (int ichunk = 0; ichunk < numChunks; ichunk++)
-			{
-				int sliceStart = ichunk * numSlices;
-				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+			parameters params_chunk = params;
+			params_chunk.numAngles = sliceEnd - sliceStart + 1;
+			params_chunk.whichGPU = whichGPU;
 
-				float* g_chunk = &g[uint64(sliceStart) * uint64(params.numRows * params.numCols)];
-				int whichGPU = params.whichGPUs[omp_get_thread_num()];
-
-				parameters params_chunk = params;
-				params_chunk.numAngles = sliceEnd - sliceStart + 1;
-				params_chunk.whichGPU = whichGPU;
-
-				transmissionFilter_gpu(g_chunk, &params_chunk, data_on_cpu, H, N_H1, N_H2, isAttenuationData);
-			}
-
-			return true;
+			transmissionFilter_gpu(g_chunk, &params_chunk, data_on_cpu, H, N_H1, N_H2, isAttenuationData);
 		}
+
+		return true;
 	}
 	else
 	{
@@ -2290,7 +2333,7 @@ bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{

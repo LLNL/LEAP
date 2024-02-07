@@ -1272,6 +1272,131 @@ bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, flo
 
 bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
 {
+    int N_x = params->numX;
+    int N_y = params->numY;
+    int N_z = params->numZ;
+
+    float minValue = -1.0e30;
+
+    // Pad and then find next power of 2
+    //int N_H1 = int(pow(2.0, ceil(log2(2 * max(N_y, N_x)))));
+    int N_H1 = optimalFFTsize(2 * max(N_y, N_x));
+    int N_H2 = N_H1;
+    int N_H2_over2 = N_H2 / 2 + 1;
+
+    cudaSetDevice(params->whichGPU);
+    bool retVal = true;
+
+    float* dev_f = 0;
+    if (data_on_cpu)
+        dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
+    else
+        dev_f = f;
+
+    // Make cuFFT Plans
+    cufftResult result;
+    cufftHandle forward_plan;
+    if (CUFFT_SUCCESS != cufftPlan2d(&forward_plan, N_H1, N_H2, CUFFT_R2C))
+    {
+        fprintf(stderr, "Failed to plan 2d r2c fft");
+        return false;
+    }
+    cufftHandle backward_plan;
+    if (CUFFT_SUCCESS != cufftPlan2d(&backward_plan, N_H1, N_H2, CUFFT_C2R))  // do I use N_H_over2?
+    {
+        fprintf(stderr, "Failed to plan 2d c2r ifft");
+        return false;
+    }
+
+    //float* paddedProj = (float*)malloc(sizeof(float) * N_H1 * N_H2);
+    // Make zero-padded array, copy data to 1st half of array and set remaining slots to zero
+    cudaError_t cudaStatus;
+    float* dev_f_pad = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_f_pad, N_H1 * N_H2 * sizeof(float)))
+    {
+        fprintf(stderr, "cudaMalloc(padded volume data) failed!\n");
+        retVal = false;
+    }
+
+    // Make data for the result of the FFT
+    cufftComplex* dev_F = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_F, N_H1 * N_H2_over2 * sizeof(cufftComplex)))
+    {
+        fprintf(stderr, "cudaMalloc(Fourier transform of padded volume data) failed!\n");
+        retVal = false;
+    }
+
+    // Copy filter to device
+    int smoothingLevel = 0;
+    float* H = rampFrequencyResponse2D(N_H1, params->voxelWidth, 1.0, smoothingLevel);  // FIXME?
+    float* dev_H = 0;
+    if (cudaSuccess != cudaMalloc((void**)&dev_H, N_H1 * N_H2_over2 * sizeof(float)))
+        fprintf(stderr, "cudaMalloc failed!\n");
+    cudaStatus = cudaMemcpy(dev_H, H, N_H1 * N_H2_over2 * sizeof(float), cudaMemcpyHostToDevice);
+    if (cudaSuccess != cudaStatus)
+    {
+        fprintf(stderr, "cudaMemcpy(H) failed!\n");
+        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+        retVal = false;
+    }
+
+    for (int k = 0; k < N_z; k++)
+    {
+        float* dev_slice = &dev_f[uint64(k) * uint64(params->numY * params->numX)];
+
+        dim3 dimBlock_padding(8, 8);
+        dim3 dimGrid_padding(int(ceil(double(N_H1) / double(dimBlock_padding.x))), int(ceil(double(N_H2) / double(dimBlock_padding.y))));
+        setPaddedDataFor2DFilter <<< dimGrid_padding, dimBlock_padding >>> (dev_slice, dev_f_pad, params->numY, params->numX, N_H1, N_H2, false);
+
+        // FFT
+        result = cufftExecR2C(forward_plan, (cufftReal*)dev_f_pad, dev_F);
+
+        // Multiply Filter
+        int3 dataSize;
+        dataSize.z = N_z;
+        dataSize.z = 1;
+        dataSize.y = N_H1;
+        dataSize.x = N_H2_over2;
+
+        dim3 dimBlock_mult = setBlockSize(dataSize);
+        dim3 dimGrid_mult = setGridSize(dataSize, dimBlock_mult);
+
+        multiply2DRampFilterKernel <<< dimGrid_mult, dimBlock_mult >>> (dev_F, dev_H, dataSize);
+
+        // IFFT
+        result = cufftExecC2R(backward_plan, (cufftComplex*)dev_F, (cufftReal*)dev_f_pad);
+
+        // Copy result back to host
+        if (retVal)
+        {
+            dimGrid_padding.x = int(ceil(double(params->numY) / double(dimBlock_padding.x)));
+            dimGrid_padding.y = int(ceil(double(params->numX) / double(dimBlock_padding.x)));
+            setPaddedDataFor2DFilter_reverse <<< dimGrid_padding, dimBlock_padding >>> (dev_slice, dev_f_pad, params->numY, params->numX, N_H1, N_H2, minValue, false);
+        }
+    }
+    cudaStatus = cudaDeviceSynchronize();
+
+    // Clean up
+    cufftDestroy(forward_plan);
+    cufftDestroy(backward_plan);
+    cudaFree(dev_f_pad);
+    cudaFree(dev_H);
+    cudaFree(dev_F);
+    free(H);
+
+    if (data_on_cpu)
+    {
+        pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+
+    return retVal;
+}
+
+bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu)
+{
     if (data_on_cpu == false)
     {
         printf("Error: current implementation of rampFilter2D requires that data reside on the CPU\n");
@@ -1327,7 +1452,7 @@ bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
     }
 
     // Copy filter to device
-    float* H = rampFrequencyResponse2D(N_H1, 1.0, 1.0, smoothingLevel);  // FIXME?
+    float* H = rampFrequencyResponse2D(N_H1, params->voxelWidth, 1.0, smoothingLevel);  // FIXME?
     float* dev_H = 0;
     if (cudaSuccess != cudaMalloc((void**)&dev_H, N_H1 * N_H2_over2 * sizeof(float)))
         fprintf(stderr, "cudaMalloc failed!\n");

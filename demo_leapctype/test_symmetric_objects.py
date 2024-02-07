@@ -84,7 +84,7 @@ startTime = time.time()
 #leapct.ASDPOCS(g,f,10,5,4,1.0/20.0)
 leapct.SART(g,f,100)
 #leapct.MLEM(g,f,5,1)
-#leapct.LS(g,f,100,True)
+#leapct.LS(g,f,100,'SQS')
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 

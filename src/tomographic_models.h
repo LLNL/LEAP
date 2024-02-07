@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.3"
+#define LEAP_VERSION "1.4"
 
 #include <stdlib.h>
 #include "parameters.h"
@@ -24,7 +24,6 @@
 /**
  *  tomographicModels class
  * This is the main interface for LEAP.  All calls to forward project, backproject, FBP, filtering, noise filters come through this class.
- * There are no dependencies on torch from here and all layers beneath.  These torch dependencies are stripped in "main_projectors.cpp".
  * The main job of this class is to set/get parameters, do error checks, and dispath jobs.  It contains almost no algorithm logic.
  * In addition to the jobs listed above, this class is also responsible for divide jobs across multiple GPUs or dividing up GPU jobs so that
  * they fit into the available GPU memory.  Functions called from this class are either CPU based or single GPU based.

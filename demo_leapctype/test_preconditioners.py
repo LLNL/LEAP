@@ -6,14 +6,18 @@ from leapctype import *
 leapct = tomographicModels()
 
 '''
-This script is nearly identical to test_standard_geometries.py
-except it uses torch tensors on a GPU to run iterative reconstructions
-This demonstrates LEAP's ability to process data that is already on a GPU.
-Because no CPU-GPU data transfers are necessary these routines can run much faster.
-However they are limited to the amount of GPU memory one has and only process on one GPU at a time.
-Thus for small-ish data sizes this may be beneficial, but as the data sizes get larger it is worth
-to pay the price of CPU-GPU data transfers because you can use multiple GPUs and aren't limited by GPU
-memory, just CPU memory.
+This script demonstrates the usage of preconditioners in LS, WLS, RLS, and RWLS algorithms.
+This family of algorithms uses conjugate gradient to minimize the cost function.
+One may specify a preconditioner which may accelerate convergence even further in some cases.
+The preconditioner are:
+Separable Quadratic Surrogate (SQS): This is a method made popular by Jeff Fessler where the preconditioner
+is given by 1/(P*WP1), where 1 is a volume of all ones and W is the weighting matrix which may be identity.
+Note that the SART algorithm is a preconditioned gradient descent algorithm with constant step size, where W = 1/P1
+and thus the surrogate becomes 1/(P*WP1) = 1/P*1.
+RAMP: This method uses a 2D ramp filter applied to each z-slice of a volume.  This method was proposed by Clinthorne and Fessler and Booth.
+Statistical-Analytic Regularized Reconstruction (SARR): This method is very similar to iterative FBP (IFBP) methods and was proposed by myself (Kyle).
+This method convergences extremely fast, but only approximately minimizes the cost function.
+The RAMP and SARR preconditioners should only be used when one has sufficient angular sampling and is not to be used for sparse-view CT reconstruction.
 '''
 
 
@@ -24,8 +28,7 @@ numAngles = 2*2*int(360*numCols/1024)
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
-# You can increase this, but let's start with an easy case of just one detector row
-numRows = 1
+numRows = numCols
 
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
@@ -52,13 +55,14 @@ f = leapct.allocateVolume()
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
 # so we implemented this feature with multi-threaded C++
 leapct.set_FORBILD(f,True)
+#for n in range(11):
+#    leapct.addObject(f, 4, 20*(n-5)*np.array([0.0, 0.0, 1.0]), np.array([120.0, 120.0, 5.0]), 1.0, None, None, 3)
+#leapct.addObject(f, 4, np.array([0.0, 0.0, 0.0]), 10.0*np.array([1.0, 1.0, 1.0]), 1.0, None, None, 3)
 #leapct.display(f)
 
-
-# Copy data to GPU
-#'''
-# Comment this section out to revert back to multi-GPU solution
-# with CPU-GPU data transfers to see when easy case is advantageous
+'''
+# Uncomment this section to enable processing completely on the GPU
+# to avoid CPU-GPU data transfers which may be faster
 device_name = "cuda:" + str(leapct.get_gpu())
 device = torch.device(device_name)
 g = torch.from_numpy(g).to(device)
@@ -81,27 +85,27 @@ f[:] = 0.0
 
 # Reconstruct the data
 startTime = time.time()
-#leapct.backproject(g,f)
-#leapct.FBP(g,f)
-#leapct.ASDPOCS(g,f,50,10,1,0.02/20.0)
-leapct.SART(g,f,50,10)
-#leapct.MLEM(g,f,10)
-#leapct.OSEM(g,f,10,10)
-#leapct.LS(g,f,50,'SQS')
-#leapct.RDLS(g,f,50,0.0,0.0,2.0,True)
-#leapct.MLTR(g,f,50,10,0.02/20.0,0.1)
+'''
+leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX()*2.0)
+leapct.backproject(g,f)
+leapct.rampFilterVolume(f)
+f *= leapct.get_FBPscalar() * 180.0/leapct.get_angularRange()
+leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX())
+leapct.windowFOV(f)
+#'''
+leapct.FBP(g,f)
+leapct.LS(g,f,10,'SQS')
+#leapct.LS(g,f,10,'RAMP')
+#leapct.LS(g,f,10,'SARR')
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 
-# Post Reconstruction Smoothing (optional)
-#startTime = time.time()
-#leapct.diffuse(f,0.02/20.0,4)
-#leapct.MedianFilter(f)
-#leapct.BlurFilter(f,2.0)
-#print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the result with napari
+leapct.display(f)
+'''
 if type(f) is torch.Tensor:
     leapct.display(f.cpu().detach().numpy())
 else:
     leapct.display(f)
+#'''

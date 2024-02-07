@@ -99,6 +99,8 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
     if (i >= N.x || j >= N.y || k >= N.z) return;
 
+    uint64 i_slice = uint64(i) * uint64(N.y) * uint64(N.z);
+    float* f_slice = &f[i_slice];
     if (windowRadius == 1)
     {
         float v[9];
@@ -109,7 +111,7 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             for (int dk = -windowRadius; dk <= windowRadius; dk++)
             {
                 const int k_shift = max(0, min(k + dk, N.z - 1));
-                v[ind] = f[i * N.y * N.z + j_shift * N.z + k_shift];
+                v[ind] = f_slice[j_shift * N.z + k_shift];
                 ind += 1;
             }
         }
@@ -129,9 +131,9 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             }
         }
         if (fabs(curVal - v[4]) >= threshold * fabs(v[4]))
-            f_filtered[i * N.y * N.z + j * N.z + k] = v[4];
+            f_filtered[i_slice + uint64(j * N.z + k)] = v[4];
         else
-            f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
+            f_filtered[i_slice + uint64(j * N.z + k)] = curVal;
     }
     else if (windowRadius == 2)
     {
@@ -143,7 +145,7 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             for (int dk = -windowRadius; dk <= windowRadius; dk++)
             {
                 const int k_shift = max(0, min(k + dk, N.z - 1));
-                v[ind] = f[i * N.y * N.z + j_shift * N.z + k_shift];
+                v[ind] = f_slice[j_shift * N.z + k_shift];
                 ind += 1;
             }
         }
@@ -163,9 +165,9 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             }
         }
         if (fabs(curVal - v[12]) >= threshold * fabs(v[12]))
-            f_filtered[i * N.y * N.z + j * N.z + k] = v[12];
+            f_filtered[i_slice + uint64(j * N.z + k)] = v[12];
         else
-            f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
+            f_filtered[i_slice + uint64(j * N.z + k)] = curVal;
     }
     else if (windowRadius == 3)
     {
@@ -177,7 +179,7 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             for (int dk = -windowRadius; dk <= windowRadius; dk++)
             {
                 const int k_shift = max(0, min(k + dk, N.z - 1));
-                v[ind] = f[i * N.y * N.z + j_shift * N.z + k_shift];
+                v[ind] = f_slice[j_shift * N.z + k_shift];
                 ind += 1;
             }
         }
@@ -197,9 +199,9 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             }
         }
         if (fabs(curVal - v[24]) >= threshold * fabs(v[24]))
-            f_filtered[i * N.y * N.z + j * N.z + k] = v[24];
+            f_filtered[i_slice + uint64(j * N.z + k)] = v[24];
         else
-            f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
+            f_filtered[i_slice + uint64(j * N.z + k)] = curVal;
     }
 }
 
@@ -211,7 +213,7 @@ __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float th
     if (i >= N.x || j >= N.y || k >= N.z) return;
     if (i < sliceStart || i > sliceEnd)
     {
-        f_filtered[i * N.y * N.z + j * N.z + k] = 0.0f;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
         return;
     }
 
@@ -226,7 +228,7 @@ __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float th
             for (int dk = -1; dk <= 1; dk++)
             {
                 const int k_shift = max(0, min(k + dk, N.z - 1));
-                v[ind] = f[i_shift * N.y * N.z + j_shift * N.z + k_shift];
+                v[ind] = f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j_shift * N.z + k_shift)];
                 ind += 1;
             }
         }
@@ -248,9 +250,9 @@ __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float th
     }
     // fabs(curVal-v[13])/fabs(curVal) > threshold
     if (fabs(curVal - v[13]) >= threshold * fabs(v[13]))
-        f_filtered[i * N.y * N.z + j * N.z + k] = v[13];
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = v[13];
     else
-        f_filtered[i * N.y * N.z + j * N.z + k] = curVal;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = curVal;
 }
 
 __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
@@ -261,7 +263,7 @@ __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM
     if (i >= N.x || j >= N.y || k >= N.z) return;
     if (i < sliceStart || i > sliceEnd)
     {
-        f_filtered[i * N.y * N.z + j * N.z + k] = 0.0f;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
         return;
     }
 
@@ -291,14 +293,14 @@ __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM
 
                 if (theWeight > 0.0001f)
                 {
-                    val += theWeight * f[i_shift * N.y * N.z + j_shift * N.z + k_shift];
+                    val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j_shift * N.z + k_shift)];
                     sum += theWeight;
                 }
             }
         }
     }
 
-    f_filtered[i * N.y * N.z + j * N.z + k] = val / sum;
+    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FWHM)
@@ -318,6 +320,7 @@ __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FW
     float val = 0.0f;
     float sum = 0.0f;
 
+    float* f_slice = &f[uint64(i) * uint64(N.y * N.z)];
     for (int dj = -pixelRadius; dj <= pixelRadius; dj++)
     {
         const int j_shift = max(0, min(j + dj, N.y - 1));
@@ -334,13 +337,13 @@ __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FW
 
             if (theWeight > 0.0001f)
             {
-                val += theWeight * f[i * N.y * N.z + j_shift * N.z + k_shift];
+                val += theWeight * f_slice[uint64(j_shift * N.z + k_shift)];
                 sum += theWeight;
             }
         }
     }
 
-    f_filtered[i * N.y * N.z + j * N.z + k] = val / sum;
+    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FWHM)
@@ -369,12 +372,12 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
 
         if (theWeight > 0.0001f)
         {
-            val += theWeight * f[i_shift * N.y * N.z + j * N.z + k];
+            val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
             sum += theWeight;
         }
     }
 
-    f_filtered[i * N.y * N.z + j * N.z + k] = val / sum;
+    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
@@ -403,7 +406,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
-    if (cudaMalloc((void**)&dev_Df, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
         return false;
@@ -442,7 +445,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     else
     {
         // copy dev_Df to dev_f
-        cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1 * N_2 * N_3, cudaMemcpyDeviceToDevice);
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * uint64(N.x) * uint64(N.y) * uint64(N.z), cudaMemcpyDeviceToDevice);
         //cudaDeviceSynchronize();
     }
     if (dev_Df != 0)
@@ -479,7 +482,7 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool dat
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
-    if (cudaMalloc((void**)&dev_Df, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
         return false;
@@ -514,7 +517,7 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool dat
     else
     {
         // copy dev_Df to dev_f
-        cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1*N_2*N_3, cudaMemcpyDeviceToDevice);
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * uint64(N.x) * uint64(N.y) * uint64(N.z), cudaMemcpyDeviceToDevice);
     }
     if (dev_Df != 0)
     {
@@ -541,7 +544,7 @@ bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
-    if (cudaMalloc((void**)&dev_Df, N.x * N.y * N.z * sizeof(float)) != cudaSuccess)
+    if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
         return false;
@@ -553,7 +556,7 @@ bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    medianFilter2DKernel << <dimGrid, dimBlock >> > (dev_f, dev_Df, N, threshold, windowRadius);
+    medianFilter2DKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, threshold, windowRadius);
 
     // wait for GPU to finish
     cudaDeviceSynchronize();
@@ -570,7 +573,7 @@ bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
     else
     {
         // copy dev_Df to dev_f
-        cudaMemcpy(dev_f, dev_Df, sizeof(float) * N_1 * N_2 * N_3, cudaMemcpyDeviceToDevice);
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * uint64(N.x) * uint64(N.y) * uint64(N.z), cudaMemcpyDeviceToDevice);
     }
     if (dev_Df != 0)
     {
