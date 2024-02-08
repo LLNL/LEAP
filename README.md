@@ -36,6 +36,14 @@ As a simple demonstration of the accuracy of our projectors we show below the re
   <img src=https://github.com/LLNL/LEAP/blob/main/results/walnut_comparison.png>
 </p>
 
+## Future Releases
+
+For the next releases, we are working on the following:
+1) Fixes of bugs reported by our users
+2) Feature requests from our users
+3) Multi-material beam hardening correction
+4) More noise reduction filters
+5) Physics-based scatter correction
 
 ## Authors
 Kyle Champley (champley@gmail.com)
