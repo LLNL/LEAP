@@ -1976,7 +1976,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{
@@ -2049,7 +2049,7 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{
@@ -2124,7 +2124,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{
@@ -2197,7 +2197,7 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize || numElements > maxElements)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
 		if (data_on_cpu == false)
 		{

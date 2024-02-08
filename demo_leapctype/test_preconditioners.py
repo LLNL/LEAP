@@ -94,9 +94,10 @@ leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX())
 leapct.windowFOV(f)
 #'''
 leapct.FBP(g,f)
-leapct.LS(g,f,10,'SQS')
+#leapct.print_cost = True
+#leapct.LS(g,f,10,'SQS')
 #leapct.LS(g,f,10,'RAMP')
-#leapct.LS(g,f,10,'SARR')
+leapct.LS(g,f,10,'SARR')
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 

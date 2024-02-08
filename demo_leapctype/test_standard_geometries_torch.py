@@ -25,7 +25,7 @@ pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
 # You can increase this, but let's start with an easy case of just one detector row
-numRows = 1
+numRows = 8
 
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
@@ -55,6 +55,17 @@ leapct.set_FORBILD(f,True)
 #leapct.display(f)
 
 
+
+# "Simulate" projection data
+startTime = time.time()
+leapct.project(g,f)
+print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
+#leapct.display(g)
+
+# Add noise to the data (just for demonstration purposes)
+I_0 = 5000.0
+g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+
 # Copy data to GPU
 #'''
 # Comment this section out to revert back to multi-GPU solution
@@ -65,29 +76,21 @@ g = torch.from_numpy(g).to(device)
 f = torch.from_numpy(f).to(device)
 #'''
 
-# "Simulate" projection data
-startTime = time.time()
-leapct.project(g,f)
-print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
-#leapct.display(g)
-
-# Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
-
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
 f[:] = 0.0
 
 # Reconstruct the data
 startTime = time.time()
+#leapct.print_cost = True
 #leapct.backproject(g,f)
 #leapct.FBP(g,f)
-#leapct.ASDPOCS(g,f,50,10,1,0.02/20.0)
-leapct.SART(g,f,50,10)
+#leapct.ASDPOCS(g,f,100,10,1,0.02/20.0)
+#leapct.SART(g,f,50,10)
 #leapct.MLEM(g,f,10)
 #leapct.OSEM(g,f,10,10)
 #leapct.LS(g,f,50,'SQS')
+leapct.RLS(g,f,50,0.01/20.0,1e3,'RAMP')
 #leapct.RDLS(g,f,50,0.0,0.0,2.0,True)
 #leapct.MLTR(g,f,50,10,0.02/20.0,0.1)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))

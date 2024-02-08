@@ -14,6 +14,9 @@
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
 
+// Commenting out this define will cause LEAP to use a Huber loss function
+// of power p=1 for TV denoising
+// Leaving this define will use a Huber-like loss function of power 1.2
 #define USE_P_HUBER // currently using p=1.2
 
 __forceinline__ __device__ float square(const float x)
@@ -77,6 +80,45 @@ __device__ float aTV_Huber_costTerm(float* f, const int i, const int j, const in
     const float dist_2 = 0.7071067811865475f * beta;  // 1/sqrt(2)
     const float dist_3 = 0.5773502691896258f * beta;  // 1/sqrt(3)
 
+    float* f_i = &f[uint64(i) * uint64(N.y * N.z)];
+    float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
+    float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
+
+    //*
+    const float curVal = f_i[j * N.z + k];
+
+    return (Huber(curVal - f_i_plus[j * N.z + k], delta) +
+        Huber(curVal - f_i_minus[j * N.z + k], delta) +
+        Huber(curVal - f_i[j_plus * N.z + k], delta) +
+        Huber(curVal - f_i[j_minus * N.z + k], delta) +
+        Huber(curVal - f_i[j * N.z + k_plus], delta) +
+        Huber(curVal - f_i[j * N.z + k_minus], delta)) *
+        dist_1 +
+        (Huber(curVal - f_i_plus[j_plus * N.z + k], delta) +
+            Huber(curVal - f_i_plus[j_minus * N.z + k], delta) +
+            Huber(curVal - f_i_plus[j * N.z + k_plus], delta) +
+            Huber(curVal - f_i_plus[j * N.z + k_minus], delta) +
+            Huber(curVal - f_i_minus[j_plus * N.z + k], delta) +
+            Huber(curVal - f_i_minus[j_minus * N.z + k], delta) +
+            Huber(curVal - f_i_minus[j * N.z + k_plus], delta) +
+            Huber(curVal - f_i_minus[j * N.z + k_minus], delta) +
+            Huber(curVal - f_i[j_plus * N.z + k_plus], delta) +
+            Huber(curVal - f_i[j_plus * N.z + k_minus], delta) +
+            Huber(curVal - f_i[j_minus * N.z + k_plus], delta) +
+            Huber(curVal - f_i[j_minus * N.z + k_minus], delta)) *
+        dist_2 +
+        (Huber(curVal - f_i_plus[j_plus * N.z + k_plus], delta) +
+            Huber(curVal - f_i_plus[j_plus * N.z + k_minus], delta) +
+            Huber(curVal - f_i_plus[j_minus * N.z + k_plus], delta) +
+            Huber(curVal - f_i_plus[j_minus * N.z + k_minus], delta) +
+            Huber(curVal - f_i_minus[j_plus * N.z + k_plus], delta) +
+            Huber(curVal - f_i_minus[j_plus * N.z + k_minus], delta) +
+            Huber(curVal - f_i_minus[j_minus * N.z + k_plus], delta) +
+            Huber(curVal - f_i_minus[j_minus * N.z + k_minus], delta)) *
+        dist_3;
+    //*/
+
+    /*
     const float curVal = f[i * N.y * N.z + j * N.z + k];
 
     return (Huber(curVal - f[i_plus * N.y * N.z + j * N.z + k], delta) +
@@ -108,6 +150,7 @@ __device__ float aTV_Huber_costTerm(float* f, const int i, const int j, const in
             Huber(curVal - f[i_minus * N.y * N.z + j_minus * N.z + k_plus], delta) +
             Huber(curVal - f[i_minus * N.y * N.z + j_minus * N.z + k_minus], delta)) *
         dist_3;
+    //*/
 }
 
 __global__ void aTV_Huber_cost(float* f, float* d, int3 N, float delta, float beta, int sliceStart, int sliceEnd)
@@ -118,11 +161,11 @@ __global__ void aTV_Huber_cost(float* f, float* d, int3 N, float delta, float be
     if (i >= N.x || j >= N.y || k >= N.z) return;
     if (i < sliceStart || i > sliceEnd)
     {
-        d[i * N.y * N.z + j * N.z + k] = 0.0f;
+        d[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
         return;
     }
 
-    d[i * N.y * N.z + j * N.z + k] = aTV_Huber_costTerm(f, i, j, k, N, delta, beta);
+    d[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = aTV_Huber_costTerm(f, i, j, k, N, delta, beta);
 }
 
 __device__ float aTV_Huber_quadFormTerm(float* f, float* d, const int i, const int j, const int k, int3 N, float delta,
@@ -139,6 +182,76 @@ __device__ float aTV_Huber_quadFormTerm(float* f, float* d, const int i, const i
     const float dist_2 = 0.7071067811865475f * beta;  // 1/sqrt(2)
     const float dist_3 = 0.5773502691896258f * beta;  // 1/sqrt(3)
 
+    float* f_i = &f[uint64(i) * uint64(N.y * N.z)];
+    float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
+    float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
+
+    float* d_i = &d[uint64(i) * uint64(N.y * N.z)];
+    float* d_i_minus = &d[uint64(i_minus) * uint64(N.y * N.z)];
+    float* d_i_plus = &d[uint64(i_plus) * uint64(N.y * N.z)];
+
+    //*
+    const float curVal = f_i[j * N.z + k];
+    const float curVal_d = d_i[j * N.z + k];
+
+    return (DDHuber(curVal - f_i_plus[j * N.z + k], delta) *
+        square(curVal_d - d_i_plus[j * N.z + k]) +
+        DDHuber(curVal - f_i_minus[j * N.z + k], delta) *
+        square(curVal_d - d_i_minus[j * N.z + k]) +
+        DDHuber(curVal - f_i[j_plus * N.z + k], delta) *
+        square(curVal_d - d_i[j_plus * N.z + k]) +
+        DDHuber(curVal - f_i[j_minus * N.z + k], delta) *
+        square(curVal_d - d_i[j_minus * N.z + k]) +
+        DDHuber(curVal - f_i[j * N.z + k_plus], delta) *
+        square(curVal_d - d_i[j * N.z + k_plus]) +
+        DDHuber(curVal - f_i[j * N.z + k_minus], delta) *
+        square(curVal_d - d_i[j * N.z + k_minus])) *
+        dist_1 +
+        (DDHuber(curVal - f_i_plus[j_plus * N.z + k], delta) *
+            square(curVal_d - d_i_plus[j_plus * N.z + k]) +
+            DDHuber(curVal - f_i_plus[j_minus * N.z + k], delta) *
+            square(curVal_d - d_i_plus[j_minus * N.z + k]) +
+            DDHuber(curVal - f_i_plus[j * N.z + k_plus], delta) *
+            square(curVal_d - d_i_plus[j * N.z + k_plus]) +
+            DDHuber(curVal - f_i_plus[j * N.z + k_minus], delta) *
+            square(curVal_d - d_i_plus[j * N.z + k_minus]) +
+            DDHuber(curVal - f_i_minus[j_plus * N.z + k], delta) *
+            square(curVal_d - d_i_minus[j_plus * N.z + k]) +
+            DDHuber(curVal - f_i_minus[j_minus * N.z + k], delta) *
+            square(curVal_d - d_i_minus[j_minus * N.z + k]) +
+            DDHuber(curVal - f_i_minus[j * N.z + k_plus], delta) *
+            square(curVal_d - d_i_minus[j * N.z + k_plus]) +
+            DDHuber(curVal - f_i_minus[j * N.z + k_minus], delta) *
+            square(curVal_d - d_i_minus[j * N.z + k_minus]) +
+            DDHuber(curVal - f_i[j_plus * N.z + k_plus], delta) *
+            square(curVal_d - d_i[j_plus * N.z + k_plus]) +
+            DDHuber(curVal - f_i[j_plus * N.z + k_minus], delta) *
+            square(curVal_d - d_i[j_plus * N.z + k_minus]) +
+            DDHuber(curVal - f_i[j_minus * N.z + k_plus], delta) *
+            square(curVal_d - d_i[j_minus * N.z + k_plus]) +
+            DDHuber(curVal - f_i[j_minus * N.z + k_minus], delta) *
+            square(curVal_d - d_i[j_minus * N.z + k_minus])) *
+        dist_2 +
+        (DDHuber(curVal - f_i_plus[j_plus * N.z + k_plus], delta) *
+            square(curVal_d - d_i_plus[j_plus * N.z + k_plus]) +
+            DDHuber(curVal - f_i_plus[j_plus * N.z + k_minus], delta) *
+            square(curVal_d - d_i_plus[j_plus * N.z + k_minus]) +
+            DDHuber(curVal - f_i_plus[j_minus * N.z + k_plus], delta) *
+            square(curVal_d - d_i_plus[j_minus * N.z + k_plus]) +
+            DDHuber(curVal - f_i_plus[j_minus * N.z + k_minus], delta) *
+            square(curVal_d - d_i_plus[j_minus * N.z + k_minus]) +
+            DDHuber(curVal - f_i_minus[j_plus * N.z + k_plus], delta) *
+            square(curVal_d - d_i_minus[j_plus * N.z + k_plus]) +
+            DDHuber(curVal - f_i_minus[j_plus * N.z + k_minus], delta) *
+            square(curVal_d - d_i_minus[j_plus * N.z + k_minus]) +
+            DDHuber(curVal - f_i_minus[j_minus * N.z + k_plus], delta) *
+            square(curVal_d - d_i_minus[j_minus * N.z + k_plus]) +
+            DDHuber(curVal - f_i_minus[j_minus * N.z + k_minus], delta) *
+            square(curVal_d - d_i_minus[j_minus * N.z + k_minus])) *
+        dist_3;
+    //*/
+
+    /*
     const float curVal = f[i * N.y * N.z + j * N.z + k];
     const float curVal_d = d[i * N.y * N.z + j * N.z + k];
 
@@ -197,6 +310,7 @@ __device__ float aTV_Huber_quadFormTerm(float* f, float* d, const int i, const i
             DDHuber(curVal - f[i_minus * N.y * N.z + j_minus * N.z + k_minus], delta) *
             square(curVal_d - d[i_minus * N.y * N.z + j_minus * N.z + k_minus])) *
         dist_3;
+    //*/
 }
 
 __global__ void aTV_Huber_quadForm(float* f, float* d, float* quad, int3 N, float delta, float beta, int sliceStart, int sliceEnd)
@@ -207,11 +321,11 @@ __global__ void aTV_Huber_quadForm(float* f, float* d, float* quad, int3 N, floa
     if (i >= N.x || j >= N.y || k >= N.z) return;
     if (i < sliceStart || i > sliceEnd)
     {
-        quad[i * N.y * N.z + j * N.z + k] = 0.0f;
+        quad[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
         return;
     }
 
-    quad[i * N.y * N.z + j * N.z + k] = aTV_Huber_quadFormTerm(f, d, i, j, k, N, delta, beta);
+    quad[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = aTV_Huber_quadFormTerm(f, d, i, j, k, N, delta, beta);
 }
 
 __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, float beta, int sliceStart, int sliceEnd)
@@ -222,7 +336,7 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
     if (i >= N.x || j >= N.y || k >= N.z) return;
     if (i < sliceStart || i > sliceEnd)
     {
-        Df[i * N.y * N.z + j * N.z + k] = 0.0f;
+        Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
         return;
     }
 
@@ -237,6 +351,48 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
     const float dist_2 = 0.7071067811865475f * beta;  // 1/sqrt(2)
     const float dist_3 = 0.5773502691896258f * beta;  // 1/sqrt(3)
 
+    float* f_i = &f[uint64(i) * uint64(N.y * N.z)];
+    float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
+    float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
+
+    //*
+    const float curVal = f_i[j * N.z + k];
+
+    // dist 1: 6
+    // dist 2: 12
+    // dist 3: 8
+    Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = (DHuber(curVal - f_i_plus[j * N.z + k], delta) +
+        DHuber(curVal - f_i_minus[j * N.z + k], delta) +
+        DHuber(curVal - f_i[j_plus * N.z + k], delta) +
+        DHuber(curVal - f_i[j_minus * N.z + k], delta) +
+        DHuber(curVal - f_i[j * N.z + k_plus], delta) +
+        DHuber(curVal - f_i[j * N.z + k_minus], delta)) *
+        dist_1 +
+        (DHuber(curVal - f_i_plus[j_plus * N.z + k], delta) +
+            DHuber(curVal - f_i_plus[j_minus * N.z + k], delta) +
+            DHuber(curVal - f_i_plus[j * N.z + k_plus], delta) +
+            DHuber(curVal - f_i_plus[j * N.z + k_minus], delta) +
+            DHuber(curVal - f_i_minus[j_plus * N.z + k], delta) +
+            DHuber(curVal - f_i_minus[j_minus * N.z + k], delta) +
+            DHuber(curVal - f_i_minus[j * N.z + k_plus], delta) +
+            DHuber(curVal - f_i_minus[j * N.z + k_minus], delta) +
+            DHuber(curVal - f_i[j_plus * N.z + k_plus], delta) +
+            DHuber(curVal - f_i[j_plus * N.z + k_minus], delta) +
+            DHuber(curVal - f_i[j_minus * N.z + k_plus], delta) +
+            DHuber(curVal - f_i[j_minus * N.z + k_minus], delta)) *
+        dist_2 +
+        (DHuber(curVal - f_i_plus[j_plus * N.z + k_plus], delta) +
+            DHuber(curVal - f_i_plus[j_plus * N.z + k_minus], delta) +
+            DHuber(curVal - f_i_plus[j_minus * N.z + k_plus], delta) +
+            DHuber(curVal - f_i_plus[j_minus * N.z + k_minus], delta) +
+            DHuber(curVal - f_i_minus[j_plus * N.z + k_plus], delta) +
+            DHuber(curVal - f_i_minus[j_plus * N.z + k_minus], delta) +
+            DHuber(curVal - f_i_minus[j_minus * N.z + k_plus], delta) +
+            DHuber(curVal - f_i_minus[j_minus * N.z + k_minus], delta)) *
+        dist_3;
+    //*/
+
+    /*
     const float curVal = f[i * N.y * N.z + j * N.z + k];
 
     // dist 1: 6
@@ -271,6 +427,7 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
             DHuber(curVal - f[i_minus * N.y * N.z + j_minus * N.z + k_plus], delta) +
             DHuber(curVal - f[i_minus * N.y * N.z + j_minus * N.z + k_minus], delta)) *
         dist_3;
+    //*/
 }
 
 bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd)

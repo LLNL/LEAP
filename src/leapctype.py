@@ -136,6 +136,7 @@ class tomographicModels:
         else:
             self.param_id = self.create_new_model()
         self.set_model()
+        self.print_cost = False
 
     def set_model(self, i=None):
         self.libprojectors.set_model.restype = ctypes.c_bool
@@ -2045,12 +2046,15 @@ class tomographicModels:
                 Sf1 = self.TVgradient(f, delta, beta)
                 if preconditioner == 'SARR':
                     self.rampFilterVolume(Sf1)
+                    self.windowFOV(Sf1)
                     pitchHat = self.get_normalizedHelicalPitch()
                     if pitchHat > 0.0:
-                        Sf1 *= leapct.get_FBPscalar() * 0.5*pitchHat
+                        Sf1 *= self.get_FBPscalar() * 0.5*pitchHat
                     else:
-                        Sf1 *= leapct.get_FBPscalar() * 180.0/leapct.get_angularRange()
-                grad += Sf1
+                        Sf1 *= self.get_FBPscalar() * 180.0/self.get_angularRange()
+                elif preconditioner == 'SQS':
+                    self.windowFOV(Sf1)
+                grad[:] += Sf1[:]
 
                 #f[:] = grad[:] # FIXME
                 #return f # FIXME
@@ -2100,7 +2104,8 @@ class tomographicModels:
             else:
                 Pf[:] = Pf[:] - stepSize*Pd[:]
             Pf_minus_g[:] = Pf[:] - g[:]
-            print('\tcost = ' + str(0.5*self.innerProd(Pf_minus_g,Pf_minus_g,W)))
+            if self.print_cost:
+                print('\tcost = ' + str(0.5*self.innerProd(Pf_minus_g,Pf_minus_g,W)))
                 
         return f
 
