@@ -25,7 +25,7 @@ pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
 # You can increase this, but let's start with an easy case of just one detector row
-numRows = 8
+numRows = 1
 
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
@@ -64,14 +64,13 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 5000.0
-g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 # Copy data to GPU
 #'''
 # Comment this section out to revert back to multi-GPU solution
 # with CPU-GPU data transfers to see when easy case is advantageous
-device_name = "cuda:" + str(leapct.get_gpu())
-device = torch.device(device_name)
+device = torch.device("cuda:" + str(leapct.get_gpu()))
 g = torch.from_numpy(g).to(device)
 f = torch.from_numpy(f).to(device)
 #'''
@@ -104,7 +103,4 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the result with napari
-if type(f) is torch.Tensor:
-    leapct.display(f.cpu().detach().numpy())
-else:
-    leapct.display(f)
+leapct.display(f)

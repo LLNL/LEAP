@@ -112,7 +112,4 @@ startTime = time.time()
 leapct.RLS(g,f,400,0.02/40.0,1e1, 'SQS')
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-if has_torch and type(f) is torch.Tensor:
-    leapct.display(f.cpu().detach().numpy())
-else:
-    leapct.display(f)
+leapct.display(f)

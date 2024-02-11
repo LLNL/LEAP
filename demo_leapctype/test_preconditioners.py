@@ -28,7 +28,7 @@ numAngles = 2*2*int(360*numCols/1024)
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
-numRows = numCols
+numRows = numCols*0+1
 
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
@@ -60,15 +60,6 @@ leapct.set_FORBILD(f,True)
 #leapct.addObject(f, 4, np.array([0.0, 0.0, 0.0]), 10.0*np.array([1.0, 1.0, 1.0]), 1.0, None, None, 3)
 #leapct.display(f)
 
-'''
-# Uncomment this section to enable processing completely on the GPU
-# to avoid CPU-GPU data transfers which may be faster
-device_name = "cuda:" + str(leapct.get_gpu())
-device = torch.device(device_name)
-g = torch.from_numpy(g).to(device)
-f = torch.from_numpy(f).to(device)
-#'''
-
 # "Simulate" projection data
 startTime = time.time()
 leapct.project(g,f)
@@ -79,20 +70,26 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 I_0 = 50000.0
 #g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
+'''
+# Uncomment this section to enable processing completely on the GPU
+# which may be faster because it avoids CPU-GPU data transfers
+device = torch.device("cuda:" + str(leapct.get_gpu()))
+g = torch.from_numpy(g).to(device)
+f = torch.from_numpy(f).to(device)
+#'''
+
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
 f[:] = 0.0
 
 # Reconstruct the data
+# We'll start with an FBP reconstruction (which is optional) and then run
+# a reconstruction which minimizes a Least Squares cost function
+# using preconditioned conjugate gradient
+# Let's turn on the cost function reporting so we can see how the preconditioners speed
+# up the convergence rate
+leapct.print_cost = True
 startTime = time.time()
-'''
-leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX()*2.0)
-leapct.backproject(g,f)
-leapct.rampFilterVolume(f)
-f *= leapct.get_FBPscalar() * 180.0/leapct.get_angularRange()
-leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX())
-leapct.windowFOV(f)
-#'''
 leapct.FBP(g,f)
 #leapct.print_cost = True
 #leapct.LS(g,f,10,'SQS')
@@ -101,12 +98,5 @@ leapct.LS(g,f,10,'SARR')
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 
-
 # Display the result with napari
 leapct.display(f)
-'''
-if type(f) is torch.Tensor:
-    leapct.display(f.cpu().detach().numpy())
-else:
-    leapct.display(f)
-#'''

@@ -24,6 +24,14 @@ numRows = 1
 leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_default_volume()
 
+# Tell the XrayPhysics library to use mm-based units so that everything agrees with LEAP which is mm-based
+# Note that it is natural to express different quantities with different units, e.g., mm or cm
+# But to avoid confusion of which parameter uses which units, everything should use the same units
+# This should be fine for most things, but one thing to look out for is densities
+# *** Note that g/cm^3 = 1.0e-3 g/mm^3 ***
+# So just add "e-3" to the end of the densities so that they are expressed in g/mm^3
+physics.use_mm()
+
 
 #######################################################################################################################
 # Now we define the total system spectral response for each of the two energies
@@ -40,11 +48,12 @@ Es, s_L = physics.simulateSpectra(kV_L,takeOffAngle, None, Es)
 
 # Then model the detector response as the product of the
 # x-ray energy and the stopping power of the scintillator
-detResp = physics.detectorResponse('O2SGd2', 7.32, 0.01, Es)
+# Here we assume the scintillator is GOS, 0.1 mm thick, and density of 7.32 g/cm^3
+detResp = physics.detectorResponse('O2SGd2', 7.32e-3, 0.1, Es)
 
 # Finally model the attenuation due to the filters
-filtResp_L = physics.filterResponse('Al', 2.7, 0.1, Es)
-filtResp_H = physics.filterResponse('Cu',  8.96, 0.1, Es)
+filtResp_L = physics.filterResponse('Al', 2.7e-3, 1.0, Es) # 1.0 mm of Al
+filtResp_H = physics.filterResponse('Cu',  8.96e-3, 1.0, Es) # 1.0 mm of Cu
 filtResp_H[:] = filtResp_H[:]*filtResp_L[:]
 
 # Take the product of all three factors
@@ -102,12 +111,6 @@ f_water = f_water - f_Al
 f_water *= 1.0e-3
 f_Al *= 2.7e-3
 
-# Now we need the mass cross section of water and aluminum, but remember that the XrayPhysics package
-# uses length units of cm.  The units of mass cross section are cm^2/g and we must convert these to
-# mm^2/g to use them with LEAP.  Thus we multiple these cross sections by 100
-sigma_water *= 1.0e2
-sigma_Al *= 1.0e2
-
 # Now forward project the density maps
 leapct.project(g_water, f_water)
 leapct.project(g_Al, f_Al)
@@ -143,8 +146,8 @@ sigmae_L = np.zeros((100),dtype=np.float32)
 sigmae_H = sigmae_L.copy()
 for n in range(100):
     Z = n+1
-    sigmae_L[n] = 1.0e2*physics.sigma_e(Z, referenceEnergy_L)
-    sigmae_H[n] = 1.0e2*physics.sigma_e(Z, referenceEnergy_H)
+    sigmae_L[n] = physics.sigma_e(Z, referenceEnergy_L)
+    sigmae_H[n] = physics.sigma_e(Z, referenceEnergy_H)
     
 f_Ze, f_rhoe = leapct.convertToRhoeZe(f_L, f_H, sigmae_L, sigmae_H)
 leapct.display(f_Ze) # Ze volume

@@ -189,7 +189,7 @@ bool tomographicModels::rampFilterVolume(float* f, bool data_on_cpu)
 
 		uint64 numElements = uint64(params.numZ) * uint64(params.numY) * uint64(params.numX);
 		double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-		uint64 maxElements = 2147483646; // 2^31 = 2*1024^3-2
+		//uint64 maxElements = 2147483646; // 2^31 = 2*1024^3-2
 
 		if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize /*|| numElements > maxElements*/))
 		{ // if data is on the cpu and there is not enough memory to process the whole thing, then process in chunks
@@ -1638,51 +1638,59 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 				float mu_L = line_L[k];
 				float mu_H = line_H[k];
 
-				float theRatio = mu_L / mu_H;
-
-				float prevError = theRatio - sigma_L[0] / sigma_H[0];
-				float curError;
-				int Z;
-				for (Z = 2; Z <= 100; Z++)
+				if (mu_L <= 0.0 || mu_H <= 0.0)
 				{
-					curError = theRatio - sigma_L[Z - 1] / sigma_H[Z - 1];
-					if (prevError * curError <= 0.0) // change of sign, so must have root between Z-1 and Z
-						break;
-					else if (fabs(prevError) < fabs(curError)) // getting worse, so just quit
-						break;
-					prevError = curError;
+					line_L[k] = 7.31231243248; // effective-Z of air
+					line_H[k] = 0.0;
 				}
-				Z = std::min(100 - 2, std::max(1, Z - 1)); // min(98, max(1,Z-1))
-
-				// Now solution is between Z and Z+1
-
-				// Original Calculation
-				//double d = (theRatio*sigma(Z+1,ref_H) - sigma(Z+1,ref_L)) / (sigma(Z,ref_L) - sigma(Z+1,ref_L) - theRatio*( sigma(Z,ref_H) - sigma(Z+1,ref_H) ));
-
-				// Revised calculation
-				float d;
-				if (Z == 1 || 0.5 * (sigma_L[Z - 1 - 1] / sigma_H[Z - 1 - 1] + sigma_L[Z + 1 - 1] / sigma_H[Z + 1 - 1]) > sigma_L[Z - 1] / sigma_H[Z - 1])
-					d = (theRatio - sigma_L[Z + 1-1] / sigma_H[Z + 1 - 1]) / (sigma_L[Z - 1] / sigma_H[Z - 1] - sigma_L[Z + 1 - 1] / sigma_H[Z + 1-1]);
 				else
-					d = (theRatio * sigma_H[Z + 1-1] - sigma_L[Z + 1 - 1]) / (sigma_L[Z - 1] - sigma_L[Z + 1 - 1] - theRatio * (sigma_H[Z - 1] - sigma_H[Z + 1 - 1]));
+				{
+					float theRatio = mu_L / mu_H;
 
-				d = std::max(float(0.0), std::min(float(1.0), d));
-				float Ze = float(Z) + 1.0 - d;
+					float prevError = theRatio - sigma_L[0] / sigma_H[0];
+					float curError;
+					int Z;
+					for (Z = 2; Z <= 100; Z++)
+					{
+						curError = theRatio - sigma_L[Z - 1] / sigma_H[Z - 1];
+						if (prevError * curError <= 0.0) // change of sign, so must have root between Z-1 and Z
+							break;
+						else if (fabs(prevError) < fabs(curError)) // getting worse, so just quit
+							break;
+						prevError = curError;
+					}
+					Z = std::min(100 - 2, std::max(1, Z - 1)); // min(98, max(1,Z-1))
 
-				int Z_lo = int(Ze);
-				int Z_hi = Z_lo + 1;
-				d = Ze - float(Z_lo);
+					// Now solution is between Z and Z+1
 
-				float sigma_Ze_L = (1.0 - d) * sigma_L[Z_lo - 1] + d * sigma_L[Z_hi - 1];
-				float sigma_Ze_H = (1.0 - d) * sigma_H[Z_lo - 1] + d * sigma_H[Z_hi - 1];
-				float rhoe = (sigma_Ze_L * mu_L + sigma_Ze_H * mu_H) / (sigma_Ze_L * sigma_Ze_L + sigma_Ze_H * sigma_Ze_H);
-				if (mu_L == 0.0 || mu_H == 0.0)
-					rhoe = 0.0;
-				else if (isnan(rhoe) == 1)
-					rhoe = 0.0;
+					// Original Calculation
+					//double d = (theRatio*sigma(Z+1,ref_H) - sigma(Z+1,ref_L)) / (sigma(Z,ref_L) - sigma(Z+1,ref_L) - theRatio*( sigma(Z,ref_H) - sigma(Z+1,ref_H) ));
 
-				line_L[k] = Ze;
-				line_H[k] = rhoe;
+					// Revised calculation
+					float d;
+					if (Z == 1 || 0.5 * (sigma_L[Z - 1 - 1] / sigma_H[Z - 1 - 1] + sigma_L[Z + 1 - 1] / sigma_H[Z + 1 - 1]) > sigma_L[Z - 1] / sigma_H[Z - 1])
+						d = (theRatio - sigma_L[Z + 1 - 1] / sigma_H[Z + 1 - 1]) / (sigma_L[Z - 1] / sigma_H[Z - 1] - sigma_L[Z + 1 - 1] / sigma_H[Z + 1 - 1]);
+					else
+						d = (theRatio * sigma_H[Z + 1 - 1] - sigma_L[Z + 1 - 1]) / (sigma_L[Z - 1] - sigma_L[Z + 1 - 1] - theRatio * (sigma_H[Z - 1] - sigma_H[Z + 1 - 1]));
+
+					d = std::max(float(0.0), std::min(float(1.0), d));
+					float Ze = float(Z) + 1.0 - d;
+
+					int Z_lo = int(Ze);
+					int Z_hi = Z_lo + 1;
+					d = Ze - float(Z_lo);
+
+					float sigma_Ze_L = (1.0 - d) * sigma_L[Z_lo - 1] + d * sigma_L[Z_hi - 1];
+					float sigma_Ze_H = (1.0 - d) * sigma_H[Z_lo - 1] + d * sigma_H[Z_hi - 1];
+					float rhoe = (sigma_Ze_L * mu_L + sigma_Ze_H * mu_H) / (sigma_Ze_L * sigma_Ze_L + sigma_Ze_H * sigma_Ze_H);
+					if (mu_L == 0.0 || mu_H == 0.0)
+						rhoe = 0.0;
+					else if (isnan(rhoe) == 1)
+						rhoe = 0.0;
+
+					line_L[k] = Ze;
+					line_H[k] = rhoe;
+				}
 			}
 		}
 	}
@@ -1704,7 +1712,7 @@ bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float 
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -1765,7 +1773,7 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -1839,7 +1847,7 @@ bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, floa
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -1900,7 +1908,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -1974,7 +1982,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -2047,7 +2055,7 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 	
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -2122,7 +2130,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 	
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -2195,7 +2203,7 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{
@@ -2267,7 +2275,7 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 	uint64 numElements = uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols);
 	//uint64 numElements_filter = uint64(N_H1) * uint64(N_H2);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize /*|| numElements > maxElements*/))
 	{
@@ -2331,7 +2339,7 @@ bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	uint64 maxElements = 2147483646;
+	//uint64 maxElements = 2147483646;
 
 	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
 	{

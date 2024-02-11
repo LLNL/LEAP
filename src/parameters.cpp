@@ -609,6 +609,8 @@ bool parameters::set_default_volume(float scale)
 			// want: z_0 = -centerRow * (sod / sdd * pixelHeight)
 			// have: z_0 = offsetZ - 0.5 * float(numZ - 1) * voxelHeight
 			offsetZ = 0.5 * float(numZ - 1) * voxelHeight - centerRow * (sod / sdd * pixelHeight);
+			if (scale == 1.0)
+				offsetZ = (0.5 * float(numZ - 1) - centerRow) * voxelHeight;
 		}
 		/* old specification of z_0
 		float rzref = -centerRow * (sod / sdd * pixelHeight);

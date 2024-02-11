@@ -1654,7 +1654,7 @@ class tomographicModels:
         
     def SIRT(self, g, f, numIter, mask=None):
         """Simultaneous Iterative Reconstruction Technique reconstruction"""
-        return self.SART(g, f, numIter, self.get_numAngles(), mask)
+        return self.SART(g, f, numIter, 1, mask)
         
     def SART(self, g, f, numIter, numSubsets=1, mask=None):
         """Simultaneous Algebraic Reconstruction Technique reconstruction
@@ -1697,6 +1697,8 @@ class tomographicModels:
                     Pd = (g-Pd) / P1 * mask
                 else:
                     Pd = (g-Pd) / P1
+                if self.print_cost:
+                    print('\tcost = ' + str(0.5*self.innerProd(Pd,Pd)))
                 self.backproject(Pd,d)
                 f += 0.9*d / Pstar1
                 f[f<0.0] = 0.0
@@ -1886,6 +1888,8 @@ class tomographicModels:
             alpha = min(1.0, alpha)
             alpha = max(0.0, min(1.0, alpha))  # force lambda to be a valid number
             print('  lambda = ' + str(np.round(1000.0*alpha)/1000.0) + ' (' + str(np.round(1000.0*alpha_1)/1000.0) + ', ' + str(np.round(1000.0*alpha_2)/1000.0) + ')')
+            if self.print_cost:
+                print('\tcost = ' + str(epsilon_SART))
             if alpha < 0.0:
                 print("  Stopping criteria met, stopping iterations.")
                 break
@@ -1988,8 +1992,9 @@ class tomographicModels:
         conjGradRestart = 50
         if W is None:
             W = self.copyData(g)
+            self.BlurFilter2D(W,3.0)
             W = self.expNeg(W)
-
+            
         Pf = self.copyData(g)
         if self.isAllZeros(f) == False:
             # fix scaling
@@ -2105,7 +2110,14 @@ class tomographicModels:
                 Pf[:] = Pf[:] - stepSize*Pd[:]
             Pf_minus_g[:] = Pf[:] - g[:]
             if self.print_cost:
-                print('\tcost = ' + str(0.5*self.innerProd(Pf_minus_g,Pf_minus_g,W)))
+                dataFidelity = 0.5*self.innerProd(Pf_minus_g,Pf_minus_g,W)
+                if has_torch == True and type(dataFidelity) is torch.Tensor:
+                    dataFidelity = dataFidelity.cpu().detach().numpy()
+                if beta > 0.0:
+                    regularizationCost = self.TVcost(f, delta, beta)
+                    print('\tcost = ' + str(dataFidelity+regularizationCost) + ' = ' + str(dataFidelity) + ' + ' + str(regularizationCost))
+                else:
+                    print('\tcost = ' + str(dataFidelity))
                 
         return f
 
@@ -2457,7 +2469,7 @@ class tomographicModels:
         else:
             self.libprojectors.applyTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.applyTransferFunction(x, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.size, True)
-            
+    
     def applyDualTransferFunction(self, x, y,  LUT, sampleRate, firstSample=0.0):
         """Applies a 2D transfer function to arbitrary 3D data pair, i.e., x,y = LUT(x,y)
         
@@ -2471,6 +2483,17 @@ class tomographicModels:
         Returns:            
             true if operation  was sucessful, false otherwise
         """
+        
+        if len(LUT.shape) == 2:
+            LUT_2d = LUT
+            LUT = np.zeros((2,LUT.shape[0],LUT.shape[1]),dtype=np.float32)
+            if has_torch == True and type(LUT_2d) is torch.Tensor:
+                LUT = torch.from_numpy(LUT)
+                if LUT_2d.is_cuda:
+                    LUT = LUT.float().to(LUT_2d.get_device())
+            LUT[0,:,:] = LUT_2d[:,:]
+            LUT[1,:,:] = LUT_2d[:,:]
+        
         #bool applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
         self.libprojectors.applyDualTransferFunction.restype = ctypes.c_bool
         self.set_model()
@@ -2519,7 +2542,7 @@ class tomographicModels:
             return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
             
     def BlurFilter2D(self, f, FWHM=2.0):
-        """Applies a 2D blurring filter to the provided numpy array
+        """Applies a 2D blurring filter to the provided numpy array or torch tensor
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
@@ -3121,12 +3144,17 @@ class tomographicModels:
     def displayVolume(self,vol):
         """Uses napari to display the provided 3D data
         """
+        if has_torch == True and type(vol) is torch.Tensor:
+            x = vol.cpu().detach().numpy()
+        else:
+            x = vol
+        
         try:
             import napari
-            if len(vol.shape) == 3 and (vol.shape[0] == 1 or vol.shape[1] == 1 or vol.shape[2] == 1):
-                viewer = napari.view_image(np.squeeze(vol), rgb=False)
+            if len(x.shape) == 3 and (x.shape[0] == 1 or x.shape[1] == 1 or x.shape[2] == 1):
+                viewer = napari.view_image(np.squeeze(x), rgb=False)
             else:
-                viewer = napari.view_image(vol, rgb=False)
+                viewer = napari.view_image(x, rgb=False)
             napari.run()
         except:
             print('Cannot load napari, to install run this command:')
@@ -3611,15 +3639,23 @@ class tomographicModels:
                 
                 baseName, fileExtension = os.path.splitext(fileName)
                 
-                for i in range(x.shape[0]):
+                if len(x.shape) <= 2:
                     if has_torch == True and type(x) is torch.Tensor:
-                        #im = Image.fromarray(x[i,:,:].numpy())
-                        im = x[i,:,:].numpy()
+                        im = x.numpy()
                     else:
-                        #im = Image.fromarray(x[i,:,:])
-                        im = x[i,:,:]
+                        im = x
                     #im.save(baseName + '_' + str(int(i)) + fileExtension)
-                    imageio.imwrite(baseName + '_' + str(int(i)) + fileExtension, im)
+                    imageio.imwrite(baseName + fileExtension, im)
+                else:
+                    for i in range(x.shape[0]):
+                        if has_torch == True and type(x) is torch.Tensor:
+                            #im = Image.fromarray(x[i,:,:].numpy())
+                            im = x[i,:,:].numpy()
+                        else:
+                            #im = Image.fromarray(x[i,:,:])
+                            im = x[i,:,:]
+                        #im.save(baseName + '_' + str(int(i)) + fileExtension)
+                        imageio.imwrite(baseName + '_' + str(int(i)) + fileExtension, im)
                 return True
                 
             except:
