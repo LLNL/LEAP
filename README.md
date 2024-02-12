@@ -16,9 +16,9 @@ There are a lot of CT reconstruction packages out there, so why choose LEAP?  In
 8) Can **avoid** costly **CPU-to-GPU data transfers** by performing operations on data already on a GPU. 
 9) Special-case FBP algorithms that are rarely included in other packages, such as helical, truncated projections, offset detector scan, and Attenuated Radon Transform.
 10) Special-case models such as the Attenuated Radon Transform (SPECT and VAM applications) and reconstruction of cylindrically-symmetric objects (flash x-ray applications).
-11) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, RDLS, ML-TR.
+11) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, RDLS, ML-TR, IFBP (RWLS-SARR)
 12) Fast multi-GPU 3D densoing methods.
-13) Pre-processing algorithms: outlier correction, detector deblur, ring removal, beam hardening correction (BHC), dual energy decomposition, and SIRZ
+13) Pre-processing algorithms: outlier correction, detector deblur, ring removal, multi-material beam hardening correction (BHC), dual energy decomposition, and SIRZ
 14) Easy-to-use, simple API.
 15) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
 16) Permissible license.
@@ -41,9 +41,8 @@ As a simple demonstration of the accuracy of our projectors we show below the re
 For the next releases, we are working on the following:
 1) Fixes of bugs reported by our users
 2) Feature requests from our users
-3) Multi-material beam hardening correction
-4) More noise reduction filters
-5) Physics-based scatter correction
+3) More noise reduction filters
+4) Physics-based scatter correction
 
 ## Authors
 Kyle Champley (champley@gmail.com)
