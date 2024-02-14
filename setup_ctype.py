@@ -15,10 +15,17 @@ from setuptools.command.install import install
 from sys import platform as _platform
 if _platform == "linux" or _platform == "linux2":
     lib_fname = 'build/lib/libleap.so'
-    os.system(r'sh ./etc/build.sh')
+    retVal = os.system(r'sh ./etc/build.sh')
+    if retVal != 0:
+        print('Failed to compile!')
+        quit()
+    
 elif _platform == "win32":
     lib_fname = r'win_build\bin\Release\libleap.dll'
-    os.system(r'.\etc\win_build.bat')
+    retVal = os.system(r'.\etc\win_build.bat')
+    if retVal != 0:
+        print('Failed to compile!')
+        quit()
     
     import site
     copy_text = 'copy ' + str(lib_fname) + ' ' + str(os.path.join(site.getsitepackages()[1], 'libleap.dll'))
@@ -26,7 +33,10 @@ elif _platform == "win32":
     
 elif _platform == "darwin":
     lib_fname = 'build/lib/libleap.dylib'
-    os.system(r'sh ./etc/build.sh')
+    retVal = os.system(r'sh ./etc/build.sh')
+    if retVal != 0:
+        print('Failed to compile!')
+        quit()
 
 setup(
     name='leapct',
