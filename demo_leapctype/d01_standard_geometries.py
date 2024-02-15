@@ -6,7 +6,10 @@ from leapctype import *
 leapct = tomographicModels()
 
 '''
-All memory for data structures, e.g., the projection data and the volume data is managed in python.
+This demo script simulates data using a forward projection of the FORBILD head phantom and then performs
+a reconstruction.  This same script can be used to test these features for parallel-, fan-, or cone-beam geometries
+
+All memory for data structures, e.g., the projection data and the volume data are managed in python.
 LEAP only tracks the specifications, i.e., geometry of the CT model, the volume parameters,
 and a few other parameters that deal with how the code should be run, such as which GPUs to use.
 These parameters exist in the C code and are set by python functions in the python class "tomographicModels".
@@ -35,6 +38,8 @@ pixelSize = 0.65*512/numCols
 numRows = numCols
 
 # Set the scanner geometry
+# This script can be run for parallel-, fan-, or cone-beam geometries
+# Try commenting out different geometry types below to run this sample script for different geometries
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
@@ -52,8 +57,10 @@ leapct.print_parameters()
 #leapct.sketch_system()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
+# You don't have to use these functions; they are provided just for convenience
+# All you need is for the data to be C contiguous float32 arrays with the right dimensions
+g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
+f = leapct.allocateVolume() # shape is numZ, numY, numX
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
@@ -77,6 +84,13 @@ I_0 = 50000.0
 f[:] = 0.0
 
 # Reconstruct the data
+# Below you will see many different reconstruction algorithms that LEAP has available, but are commented out
+# In these examples we provide some but not all of the possible reconstruction algorithm parameters, but please
+# check the comments for each function in leapctype.py for a description of their arguments
+# Also note that algorithm can be run in series.  For example, if you first perform an FBP reconstruction
+# and then an iterative reconstruction, like RWLS, then the iterative reconstruction will start with the FBP reconstruction
+# this trick can be used to accelerate an iterative reconstruction algorithm
+# If you want an iterative reconstruction to start from scratch, just initialize it with zeros
 startTime = time.time()
 #leapct.backproject(g,f)
 leapct.FBP(g,f)
@@ -92,6 +106,8 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 
 # Post Reconstruction Smoothing (optional)
+# Here are some optional post reconstruction noise filters that can be applied
+# Try uncommenting out these lines to test how they work
 #startTime = time.time()
 #leapct.diffuse(f,0.02/20.0,4)
 #leapct.MedianFilter(f)
