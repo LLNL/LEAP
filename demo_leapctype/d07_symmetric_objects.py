@@ -4,25 +4,16 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-# Make sure you add: .../LEAP/src to your python path
 
 '''
-All memory for data structures, e.g., the projection data and the volume data is managed in python.
-LEAP only tracks the specifications, i.e., geometry of the CT model, the volume parameters,
-and a few other parameters that deal with how the code should be run, such as which GPUs to use.
-These parameters exist in the C code and are set by python functions in the python class "tomographicModels".
-Once these are set, one simply provides the numpy arrays of the projection data and volume data and
-LEAP will perform the various operations.
+This demo script shows you how to model the object being imaged as an axially-symmetric object which is essentially
+an extension of the Abel Transform.  Only here we allow both the parallel- and cone-beam geometries and allow the user
+to specify the axis of symmetry by a rotation angle from the positive z axis around the axis in the same direction as the detector rows.
+These types of object models are commonly used in flash x-ray radiography where one is imaging a highly dynamic event
+such as an explosion or implosion.  The authors are from LLNL which performs many of these experiments.
 
-Each of the four geometry types: parallel-, fan-, cone-, and modular-beam has its own function
-for which to set its parameters, for example use set_conebeam to set a cone-beam geometry
-with certain specifications.
-
-Then one may specify the reconstruction volume specifications such as the number of voxels in each
-dimension and the voxel size.  We suggest using the "set_default_volume" function which sets the volume
-parameters such that the volume fills the field of view of the CT system and uses the nominal voxel sizes.
-Using voxel sizes that are significantly smaller or significantly bigger than this default size may result
-in poor computational performance.
+To enable this feature, one must specify exactly one projection angle, set the axis of rotation angle between -30 and 30.
+Because the object is symmetric, all reconstructions are essentially 2D because numX = 1
 '''
 
 
@@ -41,7 +32,7 @@ numRows = numCols
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
-# Set the rotation angle for the axis of symmetry
+# Set the rotation angle (degrees) for the axis of symmetry
 leapct.set_axisOfSymmetry(0.0)
 
 # Set the volume parameters.

@@ -40,8 +40,13 @@ numRows = numCols
 # Set the scanner geometry
 # This script can be run for parallel-, fan-, or cone-beam geometries
 # Try commenting out different geometry types below to run this sample script for different geometries
-#leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
-#leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+# Note that the arguments for each of the three standard geometries are nearly equivalent, except set_fanbeam and set_conebeam have some extra parameters
+# that specify the source-to-object distance (sod), the source-to-detector distance (sdd), and tau the horizontal translation of the source position
+# set_conebeam also allows users to specify the helicalPitch if they wish but the default for this parameter is zero
+# The line below that says: leapct.set_curvedDetector() only applies to cone-beam data and sets the detector to have a shape that is the surface of a cylinder
+# whose diameter is given by the source-to-detector distance
+#leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
+#leapct.set_fanbeam(numAngles=numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
 

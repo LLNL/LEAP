@@ -5,6 +5,12 @@ import numpy as np
 from leapctype import *
 leapct = tomographicModels()
 
+'''
+This demo script shows another example of the modular-beam geometry, except here
+the source and detectors are arranged around a sphere which mimics what one may have in a flash CT configuration
+like the MEFCT at ARL: https://pubs.aip.org/aip/acp/article-pdf/doi/10.1063/1.5045031/14167597/160032_1_online.pdf
+'''
+
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512//2

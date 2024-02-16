@@ -5,6 +5,10 @@ import numpy as np
 from leapctype import *
 leapct = tomographicModels()
 
+'''
+The only purpose of this demo script is to evaluate the speed of LEAP's forward projections, backprojection, and FBP algorithms.
+'''
+
 # Specify the number of detector rows and columns which is used below
 N = 1024
 #N = 1300

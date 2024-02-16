@@ -10,8 +10,10 @@ physics = xrayPhysics()
 '''
 This script demonstrates how to perform dual energy decomposition and requires the XrayPhysics package
 which can be found here: https://github.com/kylechampley/XrayPhysics
+
 For a full explanation of how this works, it is helpful to read the example script in the XrayPhysics package here:
 https://github.com/kylechampley/XrayPhysics/blob/main/demo/dual_energy_decomp.py
+
 And the methodology we use to perform dual energy decomposition is described in this paper:
 https://ieeexplore.ieee.org/abstract/document/8638824?casa_token=K_9cFGKJGvMAAAAA:EzTpZfY0qJHMvdxGniguZBS_dATpx-4vqhsDPZwB1VFh02loJFD0hvizr5RNKj5z5xgvU8Iq8g
 '''

@@ -5,6 +5,18 @@ import numpy as np
 from leapctype import *
 leapct = tomographicModels()
 
+'''
+This demo script shows you how to reconstruct the publically available CT data sets of walnuts (see link below).
+This is the script that was used to generate the example result on the main page of the LEAP repo.
+We chose the reconstruction volume size to match what they did in the ASTRA script for comparison purposes, but
+we find their choices of parameters strange.  There are unnecessary voxels added to the field of view and a lot of
+"air" is reconstructed and the voxel sizes are actually quite large and a better resolution reconstruction could have
+been performed.
+
+Anyway, we chose this to match what they did with ASTRA and hopefully this helps others that are familiar with ASTRA
+to use LEAP instead
+'''
+
 # Data downloaded from: https://zenodo.org/records/6986012
 # ASTRA scripts found here: https://github.com/cicwi/WalnutReconstructionCodes
 

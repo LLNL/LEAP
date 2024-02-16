@@ -6,14 +6,25 @@ from leapctype import *
 leapct = tomographicModels()
 
 '''
-This script is nearly identical to test_standard_geometries.py
+This script is nearly identical to d01_standard_geometries.py
 except it uses torch tensors on a GPU to run iterative reconstructions
 This demonstrates LEAP's ability to process data that is already on a GPU.
-Because no CPU-GPU data transfers are necessary these routines can run much faster.
+Because no CPU-GPU data transfers are necessary these routines may run much faster.
 However they are limited to the amount of GPU memory one has and only process on one GPU at a time.
 Thus for small-ish data sizes this may be beneficial, but as the data sizes get larger it is worth
 to pay the price of CPU-GPU data transfers because you can use multiple GPUs and aren't limited by GPU
 memory, just CPU memory.
+
+If CPU memory is also a concern, see "d13_cropping_subchunking.py"
+
+Thus, one may want to install pytorch even if they are not interested in LEAP's ability to integrate with
+PyTorch neural networks.
+
+If any line below seems confusing, please read d01_standard_geometries.py which has more comments
+
+The main difference between this file and d01_standard_geometries.py are the three lines below that
+copy the numpy arrays to torch tensors on a GPU.  One may use these three line is any of the demo scripts
+we provide
 '''
 
 
@@ -101,6 +112,11 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 #leapct.MedianFilter(f)
 #leapct.BlurFilter(f,2.0)
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
+
+
+# To convert a torch tensor back to a numpy array, use the following
+#f = f.cpu().detach().numpy()
+
 
 # Display the result with napari
 leapct.display(f)

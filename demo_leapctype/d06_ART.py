@@ -4,25 +4,18 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-# Make sure you add: .../LEAP/src to your python path
 
 '''
-All memory for data structures, e.g., the projection data and the volume data is managed in python.
-LEAP only tracks the specifications, i.e., geometry of the CT model, the volume parameters,
-and a few other parameters that deal with how the code should be run, such as which GPUs to use.
-These parameters exist in the C code and are set by python functions in the python class "tomographicModels".
-Once these are set, one simply provides the numpy arrays of the projection data and volume data and
-LEAP will perform the various operations.
+This demo script shows you how to use the Attenuated Radon Transform (ART) algorithms in LEAP
+Note that only parallel-beam geometries are supported.
+The attenuation map may either be a voxelized map or as a cylinder where the user
+specifies the attenuation coefficient and radius of the cylinder
+We provide analytic reconstruction (FBP) of the ART for either specification of the attenuation map
+via Novikov's inversion formula.  Unfortunately we only have this implemented for 360 degree angular range.
+Of course, one can always reconstruct with iterative reconstruction algorithms.
 
-Each of the four geometry types: parallel-, fan-, cone-, and modular-beam has its own function
-for which to set its parameters, for example use set_conebeam to set a cone-beam geometry
-with certain specifications.
-
-Then one may specify the reconstruction volume specifications such as the number of voxels in each
-dimension and the voxel size.  We suggest using the "set_default_volume" function which sets the volume
-parameters such that the volume fills the field of view of the CT system and uses the nominal voxel sizes.
-Using voxel sizes that are significantly smaller or significantly bigger than this default size may result
-in poor computational performance.
+Two applications of the Attenuated Radon Transform are SPECT and VAM.  We provide VAM algorithms here:
+https://github.com/LLNL/LEAP/tree/main/VAM
 '''
 
 

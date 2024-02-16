@@ -12,6 +12,13 @@ except:
     print('https://github.com/kylechampley/XrayPhysics')
     quit()
 
+'''
+This script demonstrates how to perform single-material beam hardening correction (BHC) and requires the XrayPhysics package
+which can be found here: https://github.com/kylechampley/XrayPhysics
+And the methodology we use to perform multi-material BHC in this paper:
+https://www.osti.gov/servlets/purl/1158895
+'''
+
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512

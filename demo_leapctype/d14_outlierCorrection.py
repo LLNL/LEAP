@@ -7,6 +7,13 @@ leapct = tomographicModels()
 sys.path.append(r'..\utils')
 from preprocessing_algorithms import *
 
+'''
+The script demonstrates two different methods to handle outliers (zingers) in your projection data
+
+Note that this uses python code in the "utils" directory of the LEAP repo which are not installed with pip, so
+you'll have to copy this file to a python folder or add this folder to your path
+'''
+
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512

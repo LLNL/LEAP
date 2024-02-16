@@ -5,6 +5,37 @@ import numpy as np
 from leapctype import *
 leapct = tomographicModels()
 
+'''
+This script demonstrates how to use LEAP's "modular-beam" geometry
+This geometry type is similar to ASTRA's cone_vec data type or the flexible geometries allowed by TIGRE
+One difference in LEAP is that our cone-beam geometry is much, much more flexible that ASTRA's cone geometry
+Thus, most cone-beam geometries should be covered by LEAP's standard cone-beam geometry which is much more
+simple to specify and the algorithms (e.g., forward and back projectors) are faster
+
+LEAP's modular-beam geometry works by the user specifying the location and orientation of every source and detector pair
+These can be anywhere in space, but if the vector along the detector columns for all projections is within 5 degrees of
+the positive z axis, then one can perform analytic, i.e., FBP algorithms to reconstruct the data
+One will know if their geometry falls into this category by running the leapct.print_parameters() command
+If the output includes the statement "axially aligned", then it can be reconstructed with FBP, otherwise
+one will have to use iterative reconstruction algorithms.
+
+Thus the major difference between cone-beam FBP and modular-beam (axially aligned) FBP is that modular-beam
+enables detector rotations around the optical axis
+
+The example below is of "axially aligned" type as it is just a generic cone-beam, but we specify it this way to
+demonstrate how it works.
+
+Another way to specify a modular-beam geometry that is just a perturbation of a cone-beam geometry is to specify the
+cone-beam geometry and then use the command: leapct.convert_to_modularbeam() and then one can get the modular-beam parameters like this:
+sourcePositions = self.get_sourcePositions()
+moduleCenters = self.get_moduleCenters()
+rowVecs = self.get_rowVectors()
+colVecs = self.get_colVectors()
+and then one can manipulate these numpy arrays and then run the command: leapct.set_modularbeam(...)
+
+If one wishes to specify a flexible geometry with parallel rays, just put the source very far away from the object
+'''
+
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
@@ -49,12 +80,13 @@ leapct.set_modularbeam(numAngles, numRows, numCols, pixelSize, pixelSize, source
 
 # Set the volume parameters
 leapct.set_default_volume()
+
+# The next line is optional.  It sets the diameter of the circular field of view mask on the reconstruction volume
 leapct.set_diameterFOV(leapct.get_numX()*leapct.get_voxelWidth())
 
 # Trouble-Shooting Functions
 leapct.print_parameters()
 #leapct.sketch_system(0)
-#quit()
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()

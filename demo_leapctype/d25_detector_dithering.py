@@ -5,6 +5,10 @@ import numpy as np
 from leapctype import *
 leapct = tomographicModels()
 
+'''
+This script demonstrates how randomly shifting the detector at every rotation angle can mitigate ring artifacts
+and how to use LEAP's modular-beam geometry to perform FBP reconstructions of such data.
+'''
 
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N

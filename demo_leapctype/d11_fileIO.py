@@ -4,7 +4,16 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-# Make sure you add: .../LEAP/src to your python path
+
+'''
+This demo script shows you how to use some of LEAP's file I/O functions to save and load
+the projection data, volume data, and a text file which tracks the CT geometry and CT volume parameters (i.e., the metadata)
+This example below sets the data as a sequence of tif files which is the most common ways to deal with CT data
+We also recommend using the nrrd format which is a file format for N-dimension data which is readable by many common 3D image viewing software
+such as ImageJ and 3D slicer
+
+Of course you can also use npy files, but these are only good for python and are not always supported by 3D viewers
+'''
 
 # Set the scanner geometry
 numCols = 512

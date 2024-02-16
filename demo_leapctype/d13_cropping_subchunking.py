@@ -9,6 +9,11 @@ leapct = tomographicModels()
 This demo script provides examples of cropping your data.  Cropping your projections may be necessary to remove
 detector edge pixels that are bad or crop to the detector down to only the region of interest.  One may also
 need to crop your data to processes it in smaller chunks so that you don't run out of CPU memory.
+
+Of course you can crop the data yourself, but the advantage of using LEAP's cropping utility functions is that
+they automaticallt update the CT geometry specification for you so you don't have to worry about how these parameters
+are effected by this cropping.  For example if you crop the detector columns more from one side than another, LEAP will
+update the "centerCol" parameter (or the moduleCenters parameter for modular-beam data) accordingly
 '''
 
 

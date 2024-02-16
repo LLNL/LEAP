@@ -7,34 +7,23 @@ leapct = tomographicModels()
 # Make sure you add: .../LEAP/src to your python path
 
 '''
-All memory for data structures, e.g., the projection data and the volume data is managed in python.
-LEAP only tracks the specifications, i.e., geometry of the CT model, the volume parameters,
-and a few other parameters that deal with how the code should be run, such as which GPUs to use.
-These parameters exist in the C code and are set by python functions in the python class "tomographicModels".
-Once these are set, one simply provides the numpy arrays of the projection data and volume data and
-LEAP will perform the various operations.
-
-Each of the four geometry types: parallel-, fan-, cone-, and modular-beam has its own function
-for which to set its parameters, for example use set_conebeam to set a cone-beam geometry
-with certain specifications.
-
-Then one may specify the reconstruction volume specifications such as the number of voxels in each
-dimension and the voxel size.  We suggest using the "set_default_volume" function which sets the volume
-parameters such that the volume fills the field of view of the CT system and uses the nominal voxel sizes.
-Using voxel sizes that are significantly smaller or significantly bigger than this default size may result
-in poor computational performance.
+This script is nearly identical to d01_standard_geometries.py except it demonstrates LEAP's
+helical cone-beam functionality.  LEAP has an implementation of helical FBP for the GPU only
+Of course, just like all geometries in LEAP, one can use any iterative reconstruction.
+For details of the helical FBP algorithm, please see the LEAP technical manual here:
+https://github.com/LLNL/LEAP/blob/main/documentation/LEAP.pdf
 '''
 
 
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
-numTurns = 3
+numTurns = 10
 numAngles = 2*2*int(360*numCols/1024)*numTurns
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
-numRows = numCols
+numRows = numCols//4
 
 # Set the scanner geometry
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)

@@ -7,6 +7,13 @@ leapct = tomographicModels()
 sys.path.append(r'..\utils')
 from preprocessing_algorithms import *
 
+'''
+The script demonstrates two different methods to mitigate ring artifacts in reconstructions
+
+Note that this uses python code in the "utils" directory of the LEAP repo which are not installed with pip, so
+you'll have to copy this file to a python folder or add this folder to your path
+'''
+
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
@@ -51,6 +58,9 @@ g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 
 # Perform ring removal
+# Below are two different algorithms to try.  They are both good at removal ring artifacts, but
+# the one called ringRemoval_fast sometimes creates new ring artifacts.
+# The called ringRemoval is slower, but it is more robust
 #g = ringRemoval_fast(leapct, g, 1.0-0.99, 30, 0.05)
 g = ringRemoval(leapct, g, 1.0-0.99, 1.0e3, 30)
 

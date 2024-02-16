@@ -10,6 +10,17 @@ import time
 import numpy as np
 from leapctype import *
 
+'''
+This script demonstrates the so-called circle+line trajectory where two cone-beam scans are performed
+The first is a standard axial scan.
+The second is a scan where the patient bed or turn table are continuously translated, but no rotations are performed.
+The purpose of this line scan is to mitigate so-called cone-beam artifacts (which can also be mitigated by a helical scan).
+
+Note that LEAP does not have an implementation of the analytic circle+line algorithm.  We solve this problem here by performing
+an axial FBP (FDK) reconstruction followed by an iterative reconstruction refinement using the line scan.
+
+This script also demonstrates how to use multiple LEAP instances to track multiple CT acquisitions simultaneously
+'''
 
 ct_circular = tomographicModels()
 ct_line = tomographicModels()
