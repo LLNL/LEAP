@@ -75,6 +75,15 @@ bool reset()
 	return tomo()->reset();
 }
 
+bool verify_input_sizes(int numAngles, int numRows, int numCols, int numZ, int numY, int numX)
+{
+	parameters* params = &(tomo()->params);
+	if (params->numAngles != numAngles || params->numRows != numRows || params->numCols != numCols || params->numZ != numZ || params->numY != numY || params->numX != numX)
+		return false;
+	else
+		return true;
+}
+
 bool project_gpu(float* g, float* f)
 {
 	return tomo()->project_gpu(g, f);

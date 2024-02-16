@@ -28,6 +28,8 @@ extern "C" PROJECTOR_API void about();
 extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
 
+extern "C" PROJECTOR_API bool verify_input_sizes(int, int, int, int, int, int);
+
 extern "C" PROJECTOR_API bool project_gpu(float* g, float* f);
 extern "C" PROJECTOR_API bool backproject_gpu(float* g, float* f);
 

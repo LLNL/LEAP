@@ -188,6 +188,49 @@ class tomographicModels:
         self.libprojectors.print_parameters.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.print_parameters()
+        
+    def verify_inputs(self, g, f):
+        """ Verifies that the projection data (g) and the volume data (f) are compatible with the specified parameters """
+        #if f is None:
+        #    f = g
+    
+        # check they are the same type
+        if type(g) != type(f):
+            print('Error: projection and volume data must be the same type')
+            return False
+            
+        # check they are numpy array or torch.tensor
+        if has_torch:
+            if type(g) is not np.ndarray and type(g) is not torch.Tensor:
+                print('Error: projection and volume data must be either numpy arrays or torch tensors')
+                return False
+        elif type(g) is not np.ndarray:
+            print('Error: projection and volume data must be either numpy arrays or torch tensors')
+            return False
+            
+        # check they are float32
+        if has_torch and type(g) is torch.Tensor:
+            if g.dtype != torch.float32 or f.dtype != torch.float32:
+                print('Error: projection and volume data must be float32 data type')
+                return False
+        else:
+            if g.dtype != np.float32 or f.dtype != np.float32:
+                print('Error: projection and volume data must be float32 data type')
+                return False
+        
+        # check are they 3D arrays
+        if len(g.shape) != 3 or len(f.shape) != 3:
+            print('Error: projection and volume data must be 3D arrays')
+            return False
+        
+        # check size
+        self.libprojectors.verify_input_sizes.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+        self.libprojectors.verify_input_sizes.restype = ctypes.c_bool
+        self.set_model()
+        retVal = self.libprojectors.verify_input_sizes(g.shape[0], g.shape[1], g.shape[2], f.shape[0], f.shape[1], f.shape[2])
+        if retVal == False:
+            print('Error: projection and/ or volume data shapes do not match specified LEAP settings')
+        return retVal
 
     ###################################################################################################################
     ###################################################################################################################
