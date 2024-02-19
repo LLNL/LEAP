@@ -72,6 +72,9 @@ s_H = s_H*filtResp_H*detResp
 sigma_water = physics.sigma('H2O', Es)
 sigma_Al = physics.sigma('Al', Es)
 
+# Calculate the PCA bases from C, N, O, and Al (as is done in the SIRZ paper)
+PCA_1, PCA_2 = physics.PCAbases(['C','N','O','Al'], Es)
+
 # Now let's choose the reference energies of the decomposition.  The user is free to choose what they want,
 # but we recommend that these energies be within the energy range of the spectra and the low energy
 # reference energy be lower than the high energy reference energy.
@@ -82,8 +85,9 @@ referenceEnergy_L = np.round(physics.meanEnergy(s_L, Es))
 referenceEnergy_H = np.round(physics.meanEnergy(s_H, Es))
 
 startTime = time.time()
-LUT,T_atten = physics.setDEDlookupTable(s_L, s_H, Es, sigma_water, sigma_Al, [referenceEnergy_L, referenceEnergy_H])
+#LUT,T_atten = physics.setDEDlookupTable(s_L, s_H, Es, sigma_water, sigma_Al, [referenceEnergy_L, referenceEnergy_H])
 #LUT,T_atten = physics.setDEDlookupTable(s_L, s_H, Es, physics.PhotoelectricBasis(Es), physics.ComptonBasis(Es), [referenceEnergy_L, referenceEnergy_H])
+LUT,T_atten = physics.setDEDlookupTable(s_L, s_H, Es, PCA_1, PCA_2, [referenceEnergy_L, referenceEnergy_H])
 print('DED LUT generation time: ' + str(time.time()-startTime) + ' seconds')
 
 

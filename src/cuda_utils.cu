@@ -786,58 +786,58 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
 
 cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation)
 {
-  if (dev_data == nullptr)
-    return nullptr;
-  cudaArray* d_data_array = nullptr;
+    if (dev_data == nullptr)
+        return nullptr;
+    cudaArray* d_data_array = nullptr;
 
-  // Allocate 3D array memory
-  cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-  cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x));
- 
-  // Bind 3D array to texture object
-  cudaResourceDesc resDesc;
-  memset(&resDesc, 0, sizeof(resDesc));
-  resDesc.resType = cudaResourceTypeArray;
-  resDesc.res.array.array = (cudaArray_t)d_data_array;
+    // Allocate 3D array memory
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+    cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x));
 
-  cudaTextureDesc texDesc;
-  memset(&texDesc, 0, sizeof(texDesc));
-  texDesc.readMode = cudaReadModeElementType;
-  texDesc.normalizedCoords = false;  // Texture coordinates normalization
+    // Bind 3D array to texture object
+    cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = (cudaArray_t)d_data_array;
 
-  if (useExtrapolation)
-  {
-    texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeClamp;
-    texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeClamp;
-    texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeClamp;
-  }
-  else
-  {
-    texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
-    texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
-  }
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.normalizedCoords = false;  // Texture coordinates normalization
 
-  if (useLinearInterpolation)
-  {
-      texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
-  }
-  else
-  {
-      texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
-  }
-  cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr);
+    if (useExtrapolation)
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeClamp;
+        texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeClamp;
+        texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeClamp;
+    }
+    else
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
+        texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
+        texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
+    }
 
-  // Update the texture memory
-  cudaMemcpy3DParms cudaparams = {0};
-  cudaparams.extent = make_cudaExtent(N_txt.z, N_txt.y, N_txt.x);
-  cudaparams.kind = cudaMemcpyDeviceToDevice;
-  cudaparams.srcPos = make_cudaPos(0, 0, 0);
-  cudaparams.srcPtr = make_cudaPitchedPtr(dev_data, N_txt.z * sizeof(float), N_txt.z, N_txt.y);
-  cudaparams.dstPos = make_cudaPos(0, 0, 0);
-  cudaparams.dstArray = (cudaArray_t)d_data_array;
-  cudaMemcpy3D(&cudaparams);
-  return d_data_array;
+    if (useLinearInterpolation)
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
+    }
+    else
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
+    }
+    cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr);
+
+    // Update the texture memory
+    cudaMemcpy3DParms cudaparams = { 0 };
+    cudaparams.extent = make_cudaExtent(N_txt.z, N_txt.y, N_txt.x);
+    cudaparams.kind = cudaMemcpyDeviceToDevice;
+    cudaparams.srcPos = make_cudaPos(0, 0, 0);
+    cudaparams.srcPtr = make_cudaPitchedPtr(dev_data, N_txt.z * sizeof(float), N_txt.z, N_txt.y);
+    cudaparams.dstPos = make_cudaPos(0, 0, 0);
+    cudaparams.dstArray = (cudaArray_t)d_data_array;
+    cudaMemcpy3D(&cudaparams);
+    return d_data_array;
 }
 
 cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int N_txt, bool useExtrapolation, bool useLinearInterpolation)
@@ -893,6 +893,11 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
     cudaMemcpy3D(&cudaparams);
     //*/
     return d_data_array;
+}
+
+extern cudaArray* loadTexture2D(cudaTextureObject_t& tex_object, float* dev_data, const int2 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+{
+    return NULL;
 }
 
 float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)

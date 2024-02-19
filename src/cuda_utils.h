@@ -33,6 +33,7 @@ extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, 
 extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
 
 extern cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern cudaArray* loadTexture2D(cudaTextureObject_t& tex_object, float* data, const int2 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
 
 // Utility Functions for pushing/pulling data to/from CPU/GPU
 extern float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU);

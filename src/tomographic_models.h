@@ -703,6 +703,24 @@ public:
 	 */
 	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, bool data_on_cpu);
 
+	/**
+	 * \fn          dictionaryDenoising
+	 * \brief       represents 3D data by a sparse representation of an overcomplete dictionary
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   dictionary pointer to the overcomplete dictionary
+	 * \param[in]   N_d1 number of pixels in the first dimension of a dictionary elements
+	 * \param[in]   N_d2 number of pixels in the second dimension of a dictionary elements
+	 * \param[in]   N_d3 number of pixels in the third dimension of a dictionary elements
+	 * \param[in]   epsilon the fitting metric
+	 * \param[in]   sparsityThreshold the maximum number of dictionary elements to use
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu);
+
 	// Anisotropic Total Variation for 3D data
 	/**
 	 * \fn          TVcost

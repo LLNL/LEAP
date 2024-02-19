@@ -629,6 +629,11 @@ bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
 	return tomo()->MedianFilter2D(f, N_1, N_2, N_3, threshold, w, data_on_cpu);
 }
 
+bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)
+{
+	return tomo()->dictionaryDenoising(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu);
+}
+
 float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
 {
 	return tomo()->TVcost(f, N_1, N_2, N_3, delta, beta, data_on_cpu);

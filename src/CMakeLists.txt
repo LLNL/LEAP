@@ -49,6 +49,7 @@ set(HEADER
   ray_weighting_cpu.h
   noise_filters.cuh
   total_variation.cuh
+  matching_pursuit.cuh
   find_center_cpu.h
   cuda_utils.h
   cpu_utils.h
@@ -86,6 +87,7 @@ set(SRC_CU
   ramp_filter.cu
   noise_filters.cu
   total_variation.cu
+  matching_pursuit.cu
   ray_weighting.cu
   cuda_utils.cu
 )

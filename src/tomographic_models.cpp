@@ -20,6 +20,7 @@
 #include "ramp_filter_cpu.h"
 #include "find_center_cpu.h"
 #include "projectors_Joseph_cpu.h"
+#include "matching_pursuit.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -1965,6 +1966,15 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 	}
 	else
 		return medianFilter(f, N_1, N_2, N_3, threshold, data_on_cpu, params.whichGPU);
+}
+
+bool tomographicModels::dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)
+{
+	if (f == NULL || dictionary == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || numElements <= 0 || N_d1 <= 0 || N_d2 <= 0 || N_d3 <= 0)
+		return false;
+	if (sparsityThreshold < 1 || sparsityThreshold > numElements || epsilon < 0.0)
+		return false;
+	return matchingPursuit(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu, params.whichGPU);
 }
 
 float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
