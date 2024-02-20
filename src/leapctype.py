@@ -200,25 +200,16 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the detector, i.e.,
-            changing these parameters causes shifts in the detector location relative to the source
             centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
             centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
-        
             phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
-        
             sod (float): source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
             sdd (float): source to detector distance, measured in mm
-            
             tau (float): center of rotation offset
             helicalPitch (float): the helical pitch (mm/radians)
             
@@ -246,25 +237,16 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the detector, i.e.,
-            changing these parameters causes shifts in the detector location relative to the source
             centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
             centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
-        
             phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
-        
             sod (float): source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
             sdd (float): source to detector distance, measured in mm
-            
             tau (float): center of rotation offset
             
         Returns:
@@ -291,20 +273,13 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the detector, i.e.,
-            changing these parameters causes shifts in the detector location relative to the source
             centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
             centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
-        
             phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
             
         Returns:
@@ -331,20 +306,13 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the source and detector pairs
             sourcePositions ((numAngles X 3) numpy array): the (x,y,z) position of each x-ray source
             moduleCenters ((numAngles X 3) numpy array): the (x,y,z) position of the center of the front face of the detectors
-        
-            The next two parameters specify the orientation of the detectors
             rowVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector row direction
             colVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector column direction
             
@@ -507,21 +475,11 @@ class tomographicModels:
         """Set the CT volume parameters
         
         Args:
-            The first three parameters specify the volume array size
-            For parallel- and fan-beam data, it is required that numRows=numZ
             numX (int): number of voxels in the x-dimension
             numY (int): number of voxels in the y-dimension
             numZ (int): number of voxels in the z-dimension
-        
-            The next two parameters specify the size of the voxels in mm
-            For parallel- and fan-beam data, it is required that pixelHeight=voxelHeigh
             voxelWidth (float): voxel pitch (size) in the x and y dimensions
             voxelHeight (float): voxel pitch (size) in the z dimension
-        
-            The final three parameters specify the location of the voxel array
-            The default position is that the voxels are centered around the origin
-            and these parameters allow one to shift the volume around
-            For parallel- and fan-beam data, it is required that offsetZ=0.0
             offsetX (float): shift the volume in the x-dimension, measured in mm
             offsetY (float): shift the volume in the y-dimension, measured in mm
             offsetZ (float): shift the volume in the z-dimension, measured in mm
@@ -3101,6 +3059,7 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def x_samples(self,centerCoords=False):
+        """Returns an array of the x sample locations"""
         if centerCoords:
             x_0 = -0.5*(self.get_numX()-1)*self.get_voxelWidth()
         else:
@@ -3108,6 +3067,7 @@ class tomographicModels:
         return np.array(range(self.get_numX()),dtype=np.float32)*self.get_voxelWidth() + x_0
         
     def y_samples(self,centerCoords=False):
+        """Returns an array of the y sample locations"""
         if centerCoords:
             y_0 = -0.5*(self.get_numY()-1)*self.get_voxelWidth()
         else:
@@ -3115,6 +3075,7 @@ class tomographicModels:
         return np.array(range(self.get_numY()),dtype=np.float32)*self.get_voxelWidth() + y_0
         
     def z_samples(self,centerCoords=False):
+        """Returns an array of the z sample locations"""
         if centerCoords:
             z_0 = -0.5*(self.get_numZ()-1)*self.get_voxelHeight()
         else:
@@ -3122,6 +3083,7 @@ class tomographicModels:
         return np.array(range(self.get_numZ()),dtype=np.float32)*self.get_voxelHeight() + z_0
     
     def voxelSamples(self,centerCoords=False):
+        """Returns 3D meshgrid of the voxel x,y,z sample locations"""
         x = self.x_samples(centerCoords)
         y = self.y_samples(centerCoords)
         z = self.z_samples(centerCoords)
