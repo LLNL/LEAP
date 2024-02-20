@@ -12,7 +12,7 @@
 #
 import os
 import sys
-import sphinx_rtd_theme
+#import sphinx_rtd_theme
 # sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('../../src'))
 sys.path.insert(0, os.path.abspath('../../utils'))
@@ -32,7 +32,7 @@ release = 'v1.4'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc','sphinx.ext.napoleon','sphinx_rtd_theme']
+extensions = ['sphinx.ext.autodoc','sphinx.ext.napoleon']
 numpydoc_show_class_members = False
 
 # Add any paths that contain templates here, relative to this directory.
