@@ -2,4 +2,5 @@ leapctype
 leaptorch
 numpy
 matplotlib
+sphinx
 sphinx-rtd-theme
