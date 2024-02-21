@@ -208,7 +208,7 @@ bool set_curvedDetector()
 	return tomo()->set_curvedDetector();
 }
 
-bool get_detectorType()
+int get_detectorType()
 {
 	return tomo()->params.detectorType;
 }
