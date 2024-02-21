@@ -32,7 +32,17 @@ release = 'v1.4'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc','sphinx.ext.napoleon','sphinx_rtd_theme']
+extensions = [
+    'sphinx.ext.duration',
+    'sphinx.ext.doctest',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.napoleon',
+    'nbsphinx',
+    'sphinx_rtd_theme',
+    'IPython.sphinxext.ipython_console_highlighting',
+]
+
 numpydoc_show_class_members = False
 
 # Add any paths that contain templates here, relative to this directory.
