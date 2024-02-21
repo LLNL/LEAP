@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forward and Back Projection &mdash; LEAP v1.4 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Analytic Reconstruction (FBP)" href="fbp.html" />
+    <link rel="prev" title="CT Volume" href="ctvolume.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LEAP
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="leapctype.html">Python API (leapctype)</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="highlevelfunctions.html">High-Level Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ctgeometries.html">CT Geometries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ctvolume.html">CT Volume</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Forward and Back Projection</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.project"><code class="docutils literal notranslate"><span class="pre">project()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.backproject"><code class="docutils literal notranslate"><span class="pre">backproject()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.sensitivity"><code class="docutils literal notranslate"><span class="pre">sensitivity()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fbp.html">Analytic Reconstruction (FBP)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iterative_reconstruction.html">Iterative Reconstruction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="projection_filters_and_transforms.html">Projection Filters and Transforms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="filters.html">Filters Applied to Arbitrary 3D Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fileIO.html">File I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="leaptorch.html">PyTorch Neural Network Interface (leaptorch)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="preprocessing_algorithms.html">Preprocessing Algorithms</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LEAP</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="leapctype.html">Python API (leapctype)</a></li>
+      <li class="breadcrumb-item active">Forward and Back Projection</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/projectors.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <div class="section" id="forward-and-back-projection">
+<h1>Forward and Back Projection<a class="headerlink" href="#forward-and-back-projection" title="Permalink to this heading"></a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.project">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">project</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">param_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.project" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate the forward projection of f and stores the result in g</p>
+<p>The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+This function take the argument g and returns the same g.
+Returning g is just there for nesting several algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p></li>
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – volume data</p></li>
+<li><p><strong>param_id</strong> (<em>int</em>) – optional parameter to project a particular parameter index</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>g, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.backproject">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">backproject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">param_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.backproject" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f</p>
+<p>The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+This function take the argument f and returns the same f.
+Returning f is just there for nesting several algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p></li>
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – volume data</p></li>
+<li><p><strong>param_id</strong> (<em>int</em>) – optional parameter to project a particular parameter index</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.sensitivity">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">sensitivity</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.sensitivity" title="Permalink to this definition"></a></dt>
+<dd><p>Performs a calculation of the sensitivity of a CT geometry, i.e., the backprojection of data that is all ones</p>
+<p>The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+One can get the same result by backprojecting an array of projection data with all entries equal to one.
+The benefit of this function is that it is faster and uses less memory.</p>
+<p>In a volume is provided, the result will be stored there, otherwise a new volume will be allocated</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – (optional argument) volume data to store the result</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="ctvolume.html" class="btn btn-neutral float-left" title="CT Volume" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fbp.html" class="btn btn-neutral float-right" title="Analytic Reconstruction (FBP)" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Kyle Champley and Hyojin Kim.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

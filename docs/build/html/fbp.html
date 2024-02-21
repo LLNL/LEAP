@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analytic Reconstruction (FBP) &mdash; LEAP v1.4 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Iterative Reconstruction" href="iterative_reconstruction.html" />
+    <link rel="prev" title="Forward and Back Projection" href="projectors.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LEAP
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="leapctype.html">Python API (leapctype)</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="highlevelfunctions.html">High-Level Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ctgeometries.html">CT Geometries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ctvolume.html">CT Volume</a></li>
+<li class="toctree-l2"><a class="reference internal" href="projectors.html">Forward and Back Projection</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Analytic Reconstruction (FBP)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.FBP"><code class="docutils literal notranslate"><span class="pre">FBP()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.BPF"><code class="docutils literal notranslate"><span class="pre">BPF()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.filterProjections"><code class="docutils literal notranslate"><span class="pre">filterProjections()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.HilbertFilterProjections"><code class="docutils literal notranslate"><span class="pre">HilbertFilterProjections()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.rampFilterProjections"><code class="docutils literal notranslate"><span class="pre">rampFilterProjections()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.weightedBackproject"><code class="docutils literal notranslate"><span class="pre">weightedBackproject()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.rampFilterVolume"><code class="docutils literal notranslate"><span class="pre">rampFilterVolume()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.set_rampFilter"><code class="docutils literal notranslate"><span class="pre">set_rampFilter()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.get_FBPscalar"><code class="docutils literal notranslate"><span class="pre">get_FBPscalar()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.set_truncatedScan"><code class="docutils literal notranslate"><span class="pre">set_truncatedScan()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.set_offsetScan"><code class="docutils literal notranslate"><span class="pre">set_offsetScan()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.inconsistencyReconstruction"><code class="docutils literal notranslate"><span class="pre">inconsistencyReconstruction()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="iterative_reconstruction.html">Iterative Reconstruction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="projection_filters_and_transforms.html">Projection Filters and Transforms</a></li>
+<li class="toctree-l2"><a class="reference internal" href="filters.html">Filters Applied to Arbitrary 3D Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fileIO.html">File I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="leaptorch.html">PyTorch Neural Network Interface (leaptorch)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="preprocessing_algorithms.html">Preprocessing Algorithms</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LEAP</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="leapctype.html">Python API (leapctype)</a></li>
+      <li class="breadcrumb-item active">Analytic Reconstruction (FBP)</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/fbp.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <div class="section" id="analytic-reconstruction-fbp">
+<h1>Analytic Reconstruction (FBP)<a class="headerlink" href="#analytic-reconstruction-fbp" title="Permalink to this heading"></a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.FBP">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">FBP</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inplace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.FBP" title="Permalink to this definition"></a></dt>
+<dd><p>Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f</p>
+<p>The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+This function take the argument f and returns the same f.
+Returning f is just there for nesting several algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p></li>
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – volume data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.BPF">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">BPF</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.BPF" title="Permalink to this definition"></a></dt>
+<dd><p>Performs a Backprojection Filtration (BPF) reconstruction of the projection data, g, and stores the result in f</p>
+<p>The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+This function take the argument f and returns the same f.
+Returning f is just there for nesting several algorithms.
+This reconstruction only works for parallel-beam data</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p></li>
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – volume data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.filterProjections">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">filterProjections</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.filterProjections" title="Permalink to this definition"></a></dt>
+<dd><p>Filters the projection data, g, so that its backprojection results in an FBP reconstruction</p>
+<p>The CT geometry parameters must be set prior to running this function.
+This function take the argument g and returns the same g.
+Returning g is just there for nesting several algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>g, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.HilbertFilterProjections">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">HilbertFilterProjections</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.HilbertFilterProjections" title="Permalink to this definition"></a></dt>
+<dd><p>Applies the Hilbert filter to the projection data, g, which is a subset of the operations in some reconstruction algorithms</p>
+<p>The CT geometry parameters must be set prior to running this function.
+This function take the argument g and returns the same g.
+Returning g is just there for nesting several algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>g, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.rampFilterProjections">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">rampFilterProjections</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.rampFilterProjections" title="Permalink to this definition"></a></dt>
+<dd><p>Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function</p>
+<p>The CT geometry parameters must be set prior to running this function.
+This function take the argument g and returns the same g.
+Returning g is just there for nesting several algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>g, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.weightedBackproject">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">weightedBackproject</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.weightedBackproject" title="Permalink to this definition"></a></dt>
+<dd><p>Calculate the weighted backprojection of g and stores the result in f</p>
+<p>The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+This function take the argument f and returns the same f.
+Returning f is just there for nesting several algorithms.</p>
+<p>Some geometries require a weighted backprojection for FBP reconstruction,
+such as fan-beam, helical cone-beam, Attenuated Radon Transform, and symmetric objects</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p></li>
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – volume data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.rampFilterVolume">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">rampFilterVolume</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.rampFilterVolume" title="Permalink to this definition"></a></dt>
+<dd><p>Applies the 2D ramp filter to the volume data, f, for each z-slice</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – volume data</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.set_rampFilter">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">set_rampFilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">which</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.set_rampFilter" title="Permalink to this definition"></a></dt>
+<dd><p>Set the ramp filter to use: 0, 2, 4, 6, 8, or 10</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.get_FBPscalar">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">get_FBPscalar</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.get_FBPscalar" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the scalar necessary for quantitative reconstruction when using the filterProjections and backproject functions</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.set_truncatedScan">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">set_truncatedScan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aFlag</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.set_truncatedScan" title="Permalink to this definition"></a></dt>
+<dd><p>Set the truncatedScan parameter</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.set_offsetScan">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">set_offsetScan</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">aFlag</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.set_offsetScan" title="Permalink to this definition"></a></dt>
+<dd><p>Set the offsetScan parameter</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.inconsistencyReconstruction">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">inconsistencyReconstruction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">g</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">inplace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.inconsistencyReconstruction" title="Permalink to this definition"></a></dt>
+<dd><p>Performs an Inconsistency Reconstruction of the projection data, g, and stores the result in f</p>
+<p>An Inconsistency Reconstruction is an FBP reconstruction except it replaces the ramp filter with
+a derivative.  For scans with angular ranges of 360 or more this will result in a pure noise
+reconstruction if the geometry is calibrated and there are no biases in the data.  This can
+be used as a robust way to find the centerCol parameter or estimate detector tilt.
+The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+This function take the argument f and returns the same f.
+Returning f is just there for nesting several algorithms.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>g</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – projection data</p></li>
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em><em> or </em><em>torch tensor</em>) – volume data</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input with the same name</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="projectors.html" class="btn btn-neutral float-left" title="Forward and Back Projection" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="iterative_reconstruction.html" class="btn btn-neutral float-right" title="Iterative Reconstruction" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Kyle Champley and Hyojin Kim.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

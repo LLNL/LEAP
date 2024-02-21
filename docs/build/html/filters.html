@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Filters Applied to Arbitrary 3D Arrays &mdash; LEAP v1.4 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+        <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="File I/O" href="fileIO.html" />
+    <link rel="prev" title="Projection Filters and Transforms" href="projection_filters_and_transforms.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LEAP
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="leapctype.html">Python API (leapctype)</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="highlevelfunctions.html">High-Level Functions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ctgeometries.html">CT Geometries</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ctvolume.html">CT Volume</a></li>
+<li class="toctree-l2"><a class="reference internal" href="projectors.html">Forward and Back Projection</a></li>
+<li class="toctree-l2"><a class="reference internal" href="fbp.html">Analytic Reconstruction (FBP)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="iterative_reconstruction.html">Iterative Reconstruction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="projection_filters_and_transforms.html">Projection Filters and Transforms</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Filters Applied to Arbitrary 3D Arrays</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.BlurFilter"><code class="docutils literal notranslate"><span class="pre">BlurFilter()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.BlurFilter2D"><code class="docutils literal notranslate"><span class="pre">BlurFilter2D()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.MedianFilter"><code class="docutils literal notranslate"><span class="pre">MedianFilter()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.MedianFilter2D"><code class="docutils literal notranslate"><span class="pre">MedianFilter2D()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.TVcost"><code class="docutils literal notranslate"><span class="pre">TVcost()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.TVgradient"><code class="docutils literal notranslate"><span class="pre">TVgradient()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.TVquadForm"><code class="docutils literal notranslate"><span class="pre">TVquadForm()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#leapctype.tomographicModels.diffuse"><code class="docutils literal notranslate"><span class="pre">diffuse()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="fileIO.html">File I/O</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="leaptorch.html">PyTorch Neural Network Interface (leaptorch)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="preprocessing_algorithms.html">Preprocessing Algorithms</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LEAP</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="leapctype.html">Python API (leapctype)</a></li>
+      <li class="breadcrumb-item active">Filters Applied to Arbitrary 3D Arrays</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/filters.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <div class="section" id="filters-applied-to-arbitrary-3d-arrays">
+<h1>Filters Applied to Arbitrary 3D Arrays<a class="headerlink" href="#filters-applied-to-arbitrary-3d-arrays" title="Permalink to this heading"></a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.BlurFilter">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">BlurFilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHM</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.BlurFilter" title="Permalink to this definition"></a></dt>
+<dd><p>Applies a blurring filter to the provided numpy array</p>
+<p>The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), …, ceil(FWHM)
+This filter is very simular to a Gaussian filter, but is a FIR</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – numpy array to smooth</p></li>
+<li><p><strong>FWHM</strong> (<em>float</em>) – the full width at half maximum (in number of pixels) of the filter</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.BlurFilter2D">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">BlurFilter2D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">FWHM</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.BlurFilter2D" title="Permalink to this definition"></a></dt>
+<dd><p>Applies a 2D blurring filter to the provided numpy array or torch tensor</p>
+<p>The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), …, ceil(FWHM)
+This filter is very simular to a Gaussian filter, but is a FIR</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – numpy array to smooth</p></li>
+<li><p><strong>FWHM</strong> (<em>float</em>) – the full width at half maximum (in number of pixels) of the filter</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.MedianFilter">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">MedianFilter</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.MedianFilter" title="Permalink to this definition"></a></dt>
+<dd><p>Applies a thresholded 3D median filter (3x3x3) to the provided numpy array</p>
+<p>The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+This algorithm performs a 3D (3x3x3) median around each data value and then replaces this value only if
+<a href="#id1"><span class="problematic" id="id2">|original value - median value|</span></a> &gt;= threshold*|median value|
+Note that if threshold is zero, then this is simply a median filter</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – numpy array to smooth</p></li>
+<li><p><strong>threshold</strong> (<em>float</em>) – the threshold of whether to use the filtered value or not</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.MedianFilter2D">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">MedianFilter2D</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">threshold</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">windowSize</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.MedianFilter2D" title="Permalink to this definition"></a></dt>
+<dd><p>Applies a thresholded 2D median filter (windowSize x windowSize) to the provided numpy array</p>
+<p>The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+This algorithm performs a 2D (windowSize x windowSize) median around each data value and then replaces this value only if
+<a href="#id3"><span class="problematic" id="id4">|original value - median value|</span></a> &gt;= threshold*|median value|
+Note that if threshold is zero, then this is simply a median filter</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – numpy array to smooth</p></li>
+<li><p><strong>threshold</strong> (<em>float</em>) – the threshold of whether to use the filtered value or not</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same as the input</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.TVcost">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">TVcost</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.TVcost" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array</p>
+<p>The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – 3D numpy array</p></li>
+<li><p><strong>delta</strong> (<em>float</em>) – parameter for the Huber-like loss function used in TV</p></li>
+<li><p><strong>beta</strong> (<em>float</em>) – TV multiplier (sometimes called the regularizaion strength)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>TV functional value</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.TVgradient">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">TVgradient</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.TVgradient" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array</p>
+<p>The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – 3D numpy array</p></li>
+<li><p><strong>delta</strong> (<em>float</em>) – parameter for the Huber-like loss function used in TV</p></li>
+<li><p><strong>beta</strong> (<em>float</em>) – TV multiplier (sometimes called the regularizaion strength)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the gradient of the TV functional applied to the input</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Df (C contiguous float32 numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.TVquadForm">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">TVquadForm</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">d</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">beta</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.TVquadForm" title="Permalink to this definition"></a></dt>
+<dd><p>Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays</p>
+<p>The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
+This function calculates the following inner product &lt;d, R’’(f)d&gt;, where R’’ is the Hessian of the TV functional
+The quadraitc surrogate is used here, so this function can be used to calculate the step size of a cost function
+that includes a TV regularization term.
+See the same  cost in the diffuse function below for an example of its usage</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – 3D numpy array</p></li>
+<li><p><strong>d</strong> (<em>C contiguous float32 numpy array</em>) – 3D numpy array</p></li>
+<li><p><strong>delta</strong> (<em>float</em>) – parameter for the Huber-like loss function used in TV</p></li>
+<li><p><strong>beta</strong> (<em>float</em>) – TV multiplier (sometimes called the regularizaion strength)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the gradient of the TV functional applied to the input</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Df (C contiguous float32 numpy array)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="leapctype.tomographicModels.diffuse">
+<span class="sig-prename descclassname"><span class="pre">leapctype.tomographicModels.</span></span><span class="sig-name descname"><span class="pre">diffuse</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">numIter</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#leapctype.tomographicModels.diffuse" title="Permalink to this definition"></a></dt>
+<dd><p>Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array</p>
+<p>The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
+This function performs a specifies number of iterations of minimizing the aTV functional using gradient descent</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>f</strong> (<em>C contiguous float32 numpy array</em>) – 3D numpy array</p></li>
+<li><p><strong>delta</strong> (<em>float</em>) – parameter for the Huber-like loss function used in TV</p></li>
+<li><p><strong>numIter</strong> (<em>int</em>) – number of iterations</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>f, the same array as the input denoised</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="projection_filters_and_transforms.html" class="btn btn-neutral float-left" title="Projection Filters and Transforms" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="fileIO.html" class="btn btn-neutral float-right" title="File I/O" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2024, Kyle Champley and Hyojin Kim.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
