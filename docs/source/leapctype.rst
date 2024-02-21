@@ -13,6 +13,7 @@ Python API (leapctype)
    fbp
    iterative_reconstruction
    projection_filters_and_transforms
+   volume_filters_and_transforms
    filters
    fileIO
    
