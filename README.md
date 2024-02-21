@@ -27,6 +27,8 @@ Physics-based modeling and correction algorithms (e.g., beam hardening correctio
 
 ## Installation and Usage
 
+Documentation is available [here](https://leapct.readthedocs.io/)
+
 Installation and usage information is posted on the [wiki](https://github.com/LLNL/LEAP/wiki) page
 
 ## Example Results
