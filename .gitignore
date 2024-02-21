@@ -13,7 +13,7 @@ LTT.log
 
 
 # temporary folders
-#./build
+./build
 doxygen
 win_build
 
@@ -32,7 +32,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-#build/
+build/
 develop-eggs/
 dist/
 downloads/
