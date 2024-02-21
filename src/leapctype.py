@@ -1083,6 +1083,9 @@ class tomographicModels:
     def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
         
+        This function performs analytic reconstruction (i.e., FBP) of parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries.
+        Note that FDK is an FBP-type algorithm, so for simplicity we just called it FBP in LEAP.
+        
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function take the argument f and returns the same f.
         Returning f is just there for nesting several algorithms.

@@ -10,6 +10,7 @@ Welcome to LEAP's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   install
    leapctype
    leaptorch
    preprocessing_algorithms
