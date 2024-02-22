@@ -3,8 +3,13 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to LEAP's documentation!
-================================
+LivermorE AI Projector for Computed Tomography (LEAP-CT)
+========================================================
+
+LEAP is a C++/CUDA library of 3D tomographic algorithms (pre-processing algorithms, projectors, and analytic (FBP) and iterative reconstruction algorithms) with a Python interface. The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
+
+.. image:: LEAPoverview.png
+   :scale: 80 %
 
 .. toctree::
    :maxdepth: 2
@@ -12,8 +17,9 @@ Welcome to LEAP's documentation!
 
    install
    leapctype
-   leaptorch
    preprocessing_algorithms
+   leaptorch
+   
    
 
 Indices and tables
