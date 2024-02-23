@@ -419,7 +419,21 @@ class tomographicModels:
         return self.libprojectors.set_centerCol(centerCol)
         
     def find_centerCol(self, g, iRow=-1):
-        """Find the centerCol parameter"""
+        """Find the centerCol parameter
+
+        This function estimates the centerCol parameter for parallel-, fan-, and cone-beam geometry types.
+        Upon completion, the centerCol parameter is updated to the estimated value.
+        If this function does not return a good estimate, try changing the iRow parameter value or try using the
+        inconsistencyReconstruction function is this class.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            iRow (int): The detector row index to be used for the estimation, if no value is given, uses the row closest to the centerRow parameter
+            
+        Returns:
+            g, the same as the input
+        
+        """
         self.libprojectors.find_centerCol.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
