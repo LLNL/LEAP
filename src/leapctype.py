@@ -130,12 +130,15 @@ class tomographicModels:
                 print('or')
                 print(fullPath_backup)
                 self.libprojectors = None
-            
-        if param_id is not None:
-            self.param_id = param_id
+        
+        if self.libprojectors is None:
+            self.param_id = -1
         else:
-            self.param_id = self.create_new_model()
-        self.set_model()
+            if param_id is not None:
+                self.param_id = param_id
+            else:
+                self.param_id = self.create_new_model()
+            self.set_model()
         self.print_cost = False
 
     def set_model(self, i=None):
