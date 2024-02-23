@@ -189,6 +189,15 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.print_parameters()
 
+    def available_RAM(self):
+        """Returns the amount of available CPU RAM in GB"""
+        try:
+            import psutil
+            return psutil.virtual_memory()[1]/2**30
+        except:
+            print('Error: cannot load psutil module which is used to calculate the amount of available CPU RAM')
+            return 0.0
+
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
