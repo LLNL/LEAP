@@ -421,8 +421,9 @@ class tomographicModels:
     def find_centerCol(self, g, iRow=-1):
         """Find the centerCol parameter
 
-        This function estimates the centerCol parameter for parallel-, fan-, and cone-beam geometry types.
-        Upon completion, the centerCol parameter is updated to the estimated value.
+        Note that it only works for parallel-, fan-, and cone-beam CT geometry types (i.e., everything but modular-beam)
+        and the projections cannot be truncated on the right or left sides.
+        If you have any bad edge detectors, these must be cropped out before running this algorithm.
         If this function does not return a good estimate, try changing the iRow parameter value or try using the
         inconsistencyReconstruction function is this class.
         
