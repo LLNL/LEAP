@@ -66,7 +66,7 @@ extern "C" PROJECTOR_API bool shift_detector(float r, float c);
 
 extern "C" PROJECTOR_API bool set_flatDetector();
 extern "C" PROJECTOR_API bool set_curvedDetector();
-extern "C" PROJECTOR_API bool get_detectorType();
+extern "C" PROJECTOR_API int get_detectorType();
 
 extern "C" PROJECTOR_API bool set_numCols(int);
 extern "C" PROJECTOR_API bool set_numRows(int);

@@ -130,12 +130,15 @@ class tomographicModels:
                 print('or')
                 print(fullPath_backup)
                 self.libprojectors = None
-            
-        if param_id is not None:
-            self.param_id = param_id
+        
+        if self.libprojectors is None:
+            self.param_id = -1
         else:
-            self.param_id = self.create_new_model()
-        self.set_model()
+            if param_id is not None:
+                self.param_id = param_id
+            else:
+                self.param_id = self.create_new_model()
+            self.set_model()
         self.print_cost = False
 
     def set_model(self, i=None):
@@ -232,6 +235,15 @@ class tomographicModels:
             print('Error: projection and/ or volume data shapes do not match specified LEAP settings')
         return retVal
 
+    def available_RAM(self):
+        """Returns the amount of available CPU RAM in GB"""
+        try:
+            import psutil
+            return psutil.virtual_memory()[1]/2**30
+        except:
+            print('Error: cannot load psutil module which is used to calculate the amount of available CPU RAM')
+            return 0.0
+
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
@@ -243,25 +255,16 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the detector, i.e.,
-            changing these parameters causes shifts in the detector location relative to the source
             centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
             centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
-        
             phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
-        
             sod (float): source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
             sdd (float): source to detector distance, measured in mm
-            
             tau (float): center of rotation offset
             helicalPitch (float): the helical pitch (mm/radians)
             
@@ -271,7 +274,7 @@ class tomographicModels:
         self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_conebeam.restype = ctypes.c_bool
         if has_torch and type(phis) is torch.Tensor:
-            phis = phis.numpy()
+            phis = phis.cpu().detach().numpy()
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
@@ -289,25 +292,16 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the detector, i.e.,
-            changing these parameters causes shifts in the detector location relative to the source
             centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
             centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
-        
             phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
-        
             sod (float): source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
             sdd (float): source to detector distance, measured in mm
-            
             tau (float): center of rotation offset
             
         Returns:
@@ -316,7 +310,7 @@ class tomographicModels:
         self.libprojectors.set_fanbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_fanbeam.restype = ctypes.c_bool
         if has_torch and type(phis) is torch.Tensor:
-            phis = phis.numpy()
+            phis = phis.cpu().detach().numpy()
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
@@ -334,20 +328,13 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the detector, i.e.,
-            changing these parameters causes shifts in the detector location relative to the source
             centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
             centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
-        
             phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
             
         Returns:
@@ -356,7 +343,7 @@ class tomographicModels:
         self.libprojectors.set_parallelbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_parallelbeam.restype = ctypes.c_bool
         if has_torch and type(phis) is torch.Tensor:
-            phis = phis.numpy()
+            phis = phis.cpu().detach().numpy()
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
@@ -374,20 +361,13 @@ class tomographicModels:
         The origin of the coordinate system is always at the center of rotation
         
         Args:
-            The first three parameters specify the projection data array size
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
             numCols (int): number of columns in the x-ray detector
-        
-            The next two parameters specify the detector pixel size in mm
             pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
-        
-            The next two parameters specify the placement of the source and detector pairs
             sourcePositions ((numAngles X 3) numpy array): the (x,y,z) position of each x-ray source
             moduleCenters ((numAngles X 3) numpy array): the (x,y,z) position of the center of the front face of the detectors
-        
-            The next two parameters specify the orientation of the detectors
             rowVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector row direction
             colVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector column direction
             
@@ -460,7 +440,7 @@ class tomographicModels:
         return self.libprojectors.set_flatDetector()
         
     def set_curvedDetector(self):
-        """Set the detectorType to CURVED"""
+        """Set the detectorType to CURVED (only for cone-beam data)"""
         self.set_model()
         self.libprojectors.set_curvedDetector.restype = ctypes.c_bool
         return self.libprojectors.set_curvedDetector()
@@ -482,7 +462,22 @@ class tomographicModels:
         return self.libprojectors.set_centerCol(centerCol)
         
     def find_centerCol(self, g, iRow=-1):
-        """Find the centerCol parameter"""
+        """Find the centerCol parameter
+
+        Note that it only works for parallel-, fan-, and cone-beam CT geometry types (i.e., everything but modular-beam)
+        and the projections cannot be truncated on the right or left sides.
+        If you have any bad edge detectors, these must be cropped out before running this algorithm.
+        If this function does not return a good estimate, try changing the iRow parameter value or try using the
+        inconsistencyReconstruction function is this class.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            iRow (int): The detector row index to be used for the estimation, if no value is given, uses the row closest to the centerRow parameter
+            
+        Returns:
+            g, the same as the input
+        
+        """
         self.libprojectors.find_centerCol.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
@@ -501,6 +496,7 @@ class tomographicModels:
         return self.libprojectors.set_centerRow(centerRow)
         
     def convert_to_modularbeam(self):
+        """Converts parallel- or cone-beam data to a modular-beam format for extra customization of the scanning geometry"""
         if self.get_geometry() == 'PARALLEL':
             return self.convert_parallelbeam_to_modularbeam()
         elif self.get_geometry() == 'CONE':
@@ -524,7 +520,7 @@ class tomographicModels:
         return self.libprojectors.convert_parallelbeam_to_modularbeam()
         
     def rotate_detector(self, alpha):
-        """rotates modular-beam detector by alpha degrees"""
+        """Rotates modular-beam detector by alpha degrees by updating the modular-beam CT geometry specification"""
         if self.get_geometry() != 'MODULAR':
             print('Error: can only rotate modular-beam detectors')
             print('Use convert_conebeam_to_modularbeam first')
@@ -535,7 +531,7 @@ class tomographicModels:
         return self.libprojectors.rotate_detector(alpha)
         
     def shift_detector(self, r, c):
-        """shifts the detector by r mm in the row direction and c mm in the column direction"""
+        """Shifts the detector by r mm in the row direction and c mm in the column direction by updating the CT geometry parameters accordingly"""
         self.set_model()
         self.libprojectors.shift_detector.restype = ctypes.c_bool
         self.libprojectors.shift_detector.argtypes = [ctypes.c_float, ctypes.c_float]
@@ -550,21 +546,11 @@ class tomographicModels:
         """Set the CT volume parameters
         
         Args:
-            The first three parameters specify the volume array size
-            For parallel- and fan-beam data, it is required that numRows=numZ
             numX (int): number of voxels in the x-dimension
             numY (int): number of voxels in the y-dimension
             numZ (int): number of voxels in the z-dimension
-        
-            The next two parameters specify the size of the voxels in mm
-            For parallel- and fan-beam data, it is required that pixelHeight=voxelHeigh
             voxelWidth (float): voxel pitch (size) in the x and y dimensions
             voxelHeight (float): voxel pitch (size) in the z dimension
-        
-            The final three parameters specify the location of the voxel array
-            The default position is that the voxels are centered around the origin
-            and these parameters allow one to shift the volume around
-            For parallel- and fan-beam data, it is required that offsetZ=0.0
             offsetX (float): shift the volume in the x-dimension, measured in mm
             offsetY (float): shift the volume in the y-dimension, measured in mm
             offsetZ (float): shift the volume in the z-dimension, measured in mm
@@ -649,7 +635,17 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def allocate_projections(self, val=0.0, astensor=False):
-        """Alias for allocateProjections"""
+        """Allocates projection data
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Args:
+            val (float): value to fill the array with
+            astensor (bool): if true turns array into a pytorch tensor
+            
+        Returns:
+            numpy array/ pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
+        """
         return self.allocateProjections(val, astensor)
     
     def allocateProjections(self, val=0.0, astensor=False):
@@ -734,7 +730,16 @@ class tomographicModels:
         return np.array([self.get_numAngles(),self.get_numRows(),self.get_numCols()],dtype=np.int32)
         
     def allocate_volume(self, val=0.0, astensor=False):
-        """Alias for allocateVolume"""
+        """Allocates reconstruction volume data
+        
+        It is not necessary to use this function. It is included simply for convenience.
+
+        Args:
+            val (float): value to fill the array with
+            
+        Returns:
+            numpy array/ pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
+        """
         return self.allocateVolume(val, astensor)
         
     def allocateVolume(self, val=0.0, astensor=False):
@@ -993,7 +998,7 @@ class tomographicModels:
         return f
         
     def filterProjections(self, g):
-        """Filters the projection data, g, so that its backprojection results in an FBP reconstruction
+        """Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction
         
         The CT geometry parameters must be set prior to running this function.
         This function take the argument g and returns the same g.
@@ -1068,8 +1073,14 @@ class tomographicModels:
         This function take the argument f and returns the same f.
         Returning f is just there for nesting several algorithms.
         
+        If preceeded by the filterProjections function, this function can produce and FBP reconstruction.
         Some geometries require a weighted backprojection for FBP reconstruction,
-        such as fan-beam, helical cone-beam, Attenuated Radon Transform, and symmetric objects
+        such as fan-beam, helical cone-beam, Attenuated Radon Transform, and symmetric objects.
+        For those geometries do not require a weighted backprojection (i.e., backprojection would suffice)
+        for FBP reconstruction, we still recommend using this function to perform two-step FBP reconstructions
+        because it performs some subtle operations that are only appropriate for FBP reconstruction; for example,
+        using extrapolation in the row direction for axial cone-beam FBP (FDK).
+        Don't forget to scale your reconstruction by get_FBPscalar().
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
@@ -1167,6 +1178,9 @@ class tomographicModels:
 
     def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
+        
+        This function performs analytic reconstruction (i.e., FBP) of parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries.
+        Note that FDK is an FBP-type algorithm, so for simplicity we just called it FBP in LEAP.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function take the argument f and returns the same f.
@@ -1423,6 +1437,20 @@ class tomographicModels:
         return rowsNeeded
         
     def cropCols(self, colRange, g=None):
+        """Crops columns from projection data
+        
+        This function crops columns from the projection data.
+        The appropriate CT geometry parameters are updated (e.g., centerCol, numCols, moduleCenters, etc)
+        and if the input projection data is given, the selected projection columns are removed
+        
+        Args:
+            colRange (2-element numpy array): the range of detector column indices to keep, all other columns will be removed
+            g (C contiguous float32 numpy array or torch tensor): projection data to operate on (optional)
+            
+        Returns:
+            If g is given, then a new numpy array is returned with the selected columns (the 3rd dimension) removed from the data
+        
+        """
         if colRange is None:
             return None
         if len(colRange) != 2 or colRange[0] < 0 or colRange[1] < colRange[0] or colRange[1] > self.get_numCols()-1:
@@ -1447,6 +1475,20 @@ class tomographicModels:
         return g_crop
         
     def cropRows(self, rowRange, g=None):
+        """Crops rows from projection data
+        
+        This function crops rows from the projection data.
+        The appropriate CT geometry parameters are updated (e.g., centerRow, numRows, moduleCenters, etc)
+        and if the input projection data is given, the selected projection rows are removed
+        
+        Args:
+            rowRange (2-element numpy array): the range of detector column indices to keep, all other rows will be removed
+            g (C contiguous float32 numpy array or torch tensor): projection data to operate on (optional)
+            
+        Returns:
+            If g is given, then a new numpy array is returned with the selected rows (the 2nd dimension) removed from the data
+        
+        """
         if rowRange is None:
             return None
         if len(rowRange) != 2 or rowRange[0] < 0 or rowRange[1] < rowRange[0] or rowRange[1] > self.get_numRows()-1:
@@ -1471,6 +1513,21 @@ class tomographicModels:
         return g_crop
         
     def cropProjections(self, rowRange, colRange=None, g=None):
+        """Crops rows and columns from projection data
+        
+        This function crops rows and columns from the projection data.
+        The appropriate CT geometry parameters are updated (e.g., centerRow, centerCol, numRows, numCols, moduleCenters, etc)
+        and if the input projection data is given, the selected projection rows and columns are removed
+        
+        Args:
+            colRange (2-element numpy array): the range of detector column indices to keep, all other rows will be removed
+            rowRange (2-element numpy array): the range of detector column indices to keep, all other rows will be removed
+            g (C contiguous float32 numpy array or torch tensor): projection data to operate on (optional)
+            
+        Returns:
+            If g is given, then a new numpy array is returned with the selected rows and columns (the 2nd and 3rd dimensions) removed from the data
+        
+        """
         if colRange is None:
             return self.cropRows(rowRange, g)
         if rowRange is None:
@@ -1531,12 +1588,14 @@ class tomographicModels:
                 return np.sum(x*y*w)
                 
     def expNeg(self, x):
+        """ Returns exp(-x), converting attenuation data to transmission data """
         if has_torch == True and type(x) is torch.Tensor:
             return torch.exp(-x)
         else:
             return np.exp(-x)
             
     def negLog(self, x):
+        """ Returns -log(x), converting transmission data to attenuation data """
         if has_torch == True and type(x) is torch.Tensor:
             return -torch.log(x)
         else:
@@ -2840,14 +2899,39 @@ class tomographicModels:
         return self.libprojectors.set_rFOV(0.5*d)
         
     def set_truncatedScan(self, aFlag):
-        """Set the truncatedScan parameter"""
+        """Set the truncatedScan parameter
+        
+        One should perform a truncated scan FBP reconstruction, when the object being imaged extends
+        past both the right and left sides of the detector, i.e., the projections are truncated.
+        In this case, you should use the command: leapct.set_truncatedScan(True) prior to executing an FBP reconstruction,
+        so that it uses extrapolation of the signal instead of zero-padding when applying the ramp filter
+        this reduces cupping artifacts and other truncation artifacts.
+        
+        Args:
+            aFlag (bool): Set to True to perform a truncated FBP reconstruction, whenever the FBP function is called
+        
+        """
         self.libprojectors.set_truncatedScan.argtypes = [ctypes.c_bool]
         self.libprojectors.set_truncatedScan.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_truncatedScan(aFlag)
         
     def set_offsetScan(self, aFlag):
-        """Set the offsetScan parameter"""
+        """Set the offsetScan parameter
+        
+        This function is used to perform an FBP reconstruction where the projections are truncated
+        on either the left or the right side (i.e., the object extends past the detector on the left or right side)
+        In this case, you should use the command: leapct.set_offsetScan(True)
+        This can happen if the detector is shifted horizontally (do this with the centerCol parameter) and/or
+        the source is shifted horizontally (do this with the tau parameter).
+        This is sometimes refered to as a half-fan or half-cone or half-scan.
+        Sometimes this is not on purpose, but in most cases this is done deliberately because it enables one
+        to nearly double the diameter of the field of view which is needed for large objects.
+        
+        Args:
+            aFlag (bool): Set to True to perform an offset scan FBP reconstruction, whenever the FBP function is called
+        
+        """
         self.libprojectors.set_offsetScan.argtypes = [ctypes.c_bool]
         self.libprojectors.set_offsetScan.restype = ctypes.c_bool
         self.set_model()
@@ -2875,7 +2959,15 @@ class tomographicModels:
         return self.libprojectors.set_projector(which)
         
     def set_rampFilter(self,which):
-        """Set the ramp filter to use: 0, 2, 4, 6, 8, or 10"""
+        """Set the ramp filter to use: 0, 2, 4, 6, 8, or 10
+        
+        Args:
+            which (int): the order of the finite difference used in the ramp filter, higher numbers produce a sharper reconstruction. Shepp-Logan filter is the default value (2).
+            
+        Returns:
+            True is the input was valid.
+        
+        """
         self.libprojectors.set_rampID.argtypes = [ctypes.c_int]
         self.libprojectors.set_rampID.restype = ctypes.c_bool
         self.set_model()
@@ -3165,6 +3257,7 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def x_samples(self,centerCoords=False):
+        """Returns an array of the x sample locations"""
         if centerCoords:
             x_0 = -0.5*(self.get_numX()-1)*self.get_voxelWidth()
         else:
@@ -3172,6 +3265,7 @@ class tomographicModels:
         return np.array(range(self.get_numX()),dtype=np.float32)*self.get_voxelWidth() + x_0
         
     def y_samples(self,centerCoords=False):
+        """Returns an array of the y sample locations"""
         if centerCoords:
             y_0 = -0.5*(self.get_numY()-1)*self.get_voxelWidth()
         else:
@@ -3179,6 +3273,7 @@ class tomographicModels:
         return np.array(range(self.get_numY()),dtype=np.float32)*self.get_voxelWidth() + y_0
         
     def z_samples(self,centerCoords=False):
+        """Returns an array of the z sample locations"""
         if centerCoords:
             z_0 = -0.5*(self.get_numZ()-1)*self.get_voxelHeight()
         else:
@@ -3186,6 +3281,7 @@ class tomographicModels:
         return np.array(range(self.get_numZ()),dtype=np.float32)*self.get_voxelHeight() + z_0
     
     def voxelSamples(self,centerCoords=False):
+        """Returns 3D meshgrid of the voxel x,y,z sample locations"""
         x = self.x_samples(centerCoords)
         y = self.y_samples(centerCoords)
         z = self.z_samples(centerCoords)
@@ -3490,6 +3586,7 @@ class tomographicModels:
         return pdic
 
     def load_parameters(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
+        """Load the CT volume and CT geometry parameters from file"""
         return self.load_param(param_fn, param_type)
 
     def load_param(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
@@ -3615,7 +3712,7 @@ class tomographicModels:
         return True
     
     def save_parameters(self, fileName):
-        """Alias for save_param"""
+        """Save the CT volume and CT geometry parameters to file"""
         return self.save_param(fileName)
     
     def save_param(self, fileName):
@@ -3629,7 +3726,7 @@ class tomographicModels:
         return self.leapct.save_param(fileName)
     
     def save_projections(self, fileName, g):
-        """Alias for saveProjections"""
+        """Save projection data to file (tif sequence, nrrd, or npy)"""
         return self.saveProjections(fileName, g)
         
     def saveProjections(self, fileName, g):
@@ -3655,7 +3752,7 @@ class tomographicModels:
         return self.saveData(fileName, g, T, phi_0, row_0, col_0)
     
     def save_volume(self, fileName, f):
-        """Alias for saveVolume"""
+        """Save volume data to file (tif sequence, nrrd, or npy)"""
         return self.saveVolume(fileName, f)
     
     def saveVolume(self, fileName, f):
@@ -3678,11 +3775,12 @@ class tomographicModels:
         if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
             print('Folder to save data either does not exist or not accessible!')
             return False
+            
+        if has_torch == True and type(x) is torch.Tensor:
+            x = x.cpu().detach().numpy()
+            
         if fileName.endswith('.npy'):
-            if has_torch == True and type(x) is torch.Tensor:
-                np.save(fileName, x.numpy())
-            else:
-                np.save(fileName, x)
+            np.save(fileName, x)
             return True
         elif fileName.endswith('.nrrd'):
             try:
@@ -3704,20 +3802,12 @@ class tomographicModels:
                 baseName, fileExtension = os.path.splitext(fileName)
                 
                 if len(x.shape) <= 2:
-                    if has_torch == True and type(x) is torch.Tensor:
-                        im = x.numpy()
-                    else:
-                        im = x
+                    im = x
                     #im.save(baseName + '_' + str(int(i)) + fileExtension)
                     imageio.imwrite(baseName + fileExtension, im)
                 else:
                     for i in range(x.shape[0]):
-                        if has_torch == True and type(x) is torch.Tensor:
-                            #im = Image.fromarray(x[i,:,:].numpy())
-                            im = x[i,:,:].numpy()
-                        else:
-                            #im = Image.fromarray(x[i,:,:])
-                            im = x[i,:,:]
+                        im = x[i,:,:]
                         #im.save(baseName + '_' + str(int(i)) + fileExtension)
                         imageio.imwrite(baseName + '_' + str(int(i)) + fileExtension, im)
                 return True
