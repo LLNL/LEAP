@@ -21,6 +21,7 @@
 #include "find_center_cpu.h"
 #include "projectors_Joseph_cpu.h"
 #include "matching_pursuit.cuh"
+#include "bilateral_filter.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -1968,13 +1969,56 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 		return medianFilter(f, N_1, N_2, N_3, threshold, data_on_cpu, params.whichGPU);
 }
 
+bool tomographicModels::BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
+{
+	if (f == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || spatialFWHM <= 0.0 || intensityFWHM <= 0.0)
+	{
+		printf("Error: BilateralFilter invalid arguments!\n");
+		return false;
+	}
+
+	int numVol = 2;
+	if (scale > 1.0)
+		numVol += 1;
+	double memNeeded = 4.0 * double(numVol) * double(N_1) * double(N_2) * double(N_3) / pow(2.0, 30.0);
+	if (getAvailableGPUmemory(params.whichGPU) < memNeeded)
+	{
+		printf("Error: BilateralFilter not enough GPU memory available for this operation!\n");
+		printf("GPU memory needed: %f GB\n", memNeeded);
+		printf("GPU memory available: %f GB\n", getAvailableGPUmemory(params.whichGPU));
+		printf("It is possible to break this calculation into smaller pieces which would enable this algorithm to work.\n");
+		printf("We plan to fix this in a future release, but if you encountered this error, please submit an issue on the github page.\n");
+		return false;
+	}
+	else
+		return scaledBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, data_on_cpu, params.whichGPU);
+}
+
 bool tomographicModels::dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)
 {
 	if (f == NULL || dictionary == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || numElements <= 0 || N_d1 <= 0 || N_d2 <= 0 || N_d3 <= 0)
+	{
+		printf("Error: dictionaryDenoising invalid arguments!\n");
 		return false;
+	}
 	if (sparsityThreshold < 1 || sparsityThreshold > numElements || epsilon < 0.0)
+	{
+		printf("Error: dictionaryDenoising invalid arguments!\n");
 		return false;
-	return matchingPursuit(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu, params.whichGPU);
+	}
+	double memNeeded = matchingPursuit_memory(N_1, N_2, N_3, numElements, N_d1, N_d2, N_d3, sparsityThreshold);
+	//printf("GPU memory needed: %f GB\n", memNeeded);
+	if (getAvailableGPUmemory(params.whichGPU) < memNeeded)
+	{
+		printf("Error: dictionaryDenoising not enough GPU memory available for this operation!\n");
+		printf("GPU memory needed: %f GB\n", memNeeded);
+		printf("GPU memory available: %f GB\n", getAvailableGPUmemory(params.whichGPU));
+		printf("It is possible to break this calculation into smaller pieces which would enable this algorithm to work.\n");
+		printf("We plan to fix this in a future release, but if you encountered this error, please submit an issue on the github page.\n");
+		return false;
+	}
+	else
+		return matchingPursuit(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu, params.whichGPU);
 }
 
 float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
@@ -2035,7 +2079,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2*N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				costs[ichunk] = anisotropicTotalVariation_cost(f_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative);
+				costs[ichunk] = anisotropicTotalVariation_cost(f_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
 			}
 
 			float retVal = 0.0;
@@ -2047,7 +2091,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 		}
 	}
 	else
-		return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU);
+		return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
 }
 
 bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
@@ -2115,14 +2159,14 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative);
+				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
 			}
 
 			return true;
 		}
 	}
 	else
-		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU);
+		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
 }
 
 float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
@@ -2183,7 +2227,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 				float* d_chunk = &d[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				costs[ichunk] = anisotropicTotalVariation_quadraticForm(f_chunk, d_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative);
+				costs[ichunk] = anisotropicTotalVariation_quadraticForm(f_chunk, d_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
 			}
 
 			float retVal = 0.0;
@@ -2195,7 +2239,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 		}
 	}
 	else
-		return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU);
+		return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
 }
 
 bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu)
@@ -2242,7 +2286,7 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 		}
 	}
 	else
-		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU);
+		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
 }
 
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)

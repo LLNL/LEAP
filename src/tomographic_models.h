@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.4"
+#define LEAP_VERSION "1.5"
 
 #include <stdlib.h>
 #include "parameters.h"
@@ -702,6 +702,21 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, bool data_on_cpu);
+
+	/**
+	 * \fn          BilateralFilter
+	 * \brief       applies a (scaled) 3D bilateral filter (BLF) to a 3D array
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   spatialFWHM the FWHM (in number of pixels) of the spatial closeness term of the BLF
+	 * \param[in]   intensityFWHM the FWHM of the intensity closeness terms of the BLF
+	 * \param[in]   scale an optional argument to used a blurred to calculate the intensity closeness term
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu);
 
 	/**
 	 * \fn          dictionaryDenoising

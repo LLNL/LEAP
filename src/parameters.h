@@ -374,6 +374,7 @@ public:
 	bool offsetScan;
 	bool truncatedScan;
 	bool inconsistencyReconstruction;
+	int numTVneighbors;
     
 	/**
 	 * \fn          T_phi
@@ -538,6 +539,14 @@ public:
 	 * \return      returns true if successful, false otherwise
 	 */
 	bool removeProjections(int firstProj, int lastProj);
+
+	/**
+	 * \fn          set_numTVneighbors
+	 * \brief       sets the number of neighbors to be used for Total Variation (TV) denoising
+	 * \param[in]   N the number of neighbors, e.g., 6 or 26
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool set_numTVneighbors(int N);
 
 	// Enums
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };

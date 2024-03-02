@@ -61,9 +61,10 @@ g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 # Below are two different algorithms to try.  They are both good at removal ring artifacts, but
 # the one called ringRemoval_fast sometimes creates new ring artifacts.
 # The called ringRemoval is slower, but it is more robust
+startTime = time.time()
 #g = ringRemoval_fast(leapct, g, 1.0-0.99, 30, 0.05)
 g = ringRemoval(leapct, g, 1.0-0.99, 1.0e3, 30)
-
+print('Ring Removal Elapsed Time: ' + str(time.time()-startTime))
 
 # Reconstruct the data
 f = leapct.allocateVolume()
@@ -71,4 +72,8 @@ leapct.FBP(g,f)
 
 
 # Display the result with napari
-leapct.display(f)
+#leapct.display(f)
+
+import matplotlib.pyplot as plt
+plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')
+plt.show()

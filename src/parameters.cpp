@@ -55,6 +55,7 @@ void parameters::initialize()
 	offsetScan = false;
 	truncatedScan = false;
 	inconsistencyReconstruction = false;
+	numTVneighbors = 26;
 
 	geometry = CONE;
 	detectorType = FLAT;
@@ -149,6 +150,7 @@ void parameters::assign(const parameters& other)
 	this->offsetScan = other.offsetScan;
 	this->truncatedScan = other.truncatedScan;
 	this->inconsistencyReconstruction = other.inconsistencyReconstruction;
+	this->numTVneighbors = other.numTVneighbors;
 	this->mu = other.mu;
 	this->muCoeff = other.muCoeff;
 	this->muRadius = other.muRadius;
@@ -1749,6 +1751,20 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 	}
 	numAngles = numAngles_new;
 	return true;
+}
+
+bool parameters::set_numTVneighbors(int N)
+{
+	if (N == 6 || N == 26)
+	{
+		numTVneighbors = N;
+		return true;
+	}
+	else
+	{
+		printf("Error: set_numTVneighbors must be 6 or 26\n");
+		return false;
+	}
 }
 
 bool parameters::modularbeamIsAxiallyAligned()

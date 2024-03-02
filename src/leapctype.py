@@ -2701,7 +2701,7 @@ class tomographicModels:
         Note that if threshold is zero, then this is simply a median filter
         
         Args:
-            f (C contiguous float32 numpy array): numpy array to smooth
+            f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
             threshold (float): the threshold of whether to use the filtered value or not
         
         Returns:
@@ -2717,13 +2717,39 @@ class tomographicModels:
             self.libprojectors.MedianFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.MedianFilter2D(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
     
-    def DictionaryDenoising(self, f, dictionary, sparsityThreshold=8, epsilon=0.0):
-        """represents 3D data by a sparse representation of an overcomplete dictionary
+    def BilateralFilter(self, f, spatialFWHM, intensityFWHM, scale=1.0):
+        """Performs 3D (Scaled) Bilateral Filter denoising method
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         
         Args:
-            ---
+            f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
+            spatialFWHM (float): the FWHM (in number of pixels) of the spatial closeness term of the BLF
+            intensityFWHM (float): the FWHM of the intensity closeness terms of the BLF
+            scale (float): an optional argument to used a blurred volume to calculate the intensity closeness term
+        
+        Returns:
+            f, the same as the input
+        """
+        self.libprojectors.BilateralFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.BilateralFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.BilateralFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, scale, f.is_cuda == False)
+        else:
+            self.libprojectors.BilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.BilateralFilter(f, f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, scale, True)
+    
+    def DictionaryDenoising(self, f, dictionary, sparsityThreshold=8, epsilon=0.0):
+        """Represents 3D data by a sparse representation of an overcomplete dictionary, effectively denoising the data
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
+            dictionary (C contiguous float32 numpy array): 4D array of dictionary patches
+            sparsityThreshold (int): the maximum number of dictionary elements to use to represent a patch in the volume
+            epsilon (float): the L^2 residual threshold to decide of the sparse dictionary representation is close enough (larger numbers perform stronger denoising)
         
         Returns:
             f, the same as the input
@@ -2737,6 +2763,20 @@ class tomographicModels:
         else:
             self.libprojectors.dictionaryDenoising.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.dictionaryDenoising(f, f.shape[0], f.shape[1], f.shape[2], dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, True)
+    
+    def get_numTVneighbors(self):
+        """Gets the number of neighboring voxels to use for 3D TV"""
+        self.libprojectors.get_numTVneighbors.restype = ctypes.c_int
+        self.set_model()
+        #self.libprojectors.get_numTVneighbors.argtypes = [ctypes.c_int]
+        return self.libprojectors.get_numTVneighbors()
+        
+    def set_numTVneighbors(self, N):
+        """Sets the number of neighboring voxels to use for 3D TV"""
+        self.libprojectors.set_numTVneighbors.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.set_numTVneighbors.argtypes = [ctypes.c_int]
+        return self.libprojectors.set_numTVneighbors(N)
     
     def TVcost(self, f, delta, beta=0.0):
         """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array

@@ -183,7 +183,12 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
         g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
         g_sum[0,:] = np.mean(g,axis=0)
     g_sum_save = leapct.copyData(g_sum)
+    
+    numNeighbors = leapct.get_numTVneighbors()
+    leapct.set_numTVneighbors(6)
     leapct.diffuse(g_sum,delta,numIter)
+    leapct.set_numTVneighbors(numNeighbors)
+    
     gainMap = g_sum - g_sum_save
     
     gainMap[gainMap>maxChange] = maxChange
@@ -210,6 +215,8 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     Returns:
         The corrected data
     """
+    numNeighbors = leapct.get_numTVneighbors()
+    leapct.set_numTVneighbors(6)
     g_0 = leapct.copyData(g)
     for n in range(numIter):
         Dg = leapct.TVgradient(g, delta, beta)
@@ -234,6 +241,7 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     gainMap[gainMap<-maxChange] = -maxChange
     g = g_0 + gainMap
     #'''
+    leapct.set_numTVneighbors(numNeighbors)
     
     return g
     

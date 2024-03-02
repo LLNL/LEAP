@@ -102,6 +102,8 @@ extern "C" PROJECTOR_API bool set_projector(int which);
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);
 extern "C" PROJECTOR_API bool set_offsetScan(bool);
 extern "C" PROJECTOR_API bool set_truncatedScan(bool);
+extern "C" PROJECTOR_API bool set_numTVneighbors(int);
+extern "C" PROJECTOR_API int get_numTVneighbors();
 extern "C" PROJECTOR_API bool set_rampID(int whichRampFilter);
 extern "C" PROJECTOR_API bool set_tau(float tau);
 extern "C" PROJECTOR_API bool set_helicalPitch(float h);
@@ -162,6 +164,7 @@ extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bo
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BlurFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter2D(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
+extern "C" PROJECTOR_API bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu);
 extern "C" PROJECTOR_API bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu);
 
 // Anisotropic Total Variation for 3D data

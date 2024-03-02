@@ -8,13 +8,7 @@ sys.path.append(r'..\utils')
 from generateDictionary import *
 
 '''
-This sample script demonstrates how one can perform dictionary denoising.
-The dictionary elements must be 3D numpy arrays.  2D dictionary elements are possible
-by making one of the three dimensions be of size 1
-We provide some sample dictionaries, but you can supply your own dictionary.
-The dictionaries we currently supply are complete (not overcomplete) and we are working on good
-overcomplete dictionaries which we will include in future releases.
-If the dictionary is complete and orthonormal, the algorithm runs about 2-8 times faster.
+This sample script demonstrates how one can perform denoising with the bilateral filter (BLF).
 '''
 
 
@@ -77,32 +71,35 @@ startTime = time.time()
 leapct.FBP(g,f)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-#D = generateRidgeletDictionary(8) # This one does not work so well and needs improvement
-#D = generateDCTDictionary(8)
-#D = generateDCTDictionary(4,True)
-#D = generateLegendreDictionary(8)
-D = generateLegendreDictionary(4,True)
-#print(D.shape)
 
-
-# Run Dictionary Denoising
+# Run Bilateral Filter (BLF)
 startTime = time.time()
 f_0 = f.copy()
-#leapct.DictionaryDenoising(f, D, 12, 0.0002)
-#leapct.DictionaryDenoising(f, D, 12, 0.002)
-leapct.DictionaryDenoising(f, D, 4, 0.002)
-#leapct.DictionaryDenoising(f, D, 12, 0.002)
+
+# This is the standard bilateral filter (BLF)
+# Here we use a spatial window size of 4 voxels and
+# an intensity window of 0.02.
+# A larger spatial window size uses more voxels to perform the averaging
+# so the denoising is stronger, but it takes longer to perform.
+# A larger intensity window will blur the result more, but an intensity window that is
+# too small won't do much denoising
+leapct.BilateralFilter(f, 4, 0.02)
+
+# One can also perform a Scaled BLF
+# Here the volume used to calculate the intensity window weight is the original
+# volume blurred by a low pass filter of FWHM 2 voxels
+# This method usually works better than the standard BLF especially when
+# the original image has very high noise, but uses 50% more memory
+#leapct.BilateralFilter(f, 4, 0.02, 2.0)
 print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
 
-# Display a slice before and after the dictionary denoising
+# Display the result
 f_0_slice = np.squeeze(f_0[f.shape[0]//2,:,:])
 f_slice = np.squeeze(f[f.shape[0]//2,:,:])
 I = np.concatenate((f_0_slice, f_slice),axis=1)
 I[I<0.0] = 0.0
 I[I>0.04] = 0.04
-
 import matplotlib.pyplot as plt
 plt.imshow(I, cmap='gray')
 plt.show()
-

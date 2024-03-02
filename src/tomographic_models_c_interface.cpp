@@ -336,6 +336,16 @@ bool set_truncatedScan(bool aFlag)
 	return tomo()->params.set_truncatedScan(aFlag);
 }
 
+bool set_numTVneighbors(int N)
+{
+	return tomo()->params.set_numTVneighbors(N);
+}
+
+int get_numTVneighbors()
+{
+	return tomo()->params.numTVneighbors;
+}
+
 bool set_rampID(int whichRampFilter)
 {
 	return tomo()->set_rampID(whichRampFilter);
@@ -627,6 +637,11 @@ bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_
 bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
 {
 	return tomo()->MedianFilter2D(f, N_1, N_2, N_3, threshold, w, data_on_cpu);
+}
+
+bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
+{
+	return tomo()->BilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, data_on_cpu);
 }
 
 bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)
