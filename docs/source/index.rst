@@ -19,6 +19,7 @@ LEAP is a C++/CUDA library (Linux and Windows) of 3D tomographic algorithms (pre
    Technical Manual <https://github.com/LLNL/LEAP/blob/main/documentation/LEAP.pdf>
    leapctype
    preprocessing_algorithms
+   physics_based_preprocessing_algorithms
    leaptorch
    
    
