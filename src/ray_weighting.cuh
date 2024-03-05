@@ -16,6 +16,11 @@
 #include "parameters.h"
 #include <stdlib.h>
 
+/**
+ * This header and associated source file provide CUDA-based implementations of functions to calculate
+ * the ray weighting steps of various FBP algorithms.
+ */
+
 bool applyPreRampFilterWeights(float* g, parameters*, bool data_on_cpu);
 bool applyPostRampFilterWeights(float* g, parameters*, bool data_on_cpu);
 

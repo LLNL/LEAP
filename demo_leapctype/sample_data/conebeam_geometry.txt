@@ -1,0 +1,24 @@
+# CT volume parameters
+numX = 512
+numY = 512
+numZ = 512
+voxelWidth = 5.107142e-01
+voxelHeight = 5.107142e-01
+offsetX = 0.000000e+00
+offsetY = 0.000000e+00
+offsetZ = 0.000000e+00
+
+# CT geometry parameters
+geometry = cone
+numAngles = 720
+numRows = 512
+numCols = 512
+pixelHeight = 6.500000e-01
+pixelWidth = 6.500000e-01
+centerRow = 2.555000e+02
+centerCol = 2.555000e+02
+angularRange = 3.600000e+02
+sod = 1.100000e+03
+sdd = 1.400000e+03
+tau = 0.000000e+00
+helicalPitch = 0.000000e+00

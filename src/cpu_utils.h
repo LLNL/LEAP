@@ -16,6 +16,10 @@
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file are for generic CPU-based functions that are used in LEAP
+ */
+
 int optimalFFTsize(int N);
 
 //double getAvailableGBofMemory();

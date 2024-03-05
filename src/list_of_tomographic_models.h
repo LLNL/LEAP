@@ -20,15 +20,40 @@ class tomographicModels;
 class listOfTomographicModels
 {
 public:
+    // Constructor; these do nothing
     listOfTomographicModels();
+
+    // Destructor, just called clear()
     ~listOfTomographicModels();
 
+    /**
+     * \fn          clear
+     * \brief       Clears the list member variable and calls the tomographicModels destructor for all elements in the list.
+     */
     void clear();
+
+    /**
+     * \fn          append
+     * \brief       Adds another instance of tomographicModels class to the end of the list
+     */
     int append();
+
+    /**
+     * \fn          size
+     * \return      returns list.size()
+     */
     int size();
-    tomographicModels* get(int);
+
+    /**
+     * \fn          get
+     * \param[in]   i, the index of the list to get
+     * \return      returns list[i % size()]
+     */
+    tomographicModels* get(int i);
     
 private:
+
+    // Tracks a list (as a stack) of tomographicModels instances
     std::vector<tomographicModels*> list;
 };
 //*/

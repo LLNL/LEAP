@@ -18,6 +18,10 @@
 //#include "cufft.h"
 #include "parameters.h"
 
+/**
+ * This header and associated source file are for generic GPU-based functions that are used in LEAP
+ */
+
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
 extern float getAvailableGPUmemory(std::vector<int> whichGPUs);

@@ -23,6 +23,11 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file provide CUDA-based implementations of functions to apply
+ * Hilbert and ramp filters to the projection data and 2D ramp filter applied to the z-slices of a volume.
+ */
+
 //bool rampFilter(float* f, int N_z, int N_y, int N_x, int smoothingLevel, int whichGPU = 0);
 //bool rampFilter(float* f, int N_z, int N_y, int N_x, bool smoothFilter = false, int whichGPU = 0);
 

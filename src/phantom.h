@@ -18,29 +18,86 @@
 #include <stdlib.h>
 #include "parameters.h"
 
+/**
+ * This class provides CPU-based implementations (accelerated by OpenMP) to specify voxelized phantoms as a collection of geometric shapes.
+ */
 
 class phantom
 {
 public:
+
+    // Constructor and destructor; these do nothing
     phantom();
     ~phantom();
 
-    bool addObject(float* f, parameters*, int type, float* c, float* r, float val, float* A = NULL, float* clip = NULL, int oversampling = 1);
+    /**
+     * \fn          addObject
+     * \brief       Changes the voxels values to a specified value inside a 3D geometric object
+                    (any voxel values inside the object before this function are ignored, i.e., this function does not accumulate the values, it replaces them)
+     * \param[in]   f, pointer to the volume data (on the CPU)
+     * \param[in]   params, pointer to an instance of the parameters class
+     * \param[in]   type, the enumerated object type; see enum objectType_list
+     * \param[in]   c, pointer to a three-element array of the (x,y,z) coordinates of the center of the object
+     * \param[in]   r, pointer to a three-element array of the (x,y,z) coordinates of the radii of the object
+     * \param[in]   val, value of the voxels inside the object
+     * \param[in]   A, pointer to a 3X3 rotation matrix of the object
+     * \param[in]   clip, pointer to a three-element array that specifies the clipping planes along the (x,y,z) coordinates
+     * \param[in]   oversampling, voxels are broken up into oversampling X oversampling X oversampling subvoxels to model the partial volume effect on voxels on the edge of the object
+     * \return      returns true if all input are valid and CT volume parameter values are defined and valid, false otherwise
+     */
+    bool addObject(float* f, parameters* params, int type, float* c, float* r, float val, float* A = NULL, float* clip = NULL, int oversampling = 1);
 
 private:
-    float x_inv(float);
-    float y_inv(float);
-    float z_inv(float);
+
+    /**
+     * \fn          x_inv
+     * \return      returns (x_val - x_0) / T_x
+     */
+    float x_inv(float x_val);
+
+    /**
+     * \fn          y_inv
+     * \return      returns (y_val - y_0) / T_y
+     */
+    float y_inv(float y_val);
+
+    /**
+     * \fn          z_inv
+     * \return      returns (z_val - z_0) / T_z
+     */
+    float z_inv(float z_val);
 
     float clipCone[2];
 
-    float x_0, y_0, z_0;
-    int numX, numY, numZ;
-    float T_x, T_y, T_z;
+    float x_0; // copy of parameters::x_0()
+    float y_0; // copy of parameters::y_0()
+    float z_0; // copy of parameters::z_0()
 
+    int numX; // copy of parameters::numX
+    int numY; // copy of parameters::numY
+    int numZ; // copy of parameters::numZ
+    float T_x; // copy of parameters::voxelWidth
+    float T_y; // copy of parameters::voxelWidth
+    float T_z; // copy of parameters::voxelHeight
+
+    /**
+     * \fn          isInside
+     * \brief       This function is called by addObject, where in addObject, the coordinate system is shifted so the object is centered on the origin,
+     *              scaled, so that all the object axes are 1.0, and rotated.  Then this function is called to test whether the given location is inside
+     *              or outside the given shape.
+     * \param[in]   x, x-coordinate
+     * \param[in]   y, y-coordinate
+     * \param[in]   z, z-coordinate
+     * \param[in]   type, the enumerated object type; see enum objectType_list
+     * \param[in]   clip, pointer to a three-element array that specifies the clipping planes along the (x,y,z) coordinates
+     * \return      returns true the given (x,y,z) coordinates are inside the the shifted, rotated, and normalized 3D geometric shape
+     */
     bool isInside(float x, float y, float z, int type, float* clip);
 
+    // enumerated list of all the 3D geometric shapes that are supported
     enum objectType_list {ELLIPSOID=0, PARALLELEPIPED=1, CYLINDER_X=2, CYLINDER_Y=3, CYLINDER_Z=4, CONE_X=5, CONE_Y=6, CONE_Z=7};
+
+    // local copy of the pointer to the parameters class that is passed by the addObject function
     parameters* params;
 };
 

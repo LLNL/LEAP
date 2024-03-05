@@ -16,6 +16,12 @@
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file provide a CPU-based (accelerated by OpenMP) implemention of an algorithm to
+ * find the "centerCol" parameter of parallel-, fan-, or cone-beam data.  It does not work with so-called offset scan
+ * which is also known as a half-fan or half-cone.
+ */
+
 bool findCenter_cpu(float* g, parameters* params, int iRow = -1);
 
 bool findCenter_parallel_cpu(float* g, parameters* params, int iRow = -1);

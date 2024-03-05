@@ -14,6 +14,13 @@
 #endif
 
 #include "device_launch_parameters.h"
+
+/**
+ * This header and associated source file provide implementions of some CUDA-based denoising algorithms, such as low-pass filter (blurFilter)
+ * and a thresholded median filter.  It also implements a low-pass filter along the azithmuthal angle coordinate of a reconstruction volume
+ * which is useful for some spare- or few-view reconstruction problems.
+ */
+
 class parameters;
 
 bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);

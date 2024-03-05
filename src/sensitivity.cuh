@@ -16,6 +16,14 @@
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file provide CUDA-based implementations of functions to calculate
+ * the volumetric sensitivites of a given CT geometry.  In otherwords, calculates of the backprojection of data where all
+ * of the elements are equal to one.  Such a calculation are required for SART, MLEM, and OSEM algorithms.
+ * One could simply just use the backproject command, but knowning that all projection data elements are equal to one enables
+ * faster calculation.
+ */
+
 bool sensitivity_gpu(float*& f, parameters* params, bool data_on_cpu);
 bool sensitivity_modular_gpu(float*& f, parameters* params, bool data_on_cpu);
 

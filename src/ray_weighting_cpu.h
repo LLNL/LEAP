@@ -16,6 +16,11 @@
 #include "parameters.h"
 #include <stdlib.h>
 
+/**
+ * This header and associated source file provide CPU-based implementations (accelerated by OpenMP) of functions to calculate
+ * the ray weighting steps of various FBP algorithms.
+ */
+
 float FBPscalar(parameters*);
 float* setViewWeights(parameters*);
 float* setParkerWeights(parameters*);

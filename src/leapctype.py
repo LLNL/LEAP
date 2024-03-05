@@ -3625,9 +3625,14 @@ class tomographicModels:
                     pdic[key] = float(value)
         return pdic
 
-    def load_parameters(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
-        """Load the CT volume and CT geometry parameters from file"""
-        return self.load_param(param_fn, param_type)
+    def load_parameters(self, parameters_fileName, param_type=0): # param_type 0: cfg, 1: dict
+        """Load the CT volume and CT geometry parameters from file
+        
+        Args:
+            parameters_fileName (string): file name of the parameters file to load
+            param_type (int): if 0, assumes that parameters_fileName is a file; if 1, assumes that parameters_fileName is the actual content of a parameters file
+        """
+        return self.load_param(parameters_fileName, param_type)
 
     def load_param(self, param_fn, param_type=0): # param_type 0: cfg, 1: dict
         pdic = {}
@@ -3752,7 +3757,7 @@ class tomographicModels:
         return True
     
     def save_parameters(self, fileName):
-        """Save the CT volume and CT geometry parameters to file"""
+        """Save the CT volume and CT geometry parameters to the provides file name"""
         return self.save_param(fileName)
     
     def save_param(self, fileName):
@@ -3766,7 +3771,13 @@ class tomographicModels:
         return self.leapct.save_param(fileName)
     
     def save_projections(self, fileName, g):
-        """Save projection data to file (tif sequence, nrrd, or npy)"""
+        """Save projection data to file (tif sequence, nrrd, or npy)
+        
+        Args:
+            fileName (string): the file name to save the projection data to
+            g (C contiguous float32 numpy array or torch tensor): projection data
+        
+        """
         return self.saveProjections(fileName, g)
         
     def saveProjections(self, fileName, g):
@@ -3792,7 +3803,13 @@ class tomographicModels:
         return self.saveData(fileName, g, T, phi_0, row_0, col_0)
     
     def save_volume(self, fileName, f):
-        """Save volume data to file (tif sequence, nrrd, or npy)"""
+        """Save volume data to file (tif sequence, nrrd, or npy)
+        
+        Args:
+            fileName (string): the file name to save the projection data to
+            f (C contiguous float32 numpy array or torch tensor): volume data
+        
+        """
         return self.saveVolume(fileName, f)
     
     def saveVolume(self, fileName, f):
@@ -3867,7 +3884,7 @@ class tomographicModels:
         return self.loadData(fileName)
         
     def load_volume(self, fileName):
-        """Load 3D volume data from file (tif sequence, nrrd, or npy)"""
+        """Load 3D volume data from the given file name provided (tif sequence, nrrd, or npy)"""
         return self.loadData(fileName)
         
     def loadProjections(self, fileName):
@@ -3875,7 +3892,7 @@ class tomographicModels:
         return self.loadData(fileName)
         
     def load_projections(self, fileName):
-        """Load 3D projection data from file (tif sequence, nrrd, or npy)"""
+        """Load 3D projection data from the given file name provided (tif sequence, nrrd, or npy)"""
         return self.loadData(fileName)
             
     def loadData(self, fileName):

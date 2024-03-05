@@ -17,6 +17,11 @@
 #include <complex>
 typedef std::complex<double> Complex;
 
+/**
+ * This header and associated source file provide CPU-based implementations (accelerated by OpenMP) of functions to apply
+ * Hilbert and ramp filters to the projection data.
+ */
+
 bool conv1D_cpu(float*& g, parameters* params, float scalar = 1.0, int whichFilter = 0);
 bool Hilbert1D_cpu(float*& g, parameters* params, float scalar = 1.0);
 bool rampFilter1D_cpu(float*& g, parameters* params, float scalar = 1.0);
