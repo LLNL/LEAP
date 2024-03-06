@@ -55,6 +55,7 @@ set(HEADER
   cuda_utils.h
   cpu_utils.h
   phantom.h
+  file_io.h
   leap_defines.h
 )
 
@@ -75,6 +76,7 @@ set(SRC_CPP
   find_center_cpu.cpp
   cpu_utils.cpp
   phantom.cpp
+  file_io.cpp
 )
 
 set(SRC_CU

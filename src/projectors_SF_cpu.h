@@ -15,6 +15,11 @@
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file provide implementions of OpenMP accelerated CPU-based (modified) Separable Footprint forward and backprojection of
+ * parallel-, fan-, and cone-beam geometries where the voxel sizes are close to the default values.
+ */
+
 bool CPUproject_SF_fan(float*, float*, parameters*, bool setToZero = true);
 bool CPUbackproject_SF_fan(float*, float*, parameters*, bool setToZero = true);
 bool CPUproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* params, int ix, int iphi);

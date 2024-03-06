@@ -109,11 +109,15 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
             const int iu_max = int(floor(u_B + 0.5f));
 
             //const int diu = max(1, int(ceil(T_f.x * fabs(sin_phi) / (0.5f * T_g.z))));
-            for (int iu = iu_min; iu <= iu_max; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu+=2)
             {
-                const float uWeight = min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A);
-                if (uWeight > 0.0f)
-                    val += tex3D<float>(g, iu, iv, l) * l_phi * uWeight;
+                const float uWeight = max(0.0f, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
+                const float uWeight_2 = max(0.0f, min(float(iu+1) + 0.5f, u_B) - max(float(iu+1) - 0.5f, u_A));
+                if (uWeight + uWeight_2 > 0.0f)
+                {
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                }
                 //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
             }
         }
@@ -127,11 +131,15 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
             const int iu_max = int(floor(u_B + 0.5f));
 
             //const int diu = max(1, int(ceil(T_f.x * fabs(cos_phi) / (0.5f * T_g.z))));
-            for (int iu = iu_min; iu <= iu_max; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu+=2)
             {
-                const float uWeight = min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A);
-                if (uWeight > 0.0f)
-                    val += tex3D<float>(g, iu, iv, l) * l_phi * uWeight;
+                const float uWeight = max(0.0f, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
+                const float uWeight_2 = max(0.0f, min(float(iu + 1) + 0.5f, u_B) - max(float(iu + 1) - 0.5f, u_A));
+                if (uWeight + uWeight_2 > 0.0f)
+                {
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                }
                 //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
             }
         }
@@ -201,11 +209,16 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
             const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi) / (0.5f * T_g.z))));
 
             // use x_lo, x_hi
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
+            for (int iu = iu_c - diu; iu <= iu_c + diu; iu+=2)
             {
-                const float u = iu * T_g.z + startVals_g.z;
-                const float uWeight = l_phi * max(0.0, min(float(iu) + 0.5f, max(u_A, u_B)) - max(float(iu) - 0.5f, min(u_A, u_B)));
-                val += tex3D<float>(g, iu, iv, l) * uWeight;
+                //const float u = iu * T_g.z + startVals_g.z;
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, max(u_A, u_B)) - max(float(iu) - 0.5f, min(u_A, u_B)));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu+1) + 0.5f, max(u_A, u_B)) - max(float(iu+1) - 0.5f, min(u_A, u_B)));
+                if (uWeight + uWeight_2 > 0.0f)
+                {
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2);
+                }
             }
         }
         else
@@ -216,12 +229,16 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
 
             const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(cos_phi) / (0.5f * T_g.z))));
 
-            for (int iu = iu_c - diu; iu <= iu_c + diu; iu++)
+            for (int iu = iu_c - diu; iu <= iu_c + diu; iu+=2)
             {
-                const float u = iu * T_g.z + startVals_g.z;
-                const float uWeight = l_phi * max(0.0, min(float(iu) + 0.5f, max(u_A, u_B)) - max(float(iu) - 0.5f, min(u_A, u_B)));
-                val += tex3D<float>(g, iu, iv, l) * uWeight;
-
+                //const float u = iu * T_g.z + startVals_g.z;
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, max(u_A, u_B)) - max(float(iu) - 0.5f, min(u_A, u_B)));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu+1) + 0.5f, max(u_A, u_B)) - max(float(iu+1) - 0.5f, min(u_A, u_B)));
+                if (uWeight + uWeight_2 > 0.0f)
+                {
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2);
+                }
             }
         }
     }
@@ -373,22 +390,30 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
 
-                for (int iu = iu_min; iu <= iu_max; iu++)
+                for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
-                    const float uWeight = helicalWeight * l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                    if (uWeight <= 0.0f)
-                        continue;
-                    for (int iv = iv_min; iv <= iv_max; iv++)
+                    const float uWeight = helicalWeight * l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                    const float uWeight_2 = helicalWeight * l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                    if (uWeight + uWeight_2 > 0.0f)
                     {
-                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                        const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                        const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                        for (int iv = iv_min; iv <= iv_max; iv += 2)
+                        {
+                            // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
 
-                        if (vWeight > 0.0f)
-                            val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                            if (vWeight + vWeight_2 > 0.0f)
+                            {
+                                const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            }
+                        }
                     }
                 }
+
             }
             else
             {
@@ -404,22 +429,30 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
 
-                for (int iu = iu_min; iu <= iu_max; iu++)
+                for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
-                    const float uWeight = helicalWeight * l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                    if (uWeight <= 0.0f)
-                        continue;
-                    for (int iv = iv_min; iv <= iv_max; iv++)
+                    const float uWeight = helicalWeight * l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                    const float uWeight_2 = helicalWeight * l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                    if (uWeight + uWeight_2 > 0.0f)
                     {
-                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                        const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                        const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                        for (int iv = iv_min; iv <= iv_max; iv += 2)
+                        {
+                            // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
 
-                        if (vWeight > 0.0f)
-                            val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                            if (vWeight + vWeight_2 > 0.0f)
+                            {
+                                const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            }
+                        }
                     }
                 }
+
             }
         }
     }
@@ -555,20 +588,27 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
 
-                for (int iu = iu_min; iu <= iu_max; iu++)
+                for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
-                    const float uWeight = helicalWeight * l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                    if (uWeight <= 0.0f)
-                        continue;
-                    for (int iv = iv_min; iv <= iv_max; iv++)
+                    const float uWeight = helicalWeight * l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                    const float uWeight_2 = helicalWeight * l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                    if (uWeight + uWeight_2 > 0.0f)
                     {
-                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                        const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                        const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                        for (int iv = iv_min; iv <= iv_max; iv += 2)
+                        {
+                            // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
 
-                        if (vWeight > 0.0f)
-                            val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                            if (vWeight + vWeight_2 > 0.0f)
+                            {
+                                const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            }
+                        }
                     }
                 }
             }
@@ -586,20 +626,27 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
 
-                for (int iu = iu_min; iu <= iu_max; iu++)
+                for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
-                    const float uWeight = helicalWeight * l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                    if (uWeight <= 0.0f)
-                        continue;
-                    for (int iv = iv_min; iv <= iv_max; iv++)
+                    const float uWeight = helicalWeight * l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                    const float uWeight_2 = helicalWeight * l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                    if (uWeight + uWeight_2 > 0.0f)
                     {
-                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                        const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                        const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                        for (int iv = iv_min; iv <= iv_max; iv += 2)
+                        {
+                            // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                            //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                            const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
 
-                        if (vWeight > 0.0f)
-                            val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                            if (vWeight + vWeight_2 > 0.0f)
+                            {
+                                const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            }
+                        }
                     }
                 }
             }
@@ -701,20 +748,27 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
             const int iu_min = int(ceil(u_min - 0.5f));
             const int iu_max = int(floor(u_max + 0.5f));
 
-            for (int iu = iu_min; iu <= iu_max; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu += 2)
             {
-                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                if (uWeight <= 0.0f)
-                    continue;
-                for (int iv = iv_min; iv <= iv_max; iv++)
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                if (uWeight + uWeight_2 > 0.0f)
                 {
-                    // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    for (int iv = iv_min; iv <= iv_max; iv += 2)
+                    {
+                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
 
-                    if (vWeight > 0.0f)
-                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                        if (vWeight + vWeight_2 > 0.0f)
+                        {
+                            const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                        }
+                    }
                 }
             }
         }
@@ -732,20 +786,27 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
             const int iu_min = int(ceil(u_min - 0.5f));
             const int iu_max = int(floor(u_max + 0.5f));
 
-            for (int iu = iu_min; iu <= iu_max; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu += 2)
             {
-                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                if (uWeight <= 0.0f)
-                    continue;
-                for (int iv = iv_min; iv <= iv_max; iv++)
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                if (uWeight + uWeight_2 > 0.0f)
                 {
-                    // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    for (int iv = iv_min; iv <= iv_max; iv += 2)
+                    {
+                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
 
-                    if (vWeight > 0.0f)
-                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                        if (vWeight + vWeight_2 > 0.0f)
+                        {
+                            const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                        }
+                    }
                 }
             }
         }
@@ -837,20 +898,27 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
             const int iu_min = int(ceil(u_min - 0.5f));
             const int iu_max = int(floor(u_max + 0.5f));
 
-            for (int iu = iu_min; iu <= iu_max; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu+=2)
             {
-                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                if (uWeight <= 0.0f)
-                    continue;
-                for (int iv = iv_min; iv <= iv_max; iv++)
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu+1) + 0.5f, u_max) - max(float(iu+1) - 0.5f, u_min));
+                if (uWeight + uWeight_2 > 0.0f)
                 {
-                    // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    for (int iv = iv_min; iv <= iv_max; iv+=2)
+                    {
+                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight_2 = max(0.0f, min(float(iv+1) + 0.5f, v_B) - max(float(iv+1) - 0.5f, v_A));
 
-                    if (vWeight > 0.0f)
-                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                        if (vWeight + vWeight_2 > 0.0f)
+                        {
+                            const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                        }
+                    }
                 }
             }
         }
@@ -868,20 +936,27 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
             const int iu_min = int(ceil(u_min - 0.5f));
             const int iu_max = int(floor(u_max + 0.5f));
 
-            for (int iu = iu_min; iu <= iu_max; iu++)
+            for (int iu = iu_min; iu <= iu_max; iu+=2)
             {
-                const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
-                if (uWeight <= 0.0f)
-                    continue;
-                for (int iv = iv_min; iv <= iv_max; iv++)
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                if (uWeight + uWeight_2 > 0.0f)
                 {
-                    // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
-                    //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
-                    const float vWeight = min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A);
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    for (int iv = iv_min; iv <= iv_max; iv+=2)
+                    {
+                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
 
-                    if (vWeight > 0.0f)
-                        val += tex3D<float>(g, iu, iv, l) * uWeight * vWeight;
+                        if (vWeight + vWeight_2 > 0.0f)
+                        {
+                            const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                        }
+                    }
                 }
             }
         }
@@ -1568,7 +1643,15 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
 
     cudaTextureObject_t d_data_txt = NULL;
     //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, false);
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, false);
+    bool doLinearInterpolation = true;
+    /*
+    bool doLinearInterpolation = false;
+    if (params->geometry == parameters::PARALLEL || params->geometry == parameters::FAN)
+        doLinearInterpolation = true;
+    if (params->geometry == parameters::CONE && (params->doWeightedBackprojection == false || params->helicalPitch == 0.0))
+        doLinearInterpolation = true;
+    //*/
+    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);

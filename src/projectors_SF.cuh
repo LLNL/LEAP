@@ -16,6 +16,11 @@
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file provide implementions of CUDA-based (modified) Separable Footprint forward and backprojection of
+ * parallel-, fan-, and cone-beam geometries where the voxel sizes are close to the default values.
+ */
+
 bool project_SF(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_SF(float*, float*&, parameters*, bool data_on_cpu);
 

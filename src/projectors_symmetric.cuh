@@ -16,6 +16,11 @@
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file provide implementions of CUDA-based forward and backprojection of
+ * parallel- and cone-beam geometries where the reconstruction is assumed to be cylindrically-symmetric.
+ */
+
 bool project_symmetric(float*& g, float* f, parameters* params, bool data_on_cpu);
 bool backproject_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu);
 

@@ -16,6 +16,11 @@
 
 #include "parameters.h"
 
+/**
+ * This header and associated source file provide implementions of CPU-based (accelerated by OpenMP) forward and backprojection of
+ * parallel- and cone-beam geometries where the reconstruction is assumed to be cylindrically-symmetric.
+ */
+
 bool CPUinverse_symmetric(float* g, float* f, parameters* params);
 
 bool CPUproject_symmetric(float* g, float* f, parameters* params);

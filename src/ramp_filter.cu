@@ -1709,6 +1709,7 @@ bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scala
 
 bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
 {
+    //printf("parallelRay_derivative\n");
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
 
@@ -1768,6 +1769,8 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
         cudaFree(dev_phis);
     if (dev_g != 0)
         cudaFree(dev_g);
+
+    //printf("parallelRay_derivative done\n");
 
     return true;
 }

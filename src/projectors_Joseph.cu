@@ -461,6 +461,7 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
 
             const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
 
+            /*
             for (int iu = iu_min; iu <= iu_max; iu++)
             {
                 const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
@@ -477,6 +478,31 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
                         val += tex3D<float>(g, iu, iv, iphi) * uWeight * vWeight;
                 }
             }
+            //*/
+            for (int iu = iu_min; iu <= iu_max; iu += 2)
+            {
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                if (uWeight + uWeight_2 > 0.0f)
+                {
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    for (int iv = iv_min; iv <= iv_max; iv += 2)
+                    {
+                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
+
+                        if (vWeight + vWeight_2 > 0.0f)
+                        {
+                            const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, iphi + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                        }
+                    }
+                }
+            }
+
         }
         else
         {
@@ -495,6 +521,7 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
 
             const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
 
+            /*
             for (int iu = iu_min; iu <= iu_max; iu++)
             {
                 const float uWeight = l_phi * (min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
@@ -511,6 +538,31 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
                         val += tex3D<float>(g, iu, iv, iphi) * uWeight * vWeight;
                 }
             }
+            //*/
+            for (int iu = iu_min; iu <= iu_max; iu += 2)
+            {
+                const float uWeight = l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
+                const float uWeight_2 = l_phi * max(0.0f, min(float(iu + 1) + 0.5f, u_max) - max(float(iu + 1) - 0.5f, u_min));
+                if (uWeight + uWeight_2 > 0.0f)
+                {
+                    const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
+                    for (int iv = iv_min; iv <= iv_max; iv += 2)
+                    {
+                        // calculate z index for v-0.5*T_g.y and v+0.5*T_g.y
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, max(v_A, v_B)) - max(float(iv) - 0.5f, min(v_A, v_B)));
+                        //const float vWeight = max(0.0, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight = max(0.0f, min(float(iv) + 0.5f, v_B) - max(float(iv) - 0.5f, v_A));
+                        const float vWeight_2 = max(0.0f, min(float(iv + 1) + 0.5f, v_B) - max(float(iv + 1) - 0.5f, v_A));
+
+                        if (vWeight + vWeight_2 > 0.0f)
+                        {
+                            const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
+                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, iphi + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                        }
+                    }
+                }
+            }
+
         }
     }
     f[ind] = val * T_f.x;
@@ -1607,7 +1659,8 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
         }
         else
         {
-            doLinearInterpolation = false;
+            //doLinearInterpolation = false;
+            doLinearInterpolation = true;
         }
         w_polar = setViewDependentPolarWeights(params);
         applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, true, false);
