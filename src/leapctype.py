@@ -2667,17 +2667,18 @@ class tomographicModels:
             self.libprojectors.BlurFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BlurFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
     
-    def MedianFilter(self, f, threshold=0.0):
-        """Applies a thresholded 3D median filter (3x3x3) to the provided numpy array
+    def MedianFilter(self, f, threshold=0.0, windowSize=3):
+        """Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided numpy array
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
-        This algorithm performs a 3D (3x3x3) median around each data value and then replaces this value only if
+        This algorithm performs a 3D (3x3x3 or 3x5x5) median around each data value and then replaces this value only if
         |original value - median value| >= threshold*|median value|
         Note that if threshold is zero, then this is simply a median filter
         
         Args:
             f (C contiguous float32 numpy array): numpy array to smooth
             threshold (float): the threshold of whether to use the filtered value or not
+            windowSize (int): the window size; can be 3 or 5
         
         Returns:
             f, the same as the input
@@ -2686,11 +2687,11 @@ class tomographicModels:
         self.libprojectors.MedianFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.MedianFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, f.is_cuda == False)
+            self.libprojectors.MedianFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, f.is_cuda == False)
         else:
-            self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, True)
+            self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
             
     def MedianFilter2D(self, f, threshold=0.0, windowSize=3):
         """Applies a thresholded 2D median filter (windowSize x windowSize) to the provided numpy array

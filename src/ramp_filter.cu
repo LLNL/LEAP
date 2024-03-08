@@ -187,9 +187,9 @@ __global__ void ray_derivative_kernel(float* g, float* Dg, const int4 N, const f
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = diff;
 }
 
-__global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis)
+__global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
 {
-    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int l = threadIdx.x + blockIdx.x * blockDim.x + iphi_offset;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
     const int n = threadIdx.z + blockIdx.z * blockDim.z;
     if (l >= N.x || m >= N.y || n >= N.z)
@@ -293,9 +293,9 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
 }
 
-__global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis)
+__global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
 {
-    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int l = threadIdx.x + blockIdx.x * blockDim.x + iphi_offset;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
     const int n = threadIdx.z + blockIdx.z * blockDim.z;
     if (l >= N.x || m >= N.y || n >= N.z)
@@ -1709,6 +1709,8 @@ bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scala
 
 bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
 {
+    return parallelRay_derivative_chunk(g, params, data_on_cpu);
+
     //printf("parallelRay_derivative\n");
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1742,9 +1744,9 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
     if (params->detectorType == parameters::FLAT)
-        deriv_helical_NHDLH_flat <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis);
+        deriv_helical_NHDLH_flat <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis, 0);
     else
-        deriv_helical_NHDLH_curved <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis);
+        deriv_helical_NHDLH_curved <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis, 0);
     params->colShiftFromFilter += -0.5; // opposite sign as LTT
     //params->rowShiftFromFilter += -0.5;
 
@@ -1771,6 +1773,123 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
         cudaFree(dev_g);
 
     //printf("parallelRay_derivative done\n");
+
+    return true;
+}
+
+bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cpu)
+{
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+
+    float epsilon = std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi())));
+
+    int maxChunkSize = 100;
+    int numChunks = int(ceil(double(params->numAngles) / double(maxChunkSize)));
+
+    float* dev_phis = copyAngleArrayToGPU(params);
+
+    uint64 N_g_chunk_prod = uint64(maxChunkSize+2) * uint64(params->numRows) * uint64(params->numCols);
+    float* dev_Dg = 0;
+    if (cudaSuccess != cudaMalloc((void**)&dev_Dg, N_g_chunk_prod * sizeof(float)))
+        fprintf(stderr, "cudaMalloc failed!\n");
+
+    float* dev_interface = 0;
+    if (cudaSuccess != cudaMalloc((void**)&dev_interface, uint64(params->numRows) * uint64(params->numCols) * sizeof(float)))
+        fprintf(stderr, "cudaMalloc failed!\n");
+
+    float* dev_g = 0;
+    if (data_on_cpu)
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+    else
+        dev_g = g;
+
+    for (int ichunk = 0; ichunk < numChunks; ichunk++)
+    {
+        int iphi_lo = ichunk * maxChunkSize;
+        int iphi_hi = min(params->numAngles-1, iphi_lo + maxChunkSize - 1);
+        //printf("iphi_lo, iphi_hi = %d, %d\n", iphi_lo, iphi_hi);
+
+        int iphi_pad_lo = max(0, iphi_lo - 1);
+        int iphi_pad_hi = min(params->numAngles - 1, iphi_hi + 1);
+
+        int4 N_g_chunk; N_g_chunk.x = iphi_pad_hi - iphi_pad_lo + 1; N_g_chunk.y = params->numRows; N_g_chunk.z = params->numCols;
+
+        float* dev_g_pad_chunk = &dev_g[uint64(iphi_pad_lo) * uint64(N_g_chunk.y * N_g_chunk.z)];
+        float* dev_phis_chunk = &dev_phis[iphi_pad_lo];
+
+        cudaTextureObject_t d_data_txt = NULL;
+        cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_pad_chunk, N_g_chunk, true, true);
+
+        dim3 dimBlock = setBlockSize(N_g_chunk);
+        dim3 dimGrid = setGridSize(N_g_chunk, dimBlock);
+        if (params->detectorType == parameters::FLAT)
+            deriv_helical_NHDLH_flat <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g_chunk, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis_chunk, 0);
+        else
+            deriv_helical_NHDLH_curved <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g_chunk, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis_chunk, 0);
+
+        cudaFreeArray(d_data_array);
+        cudaDestroyTextureObject(d_data_txt);
+
+        // Copy over what I can
+        if (iphi_lo - 1 >= 0)
+        {
+            // should be here every time except first chunk
+            // this copies over the last projection from the previous chunk
+            float* dev_g_last = &dev_g[uint64(iphi_lo - 1) * uint64(N_g_chunk.y * N_g_chunk.z)];
+            equal(dev_g_last, dev_interface, make_int3(1, N_g.y, N_g.z), params->whichGPU);
+        }
+
+        float* dev_g_chunk = &dev_g[uint64(iphi_lo) * uint64(N_g_chunk.y * N_g_chunk.z)];
+        float* dev_Dg_shift = &dev_Dg[uint64(iphi_lo - iphi_pad_lo) * uint64(N_g_chunk.y * N_g_chunk.z)]; // first chunk shift by zero, otherwise shift by 1
+        if (iphi_hi == params->numAngles - 1)
+        {
+            //printf("setting projections: %d to %d\n", iphi_lo, iphi_lo + iphi_hi - iphi_lo + 1-1);
+            equal(dev_g_chunk, dev_Dg_shift, make_int3(iphi_hi - iphi_lo + 1, N_g.y, N_g.z), params->whichGPU);
+        }
+        else
+        {
+            //printf("setting projections: %d to %d\n", iphi_lo, iphi_lo + iphi_hi - iphi_lo - 1);
+            equal(dev_g_chunk, dev_Dg_shift, make_int3(iphi_hi - iphi_lo, N_g.y, N_g.z), params->whichGPU); // does not copy last value
+
+            if (iphi_lo == 0)
+            {
+                float* dev_Dg_last = &dev_Dg[uint64(iphi_hi - iphi_lo) * uint64(N_g_chunk.y * N_g_chunk.z)];
+                equal(dev_interface, dev_Dg_last, make_int3(1, N_g.y, N_g.z), params->whichGPU); // save the last value
+            }
+            else
+            {
+                float* dev_Dg_last = &dev_Dg[uint64(iphi_hi - iphi_lo + 1) * uint64(N_g_chunk.y * N_g_chunk.z)];
+                equal(dev_interface, dev_Dg_last, make_int3(1, N_g.y, N_g.z), params->whichGPU); // save the last value
+            }
+        }
+    }
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess)
+    {
+        fprintf(stderr, "kernel failed!\n");
+        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+    }
+
+    if (data_on_cpu)
+        pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+
+    if (data_on_cpu == true && dev_g != 0)
+        cudaFree(dev_g);
+
+    if (dev_Dg != 0)
+        cudaFree(dev_Dg);
+    if (dev_interface != 0)
+        cudaFree(dev_interface);
+    if (dev_phis != 0)
+        cudaFree(dev_phis);
+
+    params->colShiftFromFilter += -0.5; // opposite sign as LTT
+    //params->rowShiftFromFilter += -0.5;
 
     return true;
 }

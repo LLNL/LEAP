@@ -48,5 +48,6 @@ bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar = 1.0);
 float* rampFilterFrequencyResponseMagnitude(int N, parameters* params);
 
 bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu);
+bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cpu);
 
 #endif

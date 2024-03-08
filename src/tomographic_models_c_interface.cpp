@@ -621,9 +621,9 @@ bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cp
 	return tomo()->BlurFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);
 }
 
-bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool data_on_cpu)
+bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
 {
-	return tomo()->MedianFilter(f, N_1, N_2, N_3, threshold, data_on_cpu);
+	return tomo()->MedianFilter(f, N_1, N_2, N_3, threshold, w, data_on_cpu);
 }
 
 bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)

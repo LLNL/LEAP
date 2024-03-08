@@ -683,10 +683,11 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   threshold original value is only replaced by the median value
 	 *              if the relative difference is greater than this value
+	 * \param[in]   w the window size in each dimension (must be 3 or 5)
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool MedianFilter(float* f, int, int, int, float threshold, bool data_on_cpu);
+	bool MedianFilter(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
 
 	/**
 	 * \fn          MedianFilter2D
@@ -697,7 +698,7 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   threshold original value is only replaced by the median value
 	 *              if the relative difference is greater than this value
-	 * \param[in]   w the window size in each dimension (must 3, 5, or 7)
+	 * \param[in]   w the window size in each dimension (must be 3, 5, or 7)
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */

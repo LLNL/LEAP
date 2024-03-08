@@ -37,6 +37,7 @@ tomographicModels::tomographicModels()
 {
 	params.initialize();
 	maxSlicesForChunking = 128;
+	//maxSlicesForChunking = 256;
 }
 
 tomographicModels::~tomographicModels()
@@ -1834,7 +1835,7 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, data_on_cpu, params.whichGPU);
 }
 
-bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, bool data_on_cpu)
+bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)
 	{
@@ -1885,17 +1886,17 @@ bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, floa
 				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				medianFilter2D(f_chunk, numSlices, N_2, N_3, FWHM, w, true, whichGPU);
+				medianFilter2D(f_chunk, numSlices, N_2, N_3, threshold, w, true, whichGPU);
 			}
 
 			return true;
 		}
 	}
 	else
-		return medianFilter2D(f, N_1, N_2, N_3, FWHM, w, data_on_cpu, params.whichGPU);
+		return medianFilter2D(f, N_1, N_2, N_3, threshold, w, data_on_cpu, params.whichGPU);
 }
 
-bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, bool data_on_cpu)
+bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)
 	{
@@ -1958,7 +1959,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				medianFilter(f_in_chunk, numSlices_pad, N_2, N_3, threshold, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				medianFilter(f_in_chunk, numSlices_pad, N_2, N_3, threshold, w, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
 			}
 			free(f_in);
 
@@ -1966,7 +1967,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 		}
 	}
 	else
-		return medianFilter(f, N_1, N_2, N_3, threshold, data_on_cpu, params.whichGPU);
+		return medianFilter(f, N_1, N_2, N_3, threshold, w, data_on_cpu, params.whichGPU);
 }
 
 bool tomographicModels::BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
