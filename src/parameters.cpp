@@ -1357,7 +1357,7 @@ float parameters::volumeDataSize()
 	return float(4.0 * double(numX) * double(numY) * double(numZ) / pow(2.0, 30.0));
 }
 
-bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice , int* rowsNeeded, bool doDebug)
+bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, int* rowsNeeded, bool doDebug)
 {
 	if (rowsNeeded == NULL || firstSlice > lastSlice)
 		return false;
@@ -1365,7 +1365,7 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice ,
 	if (geometry == PARALLEL || geometry == FAN)
 	{
 		rowsNeeded[0] = max(0, firstSlice);
-		rowsNeeded[1] = min(numRows-1, lastSlice);
+		rowsNeeded[1] = min(numRows - 1, lastSlice);
 	}
 	else if (geometry == MODULAR)
 	{
@@ -1405,7 +1405,7 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice ,
 
 				r[2] = (z_lo - s[2]);
 				t_lo = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
-				v_lo = (s[0]+t_lo*r[0] - c[0]) * v_vec[0] + (s[1]+t_lo *r[1] - c[1]) * v_vec[1] + (s[2]+t_lo *r[2] - c[2]) * v_vec[2];
+				v_lo = (s[0] + t_lo * r[0] - c[0]) * v_vec[0] + (s[1] + t_lo * r[1] - c[1]) * v_vec[1] + (s[2] + t_lo * r[2] - c[2]) * v_vec[2];
 
 				//const float denom = (x - sourcePosition[0]) * detNormal.x + (y - sourcePosition[1]) * detNormal.y + (z - sourcePosition[2]) * detNormal.z;
 				//const float t_C = c_minus_s_dot_n / denom;
@@ -1443,7 +1443,7 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice ,
 					v_hi += accountForClockingAndPixelSize;
 
 				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - v_0()) / pixelHeight)))));
-				indices.push_back(max(0, min(numRows - 1,  int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));
+				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));
 
 				dist = R_z + rFOV() + voxelWidth;
 				r[0] = (c[0] - s[0]) * dist / D_z;
@@ -1488,11 +1488,11 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice ,
 		float T_v = pixelHeight / sdd;
 		float v_denom_min = sod - rFOV() - voxelWidth;
 		float v_denom_max = sod + rFOV() + voxelWidth;
-		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5*pixelHeight/sdd;
-		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5*pixelHeight/sdd;
+		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5 * pixelHeight / sdd;
+		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5 * pixelHeight / sdd;
 
 		rowsNeeded[0] = max(0, int(floor((v_lo - v_0() / sdd) / T_v)));
-		rowsNeeded[1] = min(numRows-1, int(ceil((v_hi - v_0() / sdd) / T_v)));
+		rowsNeeded[1] = min(numRows - 1, int(ceil((v_hi - v_0() / sdd) / T_v)));
 	}
 	return true;
 }

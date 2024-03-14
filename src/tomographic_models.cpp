@@ -38,6 +38,7 @@ tomographicModels::tomographicModels()
 	params.initialize();
 	maxSlicesForChunking = 128;
 	//maxSlicesForChunking = 256;
+	//maxSlicesForChunking = 512;
 }
 
 tomographicModels::~tomographicModels()
