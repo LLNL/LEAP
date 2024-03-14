@@ -20,20 +20,16 @@ M = N
 
 # Scale the number of angles and the detector pixel size with N
 numAngles = int(720*N/1024)
-numAngles = 1601
 pixelSize = 0.2*2048/N
 
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.convert_to_modularbeam()
 
 # Set the volume parameters
 leapct.set_default_volume()
 leapct.print_parameters()
-
-leapct.set_diameterFOV(11.0/14.0*N*pixelSize)
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()
@@ -43,7 +39,7 @@ print('using ' + str(4.0*(g.size+f.size)/2.0**30.0) + ' GB of memory')
 
 # Project
 startTime = time.time()
-#leapct.project(g,f)
+leapct.project(g,f)
 print('projection time: ' + str(time.time()-startTime))
 
 # Backproject
@@ -53,5 +49,5 @@ print('backprojection time: ' + str(time.time()-startTime))
 
 # FBP
 startTime = time.time()
-#leapct.FBP(g,f)
+leapct.FBP(g,f)
 print('FBP time: ' + str(time.time()-startTime))

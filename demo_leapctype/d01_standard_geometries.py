@@ -49,7 +49,6 @@ numRows = numCols
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
-#leapct.convert_to_modularbeam()
 
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
@@ -59,8 +58,6 @@ leapct.set_default_volume()
 #leapct.set_volume(numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
 
 # Trouble-Shooting Functions
-leapct.convert_to_modularbeam()
-leapct.set_diameterFOV(11.0/14.0*numCols*pixelSize)
 leapct.print_parameters()
 #leapct.sketch_system()
 
@@ -123,15 +120,4 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the result with napari
-#leapct.display(f)
-#import warnings
-#warnings.filterwarnings("ignore", message="torch.distributed.reduce_op is deprecated")
-#import pyqtgraph as pg
-#pg.image(f)
-
-# Save results as a tif sequence
-outputDir = r'C:\Users\champley\Documents\tomography\scratch'
-if not os.path.exists(outputDir):
-    os.makedirs(outputDir)
-leapct.save_volume(os.path.join(outputDir,'rec_modular_mod.nrrd'), f)
-#leapct.save_volume(os.path.join(outputDir,'proj_modular.nrrd'), g)
+leapct.display(f)
