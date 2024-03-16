@@ -9,5 +9,6 @@ Projection Filters and Transforms
 .. autofunction:: leapctype.tomographicModels.cropCols
 .. autofunction:: leapctype.tomographicModels.cropProjections
 .. autofunction:: leapctype.tomographicModels.cropRows
+.. autofunction:: leapctype.tomographicModels.rebin_curved
 .. autofunction:: leapctype.tomographicModels.expNeg
 .. autofunction:: leapctype.tomographicModels.negLog

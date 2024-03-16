@@ -538,6 +538,14 @@ class tomographicModels:
         return self.libprojectors.shift_detector(r, c)
         
     def rebin_curved(self, g, fanAngles, order=6):
+        """ rebin data from a curved array of detector modules
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            fanAngles (C contiguous float32 numpy array): array of the fan angle (degrees) of every detector pixel in a row
+            order (int): the order of the interpolating polynomial
+        
+        """
         self.set_model()
         self.libprojectors.rebin_curved.restype = ctypes.c_bool
         self.libprojectors.rebin_curved.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
