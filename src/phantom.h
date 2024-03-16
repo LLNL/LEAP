@@ -22,6 +22,36 @@
  * This class provides CPU-based implementations (accelerated by OpenMP) to specify voxelized phantoms as a collection of geometric shapes.
  */
 
+class geometricObject
+{
+public:
+    geometricObject();
+    geometricObject(int type_in, float* c_in, float* r_in, float val_in, float* A_in, float* clip_in);
+    ~geometricObject();
+
+    void reset();
+    bool init(int type_in, float* c_in, float* r_in, float val_in, float* A_in = NULL, float* clip_in = NULL);
+
+    bool intersectionEndPoints(double* p, double* r, double* ts);
+    bool intersectionEndPoints_centeredAndNormalized(double* p, double* r, double* ts);
+    bool parametersOfIntersection_1D(double* ts, double p, double r);
+    bool parametersOfClippingPlaneIntersections(double* ts, double* p, double* r);
+
+    int type;
+    float centers[3];
+    float radii[3];
+    float val;
+    float A[9];
+    float clippingPlanes[6][4];
+    
+    bool isRotated;
+    int numClippingPlanes;
+    float clipCone[2];
+
+private:
+    double dot(double* x, double* y, int N = 3);
+};
+
 class phantom
 {
 public:
@@ -46,6 +76,29 @@ public:
      * \return      returns true if all input are valid and CT volume parameter values are defined and valid, false otherwise
      */
     bool addObject(float* f, parameters* params, int type, float* c, float* r, float val, float* A = NULL, float* clip = NULL, int oversampling = 1);
+
+    /**
+     * \fn          addObject
+     * \brief       Changes the voxels values to a specified value inside a 3D geometric object
+                    (any voxel values inside the object before this function are ignored, i.e., this function does not accumulate the values, it replaces them)
+     * \param[in]   type, the enumerated object type; see enum objectType_list
+     * \param[in]   c, pointer to a three-element array of the (x,y,z) coordinates of the center of the object
+     * \param[in]   r, pointer to a three-element array of the (x,y,z) coordinates of the radii of the object
+     * \param[in]   val, value of the voxels inside the object
+     * \param[in]   A, pointer to a 3X3 rotation matrix of the object
+     * \param[in]   clip, pointer to a three-element array that specifies the clipping planes along the (x,y,z) coordinates
+     * \return      returns true if all input are valid and CT volume parameter values are defined and valid, false otherwise
+     */
+    bool addObject(int type, float* c, float* r, float val, float* A = NULL, float* clip = NULL);
+
+    void clearObjects();
+
+    double lineIntegral(double* p, double* r);
+
+    // enumerated list of all the 3D geometric shapes that are supported
+    enum objectType_list { ELLIPSOID = 0, PARALLELEPIPED = 1, CYLINDER_X = 2, CYLINDER_Y = 3, CYLINDER_Z = 4, CONE_X = 5, CONE_Y = 6, CONE_Z = 7 };
+
+    std::vector<geometricObject> objects;
 
 private:
 
@@ -93,9 +146,6 @@ private:
      * \return      returns true the given (x,y,z) coordinates are inside the the shifted, rotated, and normalized 3D geometric shape
      */
     bool isInside(float x, float y, float z, int type, float* clip);
-
-    // enumerated list of all the 3D geometric shapes that are supported
-    enum objectType_list {ELLIPSOID=0, PARALLELEPIPED=1, CYLINDER_X=2, CYLINDER_Y=3, CYLINDER_Z=4, CONE_X=5, CONE_Y=6, CONE_Z=7};
 
     // local copy of the pointer to the parameters class that is passed by the addObject function
     parameters* params;

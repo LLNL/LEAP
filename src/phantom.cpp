@@ -16,19 +16,45 @@
 #include <omp.h>
 
 using namespace std;
+#define OUT_OF_BOUNDS 1.0e12;
 
 phantom::phantom()
 {
+	objects.clear();
 }
 
 phantom::~phantom()
 {
+	objects.clear();
+}
+
+bool phantom::addObject(int type, float* c, float* r, float val, float* A, float* clip)
+{
+	geometricObject object;
+	if (object.init(type, c, r, val, A, clip) == true)
+	{
+		objects.push_back(object);
+		//printf("number of objects: %d\n", int(objects.size()));
+		return true;
+	}
+	else
+	{
+		//printf("failed!\n");
+		return false;
+	}
+}
+
+void phantom::clearObjects()
+{
+	objects.clear();
 }
 
 bool phantom::addObject(float* f, parameters* params_in, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
 {
-	if (f == NULL || params_in == NULL || c == NULL || r == NULL)
+	if (c == NULL || r == NULL)
 		return false;
+	if (f == NULL || params_in == NULL)
+		return addObject(type, c, r, val, A, clip);
 	params = params_in;
 	/*
 	if (params->volumeDimensionOrder == parameters::XYZ)
@@ -342,4 +368,656 @@ float phantom::y_inv(float val)
 float phantom::z_inv(float val)
 {
 	return (val - z_0) / T_z;
+}
+
+double phantom::lineIntegral(double* p, double* r)
+{
+	if (p == NULL || r == NULL)
+		return 0.0;
+
+	/*
+	printf("number of objects: %d\n", int(objects.size()));
+	printf("p = (%f, %f, %f)\n", p[0], p[1], p[2]);
+	printf("r = (%f, %f, %f)\n", r[0], r[1], r[2]);
+	//*/
+
+	vector<double> endPoints;
+	double* intersection_0 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
+	double* intersection_1 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
+	for (int i = 0; i < int(objects.size()); i++)
+	{
+		double ts[2];
+		if (objects[i].intersectionEndPoints(p, r, ts))
+		{
+			endPoints.push_back(ts[0]);
+			endPoints.push_back(ts[1]);
+			intersection_0[i] = ts[0];
+			intersection_1[i] = ts[1];
+			//printf("intersection: %f to %f\n", ts[0], ts[1]);
+		}
+		else
+		{
+			//printf("no intersection (%f, %f)\n", ts[0], ts[1]);
+			intersection_0[i] = OUT_OF_BOUNDS;
+			intersection_1[i] = OUT_OF_BOUNDS;
+		}
+	}
+	double retVal = 0.0;
+	if (endPoints.size() > 0)
+	{
+		sort(endPoints.begin(), endPoints.end());
+
+		double* arealDensities = (double*)malloc(size_t(int(objects.size()))*sizeof(double));
+		for (int j = 0; j < int(objects.size()); j++)
+			arealDensities[j] = 0.0;
+
+		for (int i = 0; i < int(endPoints.size())-1; i++)
+		{
+			// Consider the interval (allPoints[i], allPoints[i+1])
+			double midPoint = (endPoints[i + 1] + endPoints[i]) / 2.0;
+			for (int j = int(objects.size())-1; j >= 0; j--)
+			{
+				// Find which object this interval belongs to
+				if (intersection_0[j] <= midPoint && midPoint <= intersection_1[j])
+				{
+					//if (isnan(arealDensities[j]))
+					//	arealDensities[j] = 0.0;
+					arealDensities[j] += objects[j].val * (endPoints[i + 1] - endPoints[i]);
+					break;
+				}
+			}
+		}
+		for (int j = 0; j < int(objects.size()); j++)
+		{
+			//if (isnan(arealDensities[j]))
+			//	arealDensities[j] = 0.0;
+			retVal += arealDensities[j];
+		}
+
+		free(arealDensities);
+	}
+	free(intersection_0);
+	free(intersection_1);
+	return retVal;
+}
+
+//#####################################################################################################################
+// geometricObject
+//#####################################################################################################################
+geometricObject::geometricObject()
+{
+	reset();
+}
+
+geometricObject::geometricObject(int type_in, float* c_in, float* r_in, float val_in, float* A_in, float* clip_in)
+{
+	init(type_in, c_in, r_in, val_in, A_in, clip_in);
+}
+
+geometricObject::~geometricObject()
+{
+	//reset();
+}
+
+void geometricObject::reset()
+{
+	type = -1;
+	for (int i = 0; i < 3; i++)
+	{
+		centers[i] = 0.0;
+		radii[i] = 0.0;
+	}
+	for (int i = 0; i < 4; i++)
+	{
+		clippingPlanes[0][i] = 0.0;
+		clippingPlanes[1][i] = 0.0;
+		clippingPlanes[2][i] = 0.0;
+		clippingPlanes[3][i] = 0.0;
+		clippingPlanes[4][i] = 0.0;
+		clippingPlanes[5][i] = 0.0;
+	}
+	val = 0.0;
+	for (int i = 0; i < 9; i++)
+		A[i] = 0.0;
+	isRotated = false;
+	numClippingPlanes = 0;
+}
+
+bool geometricObject::init(int type_in, float* c_in, float* r_in, float val_in, float* A_in, float* clip_in)
+{
+	reset();
+	if (c_in == NULL || r_in == NULL || type_in < 0 || type_in > phantom::CONE_Z)
+	{
+		/*
+		if (c_in == NULL)
+			printf("Error: center not given\n");
+		if (r_in == NULL)
+			printf("Error: radii not given\n");
+		if (type < 0 || type > phantom::CONE_Z)
+			printf("Error: invalid type (%d)\n", type_in);
+		//*/
+		return false;
+	}
+	type = type_in;
+	for (int i = 0; i < 3; i++)
+	{
+		centers[i] = c_in[i];
+		radii[i] = r_in[i];
+	}
+
+	if (clip_in != NULL)
+	{
+		numClippingPlanes = 0;
+		for (int i = 0; i < 3; i++)
+		{
+			if (clip_in[i] != 0.0)
+			{
+				clippingPlanes[numClippingPlanes][i] = -1.0;
+				clippingPlanes[numClippingPlanes][3] = -clip_in[i];
+				//clippingPlanes[numClippingPlanes][3] = 0.0;
+				numClippingPlanes += 1;
+			}
+		}
+	}
+
+	val = val_in;
+	isRotated = false;
+	if (A_in != NULL)
+	{
+		for (int i = 0; i < 9; i++)
+		{
+			A[i] = A_in[i];
+			if ((i == 0 || i == 4 || i == 8))
+			{
+				if (fabs(A[i] - 1.0) > 1.0e-8)
+					isRotated = true;
+			}
+			else
+			{
+				if (fabs(A[i]) > 1.0e-8)
+					isRotated = true;
+			}
+			
+		}
+	}
+
+	if (type == phantom::CONE_X)
+	{
+		double l = radii[0];
+		double r_1 = radii[1];
+		double r_2 = radii[2];
+
+		radii[1] = fabs(r_2 - r_1) / (2.0 * l);
+		radii[2] = radii[1];
+		radii[0] = 1.0;
+
+		centers[0] = centers[0] - l * (r_2 + r_1) / (r_2 - r_1);
+		clipCone[0] = -l + l * (r_2 + r_1) / (r_2 - r_1);
+		clipCone[1] = l + l * (r_2 + r_1) / (r_2 - r_1);
+	}
+	else if (type == phantom::CONE_Y)
+	{
+		double r_1 = radii[0];
+		double l = radii[1];
+		double r_2 = radii[2];
+
+		radii[0] = fabs(r_2 - r_1) / (2.0 * l);
+		radii[2] = radii[0];
+		radii[1] = 1.0;
+
+		centers[1] = centers[1] - l * (r_2 + r_1) / (r_2 - r_1);
+		clipCone[0] = -l + l * (r_2 + r_1) / (r_2 - r_1);
+		clipCone[1] = l + l * (r_2 + r_1) / (r_2 - r_1);
+	}
+	else if (type == phantom::CONE_Z)
+	{
+		double r_1 = radii[0];
+		double r_2 = radii[1];
+		double l = radii[2];
+
+		radii[0] = fabs(r_2 - r_1) / (2.0 * l);
+		radii[1] = radii[0];
+		radii[2] = 1.0;
+
+		centers[2] = centers[2] - l * (r_2 + r_1) / (r_2 - r_1);
+		clipCone[0] = -l + l * (r_2 + r_1) / (r_2 - r_1);
+		clipCone[1] = l + l * (r_2 + r_1) / (r_2 - r_1);
+	}
+
+	return true;
+}
+
+bool geometricObject::intersectionEndPoints(double* p, double* r, double* ts)
+{
+	// assume ||r|| == 1 && r != (0,0,1) && axis[i] > 0 for i=0,1,2
+	// alpha is rotation around x-y axis, currently there is no rotation for x-z or y-z axes
+	double q[3];
+	double Minv_r[3];
+
+	if (isRotated == false)
+	{
+		// Scale; (9,0) ops
+		q[0] = (p[0] - centers[0]) / radii[0];
+		q[1] = (p[1] - centers[1]) / radii[1];
+		q[2] = (p[2] - centers[2]) / radii[2];
+
+		Minv_r[0] = r[0] / radii[0];
+		Minv_r[1] = r[1] / radii[1];
+		Minv_r[2] = r[2] / radii[2];
+	}
+	else
+	{
+		double temp[3];
+
+		// Shift
+		q[0] = p[0] - centers[0];
+		q[1] = p[1] - centers[1];
+		q[2] = p[2] - centers[2];
+
+		// Rotate and Scale; (36, 0) ops
+		temp[0] = (q[0] * A[0 * 3 + 0] + q[1] * A[0 * 3 + 1] + q[2] * A[0 * 3 + 2]) / radii[0];
+		temp[1] = (q[0] * A[1 * 3 + 0] + q[1] * A[1 * 3 + 1] + q[2] * A[1 * 3 + 2]) / radii[1];
+		temp[2] = (q[0] * A[2 * 3 + 0] + q[1] * A[2 * 3 + 1] + q[2] * A[2 * 3 + 2]) / radii[2];
+
+		q[0] = temp[0];
+		q[1] = temp[1];
+		q[2] = temp[2];
+
+		Minv_r[0] = (r[0] * A[0 * 3 + 0] + r[1] * A[0 * 3 + 1] + r[2] * A[0 * 3 + 2]) / radii[0];
+		Minv_r[1] = (r[0] * A[1 * 3 + 0] + r[1] * A[1 * 3 + 1] + r[2] * A[1 * 3 + 2]) / radii[1];
+		Minv_r[2] = (r[0] * A[2 * 3 + 0] + r[1] * A[2 * 3 + 1] + r[2] * A[2 * 3 + 2]) / radii[2];
+	}
+
+	//printf("before: (%f, %f, %f) + t(%f, %f, %f)\n", p[0], p[1], p[2], r[0], r[1], r[2]);
+	//printf("after : (%f, %f, %f) + t(%f, %f, %f)\n", q[0], q[1], q[2], Minv_r[0], Minv_r[1], Minv_r[2]); exit(1);
+
+	//return intersectionEndPoints_centeredAndNormalized(&q[0], &Minv_r[0], ts);
+
+	//printf("q = (%f, %f, %f)\n", q[0], q[1], q[2]);
+	//printf("Minv_r = (%f, %f, %f)\n", Minv_r[0], Minv_r[1], Minv_r[2]);
+
+	intersectionEndPoints_centeredAndNormalized(q, Minv_r, ts);
+	if (parametersOfClippingPlaneIntersections(ts, p, r) == false)
+	{
+		ts[0] = -OUT_OF_BOUNDS;
+		ts[1] = ts[0];
+	}
+	if (ts[1] > ts[0])
+		return true;
+	else
+		return false;
+}
+
+bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, double* r, double* ts)
+{
+	if (ts == NULL)
+		return false;
+	ts[0] = -OUT_OF_BOUNDS;
+	ts[1] = ts[0];
+
+	// r != (0,0,1)
+	double r_dot_r = r[0] * r[0] + r[1] * r[1] + r[2] * r[2];
+	//double t0 = (r[0]*p[0] + r[1]*p[1] + r[2]*p[2])/r_dot_r;
+	if (type != phantom::CONE_Y && type != phantom::CONE_Z && type != phantom::CONE_X)
+	{
+		double t0 = -(r[0] * p[0] + r[1] * p[1] + r[2] * p[2]) / r_dot_r;
+		//if (fabs(p[0]+t0*r[0]) > 1.0 || fabs(p[1]+t0*r[1]) > 1.0 || fabs(p[2]+t0*r[2]) > 1.0)
+		//if ((p[0]-t0*r[0])*(p[0]-t0*r[0]) + (p[1]-t0*r[1])*(p[1]-t0*r[1]) + (p[2]-t0*r[2])*(p[2]-t0*r[2]) > 3.0)
+		if ((p[0] + t0 * r[0]) * (p[0] + t0 * r[0]) + (p[1] + t0 * r[1]) * (p[1] + t0 * r[1]) + (p[2] + t0 * r[2]) * (p[2] + t0 * r[2]) > 3.0)
+			return ts;
+	}
+
+	if (type == phantom::ELLIPSOID)
+	{
+		//double p_dot_r = dot(p,r);
+		double p_dot_r = r[0] * p[0] + r[1] * p[1] + r[2] * p[2];
+		//double p_dot_r = t0*r_dot_r;
+		double disc = p_dot_r * p_dot_r + r_dot_r * (1.0 - dot(p, p));
+		//double disc = p_dot_r*p_dot_r + r_dot_r*(1.0 - (p[0]*p[0]+p[1]*p[1]+p[2]*p[2]));
+		if (disc > 0.0)
+		{
+			disc = sqrt(disc);
+			ts[0] = (-p_dot_r - disc) / r_dot_r;
+			ts[1] = (-p_dot_r + disc) / r_dot_r;
+		}
+	}
+	else if (type == phantom::PARALLELEPIPED)
+	{
+		double tx[2];
+		double ty[2];
+		double tz[2];
+		if (parametersOfIntersection_1D(&tx[0], p[0], r[0]) == true)
+		{
+			if (parametersOfIntersection_1D(&ty[0], p[1], r[1]) == true)
+			{
+				if (parametersOfIntersection_1D(&tz[0], p[2], r[2]) == true)
+				{
+					ts[0] = max(max(tx[0], ty[0]), tz[0]);
+					ts[1] = min(min(tx[1], ty[1]), tz[1]);
+				}
+			}
+		}
+	}
+	else if (type == phantom::CYLINDER_Z)
+	{
+		double r_dot_r_2D = r[0] * r[0] + r[1] * r[1];
+		double disc = (p[0] * r[0] + p[1] * r[1]) * (p[0] * r[0] + p[1] * r[1]) - r_dot_r_2D * (p[0] * p[0] + p[1] * p[1] - 1.0);
+		if (disc > 0.0)
+		{
+			disc = sqrt(disc);
+			double tmin = (-(p[0] * r[0] + r[1] * p[1]) - disc) / r_dot_r_2D;
+			double tmax = (-(p[0] * r[0] + r[1] * p[1]) + disc) / r_dot_r_2D;
+
+			double tz[2];
+			if (parametersOfIntersection_1D(&tz[0], p[2], r[2]) == true)
+			{
+				ts[0] = max(tmin, tz[0]);
+				ts[1] = min(tmax, tz[1]);
+			}
+		}
+		else if (r[0] == 0.0 && r[1] == 0.0 && p[0] * p[0] + p[1] * p[1] <= 1.0)
+		{
+			parametersOfIntersection_1D(ts, p[2], r[2]);
+		}
+	}
+	else if (type == phantom::CYLINDER_X) // ellipsoidal cross sections parallel to x-y axis
+	{
+		double r_dot_r_2D = r[2] * r[2] + r[1] * r[1];
+		double disc = (p[2] * r[2] + p[1] * r[1]) * (p[2] * r[2] + p[1] * r[1]) - r_dot_r_2D * (p[2] * p[2] + p[1] * p[1] - 1.0);
+		if (disc > 0.0)
+		{
+			disc = sqrt(disc);
+			double tmin = (-(p[2] * r[2] + r[1] * p[1]) - disc) / r_dot_r_2D;
+			double tmax = (-(p[2] * r[2] + r[1] * p[1]) + disc) / r_dot_r_2D;
+
+			double tz[2];
+			if (parametersOfIntersection_1D(&tz[0], p[0], r[0]) == true)
+			{
+				ts[0] = max(tmin, tz[0]);
+				ts[1] = min(tmax, tz[1]);
+			}
+		}
+		else if (r[1] == 0.0 && r[2] == 0.0 && p[1] * p[1] + p[2] * p[2] <= 1.0)
+		{
+			parametersOfIntersection_1D(ts, p[0], r[0]);
+		}
+	}
+	else if (type == phantom::CYLINDER_Y) // ellipsoidal cross sections parallel to x-y axis
+	{
+		double r_dot_r_2D = r[0] * r[0] + r[2] * r[2];
+		double disc = (p[0] * r[0] + p[2] * r[2]) * (p[0] * r[0] + p[2] * r[2]) - r_dot_r_2D * (p[0] * p[0] + p[2] * p[2] - 1.0);
+		if (disc > 0.0)
+		{
+			disc = sqrt(disc);
+			double tmin = (-(p[0] * r[0] + r[2] * p[2]) - disc) / r_dot_r_2D;
+			double tmax = (-(p[0] * r[0] + r[2] * p[2]) + disc) / r_dot_r_2D;
+
+			double tz[2];
+			if (parametersOfIntersection_1D(&tz[0], p[1], r[1]) == true)
+			{
+				ts[0] = max(tmin, tz[0]);
+				ts[1] = min(tmax, tz[1]);
+			}
+		}
+		else if (r[0] == 0.0 && r[2] == 0.0 && p[0] * p[0] + p[2] * p[2] <= 1.0)
+		{
+			parametersOfIntersection_1D(ts, p[1], r[1]);
+		}
+	}
+	else if (type == phantom::CONE_Z)
+	{
+		double a = r[0] * r[0] + r[1] * r[1] - r[2] * r[2];
+		double b_half = p[0] * r[0] + p[1] * r[1] - p[2] * r[2];
+		double c = p[0] * p[0] + p[1] * p[1] - p[2] * p[2];
+		double disc = b_half * b_half - a * c;
+
+		if (disc > 0.0)
+		{
+			disc = sqrt(disc);
+			double tmin = (-b_half - disc) / a;
+			double tmax = (-b_half + disc) / a;
+			if (tmin > tmax)
+			{
+				a = tmin;
+				tmin = tmax;
+				tmax = a;
+			}
+
+			double theShift = 0.5 * (clipCone[1] + clipCone[0]);
+			double theScale = 0.5 * (clipCone[1] - clipCone[0]);
+
+			double tz[2];
+			if (parametersOfIntersection_1D(&tz[0], (p[2] - theShift) / theScale, r[2] / theScale) == true)
+			{
+				ts[0] = max(tmin, tz[0]);
+				ts[1] = min(tmax, tz[1]);
+			}
+		}
+	}
+	else if (type == phantom::CONE_X)
+	{
+		double a = r[2] * r[2] + r[1] * r[1] - r[0] * r[0];
+		double b_half = p[2] * r[2] + p[1] * r[1] - p[0] * r[0];
+		double c = p[2] * p[2] + p[1] * p[1] - p[0] * p[0];
+		double disc = b_half * b_half - a * c;
+
+		if (disc > 0.0)
+		{
+			disc = sqrt(disc);
+			double tmin = (-b_half - disc) / a;
+			double tmax = (-b_half + disc) / a;
+			if (tmin > tmax)
+			{
+				a = tmin;
+				tmin = tmax;
+				tmax = a;
+			}
+
+			double theShift = 0.5 * (clipCone[1] + clipCone[0]);
+			double theScale = 0.5 * (clipCone[1] - clipCone[0]);
+
+			double tz[2];
+			if (parametersOfIntersection_1D(&tz[0], (p[0] - theShift) / theScale, r[0] / theScale) == true)
+			{
+				ts[0] = max(tmin, tz[0]);
+				ts[1] = min(tmax, tz[1]);
+			}
+		}
+	}
+	else if (type == phantom::CONE_Y)
+	{
+		double a = r[0] * r[0] + r[2] * r[2] - r[1] * r[1];
+		double b_half = p[0] * r[0] + p[2] * r[2] - p[1] * r[1];
+		double c = p[0] * p[0] + p[2] * p[2] - p[1] * p[1];
+		double disc = b_half * b_half - a * c;
+
+		if (disc > 0.0)
+		{
+			disc = sqrt(disc);
+			double tmin = (-b_half - disc) / a;
+			double tmax = (-b_half + disc) / a;
+			if (tmin > tmax)
+			{
+				a = tmin;
+				tmin = tmax;
+				tmax = a;
+			}
+
+			double theShift = 0.5 * (clipCone[1] + clipCone[0]);
+			double theScale = 0.5 * (clipCone[1] - clipCone[0]);
+
+			double tz[2];
+			if (parametersOfIntersection_1D(&tz[0], (p[1] - theShift) / theScale, r[1] / theScale) == true)
+			{
+				if (fabs(r[1]) > 1.0e-12)
+				{
+					bool isInside_0 = false;
+					double x_val, y_val, z_val;
+					x_val = p[0] + tz[0] * r[0]; x_val *= x_val;
+					y_val = p[1] + tz[0] * r[1]; y_val *= y_val;
+					z_val = p[2] + tz[0] * r[2]; z_val *= z_val;
+					if (x_val + z_val <= y_val)
+						isInside_0 = true;
+
+					bool isInside_1 = false;
+					x_val = p[0] + tz[1] * r[0]; x_val *= x_val;
+					y_val = p[1] + tz[1] * r[1]; y_val *= y_val;
+					z_val = p[2] + tz[1] * r[2]; z_val *= z_val;
+					if (x_val + z_val <= y_val)
+						isInside_1 = true;
+					if (isInside_0 == true)
+					{
+						if (isInside_1 == true)
+						{
+							//ts[0] = max(tmin, tz[0]);
+							//ts[1] = min(tmax, tz[1]);
+							ts[0] = tz[0];
+							ts[1] = tz[1];
+						}
+						else
+						{
+							//insiders: tz[0], tmin, tmax
+							if (tz[0] <= tmin && tmin <= tz[1])
+							{
+								ts[0] = tz[0];
+								ts[1] = tmin;
+							}
+							else
+							{
+								ts[0] = tz[0];
+								ts[1] = tmax;
+							}
+						}
+					}
+					else
+					{
+						if (isInside_1 == true)
+						{
+							//insiders: tz[1], tmin, tmax
+							if (tz[0] <= tmin && tmin <= tz[1])
+							{
+								ts[0] = tmin;
+								ts[1] = tz[1];
+							}
+							else
+							{
+								ts[0] = tmax;
+								ts[1] = tz[1];
+							}
+						}
+						else
+						{
+							// insiders: tmin, tmax
+							if (tz[0] <= tmin && tmax <= tz[1])
+							{
+								ts[0] = tmin;
+								ts[1] = tmax;
+							}
+							else
+							{
+								ts[0] = -OUT_OF_BOUNDS;
+								ts[1] = ts[0];
+							}
+						}
+					}
+				}
+				else
+				{
+					ts[0] = tmin;
+					ts[1] = tmax;
+				}
+			}
+		}
+	}
+	else
+	{
+		ts[0] = -OUT_OF_BOUNDS;
+		ts[1] = -OUT_OF_BOUNDS;
+	}
+
+	if (ts[0] >= ts[1])
+	{
+		ts[0] = -OUT_OF_BOUNDS;
+		ts[1] = ts[0];
+	}
+
+	return true;
+}
+
+bool geometricObject::parametersOfIntersection_1D(double* ts, double p, double r)
+{
+	// finds ts such that p+t*r = +-1
+	if (fabs(r) < 1e-12)
+	{
+		if (fabs(p) < 1.0)
+		{
+			ts[0] = -OUT_OF_BOUNDS;
+			ts[1] = OUT_OF_BOUNDS;
+
+			return true;
+		}
+		else
+			return false;
+	}
+	else
+	{
+		if (r > 0.0)
+		{
+			ts[0] = (-1.0 - p) / r;
+			ts[1] = (1.0 - p) / r;
+		}
+		else
+		{
+			ts[1] = (-1.0 - p) / r;
+			ts[0] = (1.0 - p) / r;
+		}
+		return true;
+	}
+}
+
+bool geometricObject::parametersOfClippingPlaneIntersections(double* ts, double* p, double* r)
+{
+	for (int i = 0; i < numClippingPlanes; i++)
+	{
+		double p_dot_n = clippingPlanes[i][0] * p[0] + clippingPlanes[i][1] * p[1] + clippingPlanes[i][2] * p[2];
+		double r_dot_n = clippingPlanes[i][0] * r[0] + clippingPlanes[i][1] * r[1] + clippingPlanes[i][2] * r[2];
+		if (fabs(r_dot_n) < 1.0e-12)
+		{
+			if (p_dot_n < clippingPlanes[i][3])
+				return false;
+		}
+		else if (r_dot_n > 0.0)
+		{
+			double temp = (clippingPlanes[i][3] - p_dot_n) / r_dot_n;
+			// restriction: t > temp
+			if (ts[1] < temp)
+				return false;
+			if (temp > ts[0])
+				ts[0] = temp;
+		}
+		else
+		{
+			// restriction: t < temp
+			double temp = (clippingPlanes[i][3] - p_dot_n) / r_dot_n;
+			if (ts[0] > temp)
+				return false;
+			if (ts[1] > temp)
+				ts[1] = temp;
+		}
+	}
+
+	return true;
+}
+
+double geometricObject::dot(double* x, double* y, int N)
+{
+	if (x == NULL || y == NULL || N <= 0)
+		return 0.0;
+	else
+	{
+		double retVal = x[0] * y[0];
+		for (int i = 1; i < N; i++)
+			retVal += x[i] * y[i];
+		return retVal;
+	}
 }

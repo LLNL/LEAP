@@ -536,6 +536,12 @@ class tomographicModels:
         self.libprojectors.shift_detector.restype = ctypes.c_bool
         self.libprojectors.shift_detector.argtypes = [ctypes.c_float, ctypes.c_float]
         return self.libprojectors.shift_detector(r, c)
+        
+    def rebin_curved(self, g, fanAngles, order=6):
+        self.set_model()
+        self.libprojectors.rebin_curved.restype = ctypes.c_bool
+        self.libprojectors.rebin_curved.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+        return self.libprojectors.rebin_curved(g, fanAngles, order)
     
     ###################################################################################################################
     ###################################################################################################################
@@ -3987,10 +3993,45 @@ class tomographicModels:
     # PHANTOM SPECIFICATION FUNCTIONS
     ###################################################################################################################
     ###################################################################################################################
-    def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None, oversampling=1):
-        """Adds a geometric object to the volume
+    def rayTrace(self, g=None, oversampling=1):
+        """Performs analytic ray-tracing simulation through a phantom composed of geometrical objects
+
+        See the addObject function for how to build the phantom description
+        The CT geometry parameters must be specified prior to running this functions
         
-        The CT volume parameters must be specified prior to running this functions
+        Args:
+            g (C contiguous float32 numpy array): CT projection data
+            oversampling (int): the oversampling factor for each ray
+            
+        Returns:
+            g
+        
+        """
+        if g is None:
+            g = self.allocate_projections()
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.rayTrace.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            self.libprojectors.rayTrace(g.data_ptr(), int(oversampling))
+        else:
+            self.libprojectors.rayTrace.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            self.libprojectors.rayTrace(g, int(oversampling))
+        return g
+    
+    def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None, oversampling=1):
+        """Adds a geometric object to the phantom
+        
+        This function operates in two modes: (1) specifying a voxelized phantom and (2) specifying a phantom
+        to be used in an analytic ray-tracing simulation (see rayTrace).
+        If a volume is given (first argument of this function), then the specified object will be added to the voxel data.
+        If a volume is not given then the object will be added to a stack of objects that define a phantom to be used for
+        an analytic ray-tracing simulation.
+        
+        The order in which multiple object are defined is important.  Background objects must be specified first
+        and foreground objects defined last.  If you reverse the order, then the foreground objects will be effectively overriden
+        by the background objects.
+        
+        The CT volume or CT geometry parameters must be specified prior to running this functions.
         
         Args:
             f (C contiguous float32 numpy array): CT volume
@@ -4018,15 +4059,30 @@ class tomographicModels:
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.addObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
             return self.libprojectors.addObject(f.data_ptr(), int(typeOfObject), c, r, float(val), A, clip, oversampling)
+        elif f is None:
+            self.libprojectors.addObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            return self.libprojectors.addObject(f, int(typeOfObject), c, r, float(val), A, clip, oversampling)
         else:
             self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
             return self.libprojectors.addObject(f, int(typeOfObject), c, r, float(val), A, clip, oversampling)
         
-    def set_FORBILD(self, f, includeEar=False, oversampling=1):
+    def set_FORBILD(self, f=None, includeEar=True, oversampling=1):
         """Sets the FORBILD head phantom
         
+        This function operates in two modes: (1) specifying a voxelized phantom and (2) specifying a phantom
+        to be used in an analytic ray-tracing simulation (see rayTrace).
+        If a volume is given (first argument of this function), then the specified object will be added to the voxel data.
+        If a volume is not given then all the objects of the FORBILD head phantom will be added to a stack of objects
+        that define a phantom to be used for an analytic ray-tracing simulation.
+        
         Note that the values of the FORBILD head phantom are all scaled by 0.02
-        which is the LAC of water at around 60 keV
+        which is the LAC of water at around 60 keV.
+        
+        Args:
+            f (C contiguous float32 numpy array): CT volume
+            includeEar (boolean): specifies whether the air bubbles in the ear are to be included or not
+            oversampling (int): the oversampling factor of the voxelization
+        
         """
         has_scipy = False
         try:
@@ -4057,7 +4113,8 @@ class tomographicModels:
         if self.get_numAngles() == 1 and self.get_numX() == 1:
             pass
         else:
-            self.addObject(f, 0, 10.0*np.array([9.1, 0.0, 0.0]), 10.0*np.array([4.2, 1.8, 1.8]), 1.800*0.02, None, np.array([1.0, 0.0, 0.0]), oversampling)
+            #self.addObject(f, 0, 10.0*np.array([9.1, 0.0, 0.0]), 10.0*np.array([4.2, 1.8, 1.8]), 1.800*0.02, None, np.array([1.0, 0.0, 0.0]), oversampling)
+            self.addObject(f, 0, 10.0*np.array([9.1, 0.0, 0.0]), 10.0*np.array([4.2, 1.8, 1.8]), 1.800*0.02, None, np.array([91.0, 0.0, 0.0]), oversampling)
 
         #'''
         if includeEar:
@@ -4068,6 +4125,11 @@ class tomographicModels:
                 z = xyzs[3*n+2]
                 self.addObject(f, 0, 10.0*np.array([x, y, z]), 10.0*np.array([0.15, 0.15, 0.15]), 0.0, None, None, oversampling)
         #'''
+        
+    def clearPhantom(self):
+        """Clears all phantom objects"""
+        self.set_model()
+        self.libprojectors.clearPhantom()
         
 class subsetParameters:
     def __init__(self, ctModel, numSubsets):

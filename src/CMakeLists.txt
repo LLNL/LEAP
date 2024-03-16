@@ -55,6 +55,8 @@ set(HEADER
   cuda_utils.h
   cpu_utils.h
   phantom.h
+  analytic_ray_tracing.h
+  rebin.h
   file_io.h
   leap_defines.h
 )
@@ -76,6 +78,8 @@ set(SRC_CPP
   find_center_cpu.cpp
   cpu_utils.cpp
   phantom.cpp
+  analytic_ray_tracing.cpp
+  rebin.cpp
   file_io.cpp
 )
 

@@ -668,8 +668,23 @@ bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
 
 bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
 {
-	phantom testObject;
-	return testObject.addObject(f, &(tomo()->params), type, c, r, val, A, clip, oversampling);
+	return tomo()->geometricPhantom.addObject(f, &(tomo()->params), type, c, r, val, A, clip, oversampling);
+}
+
+bool clearPhantom()
+{
+	tomo()->geometricPhantom.clearObjects();
+	return true;
+}
+
+bool rayTrace(float* g, int oversampling)
+{
+	return tomo()->rayTrace(g, oversampling);
+}
+
+bool rebin_curved(float* g, float* fanAngles, int order)
+{
+	return tomo()->rebin_curved(g, fanAngles, order);
 }
 
 bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)

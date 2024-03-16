@@ -13,13 +13,14 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.6"
+#define LEAP_VERSION "1.7"
 
 #include <stdlib.h>
 #include "parameters.h"
 #include "projectors.h"
 #include "filtered_backprojection.h"
 #include "cpu_utils.h"
+#include "phantom.h"
 
 /**
  *  tomographicModels class
@@ -796,6 +797,25 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu);
+
+	/**
+	 * \fn          rayTrace
+	 * \brief       analytic ray tracing simulation
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   oversampling the detector oversampling factor
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool rayTrace(float* g, int oversampling = 1);
+
+	/**
+	 * \fn          rebin_curved
+	 * \brief       rebin a collection of flat detector modules to a curved detector
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   fanAngles the measured fan angles
+	 * \param[in]	order the order of the interpolation polynomial
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool rebin_curved(float* g, float* fanAngles, int order = 6);
 	
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
@@ -808,6 +828,7 @@ public:
 	bool backprojectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
 	parameters params;
+	phantom geometricPhantom;
 private:
 
 	/**

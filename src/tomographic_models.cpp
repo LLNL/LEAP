@@ -22,6 +22,8 @@
 #include "projectors_Joseph_cpu.h"
 #include "matching_pursuit.cuh"
 #include "bilateral_filter.cuh"
+#include "analytic_ray_tracing.h"
+#include "rebin.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -70,6 +72,7 @@ bool tomographicModels::reset()
 {
 	params.clearAll();
 	params.initialize();
+	geometricPhantom.clearObjects();
 	return true;
 }
 
@@ -2289,6 +2292,18 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	}
 	else
 		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
+}
+
+bool tomographicModels::rayTrace(float* g, int oversampling)
+{
+	analyticRayTracing simulator;
+	return simulator.rayTrace(g, &params, &geometricPhantom, oversampling);
+}
+
+bool tomographicModels::rebin_curved(float* g, float* fanAngles, int order)
+{
+	rebin rebinningRoutines;
+	return rebinningRoutines.rebin_curved(g, &params, fanAngles, order);
 }
 
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
