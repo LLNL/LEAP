@@ -92,17 +92,19 @@ f[:] = 0.0
 
 # Reconstruct the data
 startTime = time.time()
-#leapct.print_cost = True
 #leapct.backproject(g,f)
 #leapct.FBP(g,f)
-#leapct.ASDPOCS(g,f,100,10,1,0.02/20.0)
-#leapct.SART(g,f,50,10)
-#leapct.MLEM(g,f,10)
+#leapct.inconsistencyReconstruction(g,f)
+#leapct.print_cost = True
+filters = filterSequence(1.0e0)
+filters.append(TV(leapct, delta=0.02/20.0))
+#leapct.ASDPOCS(g,f,10,10,1,filters)
+#leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
 #leapct.LS(g,f,50,'SQS')
-leapct.RLS(g,f,50,0.01/20.0,1e3,'RAMP')
-#leapct.RDLS(g,f,50,0.0,0.0,2.0,True)
-#leapct.MLTR(g,f,50,10,0.02/20.0,0.1)
+#leapct.RWLS(g,f,100,filters,None,'SQS')
+leapct.RDLS(g,f,100,filters,1.0,True,1)
+#leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 
@@ -119,4 +121,7 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 
 # Display the result with napari
-leapct.display(f)
+#leapct.display(f)
+import matplotlib.pyplot as plt
+plt.imshow(np.squeeze(f.cpu().detach().numpy()), cmap='gray')
+plt.show()

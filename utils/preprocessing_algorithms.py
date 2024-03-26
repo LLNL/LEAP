@@ -196,6 +196,39 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     g = g + gainMap[None,:,:]
     return g
 
+def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
+    """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    
+    Assumes the input data is in attenuation space.
+    No LEAP parameters need to be set for this function to work 
+    and can be applied to any CT geometry type.
+    This algorithm is effective at removing ring artifacts without creating new ring artifacts.
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        threshold (float): A pixel will be replaced by the median of its neighbors if |g - median(g)|/median(g) > threshold
+        windowSize (int): The window size of the median filter applied is windowSize x windowSize
+        numIter (int): Number of iterations
+    
+    Returns:
+        The corrected data
+    """
+    
+    Dg = leapct.copyData(g)
+    for n in range(numIter):
+        if n > 0:
+            Dg[:] = g[:]
+        leapct.MedianFilter2D(Dg, threshold, windowSize)
+        Dg[:] = g[:] - Dg[:] # noise only
+        if has_torch == True and type(g) is torch.Tensor:
+            Dg_sum = torch.mean(Dg,axis=0)
+        else:
+            Dg_sum = np.mean(Dg,axis=0)
+
+        g -= Dg_sum[None,:,:]
+    return g
+
 def ringRemoval(leapct, g, delta, beta, numIter):
     """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     

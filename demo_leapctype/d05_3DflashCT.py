@@ -111,11 +111,21 @@ if has_torch:
 
 
 # Reconstruct the data
-# This is a lot of iterations but should take us close to full convergence
 startTime = time.time()
 #leapct.backproject(g,f)
-#leapct.ASDPOCS(g,f,400,15,5,0.02/40.0)
-leapct.RLS(g,f,400,0.02/40.0,1e1, 'SQS')
+#leapct.FBP(g,f)
+#leapct.inconsistencyReconstruction(g,f)
+#leapct.print_cost = True
+filters = filterSequence(1.0e1)
+filters.append(TV(leapct, delta=0.02/40.0))
+#leapct.ASDPOCS(g,f,10,10,1,filters)
+#leapct.SART(g,f,10,10)
+#leapct.OSEM(g,f,10,10)
+#leapct.LS(g,f,50,'SQS')
+leapct.RLS(g,f,400,filters, 'SQS')
+#leapct.RWLS(g,f,100,filters,None,'SQS')
+#leapct.RDLS(g,f,100,filters,1.0,True,1)
+#leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 leapct.display(f)

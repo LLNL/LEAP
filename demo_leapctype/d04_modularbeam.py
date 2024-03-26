@@ -119,10 +119,17 @@ f[:] = 0.0
 startTime = time.time()
 #leapct.backproject(g,f)
 leapct.FBP(g,f)
-#leapct.ASDPOCS(g,f,50,10,1,1.0/20.0)
-#leapct.SART(g,f,20,10)
+#leapct.inconsistencyReconstruction(g,f)
+#leapct.print_cost = True
+filters = filterSequence(1.0e0)
+filters.append(TV(leapct, delta=0.02/20.0))
+#leapct.ASDPOCS(g,f,10,10,1,filters)
+#leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
-#leapct.LS(g,f,10,'SQS')
+#leapct.LS(g,f,50,'SQS')
+#leapct.RWLS(g,f,100,filters,None,'SQS')
+#leapct.RDLS(g,f,100,filters,1.0,True,1)
+#leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 

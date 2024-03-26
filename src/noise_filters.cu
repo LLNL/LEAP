@@ -15,7 +15,7 @@
 #include "device_launch_parameters.h"
 #include "parameters.h"
 
-__global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, const float3 T, const float3 startVal, const int N_phi_max, const float filterWidth)
+__global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, const float3 T, const float3 startVal, const int N_phi_max, const float filterWidth, const float rFOVsq)
 {
     // return;
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -25,6 +25,13 @@ __global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, c
 
     const float x = i * T.x + startVal.x;
     const float y = j * T.y + startVal.y;
+
+    if (x * x + y * y > rFOVsq)
+    {
+        f[uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i)] = 0.0f;
+        return;
+    }
+
     // const float z = k * T.z + startVal.z;
 
     const float r = sqrt(x * x + y * y);
@@ -716,11 +723,13 @@ bool azimuthalBlur(float* f, parameters* params, float filterWidth, bool data_on
         return false;
     }
 
+    float rFOVsq = params->rFOV() * params->rFOV();
+
     // Call kernel
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    azimuthalBlurKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, T, startVal, N_phi_max, filterWidth);
+    azimuthalBlurKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, T, startVal, N_phi_max, filterWidth, rFOVsq);
 
     // wait for GPU to finish
     cudaDeviceSynchronize();

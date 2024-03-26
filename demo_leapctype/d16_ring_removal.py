@@ -63,7 +63,8 @@ g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 # The called ringRemoval is slower, but it is more robust
 startTime = time.time()
 #g = ringRemoval_fast(leapct, g, 1.0-0.99, 30, 0.05)
-g = ringRemoval(leapct, g, 1.0-0.99, 1.0e3, 30)
+g = ringRemoval_median(leapct, g, threshold=0.0, windowSize=7, numIter=1)
+#g = ringRemoval(leapct, g, 1.0-0.99, 1.0e3, 30)
 print('Ring Removal Elapsed Time: ' + str(time.time()-startTime))
 
 # Reconstruct the data
@@ -72,7 +73,7 @@ leapct.FBP(g,f)
 
 
 # Display the result with napari
-#leapct.display(f)
+leapct.display(f)
 
 import matplotlib.pyplot as plt
 plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')

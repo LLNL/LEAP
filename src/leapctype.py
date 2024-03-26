@@ -18,6 +18,8 @@ try:
     has_torch = True
 except:
     has_torch = False
+from leap_filter_sequence import *
+testFS = filterSequence()
 
 class tomographicModels:
     """ Python class for tomographicModels bindings
@@ -1601,6 +1603,30 @@ class tomographicModels:
             else:
                 return np.sum(x*y*w)
                 
+    def sum(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.sum(x)
+        else:
+            return np.sum(x)
+            
+    def abssum(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.sum(torch.abs(x))
+        else:
+            return np.sum(np.abs(x))
+            
+    def abs(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.abs(x)
+        else:
+            return np.abs(x)
+            
+    def sign(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.sign(x)
+        else:
+            return np.sign(x)
+                
     def expNeg(self, x):
         """ Returns exp(-x), converting attenuation data to transmission data """
         if has_torch == True and type(x) is torch.Tensor:
@@ -1863,7 +1889,7 @@ class tomographicModels:
             subsetParams.setSubset(-1)
             return f
             
-    def ASDPOCS(self, g, f, numIter, numSubsets, numTV, delta=0.0, mask=None):
+    def ASDPOCS(self, g, f, numIter, numSubsets, numTV, filters=None, mask=None):
         """Adaptive Steepest Descent-Projection onto Convex Subsets reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1881,7 +1907,7 @@ class tomographicModels:
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             numTV (int): number of TV diffusion steps
-            delta (float): parameter for the Huber-like loss function used in TV
+            filters (filterSequence object): list of differentiable regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
@@ -1895,7 +1921,16 @@ class tomographicModels:
             print('Error: mask must be the same shape as the projection data!')
             return None
         if numTV <= 0:
-            return self.SART(g,f,numIter,numSubsets,W)
+            return self.SART(g,f,numIter,numSubsets,mask)
+            
+        if filters is None:
+            filters = filterSequence()
+            filters.append(TV(self, delta=0.0))
+        elif isinstance(filters, (int, float)):
+            delta = filters
+            filters = filterSequence()
+            filters.append(TV(self, delta))
+            
         numSubsets = min(numSubsets, self.get_numAngles())
         omega = 0.8
         P1 = self.allocateData(g)
@@ -1965,7 +2000,9 @@ class tomographicModels:
             #'''            
             # TV step(s)
             f_TV[:] = f[:]
-            self.diffuse(f_TV, delta, numTV)
+            #self.diffuse(f_TV, delta, numTV)
+            for m in range(numTV):
+                f_TV = filters.apply(f_TV)
             #self.displayVolume(f_TV)
             self.project(Pf_TV_minus_g, f_TV)
             Pf_TV_minus_g = Pf_TV_minus_g - g
@@ -2038,7 +2075,7 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, 0.0, 0.0, 1.0, preconditioner, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, None, 1.0, preconditioner, nonnegativityConstraint)
         
     def WLS(self, g, f, numIter, W=None, preconditioner=None, nonnegativityConstraint=True):
         """Weighted Least Squares reconstruction
@@ -2058,9 +2095,9 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, 0.0, 0.0, W, preconditioner, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, None, W, preconditioner, nonnegativityConstraint)
         
-    def RLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditioner=None, nonnegativityConstraint=True):
+    def RLS(self, g, f, numIter, filters=None, preconditioner=None, nonnegativityConstraint=True):
         """Regularized Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2072,16 +2109,15 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            delta (float): parameter for the Huber-like loss function used in TV
-            beta (float): regularization strength
+            filters (filterSequence object): list of differentiable regularization filters
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, delta, beta, 1.0, preconditioner, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, filters, 1.0, preconditioner, nonnegativityConstraint)
        
-    def RWLS(self, g, f, numIter, delta=0.0, beta=0.0, W=None, preconditioner=None, nonnegativityConstraint=True):
+    def RWLS(self, g, f, numIter, filters=None, W=None, preconditioner=None, nonnegativityConstraint=True):
         """Regularized Weighted Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2093,18 +2129,20 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            delta (float): parameter for the Huber-like loss function used in TV
-            beta (float): regularization strength
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
+            filters (filterSequence object): list of differentiable regularization filters
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W:=exp(-g)
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
             f, the same as the input with the same name
         """
-        #if has_torch == True and type(f) is torch.Tensor:
-        #    print('ERROR: RWLS reconstruction algorithms not implemented for torch tensors!')
-        #    print('Please convert to numpy array prior to running this algorithm.')
-        #    return f
+        
+        if filters is None:
+            filters = filterSequence(0.0)
+        elif isinstance(filters, (int, float)):
+            print('Error: invalid inputs!  Note that algorithm syntax has changed, please see documentation.')
+            return None
+        
         conjGradRestart = 50
         if W is None:
             W = self.copyData(g)
@@ -2163,8 +2201,9 @@ class tomographicModels:
                 self.FBP(WPf_minus_g, grad)
             else:
                 self.backproject(WPf_minus_g, grad)
-            if beta > 0.0:
-                Sf1 = self.TVgradient(f, delta, beta)
+            if filters.beta > 0.0:
+                #Sf1 = self.TVgradient(f, delta, beta)
+                Sf1 = filters.gradient(f)
                 if preconditioner == 'SARR':
                     self.rampFilterVolume(Sf1)
                     self.windowFOV(Sf1)
@@ -2209,11 +2248,11 @@ class tomographicModels:
             num = 0.0
             if preconditioner == 'SARR':
                 num = self.innerProd(Pd,WPf_minus_g)
-                if beta > 0.0:
+                if filters.beta > 0.0:
                     num += self.innerProd(d,Sf1)
             else:
                 num = self.innerProd(d,grad)
-            stepSize = self.RWLSstepSize(f, grad, d, Pd, W, delta, beta, num)
+            stepSize = self.RWLSstepSize(f, grad, d, Pd, W, filters, num)
             if stepSize <= 0.0:
                 print('invalid step size; quitting!')
                 break
@@ -2229,15 +2268,16 @@ class tomographicModels:
                 dataFidelity = 0.5*self.innerProd(Pf_minus_g,Pf_minus_g,W)
                 if has_torch == True and type(dataFidelity) is torch.Tensor:
                     dataFidelity = dataFidelity.cpu().detach().numpy()
-                if beta > 0.0:
-                    regularizationCost = self.TVcost(f, delta, beta)
+                if filters.beta > 0.0:
+                    #regularizationCost = self.TVcost(f, delta, beta)
+                    regularizationCost = filters.cost(f)
                     print('\tcost = ' + str(dataFidelity+regularizationCost) + ' = ' + str(dataFidelity) + ' + ' + str(regularizationCost))
                 else:
                     print('\tcost = ' + str(dataFidelity))
                 
         return f
 
-    def RWLSstepSize(self, f, grad, d, Pd, W, delta, beta, num=None):
+    def RWLSstepSize(self, f, grad, d, Pd, W, filters, num=None):
         """Calculates the step size for an RWLS iteration
 
         Args:
@@ -2246,8 +2286,7 @@ class tomographicModels:
             d (C contiguous float32 numpy or torch array): descent direction of the RWLS cost function
             Pd (C contiguous float32 numpy or torch array): forward projection of d
             W (C contiguous float32 numpy or torch array): weights, should be the same size as g, if not given, W=exp(-g)
-            delta (float): parameter for the Huber-like loss function used in TV
-            beta (float): regularization strength
+            filters (filterSequence object): list of filters to use as a regularizer terms
         
         Returns:
             step size (float)
@@ -2258,9 +2297,10 @@ class tomographicModels:
             denomA = self.innerProd(Pd,Pd,W)
         else:
             denomA = self.innerProd(Pd,Pd)
-        denomB = 0.0;
-        if beta > 0.0:
-            denomB = self.TVquadForm(f, d, delta, beta)
+        denomB = 0.0
+        if filters.beta > 0.0:
+            #denomB = self.TVquadForm(f, d, delta, beta)
+            denomB = filters.quadForm(f, d)
             #print('denomB = ' + str(denomA))
         denom = denomA + denomB
         if has_torch == True and type(denom) is torch.Tensor:
@@ -2277,7 +2317,7 @@ class tomographicModels:
         """Derivative Least Squares reconstruction"""
         return self.RDLS(g, f, numIter, 0.0, 0.0, preconditionerFWHM, nonnegativityConstraint, dimDeriv)
         
-    def RDLS(self, g, f, numIter, delta=0.0, beta=0.0, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=1):
+    def RDLS(self, g, f, numIter, filters=None, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=1):
         """Regularized Derivative Least Squares reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2288,8 +2328,7 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            delta (float): parameter for the Huber-like loss function used in TV
-            beta (float): regularization strength
+            filters (filterSequence object): list of differentiable regularization filters
             preconditionerFWHM (float): specifies the FWHM of the blur preconditioner
             nonnegativityConstraint (bool): whether to apply a nonnegativity constraint
             dimDeriv (int): number of dimensions to apply the Laplacian derivative
@@ -2297,10 +2336,13 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        #if has_torch == True and type(f) is torch.Tensor:
-        #    print('ERROR: RDLS reconstruction algorithms not implemented for torch tensors!')
-        #    print('Please convert to numpy array prior to running this algorithm.')
-        #    return f
+        
+        if filters is None:
+            filters = filterSequence(0.0)
+        elif isinstance(filters, (int, float)):
+            print('Error: invalid inputs!  Note that algorithm syntax has changed, please see documentation.')
+            return None
+        
         if preconditionerFWHM > 1.0:
             smoothLaplacian = True
             #print('The preconditionerFWHM feature does not seem to be working, so this parameter will be disabled until we resolve the issue.')
@@ -2342,8 +2384,9 @@ class tomographicModels:
             self.Laplacian(LPf_minus_g, dimDeriv, smoothLaplacian)
             LPf_minus_g *= -1.0
             self.backproject(LPf_minus_g, grad)
-            if beta > 0.0:
-                Sf1 = self.TVgradient(f, delta, beta)
+            if filters.beta > 0.0:
+                #Sf1 = self.TVgradient(f, delta, beta)
+                Sf1 = filters.gradient(f)
                 grad[:] += Sf1[:]
 
             u[:] = grad[:]
@@ -2370,7 +2413,7 @@ class tomographicModels:
             
             self.project(Pd, d)
             
-            stepSize = self.RDLSstepSize(f, grad, d, Pd, delta, beta, dimDeriv, smoothLaplacian)
+            stepSize = self.RDLSstepSize(f, grad, d, Pd, filters, dimDeriv, smoothLaplacian)
             #if stepSize <= 0.0:
             #    print('invalid step size; quitting!')
             #    break
@@ -2384,7 +2427,7 @@ class tomographicModels:
                 Pf_minus_g[:] = Pf_minus_g[:] - stepSize*Pd[:]
         return f
 
-    def RDLSstepSize(self, f, grad, d, Pd, delta, beta, dimDeriv, smoothLaplacian):
+    def RDLSstepSize(self, f, grad, d, Pd, filters, dimDeriv, smoothLaplacian):
         """Calculates the step size for an RDLS iteration
 
         Args:
@@ -2392,8 +2435,7 @@ class tomographicModels:
             grad (C contiguous float32 numpy or torch array): gradient of the RWLS cost function
             d (C contiguous float32 numpy or torch array): descent direction of the RWLS cost function
             Pd (C contiguous float32 numpy or torch array): forward projection of d
-            delta (float): parameter for the Huber-like loss function used in TV
-            beta (float): regularization strength
+            filters (filterSequence object): list of differentiable regularization filters
         
         Returns:
             step size (float)
@@ -2404,8 +2446,9 @@ class tomographicModels:
         LPd *= -1.0
         denomA = self.innerProd(LPd,Pd)
         denomB = 0.0;
-        if beta > 0.0:
-            denomB = self.TVquadForm(f, d, delta, beta)
+        if filters.beta > 0.0:
+            #denomB = self.TVquadForm(f, d, delta, beta)
+            denomB = filters.quadForm(f, d)
             #print('denomB = ' + str(denomA))
         denom = denomA + denomB
 
@@ -2422,7 +2465,7 @@ class tomographicModels:
             print('\tlambda = ' + str(stepSize))
         return stepSize
 
-    def MLTR(self, g, f, numIter, numSubsets=1, delta=0.0, beta=0.0, mask=None):
+    def MLTR(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
         """Maximum Likelihood Transmission reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2434,8 +2477,7 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
-            delta (float): parameter for the Huber-like loss function used in TV
-            beta (float): regularization strength
+            filters (filterSequence object): list of differentiable regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
@@ -2448,7 +2490,15 @@ class tomographicModels:
         if mask is not None and mask.shape != g.shape:
             print('Error: mask must be the same shape as the projection data!')
             return None
-        beta = max(0.0, beta/float(numSubsets))
+            
+        if filters is None:
+            filters = filterSequence(0.0)
+        elif isinstance(filters, (int, float)):
+            print('Error: invalid inputs!  Note that algorithm syntax has changed, please see documentation.')
+            return None
+        
+        numSubsets = max(1,numSubsets)
+        filters.beta = max(0.0, filters.beta/float(numSubsets))
     
         t = self.expNeg(g)
 
@@ -2489,14 +2539,16 @@ class tomographicModels:
                 
                 # Regularizer and divide by SQS
                 stepMultiplier = 1.0
-                if beta > 0.0:
-                    Sf1 = self.TVgradient(f, delta, beta)
+                if filters.beta > 0.0:
+                    #Sf1 = self.TVgradient(f, delta, beta)
+                    Sf1 = filters.gradient(f)
                     d[:] -= Sf1[:]
                     grad_dot_descent = self.innerProd(d,d,SQS)
                 
                     d[:] = d[:] * SQS[:]
                 
-                    stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
+                    #stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
+                    stepMultiplier = grad_dot_descent / (grad_dot_descent + filters.quadForm(f,d))
                 else:
                     d[:] = d[:] * SQS[:]
                 
@@ -2538,14 +2590,16 @@ class tomographicModels:
                     
                     # Regularizer and divide by SQS
                     stepMultiplier = 1.0
-                    if beta > 0.0:
-                        Sf1 = self.TVgradient(f, delta, beta)
+                    if filters.beta > 0.0:
+                        #Sf1 = self.TVgradient(f, delta, beta)
+                        Sf1 = filters.gradient(f)
                         d[:] -= Sf1[:]
                         grad_dot_descent = self.innerProd(d,d,SQS)
                     
                         d[:] = d[:] * SQS[:]
                     
-                        stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
+                        #stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
+                        stepMultiplier = grad_dot_descent / (grad_dot_descent + filters.quadForm(f,d))
                     else:
                         d[:] = d[:] * SQS[:]
                     
@@ -2555,6 +2609,7 @@ class tomographicModels:
             subsetParams.setSubset(-1)
         
         g = self.negLog(t)
+        filters.beta = filters.beta*float(numSubsets)
         
         return f
             

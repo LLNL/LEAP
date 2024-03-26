@@ -40,7 +40,7 @@ elif _platform == "darwin":
 
 setup(
     name='leapct',
-    version='1.7', 
+    version='1.8', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 
@@ -49,6 +49,6 @@ setup(
     packages=find_packages("src"), 
     package_dir={'': 'src'},
     install_requires=['numpy', 'torch'], 
-    py_modules=['leaptorch','leapctype'], 
+    py_modules=['leaptorch', 'leapctype', 'leap_filter_sequence'], 
     package_data={'': [lib_fname]},
 )
