@@ -21,22 +21,65 @@ class denoisingFilter:
     
     """
     def __init__(self, leapct):
+        """Constructor for denoisingFilter abstract class
+        
+        This defines three variables that shall be used by all denoising filters.
+        leapct (object of the tomographicModels class): used to run algorithms from this class to carry out various filter implementations
+        weight: this is the relative weight of a particular filter; only used by differentiable filters
+        isDifferentiable (boolean): specifies whether the filter is differentiable or not
+        
+        """
 
         self.leapct = leapct
         self.weight = 1.0
         self.isDifferentiable = False
     
     def cost(self, f):
+        """Calculates the cost of the given volume
+        
+        Args:
+            f (C contiguous float32 numpy or torch array): volume data
+            
+        Returns:
+            The cost (float) of the cost functional
+        """
         pass
         
     def gradient(self, f):
+        """Calculates the gradient of the given volume
+        
+        Args:
+            f (C contiguous float32 numpy or torch array): volume data
+            
+        Returns:
+            The gradient (C contiguous float32 numpy or torch array; has the same dimensions as the input) of the cost functional
+        """
         pass
         
     def quadForm(self, f, d):
+        """Calculates the quadratic form of the given volume and descent direction
+        
+        Args:
+            f (C contiguous float32 numpy or torch array): volume data, current estimate
+            d (C contiguous float32 numpy or torch array): volume data, descent direction
+            
+        Returns:
+            The quadratic form (float) of the cost functional
+        """
         pass
         
     def apply(self, f):
-        """If this function is not defined in the child class, perform one gradient descent iteration"""
+        """Filters (denoises) the input
+        
+        If this function is not defined in the child class, then this performs one gradient descent iteration
+        as a means to apply the given filter.  This only works for differentiable filters.
+        
+        Args:
+            f (C contiguous float32 numpy or torch array): volume data, current estimate
+            
+        Returns:
+            The filtered (denoised) input (C contiguous float32 numpy or torch array, same dimensions as the input)
+        """
         if self.isDifferentiable:
             d = self.gradient(f)
             num = self.leapct.sum(d**2)
@@ -50,9 +93,15 @@ class denoisingFilter:
             return None
 
 class BlurFilter(denoisingFilter):
-    """This class defines a filter based on leapct.tomographicModels.BlurFilter"""
+    """This class defines a filter based on leapct.tomographicModels.BlurFilter which is a basic low pass filter"""
     def __init__(self, leapct, FWHM):
         super(BlurFilter, self).__init__(leapct)
+        """Constructor for BlurFilter class
+        
+        This constructor sets the following:
+        leapct (object of the tomographicModels class)
+        FWHM (float): The Full Width at Half Maximum (given in number of pixels) of the low pass filter
+        """
 
         self.FWHM = FWHM
         self.isDifferentiable = False
@@ -64,6 +113,14 @@ class BilateralFilter(denoisingFilter):
     """This class defines a filter based on leapct.tomographicModels.BilateralFilter"""
     def __init__(self, leapct, spatialFWHM, intensityFWHM, scale=1.0):
         super(BilateralFilter, self).__init__(leapct)
+        """Constructor for BilateralFilter class
+        
+        This constructor sets the following:
+        leapct (object of the tomographicModels class)
+        spatialFWHM (float): The Full Width at Half Maximum (given in number of pixels) of the filter
+        intensityFWHM (float): The FWHM (given in the voxel value domain, which is usually mm^-1) of the filter
+        scale (float): The FWHM of a low pass filter applied to the voxel values used in the intensity filter
+        """
 
         self.spatialFWHM = spatialFWHM
         self.intensityFWHM = intensityFWHM
@@ -87,48 +144,73 @@ class MedianFilter(denoisingFilter):
 
 class TV(denoisingFilter):
     """This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer"""
-    def __init__(self, leapct, delta=0.0, weight=1.0, f_0=None):
+    def __init__(self, leapct, delta=0.0, p=1.2, weight=1.0, f_0=None):
         super(TV, self).__init__(leapct)
+        """Constructor for TV class
+        
+        This constructor sets the following:
+        leapct (object of the tomographicModels class)
+        delta (float): parameter for the Huber-like loss function used in TV
+        weight (float): the regularizaion strength of this denoising filter term
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates TV(f-f_0)
+        """
 
         self.delta = delta
+        self.p = max(0.01, p)
         self.weight = weight
         self.isDifferentiable = True
         self.f_0 = f_0
         
     def cost(self, f):
+        """Calculates the anisotropic Total Variation functional of the given volume
+        
+        Args:
+            f (C contiguous float32 numpy or torch array): volume data
+            
+        Returns:
+            The cost (float) of the cost functional
+        """
         if self.f_0 is not None:
-            return self.leapct.TVcost(f-self.f_0, self.delta, self.weight)
+            return self.leapct.TVcost(f-self.f_0, self.delta, self.weight, self.p)
         else:
-            return self.leapct.TVcost(f, self.delta, self.weight)
+            return self.leapct.TVcost(f, self.delta, self.weight, self.p)
         
     def gradient(self, f):
         if self.f_0 is not None:
-            return self.leapct.TVgradient(f-self.f_0, self.delta, self.weight)
+            return self.leapct.TVgradient(f-self.f_0, self.delta, self.weight, self.p)
         else:
-            return self.leapct.TVgradient(f, self.delta, self.weight)
+            return self.leapct.TVgradient(f, self.delta, self.weight, self.p)
         
     def quadForm(self, f, d):
         if self.f_0 is not None:
-            return self.leapct.TVquadForm(f-self.f_0, d, self.delta, self.weight)
+            return self.leapct.TVquadForm(f-self.f_0, d, self.delta, self.weight, self.p)
         else:
-            return self.leapct.TVquadForm(f, d, self.delta, self.weight)
+            return self.leapct.TVquadForm(f, d, self.delta, self.weight, self.p)
         
     def apply(self, f):
         if self.f_0 is not None:
-            self.leapct.diffuse(f-self.f_0, self.delta, 1)
+            self.leapct.diffuse(f-self.f_0, self.delta, 1, self.p)
             f[:] += self.f_0[:]
             return f
         else:
-            return self.leapct.diffuse(f, self.delta, 1)
+            return self.leapct.diffuse(f, self.delta, 1, self.p)
 
 class LpNorm(denoisingFilter):
     """This class defines a filter based on the L_p norm (raised to the p power) of the input"""
     def __init__(self, leapct, p=1.0, weight=1.0, f_0=None):
         super(LpNorm, self).__init__(leapct)
-
-        self.f_0 = f_0
-        self.p = p
+        """Constructor for LpNorm class
+        
+        This constructor sets the following:
+        leapct (object of the tomographicModels class)
+        p (float): The p-value of the L_p norm
+        weight (float): the regularizaion strength of this denoising filter term
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates ||f-f_0||_p^p
+        """
+        
+        self.p = max(0.0, p)
         self.weight = weight
+        self.f_0 = f_0
         self.isDifferentiable = True
         
     def cost(self, f):
@@ -174,17 +256,31 @@ class LpNorm(denoisingFilter):
             return super().apply(f)
         
 class histogramSparsity(denoisingFilter):
-    """This class defines a filter that encourages sparisty in the histogram domain"""
+    """This class defines a filter that encourages sparisty in the histogram domain
+    
+    Warning: this is a nonconvex regularizer.
+    It is best to use this filter after an initial reconstruction is performed.
+    
+    """
     def __init__(self, leapct, mus=None, weight=1.0):
         super(histogramSparsity, self).__init__(leapct)
+        """Constructor for histogramSparsity class
+        
+        This constructor sets the following:
+        leapct (object of the tomographicModels class)
+        mus (numpy array or list of floats): list of target values expected in the reconstruction volume
+        weight (float): the regularizaion strength of this denoising filter term
+        """
 
         self.weight = weight
         self.isDifferentiable = True
         
+        if type(mus) is not np.ndarray:
+            mus = np.array(mus)
         if np.any(mus == 0.0) == False:
             mus = np.append(mus, 0.0)
         
-        self.mus = np.sort(mus)
+        self.mus = np.sort(np.unique(mus))
         
         if mus.size > 1:
             minDist = np.abs(self.mus[1] - self.mus[0])
@@ -229,13 +325,29 @@ class histogramSparsity(denoisingFilter):
         minDiff = self.leapct.copyData(f)
         minDiff[:] = self.leapct.abs(minDiff[:] - self.mus[0])
         for l in range(1,self.mus.size):
-            minDiff = np.minimum(minDiff, self.leapct.abs(minDiff[:] - self.mus[l]))
+            minDiff = self.leapct.minimum(minDiff, self.leapct.abs(minDiff[:] - self.mus[l]))
         return self.weight * self.leapct.innerProd(self.Geman1_over_x(minDiff), d, d)
 
 class azimuthalFilter(denoisingFilter):
-    """This class defines a filter based on leapct AzimuthalBlur filter"""
+    """This class defines a filter based on leapct AzimuthalBlur filter
+    
+    This denoising filter applies a high pass filter in the azimuthal direction of the reconstructed volume.
+    If is useful for reconstructing objects that have a sparse azimuthal gradient, such as pipes with
+    delaminations, voids, or high density inclusions.
+    
+    The functional is given by the L_p norm (raised to the p power) of the azimuthal high pass filter of the input,
+    i.e., ||H(f)||_p^p, where H is the azimuthal high pass filter
+    """
     def __init__(self, leapct, FWHM, p, weight=1.0):
         super(azimuthalFilter, self).__init__(leapct)
+        """Constructor for histogramSparsity class
+        
+        This constructor sets the following:
+        leapct (object of the tomographicModels class)
+        FWHM (float): The FWHM (measured in degrees) of the high pass filter
+        p (float): the p-value of the L_p norm
+        weight (float): the regularizaion strength of this denoising filter term
+        """
 
         self.FWHM = FWHM
         self.p = p
@@ -278,13 +390,30 @@ class azimuthalFilter(denoisingFilter):
 class filterSequence:
     """This class defines a weighted sum of filters (i.e., regularizers)"""
     def __init__(self, beta=1.0):
+        """Constructor for the filterSequence class
+        
+        This constructor sets the following:
+        beta (float): the overall strength of the sequence of filters, if zero no filters are applied
+        """
         self.filters = []
         self.beta = beta
 
     def append(self, newFilter):
+        """Append a new filter to the list
+        
+        Note that in the case of ASDPOCS, the order of the sequence of filters matters because they are applied sequentially.
+        When used in a gradient-based algorithm, the cost of filter sequence is given by
+        self.beta * sum_n filters[n].cost(f)
+        and note that each filter can have its own weight, given by filters[n].weight
+        
+        Args:
+            newFilter (object whose base class is denoisingFilter): the denoising filter to add to the sequence of filters
+        
+        """
         self.filters.append(newFilter)
         
     def clear(self):
+        """Removes all filters from the list"""
         self.filters = []
         
     def cost(self, f):

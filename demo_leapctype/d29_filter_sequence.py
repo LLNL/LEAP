@@ -7,7 +7,7 @@ leapct = tomographicModels()
 
 numCols = 512
 numAngles = 2*2*int(360*numCols/1024)
-#numAngles = 24
+numAngles = 100
 pixelSize = 0.65*512/numCols
 numRows = 1
 #leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
@@ -25,8 +25,42 @@ leapct.project(g,f_true)
 I_0 = 5000.0
 g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 f=leapct.FBP(g)
-f[:] = 0.0
+#f[:] = 0.0
 
+#'''
+# Comment this section out to revert back to multi-GPU solution
+# with CPU-GPU data transfers to see when easy case is advantageous
+import torch
+device = torch.device("cuda:" + str(leapct.get_gpu()))
+g = torch.from_numpy(g).to(device)
+f = torch.from_numpy(f).to(device)
+#'''
+
+#'''
+#leapct.BlurFilter(f,8.0)
+filters = filterSequence(2e1)
+filters.append(TV(leapct, delta=0.01/100.0, p=1.0))
+#leapct.ASDPOCS(g,f,50,4,5,filters)
+leapct.RWLS(g, f, 500, filters, preconditioner='SQS')
+leapct.MedianFilter(f,0.0,5)
+leapct.RWLS(g, f, 500, filters, preconditioner='SQS')
+
+#filters.append(histogramSparsity(leapct, mus=[0.0, 0.021, 0.036],weight=0.001))
+
+filters.clear()
+filters.append(MedianFilter(leapct, 0.0, 3))
+filters.append(histogramSparsity(leapct, mus=[0.0, 0.021, 0.036]))
+filters.append(MedianFilter(leapct, 0.0, 3))
+filters.append(TV(leapct, delta=0.01/100.0))
+filters.append(TV(leapct, delta=0.01/100.0))
+#leapct.ASDPOCS(g,f,50,4,5,filters)
+#leapct.RWLS(g, f, 10, filters, preconditioner='SQS')
+#'''
+
+if type(f) is torch.Tensor:
+    f = f.cpu().detach().numpy()
+
+'''
 #f = leapct.allocate_volume()
 filters = filterSequence(4e1)
 filters.append(TV(leapct, delta=0.02/20.0))
@@ -50,6 +84,8 @@ filters.append(histogramSparsity(leapct, mus=np.array([0.0, 0.021, 0.036]),weigh
 #    f=filter.apply(f)
 #filter = BilateralFilter(leapct, 3.0, 0.02, 1.0)
 #filter.apply(f)
+'''
+
 '''
 denoiser = filterSequence()
 denoiser.append(TV(leapct, delta=0.02/20.0, alpha=1.0, f_0=None))

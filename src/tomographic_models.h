@@ -748,10 +748,11 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
 	 * \param[in]   beta the strength of the functional
+	 * \param[in]	p the exponent on the Huber-like loss function
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      value of the aTV functional
 	 */
-	float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
+	float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
 
 	/**
 	 * \fn          TVgradient
@@ -763,10 +764,11 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
 	 * \param[in]   beta the strength of the functional
+	 * \param[in]	p the exponent on the Huber-like loss function
 	 * \param[in]   data_on_cpu true if data (f and Df) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise 
 	 */
-	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
+	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
 
 	/**
 	 * \fn          TVquadForm
@@ -778,10 +780,11 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
 	 * \param[in]   beta the strength of the functional
+	 * \param[in]	p the exponent on the Huber-like loss function
 	 * \param[in]   data_on_cpu true if data (f and d) are on the cpu, false if they are on the gpu
 	 * \return      value of the aTV quadratic form, i.e., <d, dR''(d)>, where R'' is the second derivative of the aTV functional
 	 */
-	float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu);
+	float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
 
 	/**
 	 * \fn          Diffuse
@@ -792,11 +795,12 @@ public:
 	 * \param[in]   N_2 number of samples in the second dimension
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   delta transition value of the Huber-like loss function
+	 * \param[in]	p the exponent on the Huber-like loss function
 	 * \param[in]   numIter the number of iterations
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu);
+	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu);
 
 	/**
 	 * \fn          rayTrace

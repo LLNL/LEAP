@@ -1608,18 +1608,18 @@ class tomographicModels:
             return torch.sum(x)
         else:
             return np.sum(x)
-            
-    def abssum(self, x):
-        if has_torch == True and type(x) is torch.Tensor:
-            return torch.sum(torch.abs(x))
-        else:
-            return np.sum(np.abs(x))
-            
+        
     def abs(self, x):
         if has_torch == True and type(x) is torch.Tensor:
             return torch.abs(x)
         else:
             return np.abs(x)
+            
+    def minimum(self, x, y):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.minimum(x, y)
+        else:
+            return np.minimum(x, y)
             
     def sign(self, x):
         if has_torch == True and type(x) is torch.Tensor:
@@ -2848,7 +2848,7 @@ class tomographicModels:
         self.libprojectors.set_numTVneighbors.argtypes = [ctypes.c_int]
         return self.libprojectors.set_numTVneighbors(N)
     
-    def TVcost(self, f, delta, beta=0.0):
+    def TVcost(self, f, delta, beta=0.0, p=1.2):
         """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -2865,13 +2865,13 @@ class tomographicModels:
         self.libprojectors.TVcost.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.TVcost.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVcost(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, f.is_cuda == False)
+            self.libprojectors.TVcost.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVcost(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, f.is_cuda == False)
         else:
-            self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
+            self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
         
-    def TVgradient(self, f, delta, beta=0.0):
+    def TVgradient(self, f, delta, beta=0.0, p=1.2):
         """Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -2890,17 +2890,17 @@ class tomographicModels:
         if has_torch == True and type(f) is torch.Tensor:
             Df = f.clone()
             self.set_model()
-            self.libprojectors.TVgradient.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, f.is_cuda == False)
+            self.libprojectors.TVgradient.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, f.is_cuda == False)
             return Df
         else:
             Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
             self.set_model()
-            self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
+            self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
             return Df
     
-    def TVquadForm(self, f, d, delta, beta=0.0):
+    def TVquadForm(self, f, d, delta, beta=0.0, p=1.2):
         """Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays
         
         The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -2922,13 +2922,13 @@ class tomographicModels:
         self.libprojectors.TVquadForm.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.TVquadForm.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVquadForm(f.data_ptr(), d.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, f.is_cuda == False)
+            self.libprojectors.TVquadForm.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVquadForm(f.data_ptr(), d.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, f.is_cuda == False)
         else:
-            self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, True)
+            self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
         
-    def diffuse(self, f, delta, numIter):
+    def diffuse(self, f, delta, numIter, p=1.2):
         """Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
         
         The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -2945,17 +2945,17 @@ class tomographicModels:
         self.libprojectors.Diffuse.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.Diffuse.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Diffuse(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, numIter, f.is_cuda == False)
+            self.libprojectors.Diffuse.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.Diffuse(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, p, numIter, f.is_cuda == False)
         else:
-            self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, numIter, True)
+            self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, p, numIter, True)
         return f
         ''' Here is equivalent code to run this algorithm using the TV functions above
         for n in range(N):
-            d = self.TVgradient(f, delta)
+            d = self.TVgradient(f, delta, p)
             num = np.sum(d**2)
-            denom = self.TVquadForm(f, d, delta)
+            denom = self.TVquadForm(f, d, delta, p)
             if denom <= 1.0e-16:
                 break
             stepSize = num / denom

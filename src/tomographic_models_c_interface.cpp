@@ -646,24 +646,24 @@ bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary,
 	return tomo()->dictionaryDenoising(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu);
 }
 
-float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
+float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
-	return tomo()->TVcost(f, N_1, N_2, N_3, delta, beta, data_on_cpu);
+	return tomo()->TVcost(f, N_1, N_2, N_3, delta, beta, p, data_on_cpu);
 }
 
-bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
+bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
-	return tomo()->TVgradient(f, Df, N_1, N_2, N_3, delta, beta, data_on_cpu);
+	return tomo()->TVgradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu);
 }
 
-float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
+float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
-	return tomo()->TVquadForm(f, d, N_1, N_2, N_3, delta, beta, data_on_cpu);
+	return tomo()->TVquadForm(f, d, N_1, N_2, N_3, delta, beta, p, data_on_cpu);
 }
 
-bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu)
+bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
 {
-	return tomo()->Diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu);
+	return tomo()->Diffuse(f, N_1, N_2, N_3, delta, p, numIter, data_on_cpu);
 }
 
 bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)

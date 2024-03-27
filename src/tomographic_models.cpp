@@ -2026,7 +2026,7 @@ bool tomographicModels::dictionaryDenoising(float* f, int N_1, int N_2, int N_3,
 		return matchingPursuit(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu, params.whichGPU);
 }
 
-float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
+float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)
 	{
@@ -2084,7 +2084,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2*N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				costs[ichunk] = anisotropicTotalVariation_cost(f_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
+				costs[ichunk] = anisotropicTotalVariation_cost(f_chunk, numSlices_pad, N_2, N_3, delta, beta, p, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
 			}
 
 			float retVal = 0.0;
@@ -2096,10 +2096,10 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 		}
 	}
 	else
-		return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+		return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
 }
 
-bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
+bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)
 	{
@@ -2164,17 +2164,17 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
+				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, p, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
 			}
 
 			return true;
 		}
 	}
 	else
-		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
 }
 
-float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu)
+float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)
 	{
@@ -2232,7 +2232,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 				float* d_chunk = &d[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				costs[ichunk] = anisotropicTotalVariation_quadraticForm(f_chunk, d_chunk, numSlices_pad, N_2, N_3, delta, beta, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
+				costs[ichunk] = anisotropicTotalVariation_quadraticForm(f_chunk, d_chunk, numSlices_pad, N_2, N_3, delta, beta, p, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
 			}
 
 			float retVal = 0.0;
@@ -2244,10 +2244,10 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 		}
 	}
 	else
-		return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+		return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
 }
 
-bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu)
+bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
 {
 	if (params.whichGPU < 0)
 	{
@@ -2278,9 +2278,9 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
 			for (int iter = 0; iter < numIter; iter++)
 			{
-				TVgradient(f, d, N_1, N_2, N_3, delta, 1.0, true);
+				TVgradient(f, d, N_1, N_2, N_3, delta, p, 1.0, true);
 				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
-				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, 1.0, true);
+				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, p, 1.0, true);
 				if (denom <= 1.0e-16)
 					break;
 				float stepSize = num / denom;
@@ -2291,7 +2291,7 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 		}
 	}
 	else
-		return diffuse(f, N_1, N_2, N_3, delta, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
+		return diffuse(f, N_1, N_2, N_3, delta, p, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
 }
 
 bool tomographicModels::rayTrace(float* g, int oversampling)

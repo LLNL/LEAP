@@ -17,7 +17,11 @@
 // Commenting out this define will cause LEAP to use a Huber loss function
 // of power p=1 for TV denoising
 // Leaving this define will use a Huber-like loss function of power 1.2
-#define USE_P_HUBER // currently using p=1.2
+#define USE_P_HUBER
+
+__constant__ float d_HUBER_P;
+__constant__ float d_HUBER_SLOPE;
+__constant__ float d_HUBER_SHIFT;
 
 __forceinline__ __device__ float square(const float x)
 {
@@ -30,7 +34,8 @@ __forceinline__ __device__ float Huber(const float x, const float delta)
     if (fabs(x) <= delta)
         return 0.5f * x * x;
     else
-        return delta * delta * (5.0f * pow(fabs(x / delta), 1.2f) - 2.0f) / 6.0f;
+        return d_HUBER_SLOPE * pow(fabs(x), d_HUBER_P) + d_HUBER_SHIFT;
+        //return delta * delta * (5.0f * pow(fabs(x / delta), 1.2f) - 2.0f) / 6.0f;
 #else
     if (fabs(x) <= delta)
         return 0.5f * x * x;
@@ -45,8 +50,9 @@ __forceinline__ __device__ float DHuber(const float x, const float delta)
     if (fabs(x) <= delta)
         return x;
     else
-        return x * pow(fabs(x / delta), -0.8f);
-    //return delta * pow(fabs(x/delta),0.2f);
+        return d_HUBER_P * d_HUBER_SLOPE * pow(fabs(x), d_HUBER_P) / x;
+        //return x * pow(fabs(x / delta), -0.8f); // p=1.2
+        //return delta * pow(fabs(x/delta), 0.2f);
 #else
     if (fabs(x) <= delta)
         return x;
@@ -61,7 +67,9 @@ __forceinline__ __device__ float DDHuber(const float x, const float delta)
     if (fabs(x) <= delta)
         return  1.0;
     else
-        return pow(fabs(x / delta), -0.8f);
+        return d_HUBER_P * d_HUBER_SLOPE * pow(fabs(x), d_HUBER_P - 2.0f);
+        //return pow(fabs(x / delta), d_HUBER_P - 2.0f); // require a divide
+        //return pow(fabs(x / delta), -0.8f); // p=1.2
 #else
     return delta / max(delta, fabs(x));
 #endif
@@ -472,7 +480,17 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
     //*/
 }
 
-bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, int numNeighbors)
+void setConstantMemoryParameters(const float delta, const float p)
+{
+    const float HuberSlope = pow(delta, 2.0 - p) / p;
+    const float HuberShift = (0.5 * p - 1.0) * pow(delta, p);
+
+    cudaMemcpyToSymbol(d_HUBER_P, &p, sizeof(float));
+    cudaMemcpyToSymbol(d_HUBER_SLOPE, &HuberSlope, sizeof(float));
+    cudaMemcpyToSymbol(d_HUBER_SHIFT, &HuberShift, sizeof(float));
+}
+
+bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, int numNeighbors)
 {
     if (f == NULL) return false;
     if (beta <= 0.0)
@@ -491,6 +509,8 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
+
+    setConstantMemoryParameters(delta, p);
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -539,7 +559,7 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     return true;
 }
 
-float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, int numNeighbors)
+float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, int numNeighbors)
 {
     if (f == NULL || d == NULL) return -1.0;
     if (beta <= 0.0)
@@ -558,6 +578,8 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
+
+    setConstantMemoryParameters(delta, p);
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -621,7 +643,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     return retVal;
 }
 
-float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, int numNeighbors)
+float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, int numNeighbors)
 {
     if (f == NULL) return -1.0;
     if (beta <= 0.0)
@@ -640,6 +662,8 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
+
+    setConstantMemoryParameters(delta, p);
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -679,7 +703,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     return retVal;
 }
 
-bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool data_on_cpu, int whichGPU, int numNeighbors)
+bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu, int whichGPU, int numNeighbors)
 {
     if (f == NULL) return -1.0;
     float beta = 1.0;
@@ -688,6 +712,8 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, int numIter, bool
 
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
+
+    setConstantMemoryParameters(delta, p);
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
