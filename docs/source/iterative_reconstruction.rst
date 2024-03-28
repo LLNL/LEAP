@@ -13,4 +13,3 @@ Iterative Reconstruction
 .. autofunction:: leapctype.tomographicModels.MLTR
 .. autofunction:: leapctype.tomographicModels.MLEM
 .. autofunction:: leapctype.tomographicModels.OSEM
-.. autofunction:: leapctype.tomographicModels.print_cost

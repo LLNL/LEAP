@@ -44,7 +44,8 @@ For the next releases, we are working on the following:
 1) Fixes of bugs reported by our users
 2) Feature requests from our users
 3) More noise reduction filters
-4) Physics-based scatter correction
+4) AMD Support
+5) Physics-based scatter correction
 
 ## Authors
 Kyle Champley (champley@gmail.com)

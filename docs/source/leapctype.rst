@@ -12,6 +12,7 @@ Python API (leapctype)
    projectors
    fbp
    iterative_reconstruction
+   filter_sequence
    projection_filters_and_transforms
    volume_filters_and_transforms
    filters

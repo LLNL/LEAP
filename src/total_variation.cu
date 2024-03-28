@@ -713,7 +713,7 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numI
     cudaSetDevice(whichGPU);
     cudaError_t cudaStatus;
 
-    setConstantMemoryParameters(delta, p);
+    //setConstantMemoryParameters(delta, p);
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -732,9 +732,9 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numI
 
     for (int n = 0; n < numIter; n++)
     {
-        anisotropicTotalVariation_gradient(dev_f, dev_d, N_1, N_2, N_3, delta, beta, false, whichGPU, -1, -1, numNeighbors);
+        anisotropicTotalVariation_gradient(dev_f, dev_d, N_1, N_2, N_3, delta, beta, p, false, whichGPU, -1, -1, numNeighbors);
         float num = innerProduct(dev_d, dev_d, N, whichGPU);
-        float denom = anisotropicTotalVariation_quadraticForm(dev_f, dev_d, N_1, N_2, N_3, delta, beta, false, whichGPU, -1, -1, numNeighbors);
+        float denom = anisotropicTotalVariation_quadraticForm(dev_f, dev_d, N_1, N_2, N_3, delta, beta, p, false, whichGPU, -1, -1, numNeighbors);
         if (denom <= 1.0e-16)
             break;
         float stepSize = num / denom;

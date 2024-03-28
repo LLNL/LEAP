@@ -93,7 +93,13 @@ class denoisingFilter:
             return None
 
 class BlurFilter(denoisingFilter):
-    """This class defines a filter based on leapct.tomographicModels.BlurFilter which is a basic low pass filter"""
+    """This class defines a filter based on leapct.tomographicModels.BlurFilter which is a basic low pass filter
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        FWHM (float): The Full Width at Half Maximum (given in number of pixels) of the low pass filter
+    
+    """
     def __init__(self, leapct, FWHM):
         super(BlurFilter, self).__init__(leapct)
         """Constructor for BlurFilter class
@@ -110,7 +116,15 @@ class BlurFilter(denoisingFilter):
         return self.leapct.BlurFilter(f, self.FWHM)
 
 class BilateralFilter(denoisingFilter):
-    """This class defines a filter based on leapct.tomographicModels.BilateralFilter"""
+    """This class defines a filter based on leapct.tomographicModels.BilateralFilter
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        spatialFWHM (float): The Full Width at Half Maximum (given in number of pixels) of the filter
+        intensityFWHM (float): The FWHM (given in the voxel value domain, which is usually mm^-1) of the filter
+        scale (float): The FWHM of a low pass filter applied to the voxel values used in the intensity filter
+    
+    """
     def __init__(self, leapct, spatialFWHM, intensityFWHM, scale=1.0):
         super(BilateralFilter, self).__init__(leapct)
         """Constructor for BilateralFilter class
@@ -131,7 +145,14 @@ class BilateralFilter(denoisingFilter):
         return self.leapct.BilateralFilter(f, self.spatialFWHM, self.intensityFWHM, self.scale)
         
 class MedianFilter(denoisingFilter):
-    """This class defines a filter based on leapct.tomographicModels.MedianFilter"""
+    """This class defines a filter based on leapct.tomographicModels.MedianFilter
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        threshold (float): the threshold of whether to use the filtered value or not
+        windowSize (int): the window size; can be 3 or 5
+    
+    """
     def __init__(self, leapct, threshold=0.0, windowSize=3):
         super(MedianFilter, self).__init__(leapct)
 
@@ -143,7 +164,15 @@ class MedianFilter(denoisingFilter):
         return self.leapct.MedianFilter(f, self.threshold, self.windowSize)
 
 class TV(denoisingFilter):
-    """This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer"""
+    """This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        delta (float): parameter for the Huber-like loss function used in TV
+        weight (float): the regularizaion strength of this denoising filter term
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates TV(f-f_0)
+    
+    """
     def __init__(self, leapct, delta=0.0, p=1.2, weight=1.0, f_0=None):
         super(TV, self).__init__(leapct)
         """Constructor for TV class
@@ -196,7 +225,14 @@ class TV(denoisingFilter):
             return self.leapct.diffuse(f, self.delta, 1, self.p)
 
 class LpNorm(denoisingFilter):
-    """This class defines a filter based on the L_p norm (raised to the p power) of the input"""
+    """This class defines a filter based on the L_p norm (raised to the p power) of the input
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        p (float): The p-value of the L_p norm
+        weight (float): the regularizaion strength of this denoising filter term
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates ||f-f_0||_p^p
+    """
     def __init__(self, leapct, p=1.0, weight=1.0, f_0=None):
         super(LpNorm, self).__init__(leapct)
         """Constructor for LpNorm class
@@ -260,6 +296,11 @@ class histogramSparsity(denoisingFilter):
     
     Warning: this is a nonconvex regularizer.
     It is best to use this filter after an initial reconstruction is performed.
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        mus (numpy array or list of floats): list of target values expected in the reconstruction volume
+        weight (float): the regularizaion strength of this denoising filter term
     
     """
     def __init__(self, leapct, mus=None, weight=1.0):
@@ -337,6 +378,12 @@ class azimuthalFilter(denoisingFilter):
     
     The functional is given by the L_p norm (raised to the p power) of the azimuthal high pass filter of the input,
     i.e., ||H(f)||_p^p, where H is the azimuthal high pass filter
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        FWHM (float): The FWHM (measured in degrees) of the high pass filter
+        p (float): the p-value of the L_p norm
+        weight (float): the regularizaion strength of this denoising filter term
     """
     def __init__(self, leapct, FWHM, p, weight=1.0):
         super(azimuthalFilter, self).__init__(leapct)
@@ -388,7 +435,12 @@ class azimuthalFilter(denoisingFilter):
         return self.weight * self.p * self.leapct.innerProd(Bf, Bd, Bd)
         
 class filterSequence:
-    """This class defines a weighted sum of filters (i.e., regularizers)"""
+    """This class defines a weighted sum of filters (i.e., regularizers)
+    
+    Args:
+        beta (float): the overall strength of the sequence of filters, if zero no filters are applied
+    
+    """
     def __init__(self, beta=1.0):
         """Constructor for the filterSequence class
         
@@ -417,6 +469,7 @@ class filterSequence:
         self.filters = []
         
     def cost(self, f):
+        """Calculates the accumulated cost of all filters"""
         retVal = 0.0
         if self.beta > 0.0:
             for n in range(len(self.filters)):
@@ -426,6 +479,7 @@ class filterSequence:
         return retVal
         
     def gradient(self, f):
+        """Calculates the accumulated gradient of all filters"""
         D = self.filters[0].leapct.copyData(f)
         D[:] = 0.0
         if self.beta > 0.0:
@@ -436,6 +490,7 @@ class filterSequence:
         return D
         
     def quadForm(self, f, d):
+        """Calculates the accumulated quadratic form of all filters"""
         retVal = 0.0
         if self.beta > 0.0:
             for n in range(len(self.filters)):
@@ -445,6 +500,7 @@ class filterSequence:
         return retVal
         
     def apply(self, f):
+        """Applies all the filters in sequence"""
         for n in range(len(self.filters)):
             self.filters[n].apply(f)
         return f

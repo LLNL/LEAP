@@ -2278,9 +2278,9 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
 			for (int iter = 0; iter < numIter; iter++)
 			{
-				TVgradient(f, d, N_1, N_2, N_3, delta, p, 1.0, true);
+				TVgradient(f, d, N_1, N_2, N_3, delta, 1.0, p, true);
 				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
-				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, p, 1.0, true);
+				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, 1.0, p, true);
 				if (denom <= 1.0e-16)
 					break;
 				float stepSize = num / denom;

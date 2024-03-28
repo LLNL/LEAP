@@ -19,7 +19,7 @@ try:
 except:
     has_torch = False
 from leap_filter_sequence import *
-testFS = filterSequence()
+#testFS = filterSequence()
 
 class tomographicModels:
     """ Python class for tomographicModels bindings
@@ -1926,10 +1926,12 @@ class tomographicModels:
         if filters is None:
             filters = filterSequence()
             filters.append(TV(self, delta=0.0))
+            print('None?')
         elif isinstance(filters, (int, float)):
             delta = filters
             filters = filterSequence()
             filters.append(TV(self, delta))
+            print('float?')
             
         numSubsets = min(numSubsets, self.get_numAngles())
         omega = 0.8

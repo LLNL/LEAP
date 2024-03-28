@@ -36,14 +36,19 @@ g = torch.from_numpy(g).to(device)
 f = torch.from_numpy(f).to(device)
 #'''
 
+
 #'''
 #leapct.BlurFilter(f,8.0)
 filters = filterSequence(2e1)
 filters.append(TV(leapct, delta=0.01/100.0, p=1.0))
-#leapct.ASDPOCS(g,f,50,4,5,filters)
-leapct.RWLS(g, f, 500, filters, preconditioner='SQS')
+leapct.RWLS(g, f, 300, filters, preconditioner='SQS')
 leapct.MedianFilter(f,0.0,5)
-leapct.RWLS(g, f, 500, filters, preconditioner='SQS')
+
+filters.clear()
+filters.beta *= 100.0
+filters.append(TV(leapct, delta=0.01/100.0, p=0.01))
+#filters.append(histogramSparsity(leapct, mus=[0.0, 0.021, 0.036],weight=0.00002))
+leapct.RWLS(g, f, 200, filters, preconditioner='SQS')
 
 #filters.append(histogramSparsity(leapct, mus=[0.0, 0.021, 0.036],weight=0.001))
 
@@ -51,9 +56,9 @@ filters.clear()
 filters.append(MedianFilter(leapct, 0.0, 3))
 filters.append(histogramSparsity(leapct, mus=[0.0, 0.021, 0.036]))
 filters.append(MedianFilter(leapct, 0.0, 3))
-filters.append(TV(leapct, delta=0.01/100.0))
-filters.append(TV(leapct, delta=0.01/100.0))
-#leapct.ASDPOCS(g,f,50,4,5,filters)
+filters.append(TV(leapct, delta=0.01/100.0, p=1.0))
+#filters.append(TV(leapct, delta=0.01/100.0, p=1.0))
+#leapct.ASDPOCS(g,f,200,10,5,filters)
 #leapct.RWLS(g, f, 10, filters, preconditioner='SQS')
 #'''
 
