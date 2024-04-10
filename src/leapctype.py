@@ -828,15 +828,18 @@ class tomographicModels:
         return y
             
     def setAngleArray(self,numAngles,angularRange):
-        """Sets the angle array, i.e., phis which specifies the projection angles for parallel-, fan-, and cone-beam data
+        """Sets the angle array for equi-spaced projection angles, i.e., phis which specifies the projection angles for parallel-, fan-, and cone-beam data
         
         It is not necessary to use this function. It is included simply for convenience.
+        LEAP allows one to specify non-equispaced projection angles for all geometries
+        If one wishes to do this, do not use this function, but specify them yourself in a numpy array as an argument to set_parallelbeam, set_fanbeam, or set_coneBeam
 
         Args:
-            val (float): value to fill the array with
+            numAngles (int): number of projections
+            angularRange (float): the angular range of the projection angles (degrees)
             
         Returns:
-            numpy array is numAngles, numRows, and numCols are all positive, None otherwise
+            numpy array of the projection angles (in degrees)
         """
         return np.array(range(numAngles)).astype(np.float32) * angularRange/float(numAngles)
         

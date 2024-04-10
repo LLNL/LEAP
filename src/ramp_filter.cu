@@ -25,6 +25,30 @@
 #include <cufft.h>
 #endif
 
+__global__ void explicit_convolution(float* data, float* filtered_data, const float* h, int3 N, int N_filter)
+{
+    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int m = threadIdx.y + blockIdx.y * blockDim.y;
+    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    if (l >= N.x || m >= N.y || n >= N.z)
+        return;
+
+    const uint64 ind = uint64(l) * uint64(N.z * N.y) + uint64(m * N.z);
+
+    float diff = 0.0f;
+    float* x = &data[ind];
+
+    // y[n] \sum_j h[j] x[n-j]
+    // 0 <= n-j <= N.z-1
+    // 1-N.z <= j-n <= 0
+    // 1-N.z+n <= j <= n
+    float y = 0.0f;
+    for (int j = 1 - N.z + n; j <= n; j++)
+        y += h[j] * x[n-j];
+
+    filtered_data[ind + n] = y;
+}
+
 __global__ void setPaddedDataFor2DFilter_reverse(float* g, float* g_pad, const int numRows, const int numCols, const int N_H1, const int N_H2, const float minValue, const bool isAttenuationData)
 {
     const int j = threadIdx.x + blockIdx.x * blockDim.x; // rows

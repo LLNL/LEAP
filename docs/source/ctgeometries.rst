@@ -1,6 +1,7 @@
 CT Geometries
 =============
 
+.. autofunction:: leapctype.tomographicModels.setAngleArray
 .. autofunction:: leapctype.tomographicModels.set_conebeam
 .. autofunction:: leapctype.tomographicModels.set_fanbeam
 .. autofunction:: leapctype.tomographicModels.set_parallelbeam
