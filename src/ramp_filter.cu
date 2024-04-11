@@ -12,17 +12,103 @@
 #include <iostream>
 
 #include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 #include "cuda_utils.h"
 #include "cpu_utils.h"
 
-#define INCLUDE_CUFFT
 #ifndef PI
 #define PI 3.141592653589793
 #endif
 
 #ifdef INCLUDE_CUFFT
 #include <cufft.h>
+
+__global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N)
+{
+    /*
+    int j = threadIdx.x;
+    int i = blockIdx.x;
+    if (i > N.x - 1 || j > N.y - 1)
+        return;
+    cufftComplex* aProj = &G[uint64(i) * uint64(N.y * N.z)];
+    for (int k = 0; k < N.z; k++)
+    {
+        aProj[j * N.z + k].x *= H[k];
+        aProj[j * N.z + k].y *= H[k];
+    }
+    //*/
+
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+    uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+    G[ind].x *= H[k];
+    G[ind].y *= H[k];
+}
+
+__global__ void multiplyComplexFilterKernel(cufftComplex* G, const cufftComplex* H, int3 N)
+{
+    /*
+    int j = threadIdx.x;
+    int i = blockIdx.x;
+    if (i > N.x - 1 || j > N.y - 1)
+        return;
+    cufftComplex* G_row = &G[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z)];
+    for (int k = 0; k < N.z; k++)
+    {
+        const float realPart = G_row[k].x * H[k].x - G_row[k].y * H[k].y;
+        const float imagPart = G_row[k].x * H[k].y + G_row[k].y * H[k].x;
+        G_row[k].x = realPart;
+        G_row[k].y = imagPart;
+    }
+    //*/
+
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+    uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+
+    const float realPart = G[ind].x * H[k].x - G[ind].y * H[k].y;
+    const float imagPart = G[ind].x * H[k].y + G[ind].y * H[k].x;
+
+    G[ind].x = realPart;
+    G[ind].y = imagPart;
+}
+
+__global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3 N)
+{
+    /*
+    // int k = threadIdx.x;
+    int k = blockIdx.x * blockDim.x + threadIdx.x;
+    //if (k > 0) return;
+    if (k > N.z - 1)
+        return;
+    cufftComplex* F_slice = &F[uint64(k) * uint64(N.x * N.y)];
+    for (int j = 0; j < N.y; j++)
+    {
+        for (int i = 0; i < N.x; i++)
+        {
+            F_slice[j * N.x + i].x *= H[j * N.x + i];
+            F_slice[j * N.x + i].y *= H[j * N.x + i];
+        }
+    }
+    //*/
+
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    const uint64 offset = uint64(j * N.x + i);
+    const uint64 ind = uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i);
+    F[ind].x *= H[offset];
+    F[ind].y *= H[offset];
+}
 #endif
 
 __global__ void explicit_convolution(float* data, float* filtered_data, const float* h, int3 N, int N_filter)
@@ -35,6 +121,9 @@ __global__ void explicit_convolution(float* data, float* filtered_data, const fl
 
     const uint64 ind = uint64(l) * uint64(N.z * N.y) + uint64(m * N.z);
 
+    //if (l == 0 && n == 0)
+    //    printf("m = %d\n", m);
+    
     float diff = 0.0f;
     float* x = &data[ind];
 
@@ -44,7 +133,8 @@ __global__ void explicit_convolution(float* data, float* filtered_data, const fl
     // 1-N.z+n <= j <= n
     float y = 0.0f;
     for (int j = 1 - N.z + n; j <= n; j++)
-        y += h[j] * x[n-j];
+        y += h[j+N.z] * x[n-j];
+    //y = x[n];
 
     filtered_data[ind + n] = y;
 }
@@ -419,7 +509,6 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
 }
 
-#ifdef INCLUDE_CUFFT
 __global__ void splitLeftAndRight(const float* g, float* g_left, float* g_right, int4 N, float4 T, float4 startVal)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -492,37 +581,6 @@ __global__ void mergeLeftAndRight(float* g, const float* g_left, const float* g_
         g[ind] = g_left[ind];
 }
 
-__global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3 N)
-{
-    /*
-    // int k = threadIdx.x;
-    int k = blockIdx.x * blockDim.x + threadIdx.x;
-    //if (k > 0) return;
-    if (k > N.z - 1)
-    	return;
-    cufftComplex* F_slice = &F[uint64(k) * uint64(N.x * N.y)];
-    for (int j = 0; j < N.y; j++)
-    {
-        for (int i = 0; i < N.x; i++)
-        {
-            F_slice[j * N.x + i].x *= H[j * N.x + i];
-            F_slice[j * N.x + i].y *= H[j * N.x + i];
-        }
-    }
-    //*/
-
-    const int i = threadIdx.x + blockIdx.x * blockDim.x;
-    const int j = threadIdx.y + blockIdx.y * blockDim.y;
-    const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i >= N.x || j >= N.y || k >= N.z)
-        return;
-
-    const uint64 offset = uint64(j * N.x + i);
-    const uint64 ind = uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i);
-    F[ind].x *= H[offset];
-    F[ind].y *= H[offset];
-}
-
 __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, int numExtrapolate, const float4 T, const float4 startVals, const float R, const float helicalPitch)
 {
     int j = threadIdx.x;
@@ -582,62 +640,6 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
     }
 }
 
-__global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N)
-{
-    /*
-    int j = threadIdx.x;
-    int i = blockIdx.x;
-    if (i > N.x - 1 || j > N.y - 1)
-        return;
-    cufftComplex* aProj = &G[uint64(i) * uint64(N.y * N.z)];
-    for (int k = 0; k < N.z; k++)
-    {
-        aProj[j * N.z + k].x *= H[k];
-        aProj[j * N.z + k].y *= H[k];
-    }
-    //*/
-
-    const int i = threadIdx.x + blockIdx.x * blockDim.x;
-    const int j = threadIdx.y + blockIdx.y * blockDim.y;
-    const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i >= N.x || j >= N.y || k >= N.z)
-        return;
-    uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
-    G[ind].x *= H[k];
-    G[ind].y *= H[k];
-}
-
-__global__ void multiplyComplexFilterKernel(cufftComplex* G, const cufftComplex* H, int3 N)
-{
-    /*
-    int j = threadIdx.x;
-    int i = blockIdx.x;
-    if (i > N.x - 1 || j > N.y - 1)
-        return;
-    cufftComplex* G_row = &G[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z)];
-    for (int k = 0; k < N.z; k++)
-    {
-        const float realPart = G_row[k].x * H[k].x - G_row[k].y * H[k].y;
-        const float imagPart = G_row[k].x * H[k].y + G_row[k].y * H[k].x;
-        G_row[k].x = realPart;
-        G_row[k].y = imagPart;
-    }
-    //*/
-
-    const int i = threadIdx.x + blockIdx.x * blockDim.x;
-    const int j = threadIdx.y + blockIdx.y * blockDim.y;
-    const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i >= N.x || j >= N.y || k >= N.z)
-        return;
-    uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
-
-    const float realPart = G[ind].x * H[k].x - G[ind].y * H[k].y;
-    const float imagPart = G[ind].x * H[k].y + G[ind].y * H[k].x;
-
-    G[ind].x = realPart;
-    G[ind].y = imagPart;
-}
-
 __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, const float4 T, const float4 startVals, const float R, const float helicalPitch)
 {
     int j = threadIdx.x;
@@ -684,6 +686,13 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
     }
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// LAUNCHING FUNCTIONS
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#ifdef INCLUDE_CUFFT
 cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar, float sampleShift)
 {
     cudaError_t cudaStatus;
@@ -750,30 +759,8 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
 
 float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
 {
-    float T = params->pixelWidth;
-    bool isCurved = false;
-    if (params->geometry == parameters::FAN || params->geometry == parameters::CONE || params->geometry == parameters::MODULAR)
-    {
-        T *= params->sod / params->sdd;
-        if (params->detectorType == parameters::CURVED)
-            isCurved = true;
-    }
-
     cudaError_t cudaStatus;
-    double* h_d = rampImpulseResponse(N, T, params);
-    float* h = new float[N];
-    for (int i = 0; i < N; i++)
-    {
-        h[i] = h_d[i];
-
-        if (i != 0 && isCurved == true)
-        {
-            double s = timeSamples(i, N) * T / params->sod;
-            double temp = s / sin(s);
-            h[i] *= temp * temp;
-        }
-    }
-    delete[] h_d;
+    float* h = rampImpulseResponse_modified(N, params);
 
     // Make cuFFT Plans
     cufftResult result;
@@ -823,66 +810,6 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
     delete[] H_ramp;
 
     return H_real;
-}
-
-bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar)
-{
-    //printf("rampFilter1D_symmetric...\n");
-    bool data_on_cpu = false;
-    bool retVal = true;
-    cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
-
-    int4 N_g; float4 T_g; float4 startVal_g;
-    setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
-
-    float* dev_g = g;
-
-    float* dev_g_left = 0;
-    if ((cudaStatus = cudaMalloc((void**)&dev_g_left, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
-    {
-        fprintf(stderr, "cudaMalloc(projections) failed!\n");
-        return false;
-    }
-
-    float* dev_g_right = 0;
-    if ((cudaStatus = cudaMalloc((void**)&dev_g_right, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
-    {
-        fprintf(stderr, "cudaMalloc(projections) failed!\n");
-        return false;
-    }
-
-    // Make thread block structure
-    dim3 dimBlock = setBlockSize(N_g);
-    dim3 dimGrid = setGridSize(N_g, dimBlock);
-
-    // Make copies to dev_g_lef and dev_g_right
-    splitLeftAndRight <<< dimGrid, dimBlock >>> (dev_g, dev_g_left, dev_g_right, N_g, T_g, startVal_g);
-    cudaStatus = cudaDeviceSynchronize();
-
-    // Do ramp filter
-    rampFilter1D(dev_g_left, params, data_on_cpu, scalar);
-    rampFilter1D(dev_g_right, params, data_on_cpu, scalar);
-
-    // Merge back to g
-    mergeLeftAndRight <<< dimGrid, dimBlock >>> (dev_g, dev_g_left, dev_g_right, N_g, T_g, startVal_g);
-    cudaStatus = cudaDeviceSynchronize();
-
-    // Clean up
-    cudaFree(dev_g_left);
-    cudaFree(dev_g_right);
-
-    return retVal;
-}
-
-bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu, float scalar)
-{
-    return conv1D(g, params, data_on_cpu, scalar, 0);
-}
-
-bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu, float scalar, float sampleShift)
-{
-    return conv1D(g, params, data_on_cpu, scalar, 1, sampleShift);
 }
 
 bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
@@ -1089,14 +1016,6 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
 
 bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
 {
-    /*
-    if (data_on_cpu == false)
-    {
-        printf("Error: current implementation of transmissionFilter requires that data reside on the CPU\n");
-        return false;
-    }
-    //*/
-
     float minValue = pow(2.0, -24.0);
 
     int N_x = params->numCols;
@@ -1614,26 +1533,6 @@ bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu)
 
     return retVal;
 }
-#else
-bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu)
-{
-    //printf("CUFFT libraries not available!\n");
-    //return false;
-    return rampFilter1D_cpu(g, params);
-}
-
-bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu)
-{
-    //printf("CUFFT libraries not available!\n");
-    //return false;
-    return Hilbert1D_cpu(g, params);
-}
-
-bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
-{
-    printf("CUFFT libraries not available!\n");
-    return false;
-}
 #endif
 
 bool Laplacian_gpu(float*& g, int numDims, bool smooth, parameters* params, bool data_on_cpu, float scalar)
@@ -1917,3 +1816,261 @@ bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cp
 
     return true;
 }
+
+bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar)
+{
+    //printf("rampFilter1D_symmetric...\n");
+    bool data_on_cpu = false;
+    bool retVal = true;
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
+
+    float* dev_g = g;
+
+    float* dev_g_left = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_g_left, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(projections) failed!\n");
+        return false;
+    }
+
+    float* dev_g_right = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_g_right, N_g.x * N_g.y * N_g.z * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(projections) failed!\n");
+        return false;
+    }
+
+    // Make thread block structure
+    dim3 dimBlock = setBlockSize(N_g);
+    dim3 dimGrid = setGridSize(N_g, dimBlock);
+
+    // Make copies to dev_g_lef and dev_g_right
+    splitLeftAndRight <<< dimGrid, dimBlock >>> (dev_g, dev_g_left, dev_g_right, N_g, T_g, startVal_g);
+    cudaStatus = cudaDeviceSynchronize();
+
+    // Do ramp filter
+    rampFilter1D(dev_g_left, params, data_on_cpu, scalar);
+    rampFilter1D(dev_g_right, params, data_on_cpu, scalar);
+
+    // Merge back to g
+    mergeLeftAndRight <<< dimGrid, dimBlock >>> (dev_g, dev_g_left, dev_g_right, N_g, T_g, startVal_g);
+    cudaStatus = cudaDeviceSynchronize();
+
+    // Clean up
+    cudaFree(dev_g_left);
+    cudaFree(dev_g_right);
+
+    return retVal;
+}
+
+bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu, float scalar)
+{
+    return conv1D(g, params, data_on_cpu, scalar, 0);
+}
+
+bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu, float scalar, float sampleShift)
+{
+    return conv1D(g, params, data_on_cpu, scalar, 1, sampleShift);
+}
+
+float* rampImpulseResponse_modified(int N, parameters* params)
+{
+    float T = params->pixelWidth;
+    bool isCurved = false;
+    if (params->geometry == parameters::FAN || params->geometry == parameters::CONE || params->geometry == parameters::MODULAR)
+    {
+        T *= params->sod / params->sdd;
+        if (params->detectorType == parameters::CURVED)
+            isCurved = true;
+    }
+
+    cudaError_t cudaStatus;
+    double* h_d = rampImpulseResponse(N, T, params);
+    float* h = new float[N];
+    for (int i = 0; i < N; i++)
+    {
+        h[i] = h_d[i];
+
+        if (i != 0 && isCurved == true)
+        {
+            double s = timeSamples(i, N) * T / params->sod;
+            double temp = s / sin(s);
+            h[i] *= temp * temp;
+        }
+    }
+    delete[] h_d;
+    return h;
+}
+
+#ifndef INCLUDE_CUFFT
+bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
+{
+    printf("Error: 2D transmission filter cannot be run without CUFFT libraries!\n");
+    return false;
+}
+
+bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
+{
+    printf("Error: 2D ramp filter cannot be run without CUFFT libraries!\n");
+    return false;
+}
+
+bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu)
+{
+    printf("Error: 2D ramp filter cannot be run without CUFFT libraries!\n");
+    return false;
+}
+
+bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
+{
+    printf("This is the explicit convolution version!\n");
+    // This is the explicit convolution version
+    //return true;
+    bool retVal = true;
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    float* dev_g = 0;
+    if (data_on_cpu)
+    {
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+    }
+    else
+    {
+        dev_g = g;
+    }
+
+    // PUT CODE HERE
+    //int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
+    //int N_H = optimalFFTsize(2 * params->numCols);
+    int N_H = 2 * params->numCols;
+    int N_H_over2 = N_H / 2 + 1;
+
+    float* h = NULL;
+    if (which == 0)
+    {
+        h = rampImpulseResponse_modified(N_H, params);
+        for (int i = 0; i < N_H; i++)
+            h[i] *= scalar;
+    }
+    else
+    {
+        double* h_d = NULL;
+        if (sampleShift == 0.0)
+            h_d = HilbertTransformImpulseResponse(N_H, 0);
+        else if (sampleShift > 0.0)
+        {
+            h_d = HilbertTransformImpulseResponse(N_H, 1);
+            params->colShiftFromFilter -= 0.5;
+        }
+        else
+        {
+            h_d = HilbertTransformImpulseResponse(N_H, -1);
+            params->colShiftFromFilter += 0.5;
+        }
+        h = new float[N_H];
+        for (int i = 0; i < N_H; i++)
+            h[i] = h_d[i] * scalar;// / float(N_H);
+        delete[] h_d;
+    }
+    fftshift(h, N_H);
+
+    float* dev_h = 0;
+    if (cudaSuccess != cudaMalloc((void**)&dev_h, N_H * sizeof(float)))
+        fprintf(stderr, "cudaMalloc failed!\n");
+    if (cudaMemcpy(dev_h, h, N_H * sizeof(float), cudaMemcpyHostToDevice))
+        fprintf(stderr, "cudaMemcpy(filter) failed!\n");
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+    float helicalPitch = params->helicalPitch;
+    if (which == 0 || params->numRows == 1)
+        helicalPitch = 0.0;
+    helicalPitch = 0.0;
+    //printf("max shift = %f\n", params->helicalPitch/params->sod*(startVal_g.z));
+    //printf("pitch/R = %f\n", params->helicalPitch / params->sod);
+    //printf("T_v = %f\n", T_g.y);
+
+    int numRows = params->numRows;
+    int numAngles = params->numAngles;
+    if (numAngles == 1)
+    {
+        numRows = 1;
+        numAngles = params->numRows;
+    }
+
+    //printf("numAngles = %d\n", numAngles);
+    //printf("numRows = %d\n", numRows);
+
+    //int N_viewChunk = params->numAngles;
+    int N_viewChunk = max(1, numAngles / 40); // number of views in a chunk (needs to be optimized)
+    int numChunks = int(ceil(double(numAngles) / double(N_viewChunk)));
+
+    //int3 dataSize; dataSize.x = N_viewChunk; dataSize.y = numRows; dataSize.z = N_H_over2;
+    //int3 origSize; origSize.x = numAngles; origSize.y = numRows; origSize.z = params->numCols;
+
+    int numExtrapolate = 0;
+    if (params->truncatedScan)
+        numExtrapolate = min(N_H - params->numCols - 1, 100);
+
+    float* dev_g_chunk = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_g_chunk, uint64(N_viewChunk) * uint64(numRows) * uint64(params->numCols) * sizeof(float)))
+    {
+        fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
+        retVal = false;
+    }
+
+    if (retVal == true)
+    {
+        //dim3 dimBlock_viewChunk = setBlockSize(dataSize);
+        //dim3 dimGrid_viewChunk = setGridSize(dataSize, dimBlock_viewChunk);
+
+        for (int iChunk = 0; iChunk < numChunks; iChunk++)
+        {
+            int startView = iChunk * N_viewChunk;
+            int endView = min(numAngles - 1, startView + N_viewChunk - 1);
+            //printf("filtering %d to %d\n", startView, endView);
+
+            int3 chunkSize = make_int3(endView - startView + 1, numRows, params->numCols);
+            //printf("chunkSize = %d, %d, %d\n", chunkSize.x, chunkSize.y, chunkSize.z);
+
+            equal(dev_g_chunk, &dev_g[uint64(startView)*uint64(numRows*params->numCols)], chunkSize, params->whichGPU);
+            //setToConstant(&dev_g[uint64(startView) * uint64(numRows * params->numCols)], 0.0, chunkSize, params->whichGPU);
+            //setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
+
+            // Perform convolution
+            dim3 dimBlock = setBlockSize(chunkSize);
+            dim3 dimGrid = setGridSize(chunkSize, dimBlock);
+            //explicit_convolution <<< dimGrid, dimBlock >>> (&dev_g[uint64(startView)*uint64(numRows*params->numCols)], dev_g_chunk, h, chunkSize, N_H);
+            explicit_convolution <<< dimGrid, dimBlock >>> (dev_g_chunk , &dev_g[uint64(startView) * uint64(numRows * params->numCols)], dev_h, chunkSize, N_H);
+        }
+        cudaDeviceSynchronize();
+
+        if (data_on_cpu)
+        {
+            // Copy result back to host
+            cudaStatus = cudaMemcpy(g, dev_g, uint64(numAngles) * uint64(numRows) * uint64(params->numCols) * sizeof(float), cudaMemcpyDeviceToHost);
+            if (cudaSuccess != cudaStatus)
+            {
+                fprintf(stderr, "failed to copy result back to host!\n");
+                fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+                fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+            }
+        }
+    }
+
+    // Clean up
+    //cudaFree(dev_g_pad);
+    if (data_on_cpu)
+        cudaFree(dev_g);
+    cudaFree(dev_h);
+    cudaFree(dev_g_chunk);
+    delete[] h;
+
+    return retVal;
+}
+#endif

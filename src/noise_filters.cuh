@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 
 /**
  * This header and associated source file provide implementions of some CUDA-based denoising algorithms, such as low-pass filter (blurFilter)

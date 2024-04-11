@@ -12,7 +12,7 @@
 
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 
 // Commenting out this define will cause LEAP to use a Huber loss function
 // of power p=1 for TV denoising

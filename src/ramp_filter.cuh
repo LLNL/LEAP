@@ -13,20 +13,23 @@
 #pragma once
 #endif
 
+#include "parameters.h"
+//class parameters;
+
 #define INCLUDE_CUFFT
 
 #ifdef INCLUDE_CUFFT
 #include <cufft.h>
-class parameters;
 cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar = 1.0, float sampleShift = 0.0);
+float* rampFilterFrequencyResponseMagnitude(int N, parameters* params);
 #endif
-
-#include "parameters.h"
 
 /**
  * This header and associated source file provide CUDA-based implementations of functions to apply
  * Hilbert and ramp filters to the projection data and 2D ramp filter applied to the z-slices of a volume.
  */
+
+float* rampImpulseResponse_modified(int N, parameters* params);
 
 //bool rampFilter(float* f, int N_z, int N_y, int N_x, int smoothingLevel, int whichGPU = 0);
 //bool rampFilter(float* f, int N_z, int N_y, int N_x, bool smoothFilter = false, int whichGPU = 0);
@@ -34,6 +37,7 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
 bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0, int which = 0, float sampleShift = 0.0);
 bool Hilbert1D(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0, float sampleShift = 0.0);
 bool rampFilter1D(float*& g, parameters* params, bool data_on_cpu, float scalar = 1.0);
+
 bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu);
 bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu);
 
@@ -44,8 +48,6 @@ bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scala
 bool Laplacian_gpu(float*& g, int numDims, bool smooth, parameters* params, bool data_on_cpu, float scalar = 1.0);
 
 bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar = 1.0);
-
-float* rampFilterFrequencyResponseMagnitude(int N, parameters* params);
 
 bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu);
 bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cpu);

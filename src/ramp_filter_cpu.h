@@ -52,4 +52,6 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params);
 int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft);
 float* zeroPadForOffsetScan(float* g, parameters* params);
 
+void fftshift(float* h, int N);
+
 #endif

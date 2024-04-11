@@ -13,7 +13,7 @@
 #include <math.h>
 #include <algorithm>
 #include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 #include "cuda_utils.h"
 
 __global__ void parallelBeamSensitivityKernel(int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)

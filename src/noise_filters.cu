@@ -12,7 +12,7 @@
 
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 #include "parameters.h"
 
 __global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, const float3 T, const float3 startVal, const int N_phi_max, const float filterWidth, const float rFOVsq)

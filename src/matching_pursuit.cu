@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "matching_pursuit.cuh"
 #include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 #include "cuda_utils.h"
 
 #include <iostream>

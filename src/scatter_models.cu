@@ -12,7 +12,7 @@
 #include <math.h>
 #include <algorithm>
 #include "cuda_runtime.h"
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 #include "cuda_utils.h"
 
 #include "scatter_models.cuh"

@@ -276,6 +276,17 @@ double timeSamples(int i, int N)
         return double(i) - double(N);
 }
 
+void fftshift(float* h, int N)
+{
+    for (int i = 0; i < N / 2; i++)
+    {
+        int i_conj = i + N/2;
+        float temp = h[i];
+        h[i] = h[i_conj];
+        h[i_conj] = temp;
+    }
+}
+
 double rampImpulseResponse(int N, double T, int n, int rampID)
 {
     double retVal = 0.0;

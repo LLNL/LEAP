@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#include "device_launch_parameters.h"
+//#include "device_launch_parameters.h"
 
 /**
  * This header and associated source file provide CUDA-based implementations of functions for Anisotropic Total Variation (TV) denoising.

@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "cuda_runtime.h"
-//#include "cufft.h"
 #include "parameters.h"
 
 /**
