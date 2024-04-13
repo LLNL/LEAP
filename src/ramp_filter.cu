@@ -20,7 +20,7 @@
 #define PI 3.141592653589793
 #endif
 
-#ifdef INCLUDE_CUFFT
+#ifdef __INCLUDE_CUFFT
 #include <cufft.h>
 
 __global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N)
@@ -692,7 +692,7 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#ifdef INCLUDE_CUFFT
+#ifdef __INCLUDE_CUFFT
 cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar, float sampleShift)
 {
     cudaError_t cudaStatus;
@@ -1906,7 +1906,7 @@ float* rampImpulseResponse_modified(int N, parameters* params)
     return h;
 }
 
-#ifndef INCLUDE_CUFFT
+#ifndef __INCLUDE_CUFFT
 bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
 {
     printf("Error: 2D transmission filter cannot be run without CUFFT libraries!\n");

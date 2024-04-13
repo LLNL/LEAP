@@ -40,9 +40,9 @@ elif _platform == "darwin":
 
 setup(
     name='leapct',
-    version='1.8', 
+    version='1.9', 
     author='Kyle Champley, Hyojin Kim', 
-    author_email='champley@gmail.com', 
+    author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 
     keywords='Machine Learning, ML, AI, Computed Tomography, CT, Differentiable Project, Forward Project, Back Project', 
     python_requires='>=3.6', 

@@ -26,7 +26,7 @@
 typedef std::valarray<Complex> CArray;
 
 // source: https://tfetimes.com/c-fast-fourier-transform/
-// Cooley–Tukey FFT (in-place)
+// Cooley-Tukey FFT (in-place)
 void fft(CArray& x)
 {
     const size_t N = x.size();

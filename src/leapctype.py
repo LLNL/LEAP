@@ -10,6 +10,8 @@
 import ctypes
 import os
 import sys
+import site
+import glob
 from sys import platform as _platform
 from numpy.ctypeslib import ndpointer
 import numpy as np
@@ -77,9 +79,19 @@ class tomographicModels:
         if _platform == "linux" or _platform == "linux2":
             import readline
             from ctypes import cdll
-            
-            fullPath = os.path.join(current_dir, 'libleap.so')
-            fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.so')
+
+            #libdir = site.getsitepackages()[0]
+            #libname = glob.glob(os.path.join(libdir, "leapct*.so"))
+            libname = glob.glob(os.path.join(current_dir, "*leapct*.so"))
+            if len(libname) == 0:
+                fullPath = os.path.join(current_dir, 'libleap.so')
+                fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.so')
+            elif len(libname) == 1:
+                fullPath = libname[0]
+                fullPath_backup = ""
+            elif len(libname) >= 2:
+                fullPath = libname[0]
+                fullPath_backup = libname[1]
             
             if os.path.isfile(fullPath):
                 self.libprojectors = cdll.LoadLibrary(fullPath)
@@ -95,8 +107,16 @@ class tomographicModels:
         elif _platform == "win32":
             from ctypes import windll
         
-            fullPath = os.path.join(current_dir, 'libleap.dll')
-            fullPath_backup = os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll')
+            libname = glob.glob(os.path.join(current_dir, "*leapct*.dll"))
+            if len(libname) == 0:
+                fullPath = os.path.join(current_dir, 'libleap.dll')
+                fullPath_backup = os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll')
+            elif len(libname) == 1:
+                fullPath = libname[0]
+                fullPath_backup = ""
+            elif len(libname) >= 2:
+                fullPath = libname[0]
+                fullPath_backup = libname[1]
         
             if os.path.isfile(fullPath):
                 try:
@@ -119,8 +139,16 @@ class tomographicModels:
             # there is current no support for LEAP on Mac, but maybe someone can figure this out
             from ctypes import cdll
             
-            fullPath = os.path.join(current_dir, 'libleap.dylib')
-            fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.dylib')
+            libname = glob.glob(os.path.join(current_dir, "*leapct*.dylib"))
+            if len(libname) == 0:
+                fullPath = os.path.join(current_dir, 'libleap.dylib')
+                fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.dylib')
+            elif len(libname) == 1:
+                fullPath = libname[0]
+                fullPath_backup = ""
+            elif len(libname) >= 2:
+                fullPath = libname[0]
+                fullPath_backup = libname[1]
             
             if os.path.isfile(fullPath):
                 self.libprojectors = cdll.LoadLibrary(fullPath)
