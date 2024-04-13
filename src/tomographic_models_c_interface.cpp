@@ -72,6 +72,20 @@ bool reset()
 	return tomo()->reset();
 }
 
+bool include_cufft()
+{
+	#ifdef __INCLUDE_CUFFT
+	return true;
+	#else
+	return false;
+	#endif
+}
+
+int getOptimalFFTsize(int N)
+{
+	return optimalFFTsize(N);
+}
+
 bool verify_input_sizes(int numAngles, int numRows, int numCols, int numZ, int numY, int numX)
 {
 	parameters* params = &(tomo()->params);

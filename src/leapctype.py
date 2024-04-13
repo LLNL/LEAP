@@ -196,6 +196,10 @@ class tomographicModels:
         """
         self.set_model()
         return self.libprojectors.reset()
+        
+    def include_cufft(self):
+        self.libprojectors.include_cufft.restype = ctypes.c_bool
+        return self.libprojectors.include_cufft()
 
     def about(self):
         """prints info about LEAP, including the version number"""
@@ -264,6 +268,11 @@ class tomographicModels:
         if retVal == False:
             print('Error: projection and/ or volume data shapes do not match specified LEAP settings')
         return retVal
+
+    def optimalFFTsize(self, N):
+        self.libprojectors.getOptimalFFTsize.argtypes = [ctypes.c_int]
+        self.libprojectors.getOptimalFFTsize.restype = ctypes.c_int
+        return self.libprojectors.getOptimalFFTsize(N)
 
     def available_RAM(self):
         """Returns the amount of available CPU RAM in GB"""
@@ -1155,15 +1164,49 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        self.libprojectors.rampFilterVolume.restype = ctypes.c_bool
-        self.set_model()
-        if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.rampFilterVolume.argtypes = [ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.rampFilterVolume(f.data_ptr(), f.is_cuda == False)
+        
+        if self.include_cufft():
+            self.libprojectors.rampFilterVolume.restype = ctypes.c_bool
+            self.set_model()
+            if has_torch == True and type(f) is torch.Tensor:
+                self.libprojectors.rampFilterVolume.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+                self.libprojectors.rampFilterVolume(f.data_ptr(), f.is_cuda == False)
+            else:
+                self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+                self.libprojectors.rampFilterVolume(f, True)
+            return f
         else:
-            self.libprojectors.rampFilterVolume.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.rampFilterVolume(f, True)
-        return f
+            # Get volume dimensions
+            N_z = f.shape[0]
+            N_y = f.shape[1]
+            N_x = f.shape[2]
+            
+            # Calculate optimal FFT size
+            N_Y = self.optimalFFTsize(2*max(N_y,N_x))
+            N_X = N_Y
+
+            # Set frequency samples
+            T = 2.0 * np.pi / float(N_X);
+            Y = np.fft.fftshift((np.array(range(N_Y))-0.5*N_Y)*T)
+            X = np.fft.fftshift((np.array(range(N_X))-0.5*N_X)*T)
+            Y,X = np.meshgrid(Y,X)
+                
+            # Set 2D ramp filter frequency response
+            H_X = 2*np.abs(np.sin(0.5*X))
+            H_Y = 2*np.abs(np.sin(0.5*Y))
+            H_2D = np.sqrt(H_X**2 + H_Y**2 - (0.5*H_X*H_Y)**2) / self.get_voxelWidth()
+            H = np.repeat(np.expand_dims(H_2D, axis=0), N_z, axis=0)
+            
+            # Apply ramp filter
+            if has_torch and type(f) is torch.Tensor:
+                #print('using torch')
+                H = torch.from_numpy(H).to(f.get_device())
+                f[:,:,:] = torch.real(torch.fft.ifftn(torch.fft.fftn(f, s=(N_Y, N_X), dim=(1,2))*H, dim=(1,2)))[:,0:N_y,0:N_x]
+            else:
+                #print('using numpy')
+                f[:,:,:] = np.real(np.fft.ifftn(np.fft.fftn(f, s=(N_Y, N_X), axes=(1,2))*H, axes=(1,2)))[:,0:N_y,0:N_x]
+            
+            return f
         
     def Laplacian(self, g, numDims=2, smoothLaplacian=False):
         """Applies a Laplacian operation to each projection"""

@@ -14,6 +14,7 @@
 #endif
 
 #include "parameters.h"
+#include "leap_defines.h"
 //class parameters;
 
 #ifdef __INCLUDE_CUFFT

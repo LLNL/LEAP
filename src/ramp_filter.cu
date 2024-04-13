@@ -20,6 +20,8 @@
 #define PI 3.141592653589793
 #endif
 
+#define NUM_RAYS_PER_THREAD 8
+
 #ifdef __INCLUDE_CUFFT
 #include <cufft.h>
 
@@ -111,32 +113,46 @@ __global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3
 }
 #endif
 
-__global__ void explicit_convolution(float* data, float* filtered_data, const float* h, int3 N, int N_filter)
+__global__ void explicit_convolution(cudaTextureObject_t g, float* filtered_data, cudaTextureObject_t h, int3 N, int N_filter)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
-    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    const int n = (threadIdx.z + blockIdx.z * blockDim.z) * NUM_RAYS_PER_THREAD;
     if (l >= N.x || m >= N.y || n >= N.z)
         return;
 
     const uint64 ind = uint64(l) * uint64(N.z * N.y) + uint64(m * N.z);
 
-    //if (l == 0 && n == 0)
-    //    printf("m = %d\n", m);
-    
-    float diff = 0.0f;
-    float* x = &data[ind];
-
     // y[n] \sum_j h[j] x[n-j]
     // 0 <= n-j <= N.z-1
     // 1-N.z <= j-n <= 0
     // 1-N.z+n <= j <= n
-    float y = 0.0f;
-    for (int j = 1 - N.z + n; j <= n; j++)
-        y += h[j+N.z] * x[n-j];
-    //y = x[n];
+    float ys[NUM_RAYS_PER_THREAD];
+    for (int j = 0; j < NUM_RAYS_PER_THREAD; j++)
+        ys[j] = 0.0f;
 
-    filtered_data[ind + n] = y;
+    for (int j = 0; j < N.z; j+=8)
+    {
+        const float x0 = tex3D<float>(g, j + 0, m, l);
+        const float x1 = tex3D<float>(g, j + 1, m, l);
+        const float x2 = tex3D<float>(g, j + 2, m, l);
+        const float x3 = tex3D<float>(g, j + 3, m, l);
+        const float x4 = tex3D<float>(g, j + 4, m, l);
+        const float x5 = tex3D<float>(g, j + 5, m, l);
+        const float x6 = tex3D<float>(g, j + 6, m, l);
+        const float x7 = tex3D<float>(g, j + 7, m, l);
+
+        const int n_minus_j_plus_N = n - j + N.z;
+        for (int s = 0; s < NUM_RAYS_PER_THREAD; s++)
+        {
+            ys[s] += tex1D<float>(h, n_minus_j_plus_N + s - 0) * x0 + tex1D<float>(h, n_minus_j_plus_N + s - 1) * x1
+                  +  tex1D<float>(h, n_minus_j_plus_N + s - 2) * x2 + tex1D<float>(h, n_minus_j_plus_N + s - 3) * x3
+                  +  tex1D<float>(h, n_minus_j_plus_N + s - 4) * x4 + tex1D<float>(h, n_minus_j_plus_N + s - 5) * x5
+                  +  tex1D<float>(h, n_minus_j_plus_N + s - 6) * x6 + tex1D<float>(h, n_minus_j_plus_N + s - 7) * x7;
+        }
+    }
+    for (int s = 0; s < min(NUM_RAYS_PER_THREAD, N.z-n); s++)
+        filtered_data[ind + n + s] = ys[s];
 }
 
 __global__ void setPaddedDataFor2DFilter_reverse(float* g, float* g_pad, const int numRows, const int numCols, const int N_H1, const int N_H2, const float minValue, const bool isAttenuationData)
@@ -1927,7 +1943,7 @@ bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu)
 
 bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
 {
-    printf("This is the explicit convolution version!\n");
+    //printf("This is the explicit convolution version!\n");
     // This is the explicit convolution version
     //return true;
     bool retVal = true;
@@ -1984,6 +2000,9 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
         fprintf(stderr, "cudaMalloc failed!\n");
     if (cudaMemcpy(dev_h, h, N_H * sizeof(float), cudaMemcpyHostToDevice))
         fprintf(stderr, "cudaMemcpy(filter) failed!\n");
+
+    cudaTextureObject_t d_h_txt = NULL;
+    cudaArray* d_h_array = loadTexture1D(d_h_txt, h, N_H, false, false);
 
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
@@ -2042,11 +2061,24 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
             //setToConstant(&dev_g[uint64(startView) * uint64(numRows * params->numCols)], 0.0, chunkSize, params->whichGPU);
             //setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
 
+            cudaTextureObject_t d_data_txt = NULL;
+            cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_chunk, chunkSize, false, false);
+
             // Perform convolution
-            dim3 dimBlock = setBlockSize(chunkSize);
-            dim3 dimGrid = setGridSize(chunkSize, dimBlock);
-            //explicit_convolution <<< dimGrid, dimBlock >>> (&dev_g[uint64(startView)*uint64(numRows*params->numCols)], dev_g_chunk, h, chunkSize, N_H);
-            explicit_convolution <<< dimGrid, dimBlock >>> (dev_g_chunk , &dev_g[uint64(startView) * uint64(numRows * params->numCols)], dev_h, chunkSize, N_H);
+            //dim3 dimBlock = setBlockSize(chunkSize);
+            //dim3 dimGrid = setGridSize(chunkSize, dimBlock);
+
+            int3 N_g_mod = make_int3(chunkSize.x, chunkSize.y, int(ceil(float(chunkSize.z) / float(NUM_RAYS_PER_THREAD))));
+            dim3 dimBlock = setBlockSize(N_g_mod);
+            dim3 dimGrid = setGridSize(N_g_mod, dimBlock);
+            //dim3 dimBlock(8, 8, 8);
+            //dim3 dimGrid(int(ceil(double(chunkSize.x) / double(dimBlock.x))), int(ceil(double(chunkSize.y) / double(dimBlock.y))), int(ceil(double(chunkSize.z) / double(NUM_RAYS_PER_THREAD*dimBlock.z))));
+
+            //explicit_convolution <<< dimGrid, dimBlock >>> (dev_g_chunk , &dev_g[uint64(startView) * uint64(numRows * params->numCols)], dev_h, chunkSize, N_H);
+            explicit_convolution <<< dimGrid, dimBlock >>> (d_data_txt, &dev_g[uint64(startView) * uint64(numRows * params->numCols)], d_h_txt, chunkSize, N_H);
+
+            cudaFreeArray(d_data_array);
+            cudaDestroyTextureObject(d_data_txt);
         }
         cudaDeviceSynchronize();
 
@@ -2064,6 +2096,8 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
     }
 
     // Clean up
+    cudaFreeArray(d_h_array);
+    cudaDestroyTextureObject(d_h_txt);
     //cudaFree(dev_g_pad);
     if (data_on_cpu)
         cudaFree(dev_g);

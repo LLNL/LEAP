@@ -278,21 +278,3 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     
     return g
     
-def optimalFFTsize(N):
-    # returns smallest number = 2^(n+1)*3^m such that 2^(n+1)*3^m >= N and n,m >= 0
-    # This gives a more optimal value for an FFT because it samples the number line more finely
-    if N <= 2:
-        return 2
-
-    c1 = np.log2(float(N) / 2.0) / np.log2(3.0);
-    c2 = 1.0 / np.log2(3.0);
-    #2^x*3^y = N ==> y = c1-c2*x
-    xbar = np.log2(float(N) / 2.0);
-    minValue = 2**(int(np.ceil(xbar)) + 1)
-    for x in range(int(np.ceil(xbar))):
-        y = int(np.ceil(c1 - c2 * float(x)))
-        newValue = 2.0**(x + 1) * (3.0**y)
-        if newValue < minValue and 0 <= y:
-            minValue = newValue
-
-    return int(minValue)

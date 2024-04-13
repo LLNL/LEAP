@@ -38,8 +38,8 @@ leapct.set_default_volume()
 
 # Set Blur Kernel
 # The example we use here is an analytic approximation to a typical detector psf
-N_H1 = optimalFFTsize(2*numRows)
-N_H2 = optimalFFTsize(2*numCols)
+N_H1 = leapct.optimalFFTsize(2*numRows)
+N_H2 = leapct.optimalFFTsize(2*numCols)
 y = (np.array(range(N_H1), dtype=np.float32)-N_H1//2)
 y = y / np.max(y)
 x = (np.array(range(N_H2), dtype=np.float32)-N_H2//2)
