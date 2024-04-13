@@ -33,6 +33,8 @@ extern "C" PROJECTOR_API bool copy_parameters(int);
 extern "C" PROJECTOR_API void about();
 extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
+extern "C" PROJECTOR_API bool include_cufft();
+extern "C" PROJECTOR_API int getOptimalFFTsize(int N);
 
 extern "C" PROJECTOR_API bool verify_input_sizes(int, int, int, int, int, int);
 
