@@ -74,7 +74,7 @@ bool reset()
 
 bool include_cufft()
 {
-	#ifdef INCLUDE_CUFFT
+	#ifdef __INCLUDE_CUFFT
 	return true;
 	#else
 	return false;

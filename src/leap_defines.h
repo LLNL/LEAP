@@ -18,7 +18,7 @@
  * This header file contains commonly used constants in LEAP.
  */
 
-//#define INCLUDE_CUFFT
+//#define __INCLUDE_CUFFT
 
 #ifndef PI
 	#define PI 3.1415926535897932385

@@ -17,7 +17,7 @@
 #include "leap_defines.h"
 //class parameters;
 
-#ifdef INCLUDE_CUFFT
+#ifdef __INCLUDE_CUFFT
 #include <cufft.h>
 cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar = 1.0, float sampleShift = 0.0);
 float* rampFilterFrequencyResponseMagnitude(int N, parameters* params);
