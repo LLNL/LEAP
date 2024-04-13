@@ -145,8 +145,8 @@ bool CPUbackproject_cone(float* g, float* f, parameters* params)
 									traj[1] = (-D * sin_phi + u * cos_phi) * trajLength_inv;
 									traj[2] = v * trajLength_inv;
 
-									float t_max = 1.0e16;
-									float t_min = -1.0e16;
+									float t_max = float(1.0e16);
+									float t_min = float(-1.0e16);
 									if (traj[0] != 0.0f)
 									{
 										const float t_a = (pos[0] + x_width) / traj[0];
@@ -233,8 +233,8 @@ bool CPUbackproject_cone(float* g, float* f, parameters* params)
 									traj[1] = (-D * sin_phi + u * cos_phi) * trajLength_inv;
 									traj[2] = v * trajLength_inv;
 
-									float t_max = 1.0e16;
-									float t_min = -1.0e16;
+									float t_max = float(1.0e16);
+									float t_min = float(-1.0e16);
 									if (traj[0] != 0.0f)
 									{
 										const float t_a = (pos[0] + x_width) / traj[0];
@@ -388,8 +388,8 @@ bool CPUbackproject_parallel(float* g, float* f, parameters* params)
 								pos[1] = y - u * cos_phi;
 								//pos[2] = z - v; // does not matter
 
-								float t_max = 1.0e16;
-								float t_min = -1.0e16;
+								float t_max = float(1.0e16);
+								float t_min = float(-1.0e16);
 								if (traj[0] != 0.0f)
 								{
 									const float t_a = (pos[0] + x_width) / traj[0];
@@ -461,8 +461,8 @@ bool CPUbackproject_parallel(float* g, float* f, parameters* params)
 								pos[1] = y - u * cos_phi;
 								//pos[2] = z - v; // does not matter
 
-								float t_max = 1.0e16;
-								float t_min = -1.0e16;
+								float t_max = float(1.0e16);
+								float t_min = float(-1.0e16);
 								if (traj[0] != 0.0f)
 								{
 									const float t_a = (pos[0] + x_width) / traj[0];
@@ -690,8 +690,8 @@ bool CPUbackproject_modular(float* g, float* f, parameters* params)
 								traj[1] *= trajMag_inv;
 								traj[2] *= trajMag_inv;
 
-								float t_max = 1.0e16;
-								float t_min = -1.0e16;
+								float t_max = float(1.0e16);
+								float t_min = float(-1.0e16);
 								if (traj[0] != 0.0f)
 								{
 									const float t_a = (pos[0] + x_width) / traj[0];
@@ -793,8 +793,8 @@ bool CPUbackproject_modular(float* g, float* f, parameters* params)
 								traj[1] *= trajMag_inv;
 								traj[2] *= trajMag_inv;
 
-								float t_max = 1.0e16;
-								float t_min = -1.0e16;
+								float t_max = float(1.0e16);
+								float t_min = float(-1.0e16);
 								if (traj[0] != 0.0f)
 								{
 									const float t_a = (pos[0] + x_width) / traj[0];

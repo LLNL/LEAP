@@ -496,7 +496,7 @@ bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int
     //*/
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -633,7 +633,7 @@ bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionar
     //*/
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);

@@ -210,7 +210,7 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 					float u_conj = (-u + A) / (1.0 + u*A);
 					float phi_conj = phi - 2.0 * atan(u) + atanA + PI;
 					if (phi_conj > phi_max)
-						phi_conj -= 2.0 * PI;
+						phi_conj -= float(2.0 * PI);
 					if (phi_min <= phi_conj && phi_conj <= phi_max && u_0 <= u_conj && u_conj <= u_end)
 					{
 						int phi_conj_ind = int(0.5 + params->phi_inv(phi_conj));
@@ -292,8 +292,8 @@ bool setDefaultRange_centerCol(int numCols, int& centerCol_low, int& centerCol_h
 	if (numCols < 200)
 		N_trim = 5;
 
-	centerCol_low = c * numCols;
-	centerCol_high = numCols - c * numCols;
+	centerCol_low = int(floor(c * numCols));
+	centerCol_high = int(ceil(numCols - c * numCols));
 
 	/*
 	if (left_center_right == -1)

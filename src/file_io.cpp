@@ -94,7 +94,7 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 		{
 			float phis = (params->phis[i] + 0.5 * PI) * 180.0 / PI;
 			char phis_str[64];
-			sprintf(phis_str, " %e", phis);
+			sprintf_s(phis_str, " %e", phis);
 			phis_strs += phis_str;
 			if (i != params->numAngles - 1)
 				phis_strs += ",";
@@ -182,22 +182,22 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 		{
 			char temp_str[256];
 
-			sprintf(temp_str, "%e, %e, %e", params->sourcePositions[i * 3 + 0], params->sourcePositions[i * 3 + 1], params->sourcePositions[i * 3 + 2]);
+			sprintf_s(temp_str, "%e, %e, %e", params->sourcePositions[i * 3 + 0], params->sourcePositions[i * 3 + 1], params->sourcePositions[i * 3 + 2]);
 			sourcePositions_strs += temp_str;
 			if (i != params->numAngles - 1)
 				sourcePositions_strs += ", ";
 
-			sprintf(temp_str, "%e, %e, %e", params->moduleCenters[i * 3 + 0], params->moduleCenters[i * 3 + 1], params->moduleCenters[i * 3 + 2]);
+			sprintf_s(temp_str, "%e, %e, %e", params->moduleCenters[i * 3 + 0], params->moduleCenters[i * 3 + 1], params->moduleCenters[i * 3 + 2]);
 			moduleCenters_strs += temp_str;
 			if (i != params->numAngles - 1)
 				moduleCenters_strs += ", ";
 
-			sprintf(temp_str, "%e, %e, %e", params->rowVectors[i * 3 + 0], params->rowVectors[i * 3 + 1], params->rowVectors[i * 3 + 2]);
+			sprintf_s(temp_str, "%e, %e, %e", params->rowVectors[i * 3 + 0], params->rowVectors[i * 3 + 1], params->rowVectors[i * 3 + 2]);
 			rowVectors_strs += temp_str;
 			if (i != params->numAngles - 1)
 				rowVectors_strs += ", ";
 
-			sprintf(temp_str, "%e, %e, %e", params->colVectors[i * 3 + 0], params->colVectors[i * 3 + 1], params->colVectors[i * 3 + 2]);
+			sprintf_s(temp_str, "%e, %e, %e", params->colVectors[i * 3 + 0], params->colVectors[i * 3 + 1], params->colVectors[i * 3 + 2]);
 			colVectors_strs += temp_str;
 			if (i != params->numAngles - 1)
 				colVectors_strs += ", ";

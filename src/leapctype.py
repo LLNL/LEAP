@@ -10,6 +10,7 @@
 import ctypes
 import os
 import sys
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 import site
 import glob
 from sys import platform as _platform
@@ -84,8 +85,8 @@ class tomographicModels:
             #libname = glob.glob(os.path.join(libdir, "leapct*.so"))
             libname = glob.glob(os.path.join(current_dir, "*leapct*.so"))
             if len(libname) == 0:
-                fullPath = os.path.join(current_dir, 'libleap.so')
-                fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.so')
+                fullPath = os.path.join(current_dir, 'libleapct.so')
+                fullPath_backup = os.path.join(current_dir, '../build/lib/libleapct.so')
             elif len(libname) == 1:
                 fullPath = libname[0]
                 fullPath_backup = ""
@@ -109,8 +110,8 @@ class tomographicModels:
         
             libname = glob.glob(os.path.join(current_dir, "*leapct*.dll"))
             if len(libname) == 0:
-                fullPath = os.path.join(current_dir, 'libleap.dll')
-                fullPath_backup = os.path.join(current_dir, r'..\win_build\bin\Release\libleap.dll')
+                fullPath = os.path.join(current_dir, 'libleapct.dll')
+                fullPath_backup = os.path.join(current_dir, r'..\win_build\bin\Release\libleapct.dll')
             elif len(libname) == 1:
                 fullPath = libname[0]
                 fullPath_backup = ""
@@ -141,8 +142,8 @@ class tomographicModels:
             
             libname = glob.glob(os.path.join(current_dir, "*leapct*.dylib"))
             if len(libname) == 0:
-                fullPath = os.path.join(current_dir, 'libleap.dylib')
-                fullPath_backup = os.path.join(current_dir, '../build/lib/libleap.dylib')
+                fullPath = os.path.join(current_dir, 'libleapct.dylib')
+                fullPath_backup = os.path.join(current_dir, '../build/lib/libleapct.dylib')
             elif len(libname) == 1:
                 fullPath = libname[0]
                 fullPath_backup = ""

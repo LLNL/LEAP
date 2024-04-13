@@ -94,8 +94,8 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < params->numAngles; i++)
         {
-            double sourcePos_save[3];
-            double r_save[3];
+            //double sourcePos_save[3];
+            //double r_save[3];
 
             double sourcePos[3];
             double r[3];

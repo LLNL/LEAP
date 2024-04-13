@@ -496,7 +496,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
         return false;
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -574,7 +574,7 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, b
     int windowRadius = max(1, min(2, (w - 1) / 2));
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -642,7 +642,7 @@ bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
     if (f == NULL) return false;
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -698,7 +698,7 @@ bool azimuthalBlur(float* f, parameters* params, float filterWidth, bool data_on
     if (f == NULL) return false;
 
     cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(params->numX, params->numY, params->numZ);

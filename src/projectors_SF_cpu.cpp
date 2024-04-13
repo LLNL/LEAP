@@ -223,15 +223,15 @@ bool CPUproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* params, i
 
     float x_dot_theta, x_dot_theta_perp;
 
-    float v_denom;//, v_phi_x;
+    //float v_denom;//, v_phi_x;
     float pitch_mult_phi_plus_startZ = 0.0;
 
-    float t_neg, t_pos, t_1, t_2;
-    int t_ind_min, t_ind_max;
-    float A_ind;
+    //float t_neg, t_pos, t_1, t_2;
+    //int t_ind_min, t_ind_max;
+    //float A_ind;
     float T_z_over_2 = params->voxelHeight / 2.0;
 
-    float T_z_over_2T_v_v_denom;
+    //float T_z_over_2T_v_v_denom;
 
     float rFOVsq = params->rFOV() * params->rFOV();
 
@@ -464,10 +464,10 @@ bool CPUbackproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* param
     float cos_phi = cos(phi);
     float sin_phi = sin(phi);
 
-    float v_denom, v_phi_x;
+    //float v_denom, v_phi_x;
     float pitch_mult_phi_plus_startZ = 0.0;
 
-    float t_neg, t_pos; //, t_1, t_2;
+    //float t_neg, t_pos; //, t_1, t_2;
     //int t_ind_min, t_ind_max;
     float T_z_over_2 = params->voxelHeight / 2.0;
 
@@ -496,9 +496,9 @@ bool CPUbackproject_SF_fan_kernel(float* aProj, float* xSlice, parameters* param
         B_y = -sin_phi * T_x_over_2;
     }
 
-    int i, L;
+    int i;
 
-    double T_z_over_2T_v_v_denom;
+    //double T_z_over_2T_v_v_denom;
 
     int v_arg_bounds[2];
     v_arg_bounds[0] = 0;

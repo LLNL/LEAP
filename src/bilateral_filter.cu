@@ -130,17 +130,17 @@ bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, flo
 {
     if (f == NULL) return false;
 
-    spatialFWHM = max(0.25, min(100.0, spatialFWHM));
-    intensityFWHM = max(1.0e-8, min(1.0e8, intensityFWHM));
+    spatialFWHM = float(max(0.25, min(100.0, spatialFWHM)));
+    intensityFWHM = float(max(1.0e-8, min(1.0e8, intensityFWHM)));
 
     // convert FWHM input parameters to sigmas
-    float sigma_d_sq = spatialFWHM / (2.0 * sqrt(2.0 * log(2.0)));
+    float sigma_d_sq = float(spatialFWHM / (2.0 * sqrt(2.0 * log(2.0))));
     sigma_d_sq *= sigma_d_sq;
-    float sigma_i_sq = intensityFWHM / (2.0 * sqrt(2.0 * log(2.0)));
+    float sigma_i_sq = float(intensityFWHM / (2.0 * sqrt(2.0 * log(2.0))));
     sigma_i_sq *= sigma_i_sq;
 
-    float sigma_d_sq_inv = 0.5 / sigma_d_sq;
-    float sigma_i_sq_inv = 0.5 / sigma_i_sq;
+    float sigma_d_sq_inv = float(0.5 / sigma_d_sq);
+    float sigma_i_sq_inv = float(0.5 / sigma_i_sq);
 
     // define filter window width by full width, tenth max
     int w = max(1, int(ceil(sqrt(2.0 * log(10.0) * sigma_d_sq))));
@@ -208,17 +208,17 @@ bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWH
         return bilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, data_on_cpu, whichGPU);
     if (f == NULL) return false;
 
-    spatialFWHM = max(0.25, min(100.0, spatialFWHM));
-    intensityFWHM = max(1.0e-8, min(1.0e8, intensityFWHM));
+    spatialFWHM = float(max(0.25, min(100.0, spatialFWHM)));
+    intensityFWHM = float(max(1.0e-8, min(1.0e8, intensityFWHM)));
 
     // convert FWHM input parameters to sigmas
-    float sigma_d_sq = spatialFWHM / (2.0 * sqrt(2.0 * log(2.0)));
+    float sigma_d_sq = float(spatialFWHM / (2.0 * sqrt(2.0 * log(2.0))));
     sigma_d_sq *= sigma_d_sq;
-    float sigma_i_sq = intensityFWHM / (2.0 * sqrt(2.0 * log(2.0)));
+    float sigma_i_sq = float(intensityFWHM / (2.0 * sqrt(2.0 * log(2.0))));
     sigma_i_sq *= sigma_i_sq;
 
-    float sigma_d_sq_inv = 0.5 / sigma_d_sq;
-    float sigma_i_sq_inv = 0.5 / sigma_i_sq;
+    float sigma_d_sq_inv = float(0.5 / sigma_d_sq);
+    float sigma_i_sq_inv = float(0.5 / sigma_i_sq);
 
     // define filter window width by full width, tenth max
     int w = max(1, int(ceil(sqrt(2.0 * log(10.0) * sigma_d_sq))));

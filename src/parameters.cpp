@@ -49,7 +49,7 @@ void parameters::initialize()
 	doExtrapolation = false;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
-	chunkingMemorySizeThreshold = 0.1;
+	chunkingMemorySizeThreshold = float(0.1);
 	colShiftFromFilter = 0.0;
 	rowShiftFromFilter = 0.0;
 	offsetScan = false;
@@ -203,7 +203,7 @@ void parameters::assign(const parameters& other)
 float parameters::T_phi()
 {
     if (numAngles <= 1 || phis == NULL)
-        return 2.0*PI;
+        return float(2.0*PI);
 	else
 		return (phis[numAngles-1] - phis[0]) / float(numAngles-1);
 }
@@ -211,7 +211,7 @@ float parameters::T_phi()
 float parameters::min_T_phi()
 {
 	if (numAngles <= 1 || phis == NULL)
-		return 2.0 * PI;
+		return float(2.0 * PI);
 	else
 	{
 		double retVal = fabs(phis[1] - phis[0]);
@@ -287,14 +287,14 @@ float parameters::rFOV()
 	else if (geometry == MODULAR)
 	{
 		//return 1.0e16;
-		return furthestFromCenter()+0.5*voxelWidth;
+		return float(furthestFromCenter()+0.5*voxelWidth);
 	}
 	else if (geometry == PARALLEL)
 	{
 		if (offsetScan)
-			return max(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0()));
+			return float(max(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0())));
 		else
-			return min(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0()));
+			return float(min(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0())));
 	}
 	else if (geometry == FAN || geometry == CONE)
 	{
@@ -331,7 +331,7 @@ float parameters::rFOV()
 			return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left-float(atan(tau / sod)))));
 	}
 	else
-		return 1.0e16;
+		return float(1.0e16);
 }
 
 float parameters::furthestFromCenter()
@@ -590,12 +590,12 @@ bool parameters::set_default_volume(float scale)
 			numZ = minSlices;
 		else if (fabs(angularRange) <= 360.0)
 		{
-			numZ = (sod / sdd * (numRows - 1) * pixelHeight + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight;
+			numZ = int(ceil((sod / sdd * (numRows - 1) * pixelHeight + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight));
 			numZ = max(minSlices, numZ);
 		}
 		else
 		{
-			numZ = fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight;
+			numZ = int(ceil(fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight));
 			numZ = max(minSlices, numZ);
 		}
 	}

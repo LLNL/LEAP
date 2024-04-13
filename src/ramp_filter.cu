@@ -361,7 +361,7 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
 
     int shiftDirection;
     float B0, B1, B2;
-    float one_over_neg_B_dot_theta;
+    //float one_over_neg_B_dot_theta;
     float cos_phi_epsilon, sin_phi_epsilon;
     float cos_phi_shift, sin_phi_shift;
     float u_arg, v_arg;
@@ -623,7 +623,7 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
             const float v_old = v_new - theShift;
 
             const float v_ind = (v_old - startVals.y)/T.y;
-            const int v_closest = int(0.5f + v_ind);
+            //const int v_closest = int(0.5f + v_ind);
             if (v_ind <= 0.0f)
             {
                 data_padded_block[k] = aProj[0 * N.z + k];
@@ -682,7 +682,7 @@ __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, i
             const float v_old = v_new + theShift;
 
             const float v_ind = (v_old - startVals.y) / T.y;
-            const int v_closest = int(0.5f + v_ind);
+            //const int v_closest = int(0.5f + v_ind);
             if (v_ind <= 0.0f)
             {
                 data_block[k] = aProj[0 * N_pad + k];
@@ -727,7 +727,7 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
     }
     float* h = new float[N];
     for (int i = 0; i < N; i++)
-        h[i] = h_d[i] * scalar / float(N);
+        h[i] = float(h_d[i] * scalar / float(N));
     delete[] h_d;
 
     // Make cuFFT Plans
@@ -1032,7 +1032,7 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
 
 bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
 {
-    float minValue = pow(2.0, -24.0);
+    float minValue = float(pow(2.0, -24.0));
 
     int N_x = params->numCols;
     int N_y = params->numRows;
@@ -1235,7 +1235,7 @@ bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
     int N_y = params->numY;
     int N_z = params->numZ;
 
-    float minValue = -1.0e30;
+    float minValue = float(-1.0e30);
 
     // Pad and then find next power of 2
     //int N_H1 = int(pow(2.0, ceil(log2(2 * max(N_y, N_x)))));
@@ -1625,7 +1625,7 @@ bool ray_derivative(float*& g, parameters* params, bool data_on_cpu, float scala
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
     ray_derivative_kernel <<< dimGrid, dimBlock >>> (dev_g, dev_Dg, N_g, T_g, startVal_g, scalar, sampleShift);
-    params->colShiftFromFilter += -0.5*sampleShift; // opposite sign as LTT
+    params->colShiftFromFilter += float(-0.5*sampleShift); // opposite sign as LTT
 
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess)
@@ -1657,7 +1657,7 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
 
-    float epsilon = std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi())));
+    float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
 
     float* dev_g = 0;
     float* dev_Dg = 0;
@@ -1724,7 +1724,7 @@ bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cp
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
 
-    float epsilon = std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi())));
+    float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
 
     int maxChunkSize = 100;
     int numChunks = int(ceil(double(params->numAngles) / double(maxChunkSize)));
@@ -1904,18 +1904,18 @@ float* rampImpulseResponse_modified(int N, parameters* params)
             isCurved = true;
     }
 
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
     double* h_d = rampImpulseResponse(N, T, params);
     float* h = new float[N];
     for (int i = 0; i < N; i++)
     {
-        h[i] = h_d[i];
+        h[i] = float(h_d[i]);
 
         if (i != 0 && isCurved == true)
         {
             double s = timeSamples(i, N) * T / params->sod;
             double temp = s / sin(s);
-            h[i] *= temp * temp;
+            h[i] *= float(temp * temp);
         }
     }
     delete[] h_d;

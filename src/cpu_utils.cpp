@@ -38,12 +38,12 @@ int optimalFFTsize(int N)
     //2^x*3^y = N ==> y = c1-c2*x
     double xbar = log2(double(N) / 2.0);
     int x, y;
-    int minValue = pow(2, int(ceil(xbar)) + 1);
+    int minValue = int(pow(2, int(ceil(xbar)) + 1));
     int newValue;
     for (x = 0; x < int(ceil(xbar)); x++)
     {
         y = int(ceil(c1 - c2 * double(x)));
-        newValue = pow(2, x + 1) * pow(3, y);
+        newValue = int(pow(2, x + 1) * pow(3, y));
         if (newValue < minValue && y >= 0)
             minValue = newValue;
     }

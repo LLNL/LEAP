@@ -124,7 +124,7 @@ __global__ void windowFOVKernel(float* f, const int4 N, const float4 T, const fl
 
     const float x = ix * T.x + startVal.x;
     const float y = iy * T.y + startVal.y;
-    const float z = iz * T.z + startVal.z;
+    //const float z = iz * T.z + startVal.z;
 
     if (x * x + y * y > rFOVsq)
     {
@@ -1025,7 +1025,7 @@ bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 float* copyAngleArrayToGPU(parameters* params)
 {
     cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
     float* dev_phis = 0;
     if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
         fprintf(stderr, "cudaMalloc failed!\n");
@@ -1123,7 +1123,7 @@ bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, 
     if (x == NULL) return false;
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);
@@ -1173,7 +1173,7 @@ bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3
     if (x == NULL || y == NULL) return false;
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     // Copy volume to GPU
     int3 N = make_int3(N_1, N_2, N_3);

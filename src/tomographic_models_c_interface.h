@@ -19,6 +19,7 @@
     #define PROJECTOR_API
 #endif
 
+
 /**
  * This header and source file's sole purpose is to provide an ANSI C wrapper around the tomographicModels class.
  * This makes it possible to use with the python ctypes module and other interfaces which do not work with C++ classes

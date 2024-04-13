@@ -943,8 +943,8 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 	params.numCols = numCols;
 	params.numRows = numRows;
 	params.numAngles = numAngles;
-	params.centerCol = 0.5*float(numCols-1);
-	params.centerRow = 0.5*float(numRows-1);
+	params.centerCol = float(0.5*float(numCols-1));
+	params.centerRow = float(0.5*float(numRows-1));
 	params.set_sourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
 	return params.geometryDefined();
 }
@@ -1493,7 +1493,7 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 					float ind = curVal / sampleRate - firstSample;
 					int ind_low = int(ind);
 					float d = ind - float(ind_low);
-					x_1D[k] = (1.0 - d) * LUT[ind_low] + d * LUT[ind_low + 1];
+					x_1D[k] = float((1.0 - d) * LUT[ind_low] + d * LUT[ind_low + 1]);
 				}
 			}
 		}
@@ -1584,14 +1584,14 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 					d_2 = ind - float(ind_lo_2);
 				}
 
-				float partA_1 = (1.0 - d_2)* LUT_1[ind_lo_1 * numSamples + ind_lo_2] + d_2* LUT_1[ind_lo_1 * numSamples + ind_hi_2];
-				float partB_1 = (1.0 - d_2) * LUT_1[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_1[ind_hi_1 * numSamples + ind_hi_2];
+				float partA_1 = float((1.0 - d_2)* LUT_1[ind_lo_1 * numSamples + ind_lo_2] + d_2* LUT_1[ind_lo_1 * numSamples + ind_hi_2]);
+				float partB_1 = float((1.0 - d_2) * LUT_1[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_1[ind_hi_1 * numSamples + ind_hi_2]);
 
-				float partA_2 = (1.0 - d_2) * LUT_2[ind_lo_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_lo_1 * numSamples + ind_hi_2];
-				float partB_2 = (1.0 - d_2) * LUT_2[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_hi_1 * numSamples + ind_hi_2];
+				float partA_2 = float((1.0 - d_2) * LUT_2[ind_lo_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_lo_1 * numSamples + ind_hi_2]);
+				float partB_2 = float((1.0 - d_2) * LUT_2[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_hi_1 * numSamples + ind_hi_2]);
 
-				x_1D[k] = (1.0 - d_1) * partA_1 + d_1 * partB_1;
-				y_1D[k] = (1.0 - d_1) * partA_2 + d_1 * partB_2;
+				x_1D[k] = float((1.0 - d_1) * partA_1 + d_1 * partB_1);
+				y_1D[k] = float((1.0 - d_1) * partA_2 + d_1 * partB_2);
 
 				/*
 				if (curVal_1 >= lastSample)
@@ -1647,7 +1647,7 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 
 				if (mu_L <= 0.0 || mu_H <= 0.0)
 				{
-					line_L[k] = 7.31231243248; // effective-Z of air
+					line_L[k] = float(7.31231243248); // effective-Z of air
 					line_H[k] = 0.0;
 				}
 				else
@@ -1681,14 +1681,14 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 						d = (theRatio * sigma_H[Z + 1 - 1] - sigma_L[Z + 1 - 1]) / (sigma_L[Z - 1] - sigma_L[Z + 1 - 1] - theRatio * (sigma_H[Z - 1] - sigma_H[Z + 1 - 1]));
 
 					d = std::max(float(0.0), std::min(float(1.0), d));
-					float Ze = float(Z) + 1.0 - d;
+					float Ze = float(Z) + float(1.0) - d;
 
 					int Z_lo = int(Ze);
 					int Z_hi = Z_lo + 1;
 					d = Ze - float(Z_lo);
 
-					float sigma_Ze_L = (1.0 - d) * sigma_L[Z_lo - 1] + d * sigma_L[Z_hi - 1];
-					float sigma_Ze_H = (1.0 - d) * sigma_H[Z_lo - 1] + d * sigma_H[Z_hi - 1];
+					float sigma_Ze_L = (float(1.0) - d) * sigma_L[Z_lo - 1] + d * sigma_L[Z_hi - 1];
+					float sigma_Ze_H = (float(1.0) - d) * sigma_H[Z_lo - 1] + d * sigma_H[Z_hi - 1];
 					float rhoe = (sigma_Ze_L * mu_L + sigma_Ze_H * mu_H) / (sigma_Ze_L * sigma_Ze_L + sigma_Ze_H * sigma_Ze_H);
 					if (mu_L == 0.0 || mu_H == 0.0)
 						rhoe = 0.0;

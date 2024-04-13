@@ -28,9 +28,9 @@
     #define PIINV 0.3183098861837907 // 1.0 / PI
 #endif
 
-#ifndef NAN
-	#define NAN sqrt(-1)
-#endif
+//#ifndef NAN
+//	#define NAN sqrt(-1)
+//#endif
 
 #ifndef E
 	#define E 2.7182818284590452354

@@ -242,17 +242,17 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 
 	float curVal = 0.0;
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
-	const int N_r = int(0.5 - startVals_f.y / T_f.y);
+	//const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
 	const float r_center_ind = -startVals_f.y / T_f.y;
 	const int N_r_left = int(floor(r_center_ind)) + 1;
-	const int N_r_right = N_f.y - N_r_left;
+	//const int N_r_right = N_f.y - N_r_left;
 	const float r_max = max((N_f.y - 1) * T_f.y + startVals_f.y, fabs(startVals_f.y));
 
 	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
 	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
 	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
-	const float r_min = 0.5f * T_f.y;
+	//const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (-R * sin_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta + v * cos_beta) / T_f.z;
@@ -336,7 +336,7 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 
 	float curVal = 0.0;
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
-	const int N_r = int(0.5 - startVals_f.y / T_f.y);
+	//const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
 	const float r_center_ind = -startVals_f.y / T_f.y;
 	const int N_r_left = int(floor(r_center_ind)) + 1;
@@ -346,7 +346,7 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
 	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
 	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
-	const float r_min = 0.5f * T_f.y;
+	//const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (-R * sin_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta + v * cos_beta) / T_f.z;
@@ -439,17 +439,17 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 
 	float curVal = 0.0;
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
-	const int N_r = int(0.5 - startVals_f.y / T_f.y);
+	//const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
 	const float r_center_ind = -startVals_f.y / T_f.y;
 	const int N_r_left = int(floor(r_center_ind)) + 1;
-	const int N_r_right = N_f.y - N_r_left;
+	//const int N_r_right = N_f.y - N_r_left;
 	const float r_max = max((N_f.y - 1) * T_f.y + startVals_f.y, fabs(startVals_f.y));
 
 	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
 	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
 	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
-	const float r_min = 0.5f * T_f.y;
+	//const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (v * cos_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta) / T_f.z;
@@ -525,7 +525,7 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 
 	float curVal = 0.0;
 	//const int N_r = int(0.5 + 0.5 * N_f.y);
-	const int N_r = int(0.5 - startVals_f.y / T_f.y);
+	//const int N_r = int(0.5 - startVals_f.y / T_f.y);
 
 	const float r_center_ind = -startVals_f.y / T_f.y;
 	const int N_r_left = int(floor(r_center_ind)) + 1;
@@ -535,7 +535,7 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 	//const int rInd_floor = int(0.5 - startVals_f.y / T_f.y); // first valid index
 	//const float r_max = (float)(N_f.y - 1) * T_f.y + startVals_f.y;
 	//const float r_min = fabs((float)(rInd_floor)*T_f.y + startVals_f.y);
-	const float r_min = 0.5f * T_f.y;
+	//const float r_min = 0.5f * T_f.y;
 
 	const float z_shift = (v * cos_beta - startVals_f.z) / T_f.z;
 	const float z_slope = (sin_beta) / T_f.z;

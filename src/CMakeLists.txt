@@ -6,7 +6,7 @@
 cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
 #cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
-project(leap CXX CUDA)
+project(leapct CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -109,9 +109,9 @@ include_directories(
   ${CUDA_INCLUDE_DIRS}
 )
 
-#add_library(leap SHARED main_projector_ctype.cpp parameters.cpp projectors_cpu.cpp projectors.cu projectors_SF.cu)
-#target_link_libraries(leap "${TORCH_LIBRARIES}")
-add_library(leap SHARED
+#add_library(leapct SHARED main_projector_ctype.cpp parameters.cpp projectors_cpu.cpp projectors.cu projectors_SF.cu)
+#target_link_libraries(leapct "${TORCH_LIBRARIES}")
+add_library(leapct SHARED
   ${HEADER}
   ${SRC_CPP}
   ${SRC_CU}
@@ -142,16 +142,16 @@ target_link_libraries(${PROJECT_NAME}
   ${CUDA_cufft_LIBRARY}
 )
 
-target_compile_options(leap PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
+target_compile_options(leapct PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
   --use_fast_math
 >)
 
-#set_property(TARGET leap PROPERTY CXX_STANDARD 14)
-#set_property(TARGET leap PROPERTY CUDA_ARCHITECTURES native)
-set_property(TARGET leap PROPERTY CUDA_ARCHITECTURES all-major)
+#set_property(TARGET leapct PROPERTY CXX_STANDARD 14)
+#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES native)
+set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
 #set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 60 61 62 70 72 75 80 86 87 89)
 #set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 75 86 87 89)
-#set_property(TARGET leap PROPERTY CUDA_ARCHITECTURES OFF)
+#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES OFF)
 
 install(TARGETS ${PROJECT_NAME}
   PUBLIC_HEADER DESTINATION include

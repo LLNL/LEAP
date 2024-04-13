@@ -538,7 +538,7 @@ __global__ void attenuatedProjectorKernel_SF(float* g, int4 N_g, float4 T_g, flo
     if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
         return;
 
-    const float v = m * T_g.y + startVals_g.y;
+    //const float v = m * T_g.y + startVals_g.y;
     const float u = n * T_g.z + startVals_g.z;
 
     const float iz = float(m) + 0.5f;
@@ -685,7 +685,7 @@ __global__ void cylindricalAttenuatedBackprojectorKernel_SF(cudaTextureObject_t 
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
-    const float z = k * T_f.z + startVals_f.z;
+    //const float z = k * T_f.z + startVals_f.z;
 
     uint64 ind;
     if (volumeDimensionOrder == 0)
@@ -757,7 +757,7 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
     if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
         return;
 
-    const float v = m * T_g.y + startVals_g.y;
+    //const float v = m * T_g.y + startVals_g.y;
     const float u = n * T_g.z + startVals_g.z;
 
     const float sin_phi = sin(phis[l]);

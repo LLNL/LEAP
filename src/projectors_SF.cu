@@ -54,7 +54,7 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
         
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
-    const float z = k * T_f.z + startVals_f.z;
+    //const float z = k * T_f.z + startVals_f.z;
     
     uint64 ind;
     if (volumeDimensionOrder == 0)
@@ -206,8 +206,8 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
     if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
         return;
 
-    const float v = m * T_g.y + startVals_g.y;
-    const float u = n * T_g.z + startVals_g.z;
+    //const float v = m * T_g.y + startVals_g.y;
+    //const float u = n * T_g.z + startVals_g.z;
     
     const float sin_phi = sin(phis[l]);
     const float cos_phi = cos(phis[l]);
@@ -448,8 +448,8 @@ __global__ void fanBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4
 
     const float n_minus_half = (float)n - 0.5f + startVals_g.z / T_g.z;
     const float n_plus_half = (float)n + 0.5f + startVals_g.z / T_g.z;
-    const float m_minus_half = (float)m - 0.5f;
-    const float m_plus_half = (float)m + 0.5f;
+    //const float m_minus_half = (float)m - 0.5f;
+    //const float m_plus_half = (float)m + 0.5f;
 
     const int iz = int(floor(0.5 + (v - startVals_f.z) / T_f.z));
 
@@ -1717,13 +1717,13 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     {
         if (params->doWeightedBackprojection && params->helicalPitch != 0.0)
         {
-            float q_helical = 0.7;
-            float weightFcnParameter = -2.0 / ((1.0 - q_helical) * (1.0 - q_helical));
-            float weightFcnTransition = (q_helical + 1.0) / 2.0;
-            float v_min_inv = (params->v(0) - 0.5 * params->pixelHeight) / params->sdd;
-            v_min_inv = 1.0 / v_min_inv;
-            float v_max_inv = (params->v(params->numRows - 1) + 0.5 * params->pixelHeight) / params->sdd;
-            v_max_inv = 1.0 / v_max_inv;
+            float q_helical = float(0.7);
+            float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
+            float weightFcnTransition = float((q_helical + 1.0) / 2.0);
+            float v_min_inv = float((params->v(0) - 0.5 * params->pixelHeight) / params->sdd);
+            v_min_inv = float(1.0 / v_min_inv);
+            float v_max_inv = float((params->v(params->numRows - 1) + 0.5 * params->pixelHeight) / params->sdd);
+            v_max_inv = float(1.0 / v_max_inv);
             float phi_start = params->get_phi_start();
             float phi_end = params->get_phi_end();
 

@@ -1017,7 +1017,7 @@ __global__ void fanBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, floa
 		const int u_arg_mid = int(0.5 + (D * (y * cos_phi - x * sin_phi) / v_denom - startVals_g.z) / T_g.z);
 		const int iv = int(0.5 + (z - startVals_g.y) / T_g.y);
 
-		const float v = iv * T_g.y + startVals_g.y;
+		//const float v = iv * T_g.y + startVals_g.y;
 		for (int iu = u_arg_mid - searchWidth_u; iu <= u_arg_mid + searchWidth_u; iu++)
 		{
 			const float u = iu * T_g.z + startVals_g.z;

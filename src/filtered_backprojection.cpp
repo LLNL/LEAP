@@ -154,7 +154,7 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 		bool retVal = true;
 
 		cudaSetDevice(params->whichGPU);
-		cudaError_t cudaStatus;
+		//cudaError_t cudaStatus;
 
 		float* dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		if (dev_g == 0)
@@ -380,7 +380,7 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 		}
 
 		cudaSetDevice(params->whichGPU);
-		cudaError_t cudaStatus;
+		//cudaError_t cudaStatus;
 
 		dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		if (dev_g == 0)

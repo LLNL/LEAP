@@ -238,7 +238,7 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 			double u_unbounded = k * T_u + u_0;
 			double u = fabs(u_unbounded);
 
-			int rInd_floor, rInd_max;
+			int rInd_max;
 			if (u_unbounded < 0.0)
 				rInd_max = N_r_left;
 			else

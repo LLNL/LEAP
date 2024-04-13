@@ -26,7 +26,7 @@ __global__ void parallelBeamSensitivityKernel(int4 N_g, float4 T_g, float4 start
 
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
-    const float z = k * T_f.z + startVals_f.z;
+    //const float z = k * T_f.z + startVals_f.z;
 
     uint64 ind;
     if (volumeDimensionOrder == 0)

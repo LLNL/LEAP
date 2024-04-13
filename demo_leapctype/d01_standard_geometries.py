@@ -4,6 +4,7 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
+leapct.about()
 
 '''
 This demo script simulates data using a forward projection of the FORBILD head phantom and then performs
@@ -123,4 +124,7 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the result with napari
-leapct.display(f)
+#leapct.display(f)
+import matplotlib.pyplot as plt
+plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')
+plt.show()

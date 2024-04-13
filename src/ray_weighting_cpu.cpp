@@ -205,7 +205,7 @@ float* setOffsetScanWeights(parameters* params)
 					theWeight = 1.0 - theWeight;
 
 				if (theWeight < 1e-12)
-					theWeight = 1e-12;
+					theWeight = float(1e-12);
 
 				for (int i = 0; i < params->numAngles; i++)
 					retVal[i * params->numCols + j] = theWeight;
@@ -237,7 +237,7 @@ float* setOffsetScanWeights(parameters* params)
 					theWeight = 1.0 - theWeight;
 
 				if (theWeight < 1e-12)
-					theWeight = 1e-12;
+					theWeight = float(1e-12);
 
 				for (int i = 0; i < params->numAngles; i++)
 					retVal[i * params->numCols + j] = theWeight;

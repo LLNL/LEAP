@@ -257,11 +257,11 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
 
     const float z = float(k) * T_f.z + startVals_f.z;
 
-    const float T_x_inv = 1.0f / T_f.x;
+    //const float T_x_inv = 1.0f / T_f.x;
     const float Tu_inv = 1.0f / T_g.z;
     const float Tv_inv = 1.0f / T_g.y;
     const float half_T_x = 0.5f * T_f.x;
-    const float half_T_z = 0.5f * T_f.z;
+    //const float half_T_z = 0.5f * T_f.z;
 
     float val = 0.0f;
     for (int iphi = 0; iphi < N_g.x; iphi++)
@@ -528,7 +528,7 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
 
     const float z = float(k) * T_f.z + startVals_f.z;
 
-    const float T_x_inv = 1.0f / T_f.x;
+    //const float T_x_inv = 1.0f / T_f.x;
     const float Tu_inv = 1.0f / T_g.z;
     const float Tv_inv = 1.0f / T_g.y;
     const float half_T_x = 0.5f * T_f.x;
@@ -537,7 +537,7 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
     float val = 0.0f;
     for (int iphi = 0; iphi < N_g.x; iphi++)
     {
-        const float L = (float)iphi + 0.5f;
+        //const float L = (float)iphi + 0.5f;
 
         float* sourcePosition = &sourcePositions[3 * iphi];
         float* moduleCenter = &moduleCenters[3 * iphi];
@@ -555,7 +555,7 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
         const float t_C = c_minus_s_dot_n / denom;
 
         const float v_c = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
-        const int iv_c = int(0.5f+(v_c - startVals_g.y) * Tv_inv);
+        //const int iv_c = int(0.5f+(v_c - startVals_g.y) * Tv_inv);
         const int div = max(1, int(ceil(half_T_z*v_vec[2]*t_C * Tv_inv)));
 
         const float v_A = (v_c - half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
@@ -989,7 +989,7 @@ __global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t
     const float z = float(k) * T_f.z + startVals_f.z;
 
     const float T_x_inv = 1.0f / T_f.x;
-    const float T_x_over2 = 0.5f * T_f.x;
+    //const float T_x_over2 = 0.5f * T_f.x;
 
     const float T_v_inv = 1.0f / T_g.y;
     const float T_u_inv = 1.0f / T_g.z;
@@ -1147,7 +1147,7 @@ __global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4
     }
 
     const float T_x_inv = 1.0f / T_f.x;
-    const float T_x_over2 = 0.5f * T_f.x;
+    //const float T_x_over2 = 0.5f * T_f.x;
 
     const float T_v_inv = 1.0f / T_g.y;
     const float T_u_inv = 1.0f / T_g.z;

@@ -14,25 +14,25 @@ from setuptools.command.install import install
 
 from sys import platform as _platform
 if _platform == "linux" or _platform == "linux2":
-    lib_fname = 'build/lib/libleap.so'
+    lib_fname = 'build/lib/libleapct.so'
     retVal = os.system(r'sh ./etc/build.sh')
     if retVal != 0:
         print('Failed to compile!')
         quit()
     
 elif _platform == "win32":
-    lib_fname = r'win_build\bin\Release\libleap.dll'
+    lib_fname = r'win_build\bin\Release\libleapct.dll'
     retVal = os.system(r'.\etc\win_build.bat')
     if retVal != 0:
         print('Failed to compile!')
         quit()
     
     import site
-    copy_text = 'copy ' + str(lib_fname) + ' ' + str(os.path.join(site.getsitepackages()[1], 'libleap.dll'))
+    copy_text = 'copy ' + str(lib_fname) + ' ' + str(os.path.join(site.getsitepackages()[1], 'libleapct.dll'))
     os.system(copy_text)
     
 elif _platform == "darwin":
-    lib_fname = 'build/lib/libleap.dylib'
+    lib_fname = 'build/lib/libleapct.dylib'
     retVal = os.system(r'sh ./etc/build.sh')
     if retVal != 0:
         print('Failed to compile!')

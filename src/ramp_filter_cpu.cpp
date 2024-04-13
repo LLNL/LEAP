@@ -641,7 +641,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
         {
             // zero pad on right
             float alpha_end = asin(params->rFOV() / params->sod) + asin(params->tau / params->sod);
-            float lateral_end;
+            //float lateral_end;
             if (params->detectorType == parameters::FLAT)
                 N_add = int(ceil(params->u_inv(tan(alpha_end)))) - params->numCols;
             else

@@ -482,8 +482,8 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
 
 void setConstantMemoryParameters(const float delta, const float p)
 {
-    const float HuberSlope = pow(delta, 2.0 - p) / p;
-    const float HuberShift = (0.5 * p - 1.0) * pow(delta, p);
+    const float HuberSlope = float(pow(delta, 2.0 - p) / p);
+    const float HuberShift = float((0.5 * p - 1.0) * pow(delta, p));
 
     cudaMemcpyToSymbol(d_HUBER_P, &p, sizeof(float));
     cudaMemcpyToSymbol(d_HUBER_SLOPE, &HuberSlope, sizeof(float));
@@ -496,7 +496,7 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
     if (beta <= 0.0)
         beta = 1.0;
     if (delta < 1.0e-8)
-        delta = 1.0e-8;
+        delta = float(1.0e-8);
 
     if (sliceStart < 0)
         sliceStart = 0;
@@ -508,7 +508,7 @@ bool anisotropicTotalVariation_gradient(float* f, float* Df, int N_1, int N_2, i
         return false;
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     setConstantMemoryParameters(delta, p);
 
@@ -565,7 +565,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
     if (beta <= 0.0)
         beta = 1.0;
     if (delta < 1.0e-8)
-        delta = 1.0e-8;
+        delta = float(1.0e-8);
 
     if (sliceStart < 0)
         sliceStart = 0;
@@ -577,7 +577,7 @@ float anisotropicTotalVariation_quadraticForm(float* f, float* d, int N_1, int N
         return false;
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     setConstantMemoryParameters(delta, p);
 
@@ -649,7 +649,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
     if (beta <= 0.0)
         beta = 1.0;
     if (delta < 1.0e-8)
-        delta = 1.0e-8;
+        delta = float(1.0e-8);
 
     if (sliceStart < 0)
         sliceStart = 0;
@@ -661,7 +661,7 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
         return false;
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     setConstantMemoryParameters(delta, p);
 
@@ -705,13 +705,13 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
 
 bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu, int whichGPU, int numNeighbors)
 {
-    if (f == NULL) return -1.0;
+    if (f == NULL) return false;
     float beta = 1.0;
     if (delta < 1.0e-8)
-        delta = 1.0e-8;
+        delta = float(1.0e-8);
 
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    //cudaError_t cudaStatus;
 
     //setConstantMemoryParameters(delta, p);
 
