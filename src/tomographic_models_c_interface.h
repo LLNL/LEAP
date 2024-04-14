@@ -188,6 +188,8 @@ extern "C" PROJECTOR_API bool rayTrace(float* g, int oversampling);
 
 extern "C" PROJECTOR_API bool rebin_curved(float* g, float* fanAngles, int order);
 
+extern "C" PROJECTOR_API bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize);
+
 extern "C" PROJECTOR_API bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool saveParamsToFile(const char* param_fn);

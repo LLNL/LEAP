@@ -55,6 +55,7 @@ set(HEADER
   matching_pursuit.cuh
   bilateral_filter.cuh
   find_center_cpu.h
+  sinogram_replacement.h
   cuda_utils.h
   cpu_utils.h
   phantom.h
@@ -79,6 +80,7 @@ set(SRC_CPP
   ramp_filter_cpu.cpp
   ray_weighting_cpu.cpp
   find_center_cpu.cpp
+  sinogram_replacement.cpp
   cpu_utils.cpp
   phantom.cpp
   analytic_ray_tracing.cpp

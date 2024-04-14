@@ -23,6 +23,7 @@
 #include "matching_pursuit.cuh"
 #include "bilateral_filter.cuh"
 #include "analytic_ray_tracing.h"
+#include "sinogram_replacement.h"
 #include "rebin.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -2304,6 +2305,11 @@ bool tomographicModels::rebin_curved(float* g, float* fanAngles, int order)
 {
 	rebin rebinningRoutines;
 	return rebinningRoutines.rebin_curved(g, &params, fanAngles, order);
+}
+
+bool tomographicModels::sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
+{
+	return sinogramReplacement(g, priorSinogram, metalTrace, &params, windowSize);
 }
 
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)

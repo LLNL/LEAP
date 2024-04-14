@@ -820,6 +820,17 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool rebin_curved(float* g, float* fanAngles, int order = 6);
+
+	/**
+	 * \fn          sinogram_replacement
+	 * \brief       replaces specified region in projection data with other projection data
+	 * \param[in]   g, pointer to the projection data to alter
+	 * \param[in]	priorSinogram, poiner to the projection data to use for patching
+	 * \param[in]	metalTrace, pointer to projection mask showing where to do the patching
+	 * \param[in]   windowSize, 3-element int array of the window size in each of the three dimensions
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize);
 	
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

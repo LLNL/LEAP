@@ -701,6 +701,11 @@ bool rebin_curved(float* g, float* fanAngles, int order)
 	return tomo()->rebin_curved(g, fanAngles, order);
 }
 
+bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
+{
+	return tomo()->sinogram_replacement(g, priorSinogram, metalTrace, windowSize);
+}
+
 bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 {
 	return tomo()->AzimuthalBlur(f, FWHM, data_on_cpu);

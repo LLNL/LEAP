@@ -591,6 +591,31 @@ class tomographicModels:
         self.libprojectors.rebin_curved.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
         return self.libprojectors.rebin_curved(g, fanAngles, order)
     
+    def sinogram_replacement(self, g, priorSinogram, metalTrace, windowSize=None):
+        """ replaces specified region in projection data with other projection data
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data to alter
+	        priorSinogram (C contiguous float32 numpy array or torch tensor): projection data to use for patching
+	        metalTrace (C contiguous float32 numpy array or torch tensor): projection mask showing where to do the patching
+	        windowSize (3-element int array): window size in each of the three dimensions
+            
+        Returns:
+            true if operation  was sucessful, false otherwise
+        """
+        
+        if windowSize is None:
+            windowSize = np.array([3, 1, 50], dtype=np.int32)
+            
+        if has_torch == True and type(g) is torch.Tensor:
+            print('Oops, forgot to implement for torch tensors!')
+            return False
+        
+        self.set_model()
+        self.libprojectors.sinogram_replacement.restype = ctypes.c_bool
+        self.libprojectors.sinogram_replacement.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
+        return self.libprojectors.sinogram_replacement(g, priorSinogram, metalTrace, windowSize)
+    
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT VOLUME PARAMETERS
