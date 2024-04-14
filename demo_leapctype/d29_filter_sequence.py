@@ -11,12 +11,13 @@ This feature has many applications and we will slowly add these to this demon sc
 
 # This script can be applied to any CT geometry, but here we will demonstrate this for fan-beam data
 numCols = 512
-numAngles = 2*2*int(360*numCols/1024)
+angularRange = 360.0
+numAngles = 2*2*int(angularRange*numCols/1024)
 #numAngles = 100
 pixelSize = 0.65*512/numCols
 numRows = 1
 #leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
-leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, angularRange), 1100, 1400)
 leapct.set_default_volume()
 g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
 #f_true = leapct.allocateVolume() # shape is numZ, numY, numX
@@ -33,8 +34,8 @@ t[t<=1.0] = 1.0
 g[:] = -np.log(t/I_0)
 
 # Choose which method you'd like to test
-whichMethod = 1
-#whichMethod = 2
+#whichMethod = 1
+whichMethod = 2
 #whichMethod = 3
 
 if whichMethod == 1:
