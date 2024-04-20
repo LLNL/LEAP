@@ -832,6 +832,46 @@ public:
 	 */
 	bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize);
 	
+	/**
+	 * \fn          down_sample
+	 * \brief       down-samples 3D array
+	 * \param[in]   I, pointer to the original data
+	 * \param[in]	N, 3-element array of the size of each dimension of the original data
+	 * \param[in]	I_dn, pointer to the output (down-sampled) 3D array
+	 * \param[in]	N_dn, 3-element array of the size of each dimension of the down-sampled data
+	 * \param[in]	factors, 3-element array of the down-sampling factors in each dimension
+	 * \param[in]	data_on_cpu true if data (I and I_dn) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, bool data_on_cpu);
+
+	/**
+	 * \fn          up_sample
+	 * \brief       up-samples 3D array
+	 * \param[in]   I, pointer to the original data
+	 * \param[in]	N, 3-element array of the size of each dimension of the original data
+	 * \param[in]	I_up, pointer to the output (up-sampled) 3D array
+	 * \param[in]	N_up, 3-element array of the size of each dimension of the up-sampled data
+	 * \param[in]	factors, 3-element array of the up-sampling factors in each dimension
+	 * \param[in]	data_on_cpu true if data (I and I_up) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu);
+
+	/**
+	 * \fn          simulate_scatter
+	 * \brief       simulates first order scatter through an object composed of a single material type
+	 * \param[in]   g, pointer to store the simulated scatter data
+	 * \param[in]	f, pointer to the mass density volume (g/mm^3)
+	 * \param[in]	source, pointer to the source spectra
+	 * \param[in]	energies, pointer to the energy bins in the source spectra model
+	 * \param[in]	detector, pointer to the detector response in 1 keV bins
+	 * \param[in]	sigma, pointer to the PE, CS, and RS cross sections in 1 keV bins
+	 * \param[in]	scatterDist, pointer to the normalized CS and RS distributions sampled in 1 keV bins and 0.1 degree angular bins
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool simulate_scatter(float* g, float* f, float* source, float* energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu);
+
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool backprojectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

@@ -24,6 +24,9 @@
 #include "bilateral_filter.cuh"
 #include "analytic_ray_tracing.h"
 #include "sinogram_replacement.h"
+#include "resample_cpu.h"
+#include "resample.cuh"
+#include "scatter_models.cuh"
 #include "rebin.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -2310,6 +2313,27 @@ bool tomographicModels::rebin_curved(float* g, float* fanAngles, int order)
 bool tomographicModels::sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
 {
 	return sinogramReplacement(g, priorSinogram, metalTrace, &params, windowSize);
+}
+
+bool tomographicModels::down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, bool data_on_cpu)
+{
+	if (data_on_cpu)
+		return downSample_cpu(I, N, I_dn, N_dn, factors);
+	else
+		return downSample(I, N, I_dn, N_dn, factors, params.whichGPU);
+}
+
+bool tomographicModels::up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu)
+{
+	if (data_on_cpu)
+		return upSample_cpu(I, N, I_up, N_up, factors);
+	else
+		return upSample(I, N, I_up, N_up, factors, params.whichGPU);
+}
+
+bool tomographicModels::simulate_scatter(float* g, float* f, float* source, float* energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu)
+{
+	return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, detector, sigma, scatterDist, data_on_cpu);
 }
 
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)

@@ -22,6 +22,8 @@ bool sinogramReplacement(float* g, float* priorSinogram, float* metalTrace, para
     if (g == NULL || priorSinogram == NULL || metalTrace == NULL || params == NULL || windowSize == NULL)
         return false;
 
+    bool retVal = true;
+
     int minSamples = 12;
     double scale_softConstraintWeight = 0.4;
     double shift_softConstraintWeight = 0.4;
@@ -79,8 +81,6 @@ bool sinogramReplacement(float* g, float* priorSinogram, float* metalTrace, para
             vector<int> goodData_finalIndex;
             bool isInsideMetalTrace = false;
             goodData_startIndex.push_back(0); // always assume first sample is not a metal trace
-            //if (m_line[k] > 0.0) // is inside metal trace (bad data)
-            //    isInsideMetalTrace = true;
             for (int k = 0; k < params->numCols; k++)
             {
                 if (isInsideMetalTrace == false)
@@ -110,6 +110,7 @@ bool sinogramReplacement(float* g, float* priorSinogram, float* metalTrace, para
             {
                 // this can only happen if there is some bug in this code, i.e., if this warning message is ever displayed, I need to fix the code!
                 printf("interval mismatch (view=%d, row=%d)!!!\n", i, j);
+                retVal = false;
                 continue;
             }
             
@@ -177,8 +178,6 @@ bool sinogramReplacement(float* g, float* priorSinogram, float* metalTrace, para
                             
                             EE += g_data[n]*p_data[n];
                             F += g_data[n];
-                            
-                            //numSamples += 1;
                         }
                         //A += ridgeRegressionWeight;
                         //C += ridgeRegressionWeight;
@@ -192,7 +191,6 @@ bool sinogramReplacement(float* g, float* priorSinogram, float* metalTrace, para
                         {
                             double linearTerm = max(linearTerm_min, min((C*EE-B*F) / det, linearTerm_max));
                             double constantTerm = (F-linearTerm*B) / C;
-                            //printf("%f --> %f * %f + %f = %f\n", g_line[k], linearTerm, p_line[k], constantTerm, linearTerm*p_line[k] + constantTerm);
                             for (int k = metal_ind_left; k <= metal_ind_right; k++)
                             {
                                 if (g_line[k] > minAttenuationToReplace)
@@ -204,18 +202,13 @@ bool sinogramReplacement(float* g, float* priorSinogram, float* metalTrace, para
                                         shiftLine[k] = constantTerm;
                                     }
                                 }
-                                
-                                //g_line[k] = linearTerm;
-                                //g_line[k] = constantTerm;
-                                //g_line[k] = 0.0;
                             }
                         }
                     }
                     
                 }
             }
-            
         }
     }
-    return true;
+    return retVal;
 }

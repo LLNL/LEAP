@@ -24,7 +24,9 @@ edges.  It is actually very easy to remove metal artifacts.  The hard part is no
 
 The method we implemented in LEAP is referred to as "sinogram replacement" which is a method developed by Seemeen Karimi.  Here is the reference:
 https://www.osti.gov/servlets/purl/1557944
-Although this method is not as well-known as other MAR algorithm, it is much more robust and effective.
+Although this method is not as well-known as other MAR algorithm, it is much more robust and effective.  It is also a flexible tool that can be used for many applications.
+We have used it to fuse x-ray and neutron CT data:
+https://pubs.aip.org/aip/jap/article/132/15/154902/2837637
 '''
 
 # Specify the number of detector columns which is used below
@@ -129,7 +131,7 @@ leapct.FBP(g,f)
 # simply just paste in the metal peices from the original reconstruction
 f[ind] = f_0[ind]
 
-plt.figure() #(figsize=(10,5))
+plt.figure()
 plt.subplot(1, 3, 1)
 plt.title('FBP')
 plt.imshow(np.squeeze(f_0), cmap='gray', vmin=0.0, vmax=0.04)

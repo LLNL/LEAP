@@ -80,6 +80,9 @@ extern "C" PROJECTOR_API int get_detectorType();
 extern "C" PROJECTOR_API bool set_numCols(int);
 extern "C" PROJECTOR_API bool set_numRows(int);
 
+extern "C" PROJECTOR_API bool set_pixelHeight(float);
+extern "C" PROJECTOR_API bool set_pixelWidth(float);
+
 extern "C" PROJECTOR_API bool set_centerCol(float);
 extern "C" PROJECTOR_API bool set_centerRow(float);
 
@@ -89,7 +92,12 @@ extern "C" PROJECTOR_API int get_volumeDimensionOrder();
 extern "C" PROJECTOR_API bool set_default_volume(float scale);
 
 extern "C" PROJECTOR_API bool set_numZ(int numZ);
+extern "C" PROJECTOR_API bool set_numY(int numY);
+extern "C" PROJECTOR_API bool set_numX(int numX);
 extern "C" PROJECTOR_API bool set_offsetZ(float offsetZ);
+
+extern "C" PROJECTOR_API bool set_voxelWidth(float W);
+extern "C" PROJECTOR_API bool set_voxelHeight(float H);
 
 extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
@@ -189,6 +197,11 @@ extern "C" PROJECTOR_API bool rayTrace(float* g, int oversampling);
 extern "C" PROJECTOR_API bool rebin_curved(float* g, float* fanAngles, int order);
 
 extern "C" PROJECTOR_API bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize);
+
+extern "C" PROJECTOR_API bool down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, bool data_on_cpu);
+extern "C" PROJECTOR_API bool up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu);
+
+extern "C" PROJECTOR_API bool simulate_scatter(float* g, float* f, float* source, float* energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
 
