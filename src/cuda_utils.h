@@ -45,6 +45,7 @@ extern float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU);
 extern bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU);
 extern float* copy3DdataToGPU(float* g, int3 N, int whichGPU);
 extern bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU);
+extern float* copy1DdataToGPU(float* x, int N, int whichGPU);
 
 extern float* copyAngleArrayToGPU(parameters* params);
 bool setProjectionGPUparams(parameters*, int4&, float4&, float4&, bool doNormalize = false);

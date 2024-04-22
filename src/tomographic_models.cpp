@@ -2331,9 +2331,9 @@ bool tomographicModels::up_sample(float* I, int* N, float* I_up, int* N_up, floa
 		return upSample(I, N, I_up, N_up, factors, params.whichGPU);
 }
 
-bool tomographicModels::simulate_scatter(float* g, float* f, float* source, float* energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu)
+bool tomographicModels::simulate_scatter(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu)
 {
-	return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, detector, sigma, scatterDist, data_on_cpu);
+	return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu);
 }
 
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)

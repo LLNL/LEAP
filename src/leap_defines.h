@@ -24,6 +24,10 @@
 	#define PI 3.1415926535897932385
 #endif
 
+#ifndef RAD_TO_DEG
+    #define RAD_TO_DEG 57.29577951308232 // 180.0 / PI
+#endif
+
 #ifndef PIINV
     #define PIINV 0.3183098861837907 // 1.0 / PI
 #endif

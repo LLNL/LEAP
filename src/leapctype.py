@@ -700,7 +700,7 @@ class tomographicModels:
             self.libprojectors.up_sample(I, np.array(I.shape), I_up, np.array(I_up.shape), factors, True)
         return I_up
         
-    def simulate_scatter(f, source, energies, detector, sigma, scatterDist):
+    def simulate_scatter(self, f, source, energies, detector, sigma, scatterDist):
         """simulates first order scatter through an object composed of a single material type
         """
         
@@ -708,8 +708,8 @@ class tomographicModels:
         
         self.set_model()
         self.libprojectors.simulate_scatter.restype = ctypes.c_bool
-        self.libprojectors.simulate_scatter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-        self.libprojectors.simulate_scatter(g, f, source, energies, detector, sigma, scatterDist, True)
+        self.libprojectors.simulate_scatter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.simulate_scatter(g, f, source, energies, energies.size, detector, sigma, scatterDist, True)
         return g
     
     ###################################################################################################################
@@ -1824,13 +1824,20 @@ class tomographicModels:
             g_dn = None
             numRows = int(self.get_numRows()/factors[1])
             numCols = int(self.get_numCols()/factors[2])
+
+        row_shift = (self.get_centerRow() - 0.5*float(self.get_numRows()-1))*self.get_pixelHeight()
+        col_shift = (self.get_centerCol() - 0.5*float(self.get_numCols()-1))*self.get_pixelWidth()
+
+        centerRow = row_shift/pixelHeight + 0.5*float(numRows-1)
+        centerCol = col_shift/pixelWidth + 0.5*float(numCols-1)
         
         self.set_pixelHeight(pixelHeight)        
         self.set_pixelWidth(pixelWidth)
         self.set_numRows(numRows)
-        self.set_numCols(numRows)
-        self.set_centerRow(self.get_centerRow()/factors[1])
-        self.set_centerCol(self.get_centerCol()/factors[2])
+        self.set_numCols(numCols)
+        
+        self.set_centerRow(centerRow)
+        self.set_centerCol(centerCol)
         
         return g_dn
         
@@ -1851,22 +1858,28 @@ class tomographicModels:
             return None
 
         pixelHeight = self.get_pixelHeight()/factors[1]
-        pixelWidth = self.get_pixelWidth()/factors[2]        
+        pixelWidth = self.get_pixelWidth()/factors[2]
         if g is not None:
-            g_dn = self.down_sample(factors, g)
+            g_dn = self.up_sample(factors, g)
             numRows = g_dn.shape[1]
             numCols = g_dn.shape[2]
         else:
             g_dn = None
             numRows = int(self.get_numRows()*factors[1])
             numCols = int(self.get_numCols()*factors[2])
+            
+        row_shift = (self.get_centerRow() - 0.5*float(self.get_numRows()-1))*self.get_pixelHeight()
+        col_shift = (self.get_centerCol() - 0.5*float(self.get_numCols()-1))*self.get_pixelWidth()
+
+        centerRow = row_shift/pixelHeight + 0.5*float(numRows-1)
+        centerCol = col_shift/pixelWidth + 0.5*float(numCols-1)
         
         self.set_pixelHeight(pixelHeight)        
         self.set_pixelWidth(pixelWidth)
         self.set_numRows(numRows)
-        self.set_numCols(numRows)
-        self.set_centerRow(self.get_centerRow()*factors[1])
-        self.set_centerCol(self.get_centerCol()*factors[2])
+        self.set_numCols(numCols)
+        self.set_centerRow(centerRow)
+        self.set_centerCol(centerCol)
         
         return g_dn
         

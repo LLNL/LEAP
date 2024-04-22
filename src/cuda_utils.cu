@@ -1005,6 +1005,27 @@ float* copy3DdataToGPU(float* g, int3 N, int whichGPU)
 	return dev_g;
 }
 
+extern float* copy1DdataToGPU(float* x, int N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Copy volume data to GPU
+    float* dev_x = 0;
+    if (cudaMalloc((void**)&dev_x, N * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(1D) failed!\n");
+        return NULL;
+    }
+    if (cudaMemcpy(dev_x, x, N * sizeof(float), cudaMemcpyHostToDevice))
+    {
+        fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+        return NULL;
+    }
+
+    return dev_x;
+}
+
 bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 {
 	cudaSetDevice(whichGPU);

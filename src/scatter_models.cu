@@ -15,54 +15,6 @@
 #include "cuda_utils.h"
 #include "scatter_models.cuh"
 
-__global__ void firstOrderScatterModel(float* dev_proj, const int4 N_g, const float4 T_g, const float4 startVal_g, cudaTextureObject_t f, const int4 N_f, const float4 T_f, const float4 startVal_f, const float* Df, const float3 x_0, const float3 moduleCenter, const float3 rowVector, const float3 colVector)
-{
-    const int m = threadIdx.x + blockIdx.x * blockDim.x; // rows
-    const int n = threadIdx.y + blockIdx.y * blockDim.y; // columns
-    if (m >= N_g.y || n >= N_g.z)
-        return;
-
-    const float t = m * T_g.y + startVal_g.y;
-    const float s = n * T_g.z + startVal_g.z;
-
-    const float3 x_f = make_float3(moduleCenter.x + t * rowVector.x + s * colVector.x, moduleCenter.y + t * rowVector.y + s * colVector.y, moduleCenter.z + t * rowVector.z + s * colVector.z);
-
-    for (int k = 0; k < N_f.z; k++)
-    {
-        const float x_3 = k * T_f.z + startVal_f.z;
-        for (int j = 0; j < N_f.y; j++)
-        {
-            const float x_2 = j * T_f.y + startVal_f.y;
-            for (int i = 0; i < N_f.x; i++)
-            {
-                const float3 x = make_float3(i * T_f.x + startVal_f.x, x_2, x_3);
-
-                const float f = tex3D<float>(f, i, j, k);
-
-                if (f > 0.0f)
-                {
-                    uint64 ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
-                    const float Df_firstLeg = Df[ind];
-
-                    const float3 r_0 = make_float3(x.x - x_0.x, x.y - x_0.y, x.z - x_0.z);
-                    const float mag_r_0_inv = rsqrtf(r_0.x * r_0.x + r_0.y * r_0.y + r_0.z * r_0.z);
-                    const float3 r_f = make_float3(x_f.x - x.x, x_f.y - x.y, x_f.z - x.z);
-                    const float mag_r_f_inv = rsqrtf(r_f.x * r_f.x + r_f.y * r_f.y + r_f.z * r_f.z);
-
-                    const float cos_theta = (r_0.x * r_f.x + r_0.y * r_f.y + r_0.z * r_f.z) * mag_r_0_inv * mag_r_f_inv;
-                    //const float theta = acos(cos_theta);
-                    for (int igamma = 0; igamma < 10; igamma++)
-                    {
-                        const float gamma_0 = 60.0f; // FIXME
-                        const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
-
-
-                    }
-                }
-            }
-        }
-    }
-}
 __device__ float divergentBeamTransform(cudaTextureObject_t mu, const int4 N, const float4 T, const float4 startVal, const float3 p, const float3 dst)
 {
     // NOTE: assumes that T.x == T.y == T.z
@@ -194,6 +146,197 @@ __device__ float divergentBeamTransform(cudaTextureObject_t mu, const int4 N, co
     }
 }
 
+__device__ float airScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies, cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt)
+{
+    float val = 0.0f;
+    const float3 x_f_minus_x_0 = make_float3(x_f.x - x_0.x, x_f.y - x_0.y, x_f.z - x_0.z);
+    const float x_f_minus_x_0_dot_n_d = x_f_minus_x_0.x * n_d.x + x_f_minus_x_0.y * n_d.y + x_f_minus_x_0.z * n_d.z;
+    const float x_f_minus_x_0_mag_inv = rsqrtf(x_f_minus_x_0.x * x_f_minus_x_0.x + x_f_minus_x_0.y * x_f_minus_x_0.y + x_f_minus_x_0.z * x_f_minus_x_0.z);
+    const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
+    for (int igamma = 0; igamma < N_energies; igamma++)
+    {
+        const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
+        if (spec > 0.0f)
+        {
+            const float gamma_0 = tex1D<float>(energies_txt, igamma);
+            val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec;
+        }
+    }
+    return val * direct_solid_angle;
+}
+
+__device__ float PrimaryScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies,
+    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt,
+    cudaTextureObject_t sigma_PE_txt, cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt,
+    cudaTextureObject_t f, const hypercube* f_params)
+{
+    const float Prho = divergentBeamTransform(f, f_params->N, f_params->T, f_params->startVal, x_f, x_0);
+
+    float val = 0.0f;
+    const float3 x_f_minus_x_0 = make_float3(x_f.x - x_0.x, x_f.y - x_0.y, x_f.z - x_0.z);
+    const float x_f_minus_x_0_dot_n_d = x_f_minus_x_0.x * n_d.x + x_f_minus_x_0.y * n_d.y + x_f_minus_x_0.z * n_d.z;
+    const float x_f_minus_x_0_mag_inv = rsqrtf(x_f_minus_x_0.x * x_f_minus_x_0.x + x_f_minus_x_0.y * x_f_minus_x_0.y + x_f_minus_x_0.z * x_f_minus_x_0.z);
+    const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
+    for (int igamma = 0; igamma < N_energies; igamma++)
+    {
+        const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
+        if (spec > 0.0f)
+        {
+            const float gamma_0 = tex1D<float>(energies_txt, igamma);
+
+            const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
+            const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
+            const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
+            const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
+
+            val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
+        }
+    }
+    return val * direct_solid_angle;
+}
+
+__global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_params,
+    cudaTextureObject_t f, const hypercube* f_params, const float* Df, const float* source_and_detector,
+    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt, cudaTextureObject_t sigma_PE_txt,
+    cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt, cudaTextureObject_t scatterDist_txt)
+{
+    const int m = threadIdx.x + blockIdx.x * blockDim.x; // rows
+    const int n = threadIdx.y + blockIdx.y * blockDim.y; // columns
+    if (m >= g_params->N.y || n >= g_params->N.z)
+        return;
+
+    bool doPrint = false;
+    //if (m == g_params->N.y/2 && n == g_params->N.z/2)
+    //    doPrint = true;
+
+    const float t = m * g_params->T.y + g_params->startVal.y;
+    const float s = n * g_params->T.z + g_params->startVal.z;
+
+    // moduleCenter = source_and_detector[3,4,5]
+    // v_vec = source_and_detector[6,7,8]
+    // u_vec = source_and_detector[9,10,11]
+    const float3 x_0 = make_float3(source_and_detector[0], source_and_detector[1], source_and_detector[2]);
+    const float3 x_f = make_float3(source_and_detector[3] + t * source_and_detector[6] + s * source_and_detector[9], source_and_detector[4] + t * source_and_detector[7] + s * source_and_detector[10], source_and_detector[5] + t * source_and_detector[8] + s * source_and_detector[11]);
+
+    const float3 n_d = make_float3(-1.0f*(source_and_detector[10] * source_and_detector[8] - source_and_detector[11] * source_and_detector[7]),
+        -1.0f * (source_and_detector[11] * source_and_detector[6] - source_and_detector[9] * source_and_detector[8]),
+            -1.0f * (source_and_detector[9] * source_and_detector[7] - source_and_detector[10] * source_and_detector[6]));
+
+    if (doPrint)
+    {
+        printf("x_0 = (%f, %f, %f)\n", x_0.x, x_0.y, x_0.z);
+        printf("x_f = (%f, %f, %f)\n", x_f.x, x_f.y, x_f.z);
+        printf("n_d = (%f, %f, %f)\n", n_d.x, n_d.y, n_d.z);
+        printf("moduleCenter = (%f, %f, %f)\n", source_and_detector[3], source_and_detector[4], source_and_detector[5]);
+        printf("v_vec = (%f, %f, %f)\n", source_and_detector[6], source_and_detector[7], source_and_detector[8]);
+        printf("u_vec = (%f, %f, %f)\n", source_and_detector[9], source_and_detector[10], source_and_detector[11]);
+        printf("(s, t) = (%f, %f)\n", s, t);
+        printf("T = (%f, %f, %f)\n", f_params->T.x, f_params->T.y, f_params->T.z);
+        for (int igamma = 0; igamma < g_params->N.w; igamma++)
+        {
+            const float spec = tex1D<float>(source_txt, igamma);
+            const float gamma_0 = tex1D<float>(energies_txt, igamma);
+            const float det = tex1D<float>(detector_txt, gamma_0 - 0.5f);
+            const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
+            const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
+            const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
+            printf("s(%f) = %f, d = %f, sigma = (%f, %f, %f)\n", gamma_0, spec, det, sigma_PE_gamma_0, sigma_CS_gamma_0, sigma_RS_gamma_0);
+        }
+    }
+
+    // Calculate the air scan response
+    const float val_airScan = airScan(x_0, x_f, n_d, g_params->N.w, source_txt, energies_txt, detector_txt);
+    //float val_primary = PrimaryScan(x_0, x_f, n_d, g_params->N.w, source_txt, energies_txt, detector_txt,
+    //    sigma_PE_txt, sigma_CS_txt, sigma_RS_txt, f, f_params);
+
+    // Calcuate the scatter response
+    float val = 0.0f;
+    for (int k = 0; k < f_params->N.z; k++)
+    {
+        const float x_3 = k * f_params->T.z + f_params->startVal.z;
+        for (int j = 0; j < f_params->N.y; j++)
+        {
+            const float x_2 = j * f_params->T.y + f_params->startVal.y;
+            for (int i = 0; i < f_params->N.x; i++)
+            {
+                const float3 x = make_float3(i * f_params->T.x + f_params->startVal.x, x_2, x_3);
+
+                const float rho = tex3D<float>(f, i + 0.5f, j + 0.5f, k + 0.5f);
+
+                if (rho > 0.0f)
+                {
+                    uint64 ind = uint64(k) * uint64(f_params->N.y * f_params->N.x) + uint64(j * f_params->N.x + i);
+                    const float Df_firstLeg = Df[ind];
+                    const float Df_secondLeg = divergentBeamTransform(f, f_params->N, f_params->T, f_params->startVal, x, x_f);
+
+                    //if (doPrint && k == 30 && j == 30 && i == 30)
+                    //    printf("Df = %f\n", Df[ind]);
+
+                    const float3 r_0 = make_float3(x.x - x_0.x, x.y - x_0.y, x.z - x_0.z);
+                    const float mag_r_0_inv = rsqrtf(r_0.x * r_0.x + r_0.y * r_0.y + r_0.z * r_0.z);
+                    const float3 r_f = make_float3(x_f.x - x.x, x_f.y - x.y, x_f.z - x.z);
+                    const float mag_r_f_inv = rsqrtf(r_f.x * r_f.x + r_f.y * r_f.y + r_f.z * r_f.z);
+
+                    const float r_0_dot_detectorNormal = r_0.x * n_d.x + r_0.y * n_d.y + r_0.z * n_d.z;
+                    const float r_f_dot_detectorNormal = r_f.x * n_d.x + r_f.y * n_d.y + r_f.z * n_d.z;
+                    const float one_over_r_0_norm_mult_r_f_norm = mag_r_0_inv * mag_r_f_inv;
+                    const float totalSolidAngle = r_0_dot_detectorNormal * r_f_dot_detectorNormal * one_over_r_0_norm_mult_r_f_norm * one_over_r_0_norm_mult_r_f_norm * one_over_r_0_norm_mult_r_f_norm;
+
+                    const float cos_theta = (r_0.x * r_f.x + r_0.y * r_f.y + r_0.z * r_f.z) * one_over_r_0_norm_mult_r_f_norm;
+                    const float theta = acos(cos_theta)*RAD_TO_DEG;
+                    if (doPrint && k == f_params->N.z / 2 && j == f_params->N.y/2 && i == f_params->N.x/2)
+                        printf("r_0 = (%f, %f, %f), r_f = (%f, %f, %f), cos_theta = %f, theta = %f\n", r_0.x, r_0.y, r_0.z, r_f.x, r_f.y, r_f.z, cos_theta, theta);
+                    //if (doPrint && k == 30 && j == 30 && i == 30)
+                    //    printf("totalSolidAngle = %f\n", totalSolidAngle);
+                    if (doPrint && k == f_params->N.z / 2 && j == f_params->N.y / 2 && i == f_params->N.x / 2)
+                    {
+                        printf("rho = %f\n", rho);
+                        printf("Df = %f, %f\n", Df_firstLeg, Df_secondLeg);
+                    }
+                    //*
+                    float val_inner = 0.0f;
+                    for (int igamma = 0; igamma < g_params->N.w; igamma++)
+                    {
+                        const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
+                        if (spec > 0.0f)
+                        {
+                            const float gamma_0 = tex1D<float>(energies_txt, igamma);
+                            const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
+
+                            const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
+                            const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
+                            const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
+                            const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
+
+                            const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
+                            const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
+
+                            //val_inner += spec * (cur_CS + cur_RS) * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
+                            //*
+                            const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
+                            const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
+                            const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
+                            const float sigma_total_gamma_f = sigma_PE_gamma_f + sigma_CS_gamma_f + sigma_RS_gamma_f;
+                            val_inner += spec * cur_CS * expf(-sigma_total_gamma_0 * Df_firstLeg - sigma_total_gamma_f * Df_secondLeg) +
+                            spec * cur_RS * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
+                            //*/
+                        }
+                    }
+                    val += val_inner * rho * totalSolidAngle;
+                    //*/
+                }
+            }
+        }
+    }
+    const float val_firstOrderScatter = val * f_params->T.x * f_params->T.y * f_params->T.z;
+
+    dev_proj[m * g_params->N.z + n] = val_firstOrderScatter / val_airScan;
+    //dev_proj[m * g_params->N.z + n] = val_primary / val_airScan;
+    //dev_proj[m * g_params->N.z + n] = 1.0 - val_firstOrderScatter / (val_primary + val_firstOrderScatter);
+    //if (doPrint || (m == g_params->N.y/2 && n == g_params->N.z/2))
+    //    printf("scatter signal = %f\n", val_firstOrderScatter / val_airScan);
+}
+
 __global__ void lineIntegralSourceToVoxels(cudaTextureObject_t f, float* Df, const int4 N_f, const float4 T_f, const float4 startVal_f, const float3 sourcePosition)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -218,7 +361,7 @@ __global__ void lineIntegralSourceToVoxels(cudaTextureObject_t f, float* Df, con
     //*/
 }
 
-bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* params, float* source, float* energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu)
+bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* params, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false || source == NULL || energies == NULL || detector == NULL || sigma == NULL || scatterDist == NULL)
         return false;
@@ -234,6 +377,7 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     // Allocate projection data on GPU
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
+    N_g.w = N_energies;
     float* dev_g = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
     {
@@ -254,12 +398,84 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
         fprintf(stderr, "cudaMalloc(volume) failed!\n");
     }
 
+    // source: the source spectra
+    // energies: the energies of the source spectra
+    // detector: the detector response sampled in 1 keV bins
+    // sigma: the PE, CS, and RS cross sections sampled in 1 keV bins
+    // scatterDist: the CS and RS distributions sampled in 1 keV bins and 0.1 degree angular bins
+    float* dev_source = copy1DdataToGPU(source, N_energies, params->whichGPU);
+    cudaTextureObject_t source_txt = NULL;
+    cudaArray* source_array = loadTexture1D(source_txt, dev_source, N_energies, false, false);
+
+    float* dev_energies = copy1DdataToGPU(energies, N_energies, params->whichGPU);
+    cudaTextureObject_t energies_txt = NULL;
+    cudaArray* energies_array = loadTexture1D(energies_txt, dev_energies, N_energies, false, false);
+
+    int maxEnergy = int(ceil(energies[N_energies-1]));
+    printf("maxEnergy = %d\n", maxEnergy);
+
+    float* dev_detector = copy1DdataToGPU(detector, maxEnergy, params->whichGPU);
+    cudaTextureObject_t detector_txt = NULL;
+    cudaArray* detector_array = loadTexture1D(detector_txt, dev_detector, maxEnergy, false, true);
+
+    float* dev_sigma = copy1DdataToGPU(sigma, 3*maxEnergy, params->whichGPU);
+    cudaTextureObject_t sigma_PE_txt = NULL;
+    cudaArray* sigma_PE_array = loadTexture1D(sigma_PE_txt, &dev_sigma[0 * maxEnergy], maxEnergy, false, true);
+    cudaTextureObject_t sigma_CS_txt = NULL;
+    cudaArray* sigma_CS_array = loadTexture1D(sigma_CS_txt, &dev_sigma[1 * maxEnergy], maxEnergy, false, true);
+    cudaTextureObject_t sigma_RS_txt = NULL;
+    cudaArray* sigma_RS_array = loadTexture1D(sigma_RS_txt, &dev_sigma[2 * maxEnergy], maxEnergy, false, true);
+
+    float* dev_scatterDist = copy1DdataToGPU(scatterDist, 2 * maxEnergy * 181, params->whichGPU);
+    cudaTextureObject_t scatterDist_txt = NULL;
+    cudaArray* scatterDist_array = loadTexture(scatterDist_txt, dev_scatterDist, make_int3(2, maxEnergy, 181), false, true);
+
+    hypercube g_params;
+    g_params.N = N_g;
+    g_params.T = T_g;
+    g_params.startVal = startVal_g;
+    hypercube* dev_g_params = NULL;
+    cudaMalloc((void**)&dev_g_params, sizeof(g_params));
+    cudaMemcpy((void*)dev_g_params, (const void*)&(g_params), sizeof(hypercube), cudaMemcpyHostToDevice);
+
+    hypercube f_params;
+    f_params.N = N_f;
+    f_params.T = T_f;
+    f_params.startVal = startVal_f;
+    hypercube* dev_f_params = NULL;
+    cudaMalloc((void**)&dev_f_params, sizeof(f_params));
+    cudaMemcpy((void*)dev_f_params, (const void*)&(f_params), sizeof(hypercube), cudaMemcpyHostToDevice);
+
+    /*
+    PhysicsTables xsec;
+    xsec.source_txt = source_txt;
+    xsec.energies_txt = energies_txt;
+    xsec.sigma_PE_txt = sigma_PE_txt;
+    xsec.sigma_CS_txt = sigma_CS_txt;
+    xsec.sigma_RS_txt = sigma_RS_txt;
+    xsec.scatterDist_txt = scatterDist_txt;
+    xsec.N_energies = N_energies;
+    xsec.maxEnergy = maxEnergy;
+    //*/
+
+    float source_and_detector[12];
     for (int i = 0; i < params->numAngles; i++)
     {
         float3 sourcePosition = make_float3(params->sourcePositions[3 * i + 0], params->sourcePositions[3 * i + 1], params->sourcePositions[3 * i + 2]);
         float3 moduleCenter = make_float3(params->moduleCenters[3 * i + 0], params->moduleCenters[3 * i + 1], params->moduleCenters[3 * i + 2]);
         float3 rowVector = make_float3(params->rowVectors[3 * i + 0], params->rowVectors[3 * i + 1], params->rowVectors[3 * i + 2]);
         float3 colVector = make_float3(params->colVectors[3 * i + 0], params->colVectors[3 * i + 1], params->colVectors[3 * i + 2]);
+
+        for (int n = 0; n < 3; n++)
+        {
+            source_and_detector[0 + n] = params->sourcePositions[3 * i + n];
+            source_and_detector[3 + n] = params->moduleCenters[3 * i + n];
+            source_and_detector[6 + n] = params->rowVectors[3 * i + n];
+            source_and_detector[9 + n] = params->colVectors[3 * i + n];
+        }
+        float* dev_source_and_detector = copy1DdataToGPU(source_and_detector, 12, params->whichGPU);
+        if (dev_source_and_detector == 0)
+            printf("failed to copy!\n");
 
         // First calculate the line integrals from the source to each voxel
         // These get reused many times so it is good to treat this line a look up table
@@ -270,7 +486,10 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
         // Now calculate the full scatter model for a fixed source and detector module
         dim3 dimBlock(8, 8);
         dim3 dimGrid(int(ceil(double(params->numRows) / double(dimBlock.x))), int(ceil(double(params->numCols) / double(dimBlock.y))));
-        firstOrderScatterModel <<< dimGrid, dimBlock >>> (dev_proj, N_g, T_g, startVal_g, f_data_txt, N_f, T_f, startVal_f, dev_Df, sourcePosition, moduleCenter, rowVector, colVector);
+        firstOrderScatterModel <<< dimGrid, dimBlock >>> (dev_proj, dev_g_params, f_data_txt, dev_f_params, dev_Df, dev_source_and_detector,
+            source_txt, energies_txt, detector_txt, sigma_PE_txt, sigma_CS_txt, sigma_RS_txt, scatterDist_txt);
+
+        cudaFree(dev_source_and_detector);
     }
 
     // pull result off GPU
@@ -289,9 +508,35 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     // Clean up
     cudaFreeArray(f_data_array);
     cudaDestroyTextureObject(f_data_txt);
-    cudaFree(dev_Df);
     cudaFree(dev_f);
+    
+    cudaFreeArray(source_array);
+    cudaDestroyTextureObject(source_txt);
+    cudaFree(dev_source);
+
+    cudaFreeArray(energies_array);
+    cudaDestroyTextureObject(energies_txt);
+    cudaFree(dev_energies);
+
+    cudaFreeArray(detector_array);
+    cudaDestroyTextureObject(detector_txt);
+    cudaFree(dev_detector);
+
+    cudaFreeArray(sigma_PE_array);
+    cudaDestroyTextureObject(sigma_PE_txt);
+    cudaFreeArray(sigma_CS_array);
+    cudaDestroyTextureObject(sigma_CS_txt);
+    cudaFreeArray(sigma_RS_array);
+    cudaDestroyTextureObject(sigma_RS_txt);
+    cudaFree(dev_sigma);
+
+    cudaFreeArray(scatterDist_array);
+    cudaDestroyTextureObject(scatterDist_txt);
+    cudaFree(dev_scatterDist);
+
+    cudaFree(dev_Df);
     cudaFree(dev_g);
+    cudaFree(dev_g_params);
 
     return true;
 }

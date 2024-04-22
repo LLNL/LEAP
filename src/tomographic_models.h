@@ -865,12 +865,13 @@ public:
 	 * \param[in]	f, pointer to the mass density volume (g/mm^3)
 	 * \param[in]	source, pointer to the source spectra
 	 * \param[in]	energies, pointer to the energy bins in the source spectra model
+	 * \param[in]	N_energies: number of energy bins
 	 * \param[in]	detector, pointer to the detector response in 1 keV bins
 	 * \param[in]	sigma, pointer to the PE, CS, and RS cross sections in 1 keV bins
 	 * \param[in]	scatterDist, pointer to the normalized CS and RS distributions sampled in 1 keV bins and 0.1 degree angular bins
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool simulate_scatter(float* g, float* f, float* source, float* energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu);
+	bool simulate_scatter(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu);
 
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
