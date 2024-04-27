@@ -48,8 +48,8 @@ struct hypercube
 // energies: the energies of the source spectra
 // detector: the detector response sampled in 1 keV bins
 // sigma: the PE, CS, and RS cross sections sampled in 1 keV bins
-// scatterDist: the CS and RS distributions sampled in 1 keV bins and 0.1 degree angular bins
-bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* params, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu);
+// scatterDist: the CS and RS distributions sampled in 1 keV bins and 1.0 degree angular bins
+bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* params, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType);
 
 bool firstLeg(cudaTextureObject_t f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition);
 

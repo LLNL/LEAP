@@ -626,7 +626,7 @@ class tomographicModels:
             self.libprojectors.sinogram_replacement.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
             return self.libprojectors.sinogram_replacement(g, priorSinogram, metalTrace, windowSize)
             
-    def down_sample(self, factors, I):
+    def down_sample(self, factors, I, dims=None):
         """down-samples the given 3D array
         
         Args:
@@ -647,7 +647,10 @@ class tomographicModels:
             if factors.size != 3:
                 return None
             
-            I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+            if dims is None:
+                I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+            else:
+                I_dn = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
             device = torch.device("cuda:" + str(self.get_gpu()))
             I_dn = torch.from_numpy(I_dn).to(device)
             self.libprojectors.down_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
@@ -658,12 +661,15 @@ class tomographicModels:
             if factors.size != 3:
                 return None
                 
-            I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+            if dims is None:
+                I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+            else:
+                I_dn = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
             self.libprojectors.down_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.down_sample(I, np.array(I.shape), I_dn, np.array(I_dn.shape), factors, True)
         return I_dn
         
-    def up_sample(self, factors, I):
+    def up_sample(self, factors, I, dims=None):
         """up-samples the given 3D array
         
         Args:
@@ -684,7 +690,10 @@ class tomographicModels:
             if factors.size != 3:
                 return None
             
-            I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
+            if dims is None:
+                I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
+            else:
+                I_up = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
             device = torch.device("cuda:" + str(self.get_gpu()))
             I_up = torch.from_numpy(I_up).to(device)
             self.libprojectors.up_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
@@ -695,21 +704,75 @@ class tomographicModels:
             if factors.size != 3:
                 return None
                 
-            I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
+            if dims is None:
+                I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
+            else:
+                I_up = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
             self.libprojectors.up_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.up_sample(I, np.array(I.shape), I_up, np.array(I_up.shape), factors, True)
         return I_up
         
-    def simulate_scatter(self, f, source, energies, detector, sigma, scatterDist):
-        """simulates first order scatter through an object composed of a single material type
+    def scatter_model(self, f, source, energies, detector, sigma, scatterDist, jobType=-1):
+        """simulates first order scatter through an object composed of a single material type (but variable density)
+
+        This is a complicated function and one should refer to the demo script: d31_scatter_correction.pynrrd
+        for a full working demonstration.
+        
+        This routine requires that one down-sample the CT detector pixels, volume voxels, and number of source spectra samples.
+        The volume should be no larger than 200^3 voxels
+        The projection data should be no larger than 256^2
+        The source spectra should have no more than 20 samples (we recommend about 10 samples)
+        
+        Note that source and energies are defined on a course grid and the number of samples has an almost
+        linear effect on the computation time of these routines.
+        But detector, sigma, scatterDist are sampled from 1 keV to int(ceil(energies[-1])) in 1 keV bins
+        These three arguments MUST be specified like this and the fine sampling here does not effect computation time
+        
+        Args:
+            f (C contiguous float32 numpy array): volume data in mass density units
+            source (numpy array): source spectra (including response due to filters)
+            energies (numpy array): energy samples for source spectra
+            detector (numpy array): detector response (sampled from 1 keV to int(ceil(energies[-1])) in 1 keV bins)
+            sigma (2D numpy array): sigma[0,:] = sigmaPE, sigma[1,:] = sigmaCS, sigma[2,:] = sigmaRS, energy samples same as detector response
+            scatterDist (3D numpy array): incoherent and coherent scatter distributions [2 x number of energy bins x 181]
+            jobType (int): if -1 estimates scatter correction gain factor, if 1 estimates scatter simulation (adds scatter to data) gain factor, and if 0 estimates scatter transmission
+        
+        Returns:
+            Returns gain factor or scatter transmission numpy array based on the jobType parameter
         """
+        
+        if self.get_geometry() != 'MODULAR':
+            print('Error: this function only works for modular-beam geometries.  Please use the function\"convert_to_modularbeam()\" prior to running this algorithm to convert your geometry to modular-beam.')
+            return None
+        if f.size > 200**3:
+            print('Error: number of voxels must be less than 200 x 200 x 200.  Please down-sample volume and try again.')
+            return None
+        if self.get_numCols() * self.get_numRows() > 256**2:
+            print('Error: number of detector pixels must be less than 256 x 256.  Please down-sample projections and try again.')
+            return None
+        if source.size > 20:
+            print('Error: number of energy bins in source spectra must be less than 20.  Please down spectra and try again.')
+            return None
+        if source.size != energies.size:
+            print('Error: \"source\" spectra and \"energies\" must be the same size.')
+            return None
+        maxEnergy = int(np.ceil(energies[-1]))
+        if detector.size != maxEnergy:
+            print('Error: \"detector\" must have exactly ' + str(maxEnergy) + ' bins')
+            return None
+        if sigma.shape[0] != 3 or sigma.shape[1] != maxEnergy:
+            print('Error: \"sigma\" must have exactly 3 x ' + str(maxEnergy) + ' bins')
+            return None
+        if scatterDist.shape[0] != 2 or scatterDist.shape[1] != maxEnergy or scatterDist.shape[2] != 181:
+            print('Error: \"scatterDist\" must have exactly 2 x ' + str(maxEnergy) + ' x 181 bins')
+            return None
         
         g = self.allocate_projections()
         
         self.set_model()
-        self.libprojectors.simulate_scatter.restype = ctypes.c_bool
-        self.libprojectors.simulate_scatter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-        self.libprojectors.simulate_scatter(g, f, source, energies, energies.size, detector, sigma, scatterDist, True)
+        self.libprojectors.scatter_model.restype = ctypes.c_bool
+        self.libprojectors.scatter_model.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int]
+        self.libprojectors.scatter_model(g, f, source, energies, energies.size, detector, sigma, scatterDist, True, jobType)
         return g
     
     ###################################################################################################################
@@ -1677,6 +1740,9 @@ class tomographicModels:
         return rowsNeeded
         
     def cropCols(self, colRange, g=None):
+        return self.crop_cols(colRange, g)
+        
+    def crop_cols(self, colRange, g=None):
         """Crops columns from projection data
         
         This function crops columns from the projection data.
@@ -1713,8 +1779,11 @@ class tomographicModels:
         else:
             g_crop = None
         return g_crop
-        
+    
     def cropRows(self, rowRange, g=None):
+        return self.crop_rows(rowRange, g)
+    
+    def crop_rows(self, rowRange, g=None):
         """Crops rows from projection data
         
         This function crops rows from the projection data.
@@ -1753,6 +1822,9 @@ class tomographicModels:
         return g_crop
         
     def cropProjections(self, rowRange, colRange=None, g=None):
+        return self.crop_projections(rowRange, colRange, g)
+        
+    def crop_projections(self, rowRange, colRange=None, g=None):
         """Crops rows and columns from projection data
         
         This function crops rows and columns from the projection data.
@@ -1841,7 +1913,7 @@ class tomographicModels:
         
         return g_dn
         
-    def up_sample_projections(self, factors, g=None):
+    def up_sample_projections(self, factors, g=None, dims=None):
         """up-samples the given projection data
 
         This function up-samples projection data and updates the CT geometry parameters accordingly
@@ -1860,7 +1932,7 @@ class tomographicModels:
         pixelHeight = self.get_pixelHeight()/factors[1]
         pixelWidth = self.get_pixelWidth()/factors[2]
         if g is not None:
-            g_dn = self.up_sample(factors, g)
+            g_dn = self.up_sample(factors, g, dims)
             numRows = g_dn.shape[1]
             numCols = g_dn.shape[2]
         else:
@@ -1878,8 +1950,9 @@ class tomographicModels:
         self.set_pixelWidth(pixelWidth)
         self.set_numRows(numRows)
         self.set_numCols(numCols)
-        self.set_centerRow(centerRow)
-        self.set_centerCol(centerCol)
+        if self.get_geometry() != 'MODULAR':
+            self.set_centerRow(centerRow)
+            self.set_centerCol(centerCol)
         
         return g_dn
         
@@ -1924,7 +1997,7 @@ class tomographicModels:
         
         return f_dn
         
-    def up_sample_volume(self, factors, f=None):
+    def up_sample_volume(self, factors, f=None, dims=None):
         """up-samples the given volume data
 
         This function up-samples volume data and updates the CT volume parameters accordingly
@@ -1947,7 +2020,7 @@ class tomographicModels:
         voxelHeight = self.get_voxelHeight()/factors[0]
         voxelWidth = self.get_voxelWidth()/factors[1]
         if f is not None:
-            f_up = self.up_sample(factors, f)
+            f_up = self.up_sample(factors, f, dims)
             numZ = f_dn.shape[0]
             numY = f_dn.shape[1]
             numX = f_dn.shape[2]
@@ -2061,7 +2134,7 @@ class tomographicModels:
                     g_subsets.append(g_subset)
             return g_subsets
     
-    def MLEM(self, g, f, numIter, mask=None):
+    def MLEM(self, g, f, numIter, filters=None, mask=None):
         """Maximum Likelihood-Expectation Maximization reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2073,6 +2146,7 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
+            filters (filterSequence object): list of differentiable regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
             
         
@@ -2108,10 +2182,14 @@ class tomographicModels:
             if mask is not None:
                 Pd[:] = Pd[:] * mask[:]
             self.backproject(Pd,d)
-            f *= d/Pstar1
+            if filters is None:
+                f *= d/Pstar1
+            else:
+                f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
+                
         return f
     
-    def OSEM(self, g, f, numIter, numSubsets=1, mask=None):
+    def OSEM(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
         """Ordered Subsets-Expectation Maximization reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2124,6 +2202,7 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
+            filters (filterSequence object): list of differentiable regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
@@ -2181,7 +2260,12 @@ class tomographicModels:
                     if mask_subsets is not None:
                         Pd[:] = Pd[:] * mask_subsets[m][:]
                     self.backproject(Pd,d)
-                    f *= d/Pstar1
+                    
+                    if filters is None:
+                        f *= d/Pstar1
+                    else:
+                        f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f)/float(numSubsets))
+                    
             subsetParams.setSubset(-1)
             return f
         

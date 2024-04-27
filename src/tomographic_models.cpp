@@ -2331,9 +2331,47 @@ bool tomographicModels::up_sample(float* I, int* N, float* I_up, int* N_up, floa
 		return upSample(I, N, I_up, N_up, factors, params.whichGPU);
 }
 
-bool tomographicModels::simulate_scatter(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu)
+bool tomographicModels::scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType)
 {
-	return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu);
+	//*
+	int numChunks = int(params.whichGPUs.size());
+	if (params.numAngles >= numChunks)
+	{
+		int numViewsPerChunk = std::max(1, int(ceil(float(params.numAngles) / double(numChunks))));
+		//printf("numChunks = %d\n", numChunks);
+
+		omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+		#pragma omp parallel for schedule(dynamic)
+		for (int ichunk = 0; ichunk < numChunks; ichunk++)
+		{
+			int firstView = ichunk * numViewsPerChunk;
+			int lastView = std::min(firstView + numViewsPerChunk - 1, params.numAngles - 1);
+			int numViews = lastView - firstView + 1;
+
+			// make a copy of the relavent rows
+			float* g_chunk = &g[uint64(firstView) * uint64(params.numRows * params.numCols)];
+
+			// make a copy of the params
+			parameters chunk_params;
+			chunk_params = params;
+			chunk_params.removeProjections(firstView, lastView);
+
+			chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+			chunk_params.whichGPUs.clear();
+
+			//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
+			//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
+
+			// Do Computation
+			simulateScatter_firstOrder_singleMaterial(g_chunk, f, &chunk_params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+		}
+		return true;
+	}
+	else
+		return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+	//*/
+
+	//return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
 }
 
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)

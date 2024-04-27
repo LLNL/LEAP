@@ -782,9 +782,9 @@ bool up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool da
 	return tomo()->up_sample(I, N, I_up, N_up, factors, data_on_cpu);
 }
 
-bool simulate_scatter(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu)
+bool scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType)
 {
-	return tomo()->simulate_scatter(g, f, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu);
+	return tomo()->scatter_model(g, f, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
 }
 
 bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)

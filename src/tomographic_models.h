@@ -859,7 +859,7 @@ public:
 	bool up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu);
 
 	/**
-	 * \fn          simulate_scatter
+	 * \fn          scatter_model
 	 * \brief       simulates first order scatter through an object composed of a single material type
 	 * \param[in]   g, pointer to store the simulated scatter data
 	 * \param[in]	f, pointer to the mass density volume (g/mm^3)
@@ -871,7 +871,7 @@ public:
 	 * \param[in]	scatterDist, pointer to the normalized CS and RS distributions sampled in 1 keV bins and 0.1 degree angular bins
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool simulate_scatter(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu);
+	bool scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType);
 
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
