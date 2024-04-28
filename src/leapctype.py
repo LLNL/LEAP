@@ -744,7 +744,10 @@ class tomographicModels:
         if self.get_geometry() != 'MODULAR':
             print('Error: this function only works for modular-beam geometries.  Please use the function\"convert_to_modularbeam()\" prior to running this algorithm to convert your geometry to modular-beam.')
             return None
-        if f.size > 200**3:
+        if len(f.shape) != 3:
+            print('Error: mass density argument must be a 3D numpy or torch tensor.')
+            return None
+        if f.shape[0]*f.shape[1]*f.shape[2] > 200**3:
             print('Error: number of voxels must be less than 200 x 200 x 200.  Please down-sample volume and try again.')
             return None
         if self.get_numCols() * self.get_numRows() > 256**2:
@@ -766,13 +769,34 @@ class tomographicModels:
         if scatterDist.shape[0] != 2 or scatterDist.shape[1] != maxEnergy or scatterDist.shape[2] != 181:
             print('Error: \"scatterDist\" must have exactly 2 x ' + str(maxEnergy) + ' x 181 bins')
             return None
-        
-        g = self.allocate_projections()
-        
+                
         self.set_model()
-        self.libprojectors.scatter_model.restype = ctypes.c_bool
-        self.libprojectors.scatter_model.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int]
-        self.libprojectors.scatter_model(g, f, source, energies, energies.size, detector, sigma, scatterDist, True, jobType)
+        if has_torch == True and type(f) is torch.Tensor:
+            g = self.allocate_projections(0.0, True)
+            
+            if f.is_cuda:
+                g = g.to(f.get_device())
+            
+            if type(source) is torch.Tensor:
+                source = source.cpu().detach().numpy()
+            if type(energies) is torch.Tensor:
+                energies = energies.cpu().detach().numpy()
+            if type(detector) is torch.Tensor:
+                detector = detector.cpu().detach().numpy()
+            if type(sigma) is torch.Tensor:
+                sigma = sigma.cpu().detach().numpy()
+            if type(scatterDist) is torch.Tensor:
+                scatterDist = scatterDist.cpu().detach().numpy()
+            
+            self.libprojectors.scatter_model.restype = ctypes.c_bool
+            self.libprojectors.scatter_model.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int]
+            self.libprojectors.scatter_model(g.data_ptr(), f.data_ptr(), source, energies, energies.size, detector, sigma, scatterDist, g.is_cuda == False, jobType)
+            
+        else:
+            g = self.allocate_projections()
+            self.libprojectors.scatter_model.restype = ctypes.c_bool
+            self.libprojectors.scatter_model.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int]
+            self.libprojectors.scatter_model(g, f, source, energies, energies.size, detector, sigma, scatterDist, True, jobType)
         return g
     
     ###################################################################################################################
@@ -1100,6 +1124,19 @@ class tomographicModels:
             return x_copy
         else:
             return x.copy()
+            
+    def copy_to_device(self, x):
+        """Copies the given argument to a torch tensor on the primary gpu"""
+        if has_torch == False:
+            print('Error: pytorch not installed')
+            return x
+        else:
+            device = torch.device("cuda:" + str(self.get_gpu()))
+            if type(x) is torch.Tensor:
+                x = x.to(device)
+            else:
+                x = torch.from_numpy(x).to(device)
+            return x
     
     ###################################################################################################################
     ###################################################################################################################

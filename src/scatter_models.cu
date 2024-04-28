@@ -529,15 +529,24 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
     N_g.w = N_energies;
     float* dev_g = 0;
-    if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
+    if (data_on_cpu)
     {
-        fprintf(stderr, "cudaMalloc(projections) failed!\n");
+        if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(projections) failed!\n");
+        }
     }
+    else
+        dev_g = g;
 
     // Allocate volume data on GPU
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
-    float* dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
+    float* dev_f = 0;
+    if (data_on_cpu)
+        dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
+    else
+        dev_f = f;
     cudaTextureObject_t f_data_txt = NULL;
     cudaArray* f_data_array = loadTexture(f_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
 
@@ -699,7 +708,8 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     // Clean up
     cudaFreeArray(f_data_array);
     cudaDestroyTextureObject(f_data_txt);
-    cudaFree(dev_f);
+    if (data_on_cpu)
+        cudaFree(dev_f);
     
     cudaFreeArray(source_array);
     cudaDestroyTextureObject(source_txt);
@@ -726,7 +736,8 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     cudaFree(dev_scatterDist);
 
     cudaFree(dev_Df);
-    cudaFree(dev_g);
+    if (data_on_cpu)
+        cudaFree(dev_g);
     cudaFree(dev_g_params);
 
     return true;

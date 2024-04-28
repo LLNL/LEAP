@@ -23,7 +23,13 @@ elif _platform == "win32":
 elif _platform == "darwin":
     fname_list = ['libleapct.dylib', 'src/leaptorch.py', 'src/leapctype.py', 'src/leap_filter_sequence.py']
     
-dst_folder = site.getsitepackages()[1]
-print('Copying LEAP-CT files to: ' + str(dst_folder))
-for n in range(len(fname_list)):
-    shutil.copy(fname_list[n], dst_folder)
+current_dir = os.path.dirname(os.path.realpath(__file__))
+if os.path.isfile(os.path.join(current_dir, fname_list[0])) == False:
+    print('Cannot find: ' + str(fname_list[0]))
+    print('Please compile this file or download from: ' + str('https://github.com/LLNL/LEAP/releases'))
+    print('and copy it into the same folder as this script and then try again')
+else:
+    dst_folder = site.getsitepackages()[1]
+    print('Copying LEAP-CT files to: ' + str(dst_folder))
+    for n in range(len(fname_list)):
+        shutil.copy(fname_list[n], dst_folder)
