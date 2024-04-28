@@ -203,6 +203,8 @@ extern "C" PROJECTOR_API bool up_sample(float* I, int* N, float* I_up, int* N_up
 
 extern "C" PROJECTOR_API bool scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType);
 
+extern "C" PROJECTOR_API bool synthesize_symmetry(float* f_radial, float* f);
+
 extern "C" PROJECTOR_API bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool saveParamsToFile(const char* param_fn);

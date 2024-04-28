@@ -787,6 +787,11 @@ bool scatter_model(float* g, float* f, float* source, float* energies, int N_ene
 	return tomo()->scatter_model(g, f, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
 }
 
+bool synthesize_symmetry(float* f_radial, float* f)
+{
+	return tomo()->synthesize_symmetry(f_radial, f);
+}
+
 bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 {
 	return tomo()->AzimuthalBlur(f, FWHM, data_on_cpu);

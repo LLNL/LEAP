@@ -20,6 +20,25 @@ using namespace std;
 
 phantom::phantom()
 {
+	params = NULL;
+	objects.clear();
+}
+
+phantom::phantom(parameters* params_in)
+{
+	params = params_in;
+	if (params != NULL)
+	{
+		x_0 = params->x_0();
+		y_0 = params->y_0();
+		z_0 = params->z_0();
+		numX = params->numX;
+		numY = params->numY;
+		numZ = params->numZ;
+		T_x = params->voxelWidth;
+		T_y = params->voxelWidth;
+		T_z = params->voxelHeight;
+	}
 	objects.clear();
 }
 
@@ -1020,4 +1039,117 @@ double geometricObject::dot(double* x, double* y, int N)
 			retVal += x[i] * y[i];
 		return retVal;
 	}
+}
+
+bool phantom::synthesizeSymmetry(float* f_radial, float* f)
+{
+	if (params == NULL || f_radial == NULL || f == NULL)
+		return false;
+
+	// params->numX = 1
+	double beta = -params->axisOfSymmetry;
+	double cos_beta = cos(beta * PI / 180.0);
+	double sin_beta = sin(beta * PI / 180.0);
+
+	//printf("beta = %f\n", beta);
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int i = 0; i < params->numZ; i++)
+	{
+		float* zSlice = &f[uint64(i)*uint64(params->numY*params->numY)];
+
+		float* zSlice_radial = &f_radial[uint64(i) * uint64(params->numY)];
+
+		float z = params->z_samples(i);
+		for (int j = 0; j < params->numY; j++)
+		{
+			float y = j * params->voxelWidth + params->y_0();
+			float* xLine = &zSlice[uint64(j) * uint64(params->numY)];
+
+			if (beta == 0.0)
+			{
+				for (int k = 0; k < params->numY; k++)
+				{
+					float x = k * params->voxelWidth + params->y_0();
+					float r = sqrt(x * x + y * y);
+					if (y < 0.0)
+						r = -r;
+					float r_ind = y_inv(r);
+
+					int r_low = int(r_ind);
+					int r_high = r_low + 1;
+					float dr = r_ind - float(r_low);
+					if (r_ind < 0.0)
+					{
+						r_low = 0;
+						r_high = 0;
+						dr = 0.0;
+					}
+					else if (r_ind >= params->numY - 1)
+					{
+						r_low = params->numY - 1;
+						r_high = r_low;
+						dr = 0.0;
+					}
+
+					xLine[k] = (1.0 - dr) * zSlice_radial[r_low] + dr * zSlice_radial[r_high];
+				}
+			}
+			else
+			{
+				for (int k = 0; k < params->numY; k++)
+				{
+					float x = k * params->voxelWidth + params->y_0();
+
+					// FIXME: check rotation
+					float x_rot = x*cos_beta - z*sin_beta;
+					float y_rot = y;
+					float z_rot = x*sin_beta + z*cos_beta;
+
+					float r = sqrt(x_rot * x_rot + y_rot * y_rot);
+					if (y < 0.0)
+						r = -r;
+
+					float r_ind = y_inv(r);
+					float z_ind = z_inv(z_rot);
+
+					int r_low = int(r_ind);
+					int r_high = r_low + 1;
+					float dr = r_ind - float(r_low);
+					if (r_ind < 0.0)
+					{
+						r_low = 0;
+						r_high = 0;
+						dr = 0.0;
+					}
+					else if (r_ind >= params->numY - 1)
+					{
+						r_low = params->numY - 1;
+						r_high = r_low;
+						dr = 0.0;
+					}
+
+					int z_low = int(z_ind);
+					int z_high = z_low + 1;
+					float dz = z_ind - float(z_low);
+					if (z_ind < 0.0)
+					{
+						z_low = 0;
+						z_high = 0;
+						dz = 0.0;
+					}
+					else if (z_ind >= params->numZ - 1)
+					{
+						z_low = params->numZ - 1;
+						z_high = z_low;
+						dz = 0.0;
+					}
+					xLine[k] = (1.0 - dr) * ((1.0 - dz) * f_radial[r_low+z_low * params->numY] + dz * f_radial[r_low+z_high * params->numY])
+						+ dr * ((1.0 - dz) * f_radial[r_high+z_low * params->numY] + dz * f_radial[r_high+z_high * params->numY]);
+				}
+			}
+		}
+	}
+	return true;
 }

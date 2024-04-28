@@ -873,6 +873,15 @@ public:
 	 */
 	bool scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType);
 
+	/**
+	 * \fn          synthesize_symmetry
+	 * \brief       converts a symmetric object into a 3D volume
+	 * \param[in]   f_radial: pointer to the radial volume
+	 * \param[in]	f: pointer to the 3D volume
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool synthesize_symmetry(float* f_radial, float* f);
+
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool backprojectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

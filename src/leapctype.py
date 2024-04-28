@@ -3202,6 +3202,33 @@ class tomographicModels:
             self.libprojectors.convertToRhoeZe(f_L, f_H, f_L.shape[0], f_L.shape[1], f_L.shape[2], sigma_L, sigma_H, True)
         return f_L, f_H
     
+    def synthesize_symmetry(self, f_radial):
+        """Converts symmetric volume to a 3D volume
+        
+        Args:
+            f_radial (C contiguous float32 numpy array): symmetric volume numpy array
+            
+        Returns:
+            3D volume
+        """
+        
+        dim1, dim2, dim3 = self.get_volume_dim()
+        if dim1 <= 0 or dim2 <= 0 and dim3 <= 0:
+            print('Error: CT volume parameters not set')
+            return None
+        
+        if has_torch == True and type(f_radial) is torch.Tensor:
+            print('Error: not yet implemented for pytorch tensors')
+            return None
+        else:
+            f = np.ascontiguousarray(np.zeros((dim1,dim2,dim2),dtype=np.float32), dtype=np.float32)
+            
+            self.libprojectors.synthesize_symmetry.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.synthesize_symmetry.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.synthesize_symmetry(f_radial, f)
+            return f
+    
     def BlurFilter(self, f, FWHM=2.0):
         """Applies a blurring filter to the provided numpy array
         
@@ -3210,7 +3237,7 @@ class tomographicModels:
         This filter is very simular to a Gaussian filter, but is a FIR
         
         Args:
-            f (C contiguous float32 numpy array): numpy array to smooth
+            f (C contiguous float32 numpy array or torch tensor): numpy array to smooth
             FWHM (float): the full width at half maximum (in number of pixels) of the filter
         
         Returns:

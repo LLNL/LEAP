@@ -2374,6 +2374,12 @@ bool tomographicModels::scatter_model(float* g, float* f, float* source, float* 
 	//return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
 }
 
+bool tomographicModels::synthesize_symmetry(float* f_radial, float* f)
+{
+	phantom symObject(&params);
+	return symObject.synthesizeSymmetry(f_radial, f);
+}
+
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
 {
 	if (data_on_cpu)
