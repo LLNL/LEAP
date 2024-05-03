@@ -563,12 +563,56 @@ class tomographicModels:
         """Rotates modular-beam detector by alpha degrees by updating the modular-beam CT geometry specification"""
         if self.get_geometry() != 'MODULAR':
             print('Error: can only rotate modular-beam detectors')
-            print('Use convert_conebeam_to_modularbeam first')
+            print('Use convert_to_modularbeam first')
             return False
         self.set_model()
         self.libprojectors.rotate_detector.restype = ctypes.c_bool
         self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
         return self.libprojectors.rotate_detector(alpha)
+        
+    def rotate_coordinate_system(self, R):
+        """Rotates the coordinate system
+        
+        This main purpose of this algorithm is to enable reconstruction on arbitrary voxel grid.
+        This is only possible for modular-beam geometries, so if your geometry is not modular-beam
+        then use the convert_to_modularbeam function first.
+        Note that if after the rotation, the vector pointing along across the detector rows isn't
+        aligned within 5 degrees of the z-axis, then one will not be able to perform FBP reconstructions
+        
+        Args:
+            R (3X3 numpy array): rotation matrix
+            
+        Returns:
+            true if operation was sucessful, false otherwise
+        """
+        if self.get_numAngles() <= 0:
+            print('Error: must specify CT geometry first')
+            return False
+        if self.get_geometry() != 'MODULAR':
+            print('Error: can only rotate coordinate system when using modular-beam geometry')
+            print('Use convert_to_modularbeam first')
+            return False
+        if type(R) is not np.ndarray or len(R.shape) != 2 or R.shape[0] != 3 or R.shape[1] != 3:
+            print('Error: must provide a 3X3 numpy array')
+            return False
+        self.set_model()
+        sourcePositions = self.get_sourcePositions()
+        moduleCenters = self.get_moduleCenters()
+        rowVecs = self.get_rowVectors()
+        colVecs = self.get_colVectors()
+        for n in range(sourcePositions.shape[0]):
+            sourcePositions[n,:] = np.matmul(R, sourcePositions[n,:])
+            moduleCenters[n,:] = np.matmul(R, moduleCenters[n,:])
+            rowVecs[n,:] = np.matmul(R, rowVecs[n,:])
+            colVecs[n,:] = np.matmul(R, colVecs[n,:])
+        
+        numAngles = self.get_numAngles()
+        numRows = self.get_numRows()
+        numCols = self.get_numCols()
+        pixelHeight = self.get_pixelHeight()
+        pixelWidth = self.get_pixelWidth()
+        self.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVecs, colVecs)
+        return True
         
     def shift_detector(self, r, c):
         """Shifts the detector by r mm in the row direction and c mm in the column direction by updating the CT geometry parameters accordingly"""
@@ -603,7 +647,7 @@ class tomographicModels:
 	        windowSize (3-element int array): window size in each of the three dimensions, default is [30, 1, 50]
             
         Returns:
-            true if operation  was sucessful, false otherwise
+            true if operation was sucessful, false otherwise
         """
         
         if windowSize is None:
@@ -715,7 +759,7 @@ class tomographicModels:
     def scatter_model(self, f, source, energies, detector, sigma, scatterDist, jobType=-1):
         """simulates first order scatter through an object composed of a single material type (but variable density)
 
-        This is a complicated function and one should refer to the demo script: d31_scatter_correction.pynrrd
+        This is a complicated function and one should refer to the demo script: d31_scatter_correction.py
         for a full working demonstration.
         
         This routine requires that one down-sample the CT detector pixels, volume voxels, and number of source spectra samples.
@@ -729,7 +773,7 @@ class tomographicModels:
         These three arguments MUST be specified like this and the fine sampling here does not effect computation time
         
         Args:
-            f (C contiguous float32 numpy array): volume data in mass density units
+            f (C contiguous float32 numpy array or torch tensor): volume data in mass density units
             source (numpy array): source spectra (including response due to filters)
             energies (numpy array): energy samples for source spectra
             detector (numpy array): detector response (sampled from 1 keV to int(ceil(energies[-1])) in 1 keV bins)
