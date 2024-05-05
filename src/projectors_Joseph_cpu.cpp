@@ -17,6 +17,27 @@
 
 using namespace std;
 
+#ifdef __USE_CPU
+
+float3 make_float3(float x, float y, float z)
+{
+    float3 retVal;
+    retVal.x = x;
+    retVal.y = y;
+    retVal.z = z;
+    return retVal;
+}
+
+double3 make_double3(double x, double y, double z)
+{
+    double3 retVal;
+    retVal.x = x;
+    retVal.y = y;
+    retVal.z = z;
+    return retVal;
+}
+#endif
+
 bool usingSFprojectorsForModularBeam(parameters* params)
 {
     if (params->whichGPU < 0)

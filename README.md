@@ -1,5 +1,5 @@
 # LivermorE AI Projector for Computed Tomography (LEAP)
-This is a C++/CUDA library (Linux and Windows) of 3D tomographic algorithms (pre-processing algorithms, projectors, and analytic (FBP) and iterative reconstruction algorithms) with a Python interface.  The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
+This is a C++/CUDA library (Linux, Windows, and MAC*) of 3D tomographic algorithms (pre-processing algorithms, projectors, and analytic (FBP) and iterative reconstruction algorithms) with a Python interface.  The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
 <p align="center">
   <img src=https://github.com/LLNL/LEAP/blob/main/documentation/LEAPoverview.png>
@@ -24,6 +24,8 @@ There are a lot of CT reconstruction packages out there, so why choose LEAP?  In
 16) Permissible license.
 
 Physics-based modeling and correction algorithms (e.g., scatter correction, beam hardening correction (BHC), dual energy decomposition, and SIRZ) can be applied when used with the [XrayPhysics](https://github.com/kylechampley/XrayPhysics) package.
+
+*Mac version does not have GPU support and some featurings are missing.
 
 ## Installation and Usage
 

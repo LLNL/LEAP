@@ -6,9 +6,11 @@
 // LivermorE AI Projector for Computed Tomography (LEAP)
 // basic CUDA operations
 ////////////////////////////////////////////////////////////////////////////////
+#include <string.h>
+
+#ifndef __USE_CPU
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
-#include <string.h>
 
 __global__ void DualTransferFunctionKernel(float* x, float* y, const float* LUT, const int3 N, const float firstSample, const float sampleRate, const int numSamples)
 {
@@ -1265,3 +1267,20 @@ bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3
 
     return true;
 }
+
+#else
+int numberOfGPUs()
+{
+    return 0;
+}
+
+float getAvailableGPUmemory(std::vector<int> whichGPUs)
+{
+    return 0.0;
+}
+
+float getAvailableGPUmemory(int whichGPU)
+{
+    return 0.0;
+}
+#endif

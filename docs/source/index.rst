@@ -9,7 +9,7 @@ LivermorE AI Projector for Computed Tomography |LEAPiconImage|
    :scale: 58 %
    :align: middle
 
-LEAP is a C++/CUDA library (Linux and Windows) of 3D tomographic algorithms (pre-processing algorithms, projectors, and analytic (FBP) and iterative reconstruction algorithms) with a Python interface. The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
+LEAP is a C++/CUDA library (Linux, Windows, and Mac) of 3D tomographic algorithms (pre-processing algorithms, projectors, and analytic (FBP) and iterative reconstruction algorithms) with a Python interface. The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
 .. image:: LEAPoverview.png
    :scale: 80 %

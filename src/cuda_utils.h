@@ -14,12 +14,14 @@
 #include <string>
 #include <vector>
 
-#include "cuda_runtime.h"
 #include "parameters.h"
 
 /**
  * This header and associated source file are for generic GPU-based functions that are used in LEAP
  */
+
+#ifndef __USE_CPU
+#include "cuda_runtime.h"
 
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
@@ -78,5 +80,10 @@ bool windowFOV_gpu(float* f, parameters* params);
 
 bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu);
 bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu);
+#else
+extern int numberOfGPUs();
+extern float getAvailableGPUmemory(int whichGPU);
+extern float getAvailableGPUmemory(std::vector<int> whichGPUs);
+#endif
 
 #endif
