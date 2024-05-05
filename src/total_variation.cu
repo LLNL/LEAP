@@ -12,6 +12,7 @@
 
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
+#include "cpu_utils.h"
 //#include "device_launch_parameters.h"
 
 // Commenting out this define will cause LEAP to use a Huber loss function
@@ -483,7 +484,10 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
 void setConstantMemoryParameters(const float delta, const float p)
 {
     const float HuberSlope = float(pow(delta, 2.0 - p) / p);
-    const float HuberShift = float((0.5 * p - 1.0) * pow(delta, p));
+    //const float HuberShift = float((0.5 * p - 1.0) * pow(delta, p));
+    const float HuberShift = float(delta*delta*(0.5 - 1.0/p));
+
+    //d_HUBER_SLOPE * pow(fabs(x), d_HUBER_P) + d_HUBER_SHIFT
 
     cudaMemcpyToSymbol(d_HUBER_P, &p, sizeof(float));
     cudaMemcpyToSymbol(d_HUBER_SLOPE, &HuberSlope, sizeof(float));
@@ -687,6 +691,13 @@ float anisotropicTotalVariation_cost(float* f, int N_1, int N_2, int N_3, float 
         int(ceil(double(N.z) / double(dimBlock.z))));
     aTV_Huber_cost <<< dimGrid, dimBlock >>> (dev_f, dev_d, N, delta, beta, sliceStart, sliceEnd, numNeighbors);
     cudaDeviceSynchronize();
+
+    /*
+    float* temp = (float*) malloc(size_t(uint64(N.x) * uint64(N.y) * uint64(N.z)) * sizeof(float));
+    pull3DdataFromGPU(temp, N, dev_d, whichGPU);
+    float retVal = sum_cpu(temp, N_1, N_2, N_3);
+    free(temp);
+    //*/
 
     float retVal = sum(dev_d, N, whichGPU);
 

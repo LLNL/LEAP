@@ -40,6 +40,7 @@ bool scale_cpu(float*, float, int N_1, int N_2, int N_3);
 bool scalarAdd_cpu(float*, float, float*, int N_1, int N_2, int N_3);
 bool clip_cpu(float*, int N_1, int N_2, int N_3, float clipVal = 0.0);
 bool replaceZeros_cpu(float*, int N_1, int N_2, int N_3, float newVal = 1.0);
+float sum_cpu(float*, int N_1, int N_2, int N_3);
 
 bool windowFOV_cpu(float* f, parameters* params);
 

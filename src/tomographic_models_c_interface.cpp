@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+//#include <pybind11/pybind11.h>
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -801,3 +802,9 @@ bool saveParamsToFile(const char* param_fn)
 {
 	return saveParametersToFile(param_fn, &(tomo()->params));
 }
+
+/*
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+	m.def("project_cpu", &project_cpu, "forward project on CPU");
+}
+//*/

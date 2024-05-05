@@ -72,6 +72,63 @@ __global__ void bilateralFilterKernel(float* f, float* f_filtered, const int3 N,
         f_filtered[ind] = curVal;
 }
 
+__global__ void bilateralFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float sigma_d_sq_inv,
+    const float sigma_i_sq_inv, const int w)
+{
+    // return;
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i > N.x || j >= N.y || k >= N.z) return;
+
+    const int di_min = -min(i, w);
+    const int di_max = min(N.x - 1 - i, w);
+
+    const int dj_min = -min(j, w);
+    const int dj_max = min(N.y - 1 - j, w);
+
+    const int dk_min = -min(k, w);
+    const int dk_max = min(N.z - 1 - k, w);
+
+    uint64 ind = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z + k);
+    //const float curVal = f[ind];
+    const float curVal = tex3D<float>(f, k, j, i);
+
+    // f_filtered[ind] = curVal;
+
+    float val = 0.0f;
+    float w_sum = 0.0f;
+    //*
+    for (int di = di_min; di <= di_max; di++)
+    {
+        // const int i_plus_di = max(0, min(N.x, i + di));
+        //const float* f_slice = &f[uint64(i + di) * uint64(N.z * N.y)];
+        for (int dj = dj_min; dj <= dj_max; dj++)
+        {
+            //const float* f_line = &f_slice[uint64((j + dj) * N.z)];
+            for (int dk = dk_min; dk <= dk_max; dk++)
+            {
+                //const float neighborVal = f_slice[uint64((j + dj) * N.z + (k + dk))];
+                //const float neighborVal = f_line[k + dk];
+                const float neighborVal = tex3D<float>(f, k+dk, j+dj, i+di);
+
+                // const float x = (di * di + dj * dj + dk * dk) * sigma_d_sq_inv + (curVal - neighborVal)*(curVal -
+                // neighborVal) * sigma_i_sq_inv; const float w_cur = (x <= 10.0) ? exp_int[int(x)] * (1.0 + (x -
+                // floorf(x))*(linTerm + quadTerm * (x - floorf(x)))) : 0.0;
+                const float w_cur = expf(-((di * di + dj * dj + dk * dk) * sigma_d_sq_inv +
+                    (curVal - neighborVal) * (curVal - neighborVal) * sigma_i_sq_inv));
+                val += w_cur * neighborVal;
+                w_sum += w_cur;
+            }
+        }
+    }
+
+    if (w_sum > 0.0f)
+        f_filtered[ind] = val / w_sum;
+    else
+        f_filtered[ind] = curVal;
+}
+
 __global__ void scaledBilateralFilterKernel(float* f, float* Bf, float* f_filtered, const int3 N, const float sigma_d_sq_inv,
                                       const float sigma_i_sq_inv, const int w)
 {
@@ -126,6 +183,62 @@ __global__ void scaledBilateralFilterKernel(float* f, float* Bf, float* f_filter
         f_filtered[ind] = curVal;
 }
 
+__global__ void scaledBilateralFilterKernel_txt(cudaTextureObject_t f, cudaTextureObject_t Bf, float* f_filtered, const int3 N, const float sigma_d_sq_inv,
+    const float sigma_i_sq_inv, const int w)
+{
+    // return;
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i > N.x || j >= N.y || k >= N.z) return;
+
+    const int di_min = -min(i, w);
+    const int di_max = min(N.x - 1 - i, w);
+
+    const int dj_min = -min(j, w);
+    const int dj_max = min(N.y - 1 - j, w);
+
+    const int dk_min = -min(k, w);
+    const int dk_max = min(N.z - 1 - k, w);
+
+    uint64 ind = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z + k);
+    //const float curVal = f[ind];
+    const float curVal = tex3D<float>(f, k, j, i);
+
+    // f_filtered[ind] = curVal;
+
+    float val = 0.0f;
+    float w_sum = 0.0f;
+    for (int di = di_min; di <= di_max; di++)
+    {
+        // const int i_plus_di = max(0, min(N.x, i + di));
+        //const float* Bf_slice = &Bf[uint64(i + di) * uint64(N.z * N.y)];
+        for (int dj = dj_min; dj <= dj_max; dj++)
+        {
+            //const float* Bf_line = &Bf_slice[uint64((j + dj) * N.z)];
+            for (int dk = dk_min; dk <= dk_max; dk++)
+            {
+                //const float neighborVal = Bf[uint64(i + di) * uint64(N.z * N.y) + uint64((j + dj) * N.z + (k + dk))];
+                //const float neighborVal = Bf_line[k + dk];
+                const float neighborVal = tex3D<float>(Bf, k+dk, j+dj, i+di);
+
+                // const float x = (di * di + dj * dj + dk * dk) * sigma_d_sq_inv + (curVal - neighborVal)*(curVal -
+                // neighborVal) * sigma_i_sq_inv; const float w_cur = (x <= 10.0) ? exp_int[int(x)] * (1.0 + (x -
+                // floorf(x))*(linTerm + quadTerm * (x - floorf(x)))) : 0.0;
+                const float w_cur = expf(-((di * di + dj * dj + dk * dk) * sigma_d_sq_inv +
+                    (curVal - neighborVal) * (curVal - neighborVal) * sigma_i_sq_inv));
+                val += w_cur * neighborVal;
+                w_sum += w_cur;
+            }
+        }
+    }
+
+    if (w_sum > 0.0f)
+        f_filtered[ind] = val / w_sum;
+    else
+        f_filtered[ind] = curVal;
+}
+
 bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, bool data_on_cpu, int whichGPU)
 {
     if (f == NULL) return false;
@@ -166,10 +279,28 @@ bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, flo
     // Call kernel
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
-    bilateralFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+
+    bool useTexture = true;
+
+    cudaTextureObject_t f_data_txt = NULL;
+    cudaArray* f_data_array = NULL;
+    if (useTexture)
+    {
+        f_data_array = loadTexture(f_data_txt, dev_f, N, false, false);
+        bilateralFilterKernel_txt <<< dimGrid, dimBlock >>> (f_data_txt, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+    }
+    else
+    {
+        bilateralFilterKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+    }
     cudaDeviceSynchronize();
 
     // Clean up
+    if (useTexture)
+    {
+        cudaFreeArray(f_data_array);
+        cudaDestroyTextureObject(f_data_txt);
+    }
     if (data_on_cpu)
     {
         // pull result off GPU
@@ -254,12 +385,34 @@ bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWH
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
 
-    blurFilter(dev_f, N_1, N_2, N_3, scale, 3, true, whichGPU, -1, -1, dev_Bf);
+    blurFilter(dev_f, N_1, N_2, N_3, scale, 3, false, whichGPU, -1, -1, dev_Bf);
 
-    scaledBilateralFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Bf, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+    bool useTexture = true;
+
+    cudaTextureObject_t f_data_txt = NULL;
+    cudaArray* f_data_array = NULL;
+    cudaTextureObject_t Bf_data_txt = NULL;
+    cudaArray* Bf_data_array = NULL;
+    if (useTexture)
+    {
+        f_data_array = loadTexture(f_data_txt, dev_f, N, false, false);
+        Bf_data_array = loadTexture(Bf_data_txt, dev_Bf, N, false, false);
+        scaledBilateralFilterKernel_txt <<< dimGrid, dimBlock >>> (f_data_txt, Bf_data_txt, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+    }
+    else
+    {
+        scaledBilateralFilterKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Bf, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+    }
     cudaDeviceSynchronize();
 
     // Clean up
+    if (useTexture)
+    {
+        cudaFreeArray(f_data_array);
+        cudaDestroyTextureObject(f_data_txt);
+        cudaFreeArray(Bf_data_array);
+        cudaDestroyTextureObject(Bf_data_txt);
+    }
     if (data_on_cpu)
     {
         // pull result off GPU
