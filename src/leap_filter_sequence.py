@@ -244,7 +244,7 @@ class LpNorm(denoisingFilter):
         f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates ||f-f_0||_p^p
         """
         
-        self.p = max(0.0, p)
+        self.p = max(0.01, p)
         self.weight = weight
         self.f_0 = f_0
         self.isDifferentiable = True
@@ -262,7 +262,8 @@ class LpNorm(denoisingFilter):
         #    return self.p * self.leapct.sign(f-self.f_0) * self.leapct.abs(f-self.f_0)**(self.p-1.0)
         #else:
         #    return self.p * self.leapct.sign(f) * self.leapct.abs(f)**(self.p-1.0)
-        Df = self.weight * self.p * self.leapct.sign(Df) * self.leapct.abs(Df)**(self.p-1.0)
+        ind = Df > 0.0
+        Df[ind] = self.weight * self.p * self.leapct.sign(Df[ind]) * self.leapct.abs(Df[ind])**(self.p-1.0)
         return Df
         
     def quadForm(self, f, d):
@@ -397,7 +398,7 @@ class azimuthalFilter(denoisingFilter):
         """
 
         self.FWHM = FWHM
-        self.p = p
+        self.p = max(0.01, p)
         self.weight = weight
         self.isDifferentiable = True
 

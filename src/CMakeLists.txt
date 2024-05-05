@@ -55,6 +55,9 @@ set(HEADER
   matching_pursuit.cuh
   bilateral_filter.cuh
   find_center_cpu.h
+  sinogram_replacement.h
+  resample_cpu.h
+  resample.cuh
   cuda_utils.h
   cpu_utils.h
   phantom.h
@@ -79,6 +82,8 @@ set(SRC_CPP
   ramp_filter_cpu.cpp
   ray_weighting_cpu.cpp
   find_center_cpu.cpp
+  sinogram_replacement.cpp
+  resample_cpu.cpp
   cpu_utils.cpp
   phantom.cpp
   analytic_ray_tracing.cpp
@@ -95,6 +100,7 @@ set(SRC_CU
   projectors_Siddon.cu
   sensitivity.cu
   ramp_filter.cu
+  resample.cu
   noise_filters.cu
   total_variation.cu
   matching_pursuit.cu

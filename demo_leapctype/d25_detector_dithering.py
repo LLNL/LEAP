@@ -6,7 +6,7 @@ from leapctype import *
 leapct = tomographicModels()
 
 '''
-This script demonstrates how randomly shifting the detector at every rotation angle can mitigate ring artifacts
+This script demonstrates how randomly shifting the detector or rotation stage at every rotation angle can mitigate ring artifacts
 and how to use LEAP's modular-beam geometry to perform FBP reconstructions of such data.
 '''
 
@@ -37,15 +37,14 @@ leapct.set_default_volume()
 leapct.set_diameterFOV(leapct.get_numX()*leapct.get_voxelWidth())
 
 #'''
-# These steps randonly shift the detector for each view.
+# These steps randonly shift the detector or stage for each view.
 # This "detector dithering" method remove ring artifacts
 # If you comment out this section, no dithering will be done
 # and the reconstruction will have ring artifacts
 #
-# Alternatively, you can shift the rotation stage.  LEAP
-# does not have a method to shift the stage because the stage 
-# defines the fixed coordinate system, so instead you can
-# shift the detector and source to do the same thing as a stage shift
+# Note that the LEAP geometry is specified with respect to the
+# object/ rotation stage.  Thus if the rotation stage is shifting,
+# this corresponds to detector and source shifts from this reference point.
 sourcePositions = leapct.get_sourcePositions()
 moduleCenters = leapct.get_moduleCenters()
 rowVectors = leapct.get_rowVectors()
@@ -54,7 +53,12 @@ for i in range(numAngles):
     colShift = pixelSize*np.random.uniform(-4.0,4.0,1)
     rowShift = pixelSize*np.random.uniform(-4.0,4.0,1)
     
+    # Perform the random detector shifts
     moduleCenters[i,:] += colShift*colVectors[i,:] + rowShift*rowVectors[i,:]
+    
+    # Uncomment the line below to switch to rotation stage shifts
+    # Note that rotation stage shifts require that BOTH the detector
+    # and the source get shifted
     #sourcePositions[i,:] += colShift*colVectors[i,:] + rowShift*rowVectors[i,:]
 
 leapct.set_modularbeam(numAngles, numRows, numCols, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
@@ -85,6 +89,10 @@ I_0 = 50000.0
 
 
 # Reconstruct the data
+# LEAP knows about the source/ detector shifts and will automatically account for these
+# in the filtering and backprojection steps of the reconstruction.  These steps
+# do not use interpolation; they use the true detector and source positions, so
+# doing these shifts does not reduce the reconstructed resolution
 f = leapct.allocateVolume()
 leapct.FBP(g,f)
 

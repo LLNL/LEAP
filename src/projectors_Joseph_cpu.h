@@ -15,7 +15,29 @@
 #endif
 
 #include "parameters.h"
-#include "cuda_runtime.h"
+
+#ifdef __USE_CPU
+struct float3
+{
+	float x;
+	float y;
+	float z;
+};
+
+float3 make_float3(float, float, float);
+
+struct double3
+{
+	double x;
+	double y;
+	double z;
+};
+
+double3 make_double3(double, double, double);
+
+#else
+	#include "cuda_runtime.h"
+#endif
 
 bool project_Joseph_cpu(float*, float*, parameters*);
 bool backproject_Joseph_cpu(float*, float*, parameters*);

@@ -19,4 +19,4 @@ CT Geometries
 .. autofunction:: leapctype.tomographicModels.convert_to_modularbeam
 .. autofunction:: leapctype.tomographicModels.rotate_detector
 .. autofunction:: leapctype.tomographicModels.shift_detector
-
+.. autofunction:: leapctype.tomographicModels.rotate_coordinate_system

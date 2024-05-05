@@ -7,32 +7,33 @@
 // main API for LEAP
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "tomographic_models.h"
-//#include "ray_weighting.cuh"
-#include "ray_weighting_cpu.h"
-#include "ramp_filter_cpu.h"
-#include "ramp_filter.cuh"
-#include "noise_filters.cuh"
-#include "total_variation.cuh"
-#include "cuda_utils.h"
-#include "sensitivity_cpu.h"
-#include "sensitivity.cuh"
-#include "ramp_filter_cpu.h"
-#include "find_center_cpu.h"
-#include "projectors_Joseph_cpu.h"
-#include "matching_pursuit.cuh"
-#include "bilateral_filter.cuh"
-#include "analytic_ray_tracing.h"
-#include "rebin.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
 #include <cstring>
 #include <omp.h>
-
-#ifndef PI
-#define PI 3.141592653589793
+#include "tomographic_models.h"
+#include "ray_weighting_cpu.h"
+#include "ramp_filter_cpu.h"
+#include "cuda_utils.h"
+#include "sensitivity_cpu.h"
+#include "sensitivity.cuh"
+#include "ramp_filter_cpu.h"
+#include "find_center_cpu.h"
+#include "projectors_Joseph_cpu.h"
+#include "analytic_ray_tracing.h"
+#include "sinogram_replacement.h"
+#include "resample_cpu.h"
+#include "rebin.h"
+#ifndef __USE_CPU
+#include "resample.cuh"
+#include "ramp_filter.cuh"
+#include "noise_filters.cuh"
+#include "total_variation.cuh"
+#include "matching_pursuit.cuh"
+#include "bilateral_filter.cuh"
+#include "scatter_models.cuh"
 #endif
 
 tomographicModels::tomographicModels()
@@ -78,32 +79,47 @@ bool tomographicModels::reset()
 
 bool tomographicModels::project_gpu(float* g, float* f)
 {
+#ifndef __USE_CPU
 	int whichGPU_save = params.whichGPU;
 	if (params.whichGPU < 0)
 		params.whichGPU = 0;
 	bool retVal = project(g, f, false);
 	params.whichGPU = whichGPU_save;
 	return retVal;
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::backproject_gpu(float* g, float* f)
 {
+#ifndef __USE_CPU
 	int whichGPU_save = params.whichGPU;
 	if (params.whichGPU < 0)
 		params.whichGPU = 0;
 	bool retVal = backproject(g, f, false);
 	params.whichGPU = whichGPU_save;
 	return retVal;
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::FBP_gpu(float* g, float* f)
 {
+#ifndef __USE_CPU
 	int whichGPU_save = params.whichGPU;
 	if (params.whichGPU < 0)
 		params.whichGPU = 0;
 	bool retVal = doFBP(g, f, false);
 	params.whichGPU = whichGPU_save;
 	return retVal;
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::project_cpu(float* g, float* f)
@@ -181,6 +197,7 @@ bool tomographicModels::filterProjections(float* g, bool data_on_cpu)
 
 bool tomographicModels::rampFilterVolume(float* f, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: 2D ramp filter only implemented for GPU\n");
@@ -240,14 +257,22 @@ bool tomographicModels::rampFilterVolume(float* f, bool data_on_cpu)
 			return rampFilter2D(f, &params, data_on_cpu);
 		}
 	}
+#else
+	printf("Error: 2D ramp filter only implemented for GPU\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::windowFOV(float* f, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (data_on_cpu == false)
 		return windowFOV_gpu(f, &params);
 	else
 		return windowFOV_cpu(f, &params);
+#else
+	return windowFOV_cpu(f, &params);
+#endif
 }
 
 float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
@@ -308,6 +333,7 @@ bool tomographicModels::FBP_multiGPU(float* g, float* f)
 
 bool tomographicModels::project_multiGPU(float* g, float* f)
 {
+#ifndef __USE_CPU
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
 	if (params.geometry == parameters::CONE && params.helicalPitch != 0.0)
@@ -401,6 +427,9 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 	}
 	return true;
+#else
+	return false;
+#endif
 }
 
 float tomographicModels::project_memoryRequired(int numRowsPerChunk)
@@ -448,6 +477,7 @@ float tomographicModels::project_memoryRequired_splitViews(int numViewsPerChunk)
 
 bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 {
+#ifndef __USE_CPU
 	//return false;
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
@@ -528,10 +558,14 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 		proj.project(g_chunk, f_chunk, &chunk_params, true);
 	}
 	return true;
+#else
+	return false;
+#endif
 }
 
 bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 {
+#ifndef __USE_CPU
 	//return false;
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
@@ -646,6 +680,9 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	}
 	//printf("done\n");
 	return true;
+#else
+	return false;
+#endif
 }
 
 float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols)
@@ -692,6 +729,7 @@ float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerC
 
 bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, bool doFBP)
 {
+#ifndef __USE_CPU
 	//return false;
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
@@ -772,6 +810,9 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 			proj.backproject(g_chunk, f_chunk, &chunk_params, true);
 	}
 	return true;
+#else
+	return false;
+#endif
 }
 
 bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
@@ -788,6 +829,7 @@ bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
 
 bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.muSpecified() == true || params.isSymmetric() == true || (params.geometry == parameters::MODULAR && usingSFprojectorsForModularBeam(&params) == false))
 	{
 		if (params.whichGPU < 0 || data_on_cpu == true)
@@ -830,7 +872,7 @@ bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 				else
 				{
 					// do chunking
-					int numSlicesPerChunk = std::max(1,params.numZ / 2);
+					int numSlicesPerChunk = std::max(1, params.numZ / 2);
 					while (getAvailableGPUmemory(params.whichGPU) < params.volumeDataSize() * float(numSlicesPerChunk) / float(params.numZ))
 					{
 						numSlicesPerChunk = numSlicesPerChunk / 2;
@@ -844,7 +886,7 @@ bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 					for (int ichunk = 0; ichunk < numChunks; ichunk++)
 					{
 						int firstSlice = ichunk * numSlicesPerChunk;
-						int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ-1);
+						int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ - 1);
 						if (firstSlice < params.numZ)
 						{
 							int numZ_save = params.numZ;
@@ -869,6 +911,18 @@ bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 		else
 			return sensitivity_gpu(f, &params, data_on_cpu);
 	}
+#else
+	if (params.muSpecified() == true || params.isSymmetric() == true || (params.geometry == parameters::MODULAR && usingSFprojectorsForModularBeam(&params) == false))
+	{
+		float* g = params.setToConstant(NULL, uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols), 1.0);
+		bool retVal = backproject(g, f, data_on_cpu);
+		replaceZeros_cpu(f, params.numX, params.numY, params.numZ, 1.0);
+		free(g);
+		return retVal;
+	}
+	else
+		return sensitivity_CPU(f, &params);
+#endif
 }
 
 float tomographicModels::get_FBPscalar()
@@ -1041,6 +1095,7 @@ int tomographicModels::get_volumeDimensionOrder()
 
 bool tomographicModels::set_GPU(int whichGPU)
 {
+#ifndef __USE_CPU
 	if (numberOfGPUs() <= 0)
 		params.whichGPU = -1;
 	else
@@ -1048,10 +1103,14 @@ bool tomographicModels::set_GPU(int whichGPU)
 	params.whichGPUs.clear();
 	params.whichGPUs.push_back(whichGPU);
 	return true;
+#else
+	return false;
+#endif
 }
 
 bool tomographicModels::set_GPUs(int* whichGPUs, int N)
 {
+#ifndef __USE_CPU
 	if (whichGPUs == NULL || N <= 0)
 		return false;
 	params.whichGPUs.clear();
@@ -1059,6 +1118,9 @@ bool tomographicModels::set_GPUs(int* whichGPUs, int N)
 		params.whichGPUs.push_back(whichGPUs[i]);
 	params.whichGPU = params.whichGPUs[0];
 	return true;
+#else
+	return false;
+#endif
 }
 
 int tomographicModels::get_GPU()
@@ -1459,6 +1521,7 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 		return false;
 	}
 
+#ifndef __USE_CPU
 	// This is a simple algorithm, so only run it on the GPU if the data is already there
 	if (data_on_cpu == false)
 	{
@@ -1467,7 +1530,7 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 		//return false;
 	}
 	//return applyTransferFunction_gpu(x, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, params.whichGPU, data_on_cpu);
-
+#endif
 	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
 
 	omp_set_num_threads(omp_get_num_procs());
@@ -1511,6 +1574,7 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 		return false;
 	}
 
+#ifndef __USE_CPU
 	// This is a simple algorithm, so only run it on the GPU if the data is already there
 	if (data_on_cpu == false)
 	{
@@ -1519,7 +1583,7 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 		//return false;
 	}
 	//return applyDualTransferFunction_gpu(x, y, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, params.whichGPU, data_on_cpu);
-
+#endif
 	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
 
 	float* LUT_1 = &LUT[0];
@@ -1706,6 +1770,7 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 
 bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -1763,10 +1828,15 @@ bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float 
 	}
 	else
 		return blurFilter(f, N_1, N_2, N_3, FWHM, 2, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -1837,10 +1907,15 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 	}
 	else
 		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -1898,10 +1973,15 @@ bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, floa
 	}
 	else
 		return medianFilter2D(f, N_1, N_2, N_3, threshold, w, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -1972,10 +2052,15 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 	}
 	else
 		return medianFilter(f, N_1, N_2, N_3, threshold, w, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (f == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || spatialFWHM <= 0.0 || intensityFWHM <= 0.0)
 	{
 		printf("Error: BilateralFilter invalid arguments!\n");
@@ -1997,10 +2082,15 @@ bool tomographicModels::BilateralFilter(float* f, int N_1, int N_2, int N_3, flo
 	}
 	else
 		return scaledBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (f == NULL || dictionary == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || numElements <= 0 || N_d1 <= 0 || N_d2 <= 0 || N_d3 <= 0)
 	{
 		printf("Error: dictionaryDenoising invalid arguments!\n");
@@ -2024,10 +2114,15 @@ bool tomographicModels::dictionaryDenoising(float* f, int N_1, int N_2, int N_3,
 	}
 	else
 		return matchingPursuit(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -2097,10 +2192,15 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 	}
 	else
 		return anisotropicTotalVariation_cost(f, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -2172,10 +2272,15 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 	}
 	else
 		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -2245,10 +2350,15 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 	}
 	else
 		return anisotropicTotalVariation_quadraticForm(f, d, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -2292,6 +2402,10 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	}
 	else
 		return diffuse(f, N_1, N_2, N_3, delta, p, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::rayTrace(float* g, int oversampling)
@@ -2304,6 +2418,89 @@ bool tomographicModels::rebin_curved(float* g, float* fanAngles, int order)
 {
 	rebin rebinningRoutines;
 	return rebinningRoutines.rebin_curved(g, &params, fanAngles, order);
+}
+
+bool tomographicModels::sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
+{
+	return sinogramReplacement(g, priorSinogram, metalTrace, &params, windowSize);
+}
+
+bool tomographicModels::down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (data_on_cpu)
+		return downSample_cpu(I, N, I_dn, N_dn, factors);
+	else
+		return downSample(I, N, I_dn, N_dn, factors, params.whichGPU);
+#else
+	return downSample_cpu(I, N, I_dn, N_dn, factors);
+#endif
+}
+
+bool tomographicModels::up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (data_on_cpu)
+		return upSample_cpu(I, N, I_up, N_up, factors);
+	else
+		return upSample(I, N, I_up, N_up, factors, params.whichGPU);
+#else
+	return upSample_cpu(I, N, I_up, N_up, factors);
+#endif
+}
+
+bool tomographicModels::scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType)
+{
+#ifndef __USE_CPU
+	//*
+	int numChunks = int(params.whichGPUs.size());
+	if (params.numAngles >= numChunks)
+	{
+		int numViewsPerChunk = std::max(1, int(ceil(float(params.numAngles) / double(numChunks))));
+		//printf("numChunks = %d\n", numChunks);
+
+		omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+		#pragma omp parallel for schedule(dynamic)
+		for (int ichunk = 0; ichunk < numChunks; ichunk++)
+		{
+			int firstView = ichunk * numViewsPerChunk;
+			int lastView = std::min(firstView + numViewsPerChunk - 1, params.numAngles - 1);
+			int numViews = lastView - firstView + 1;
+
+			// make a copy of the relavent rows
+			float* g_chunk = &g[uint64(firstView) * uint64(params.numRows * params.numCols)];
+
+			// make a copy of the params
+			parameters chunk_params;
+			chunk_params = params;
+			chunk_params.removeProjections(firstView, lastView);
+
+			chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+			chunk_params.whichGPUs.clear();
+
+			//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
+			//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
+
+			// Do Computation
+			simulateScatter_firstOrder_singleMaterial(g_chunk, f, &chunk_params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+		}
+		return true;
+	}
+	else
+		return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+	//*/
+
+	//return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::synthesize_symmetry(float* f_radial, float* f)
+{
+	phantom symObject(&params);
+	return symObject.synthesizeSymmetry(f_radial, f);
 }
 
 bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
@@ -2322,14 +2519,19 @@ bool tomographicModels::Laplacian(float* g, int numDims, bool smooth, bool data_
 	if (g == NULL || params.geometryDefined() == false)
 		return false;
 	//BlurFilter2D(g, params.numAngles, params.numRows, params.numCols, 2.0, data_on_cpu);
+#ifndef __USE_CPU
 	if (data_on_cpu)
 		return Laplacian_cpu(g, numDims, smooth, &params, 1.0);
 	else
 		return Laplacian_gpu(g, numDims, smooth, &params, data_on_cpu, 1.0);
+#else
+	return Laplacian_cpu(g, numDims, smooth, &params, 1.0);
+#endif
 }
 
 bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (g == NULL || H == NULL || N_H1 <= 0 || N_H2 <= 0 || params.geometryDefined() == false)
 		return false;
 	//return transmissionFilter_gpu(g, &params, data_on_cpu, H, N_H1, N_H2);
@@ -2389,10 +2591,15 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 		return transmissionFilter_gpu(g, &params, data_on_cpu, H, N_H1, N_H2, isAttenuationData);
 	}
 	//#####################################################################################################
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
 		printf("Error: this function is currently only implemented for GPU processing!\n");
@@ -2457,4 +2664,8 @@ bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 	}
 	else
 		return azimuthalBlur(f, &params, FWHM, data_on_cpu);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }

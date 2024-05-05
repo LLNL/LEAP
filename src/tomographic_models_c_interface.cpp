@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+//#include <pybind11/pybind11.h>
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -255,6 +256,28 @@ bool set_numRows(int numRows)
 		return false;
 }
 
+bool set_pixelHeight(float H)
+{
+	if (H > 0.0)
+	{
+		tomo()->params.pixelHeight = H;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_pixelWidth(float W)
+{
+	if (W > 0.0)
+	{
+		tomo()->params.pixelWidth = W;
+		return true;
+	}
+	else
+		return false;
+}
+
 bool set_centerCol(float centerCol)
 {
 	return tomo()->set_centerCol(centerCol);
@@ -286,10 +309,54 @@ bool set_numZ(int numZ)
 		return false;
 }
 
+bool set_numY(int numY)
+{
+	if (numY > 0)
+	{
+		tomo()->params.numY = numY;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_numX(int numX)
+{
+	if (numX > 0)
+	{
+		tomo()->params.numX = numX;
+		return true;
+	}
+	else
+		return false;
+}
+
 bool set_offsetZ(float offsetZ)
 {
 	tomo()->params.offsetZ = offsetZ;
 	return true;
+}
+
+bool set_voxelWidth(float W)
+{
+	if (W > 0.0)
+	{
+		tomo()->params.voxelWidth = W;
+		return true;
+	}
+	else
+		return false;
+}
+
+bool set_voxelHeight(float H)
+{
+	if (H > 0.0 /*&& (tomo()->params.geometry == parameters::CONE || tomo()->params.geometry == parameters::MODULAR)*/)
+	{
+		tomo()->params.voxelHeight = H;
+		return true;
+	}
+	else
+		return false;
 }
 
 bool set_volumeDimensionOrder(int which)
@@ -701,6 +768,31 @@ bool rebin_curved(float* g, float* fanAngles, int order)
 	return tomo()->rebin_curved(g, fanAngles, order);
 }
 
+bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
+{
+	return tomo()->sinogram_replacement(g, priorSinogram, metalTrace, windowSize);
+}
+
+bool down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, bool data_on_cpu)
+{
+	return tomo()->down_sample(I, N, I_dn, N_dn, factors, data_on_cpu);
+}
+
+bool up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu)
+{
+	return tomo()->up_sample(I, N, I_up, N_up, factors, data_on_cpu);
+}
+
+bool scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType)
+{
+	return tomo()->scatter_model(g, f, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+}
+
+bool synthesize_symmetry(float* f_radial, float* f)
+{
+	return tomo()->synthesize_symmetry(f_radial, f);
+}
+
 bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 {
 	return tomo()->AzimuthalBlur(f, FWHM, data_on_cpu);
@@ -710,3 +802,9 @@ bool saveParamsToFile(const char* param_fn)
 {
 	return saveParametersToFile(param_fn, &(tomo()->params));
 }
+
+/*
+PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+	m.def("project_cpu", &project_cpu, "forward project on CPU");
+}
+//*/

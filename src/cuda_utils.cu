@@ -6,9 +6,11 @@
 // LivermorE AI Projector for Computed Tomography (LEAP)
 // basic CUDA operations
 ////////////////////////////////////////////////////////////////////////////////
+#include <string.h>
+
+#ifndef __USE_CPU
 #include "cuda_utils.h"
 #include "cuda_runtime.h"
-#include <string.h>
 
 __global__ void DualTransferFunctionKernel(float* x, float* y, const float* LUT, const int3 N, const float firstSample, const float sampleRate, const int numSamples)
 {
@@ -1005,6 +1007,48 @@ float* copy3DdataToGPU(float* g, int3 N, int whichGPU)
 	return dev_g;
 }
 
+extern float* copy1DdataToGPU(float* x, int N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Copy volume data to GPU
+    float* dev_x = 0;
+    if (cudaMalloc((void**)&dev_x, N * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(1D) failed!\n");
+        return NULL;
+    }
+    if (cudaMemcpy(dev_x, x, N * sizeof(float), cudaMemcpyHostToDevice))
+    {
+        fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+        return NULL;
+    }
+
+    return dev_x;
+}
+
+extern bool* copy1DbooleanToGPU(bool* x, int N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Copy volume data to GPU
+    bool* dev_x = 0;
+    if (cudaMalloc((void**)&dev_x, N * sizeof(bool)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(1D) failed!\n");
+        return NULL;
+    }
+    if (cudaMemcpy(dev_x, x, N * sizeof(bool), cudaMemcpyHostToDevice))
+    {
+        fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+        return NULL;
+    }
+
+    return dev_x;
+}
+
 bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 {
 	cudaSetDevice(whichGPU);
@@ -1223,3 +1267,20 @@ bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3
 
     return true;
 }
+
+#else
+int numberOfGPUs()
+{
+    return 0;
+}
+
+float getAvailableGPUmemory(std::vector<int> whichGPUs)
+{
+    return 0.0;
+}
+
+float getAvailableGPUmemory(int whichGPU)
+{
+    return 0.0;
+}
+#endif

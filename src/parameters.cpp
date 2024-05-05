@@ -16,8 +16,10 @@
 #include <iterator>
 #include <omp.h>
 #include "parameters.h"
-#include "cuda_utils.h"
 #include "cpu_utils.h"
+#ifndef __USE_CPU
+#include "cuda_utils.h"
+#endif
 
 using namespace std;
 
@@ -35,7 +37,11 @@ parameters::parameters()
 void parameters::initialize()
 {
 	whichGPUs.clear();
+#ifndef __USE_CPU
 	int numGPUs = numberOfGPUs();
+#else
+	int numGPUs = 0;
+#endif
 	if (numGPUs > 0)
 	{
 		whichGPU = 0;
@@ -610,9 +616,11 @@ bool parameters::set_default_volume(float scale)
 		{
 			// want: z_0 = -centerRow * (sod / sdd * pixelHeight)
 			// have: z_0 = offsetZ - 0.5 * float(numZ - 1) * voxelHeight
-			offsetZ = 0.5 * float(numZ - 1) * voxelHeight - centerRow * (sod / sdd * pixelHeight);
+			//offsetZ = 0.5 * float(numZ - 1) * voxelHeight - centerRow * (sod / sdd * pixelHeight);
 			if (scale == 1.0)
 				offsetZ = (0.5 * float(numZ - 1) - centerRow) * voxelHeight;
+			else
+				offsetZ = (0.5 * float(numRows - 1) - centerRow) * (sod / sdd * pixelHeight);
 		}
 		/* old specification of z_0
 		float rzref = -centerRow * (sod / sdd * pixelHeight);
@@ -737,6 +745,7 @@ void parameters::printAll()
 		printf("%d-core CPU processing\n", int(omp_get_num_procs()));
 	else
 	{
+#ifndef __USE_CPU
 		if (whichGPUs.size() == 1)
 			printf("GPU processing on device %d\n", whichGPU);
 		else
@@ -747,6 +756,7 @@ void parameters::printAll()
 			printf("%d\n", whichGPUs[whichGPUs.size() - 1]);
 		}
 		printf("GPU with least amount of memory: %f GB\n", getAvailableGPUmemory(whichGPUs));
+#endif
 	}
 
 	/*
@@ -1680,6 +1690,7 @@ float parameters::requiredGPUmemory(int extraCols)
 
 bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns)
 {
+#ifndef __USE_CPU
 	if (useLeastGPUmemory)
 	{
 		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns))
@@ -1694,6 +1705,9 @@ bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns
 		else
 			return true;
 	}
+#else
+	return false;
+#endif
 }
 
 bool parameters::removeProjections(int firstProj, int lastProj)

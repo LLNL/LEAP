@@ -1,5 +1,5 @@
 # LivermorE AI Projector for Computed Tomography (LEAP)
-This is a C++/CUDA library (Linux and Windows, NVIDIA and AMD) of 3D tomographic algorithms (pre-processing algorithms, projectors, and analytic (FBP) and iterative reconstruction algorithms) with a Python interface.  The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
+This is a C++/CUDA library (Linux, Windows, and Mac*) of 3D tomographic algorithms (pre-processing algorithms, projectors, and analytic (FBP) and iterative reconstruction algorithms) with a Python interface.  The projectors (forward and back projection) are implemented for both multi-GPU and multi-core CPU and we provide bindings to PyTorch to achieve differentiable forward and backward projectors for AI/ML-driven Computed Tomography (CT) applications.
 
 <p align="center">
   <img src=https://github.com/LLNL/LEAP/blob/main/documentation/LEAPoverview.png>
@@ -18,18 +18,24 @@ There are a lot of CT reconstruction packages out there, so why choose LEAP?  In
 10) Special-case models such as the Attenuated Radon Transform (SPECT and VAM applications) and reconstruction of cylindrically-symmetric objects (flash x-ray applications).
 11) Iterative reconstruction algorithms: OSEM, OS-SART, ASD-POCS, RWLS, RDLS, ML-TR, IFBP (RWLS-SARR)
 12) Fast multi-GPU 3D densoing methods.
-13) Pre-processing algorithms: outlier correction, detector deblur, ring removal, multi-material beam hardening correction (BHC), dual energy decomposition, and SIRZ
+13) Pre-processing algorithms: outlier correction, detector deblur, ring removal, scatter correction, metal artifact reduction (MAR), multi-material beam hardening correction (BHC), dual energy decomposition, and SIRZ
 14) Easy-to-use, simple API.
 15) Easy-to-build executable because the only dependency is CUDA.  Python API can be run with or without PyTorch (of course the neural network stuff requires PyTorch).
 16) Permissible license.
 
-Physics-based modeling and correction algorithms (e.g., beam hardening correction (BHC), dual energy decomposition, and SIRZ) can be applied when used with the [XrayPhysics](https://github.com/kylechampley/XrayPhysics) package.
+Physics-based modeling and correction algorithms (e.g., scatter correction, beam hardening correction (BHC), dual energy decomposition, and SIRZ) can be applied when used with the [XrayPhysics](https://github.com/kylechampley/XrayPhysics) package.
+
+*Mac version does not have GPU support and some featurings are missing.
 
 ## Installation and Usage
 
 Documentation is available [here](https://leapct.readthedocs.io/)
 
 Installation and usage information is posted on the [wiki](https://github.com/LLNL/LEAP/wiki) page
+
+Demo scripts for most functionality in the [demo_leapctype](https://github.com/LLNL/LEAP/tree/main/demo_leapctype) directory
+
+Demo scripts for AI/ML/DL applications in the [demo_leaptorch](https://github.com/LLNL/LEAP/tree/main/demo_leaptorch) directory
 
 ## Example Results
 
@@ -45,7 +51,7 @@ For the next releases, we are working on the following:
 2) Feature requests from our users
 3) More noise reduction filters
 4) AMD Support
-5) Physics-based scatter correction
+5) cone-parallel geometry support
 
 ## Authors
 Kyle Champley (champley@gmail.com)

@@ -338,6 +338,33 @@ bool replaceZeros_cpu(float* f, int N_1, int N_2, int N_3, float newVal)
     return true;
 }
 
+float sum_cpu(float* f, int N_1, int N_2, int N_3)
+{
+    double* sums = new double[N_1];
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        double sum = 0.0;
+        float* aSlice = &f[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+            {
+                sum += double(aSlice[j * N_3 + k]);
+            }
+        }
+        sums[i] = sum;
+    }
+
+    double retVal = 0.0;
+    for (int i = 0; i < N_1; i++)
+        retVal += sums[i];
+    delete[] sums;
+
+    return float(retVal);
+}
+
 bool windowFOV_cpu(float* f, parameters* params)
 {
     if (f == NULL || params == NULL)

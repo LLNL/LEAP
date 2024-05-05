@@ -9,21 +9,23 @@
 // whether the calculation should happen on the CPU or GPU
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "projectors.h"
-#include "projectors_SF_cpu.h"
-#include "projectors_SF.cuh"
-#include "projectors_Joseph_cpu.h"
-#include "projectors_Siddon_cpu.h"
-#include "cuda_utils.h"
-#include "projectors_symmetric.cuh"
-#include "projectors_symmetric_cpu.h"
-#include "projectors_attenuated.cuh"
-#include "projectors_Joseph.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
 #include <omp.h>
+#include "projectors.h"
+#include "projectors_SF_cpu.h"
+#include "projectors_Joseph_cpu.h"
+#include "projectors_Siddon_cpu.h"
+#include "cuda_utils.h"
+#include "projectors_symmetric_cpu.h"
+#include "projectors_SF.cuh"
+#ifndef __USE_CPU
+#include "projectors_symmetric.cuh"
+#include "projectors_attenuated.cuh"
+#include "projectors_Joseph.cuh"
+#endif
 
 projectors::projectors()
 {
@@ -44,6 +46,7 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 		printf("ERROR: project: invalid parameters or invalid input arrays!\n");
 		return false;
 	}
+#ifndef __USE_CPU
 	else if (params->whichGPU >= 0)
 	{
 		if (data_on_cpu)
@@ -64,6 +67,7 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 		else
 			return project_SF(g, f, params, data_on_cpu);
 	}
+#endif
 	else
 	{
 		if (params->isSymmetric())
@@ -114,6 +118,7 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 {
 	if (params->allDefined() == false || g == NULL || f == NULL)
 		return false;
+#ifndef __USE_CPU
 	else if (params->whichGPU >= 0)
 	{
 		if (data_on_cpu)
@@ -134,6 +139,7 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 		else
 			return backproject_SF(g, f, params, data_on_cpu);
 	}
+#endif
 	else
 	{
 		if (params->mu != NULL)

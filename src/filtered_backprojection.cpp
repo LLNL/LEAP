@@ -8,21 +8,23 @@
 // algorithms.
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "filtered_backprojection.h"
-#include "projectors.h"
-#include "ramp_filter.cuh"
-#include "ray_weighting_cpu.h"
-#include "ray_weighting.cuh"
-#include "cuda_utils.h"
-#include "projectors_symmetric.cuh"
-#include "projectors_symmetric_cpu.h"
-#include "ramp_filter_cpu.h"
-#include "projectors_attenuated.cuh"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
 #include <omp.h>
+#include "filtered_backprojection.h"
+#include "projectors.h"
+#include "ray_weighting_cpu.h"
+#include "projectors_symmetric_cpu.h"
+#include "ramp_filter_cpu.h"
+#ifndef __USE_CPU
+#include "cuda_utils.h"
+#include "ramp_filter.cuh"
+#include "ray_weighting.cuh"
+#include "projectors_symmetric.cuh"
+#include "projectors_attenuated.cuh"
+#endif
 
 filteredBackprojection::filteredBackprojection()
 {
@@ -71,6 +73,7 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool data_
 	}
 	else
 	{
+#ifndef __USE_CPU
 		if (params->isSymmetric())
 		{
 			if (data_on_cpu)
@@ -101,6 +104,9 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool data_
 			else
 				return Hilbert1D(g, params, data_on_cpu, scalar, sampleShift);
 		}
+#else
+		return false;
+#endif
 	}
 }
 
@@ -120,12 +126,18 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 		// no transfers to/from GPU are necessary; just run the code
 		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
 		{
+#ifndef __USE_CPU
 			parallelRay_derivative(g, params, false);
 			applyPostRampFilterWeights(g, params, false);
 			return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
+#else
+			printf("Error: helical FBP filtering is only implemented on the GPU at this time!\n");
+			return false;
+#endif
 		}
 		else
 		{
+#ifndef __USE_CPU
 			applyPreRampFilterWeights(g, params, data_on_cpu);
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, false, false);
@@ -141,10 +153,25 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, false, true);
 			return applyPostRampFilterWeights(g, params, data_on_cpu);
+#else
+			applyPreRampFilterWeights_CPU(g, params);
+			if (params->muCoeff != 0.0)
+				convertARTtoERT_CPU(g, params, false);
+			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
+			{
+				ray_derivative_cpu(g, params);
+			}
+			else
+				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
+			if (params->muCoeff != 0.0)
+				convertARTtoERT_CPU(g, params, true);
+			return applyPostRampFilterWeights_CPU(g, params);
+#endif
 		}
 	}
 	else
 	{
+#ifndef __USE_CPU
 		if (getAvailableGPUmemory(params->whichGPU) < params->projectionDataSize())
 		{
 			printf("Error: insufficient GPU memory\n");
@@ -166,6 +193,9 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 		if (dev_g != 0)
 			cudaFree(dev_g);
 		return retVal;
+#else
+		return false;
+#endif
 	}
 }
 
@@ -220,10 +250,14 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 			params->doExtrapolation = true;
 		if (params->isSymmetric())
 		{
+#ifndef __USE_CPU
 			if (params->whichGPU < 0)
 				retVal = CPUinverse_symmetric(g, f, params);
 			else
 				retVal = inverse_symmetric(g, f, params, data_on_cpu);
+#else
+			retVal = CPUinverse_symmetric(g, f, params);
+#endif
 		}
 		else
 			retVal = proj.backproject(g, f, params, data_on_cpu);
@@ -239,6 +273,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 	}
 	else
 	{
+#ifndef __USE_CPU
 		if (params->hasSufficientGPUmemory() == false)
 		{
 			printf("Error: insufficient GPU memory\n");
@@ -282,6 +317,9 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		if (dev_g != 0)
 			cudaFree(dev_g);
 		return retVal;
+#else
+		return false;
+#endif
 	}
 }
 
@@ -303,10 +341,18 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 	{
 		// data transfers to/from GPU are not necessary
 		// don't need memory checks
+
+#ifndef __USE_CPU
 		applyPreRampFilterWeights(g, params, data_on_cpu);
 		convertARTtoERT(g, params, false, false);
 		rampFilterProjections(g, params, false, FBPscalar(params));
 		convertARTtoERT(g, params, false, true);
+#else
+		applyPreRampFilterWeights_CPU(g, params);
+		convertARTtoERT_CPU(g, params, false);
+		rampFilterProjections(g, params, false, FBPscalar(params));
+		convertARTtoERT_CPU(g, params, true);
+#endif
 
 		params->muCoeff *= -1.0;
 		bool retVal = proj.backproject(g, f, params, false);
@@ -315,6 +361,7 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 	}
 	else
 	{
+#ifndef __USE_CPU
 		if (params->hasSufficientGPUmemory() == false)
 		{
 			printf("Error: insufficient GPU memory\n");
@@ -347,11 +394,15 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 		if (dev_g != 0)
 			cudaFree(dev_g);
 		return retVal;
+#else
+		return false;
+#endif
 	}
 }
 
 bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* params, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params->geometry != parameters::PARALLEL)
 	{
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
@@ -476,10 +527,15 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 			cudaFree(dev_mu);
 	}
 	return true;
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* params, bool data_on_cpu)
 {
+#ifndef __USE_CPU
 	if (params->geometry != parameters::PARALLEL)
 	{
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
@@ -625,4 +681,8 @@ bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* par
 			cudaFree(dev_mu);
 	}
 	return true;
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }

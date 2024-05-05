@@ -563,12 +563,56 @@ class tomographicModels:
         """Rotates modular-beam detector by alpha degrees by updating the modular-beam CT geometry specification"""
         if self.get_geometry() != 'MODULAR':
             print('Error: can only rotate modular-beam detectors')
-            print('Use convert_conebeam_to_modularbeam first')
+            print('Use convert_to_modularbeam first')
             return False
         self.set_model()
         self.libprojectors.rotate_detector.restype = ctypes.c_bool
         self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
         return self.libprojectors.rotate_detector(alpha)
+        
+    def rotate_coordinate_system(self, R):
+        """Rotates the coordinate system
+        
+        This main purpose of this algorithm is to enable reconstruction on arbitrary voxel grid.
+        This is only possible for modular-beam geometries, so if your geometry is not modular-beam
+        then use the convert_to_modularbeam function first.
+        Note that if after the rotation, the vector pointing along across the detector rows isn't
+        aligned within 5 degrees of the z-axis, then one will not be able to perform FBP reconstructions
+        
+        Args:
+            R (3X3 numpy array): rotation matrix
+            
+        Returns:
+            true if operation was sucessful, false otherwise
+        """
+        if self.get_numAngles() <= 0:
+            print('Error: must specify CT geometry first')
+            return False
+        if self.get_geometry() != 'MODULAR':
+            print('Error: can only rotate coordinate system when using modular-beam geometry')
+            print('Use convert_to_modularbeam first')
+            return False
+        if type(R) is not np.ndarray or len(R.shape) != 2 or R.shape[0] != 3 or R.shape[1] != 3:
+            print('Error: must provide a 3X3 numpy array')
+            return False
+        self.set_model()
+        sourcePositions = self.get_sourcePositions()
+        moduleCenters = self.get_moduleCenters()
+        rowVecs = self.get_rowVectors()
+        colVecs = self.get_colVectors()
+        for n in range(sourcePositions.shape[0]):
+            sourcePositions[n,:] = np.matmul(R, sourcePositions[n,:])
+            moduleCenters[n,:] = np.matmul(R, moduleCenters[n,:])
+            rowVecs[n,:] = np.matmul(R, rowVecs[n,:])
+            colVecs[n,:] = np.matmul(R, colVecs[n,:])
+        
+        numAngles = self.get_numAngles()
+        numRows = self.get_numRows()
+        numCols = self.get_numCols()
+        pixelHeight = self.get_pixelHeight()
+        pixelWidth = self.get_pixelWidth()
+        self.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVecs, colVecs)
+        return True
         
     def shift_detector(self, r, c):
         """Shifts the detector by r mm in the row direction and c mm in the column direction by updating the CT geometry parameters accordingly"""
@@ -590,6 +634,214 @@ class tomographicModels:
         self.libprojectors.rebin_curved.restype = ctypes.c_bool
         self.libprojectors.rebin_curved.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
         return self.libprojectors.rebin_curved(g, fanAngles, order)
+    
+    def sinogram_replacement(self, g, priorSinogram, metalTrace, windowSize=None):
+        """ replaces specified region in projection data with other projection data
+        
+        This routine provides a robust solution to metal artifact reduction (MAR).
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data to alter
+	        priorSinogram (C contiguous float32 numpy array or torch tensor): projection data to use for patching
+	        metalTrace (C contiguous float32 numpy array or torch tensor): projection mask showing where to do the patching
+	        windowSize (3-element int array): window size in each of the three dimensions, default is [30, 1, 50]
+            
+        Returns:
+            true if operation was sucessful, false otherwise
+        """
+        
+        if windowSize is None:
+            windowSize = np.array([3, 1, 50], dtype=np.int32)
+            
+        self.set_model()
+        self.libprojectors.sinogram_replacement.restype = ctypes.c_bool
+        if has_torch == True and type(g) is torch.Tensor:
+        
+            if g.is_cuda == True:
+                print('Error: sinogram replacement only implemented for data on CPU!')
+                return False
+                
+            if type(windowSize) is torch.Tensor:
+                windowSize = windowSize.cpu().detach().numpy()
+        
+            self.libprojectors.sinogram_replacement.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
+            return self.libprojectors.sinogram_replacement(g.data_ptr(), priorSinogram.data_ptr(), metalTrace.data_ptr(), windowSize)
+        else:
+            self.libprojectors.sinogram_replacement.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
+            return self.libprojectors.sinogram_replacement(g, priorSinogram, metalTrace, windowSize)
+            
+    def down_sample(self, factors, I, dims=None):
+        """down-samples the given 3D array
+        
+        Args:
+            factors: 3-element array of down-sampling factors
+            I (C contiguous float32 numpy array or torch tensor): data to down-sample
+            
+        Returns:
+            down-sampled array
+        """
+        
+        self.set_model()
+        self.libprojectors.down_sample.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if type(factors) is torch.Tensor:
+                factors = factors.cpu().detach().numpy()
+            elif type(factors) is not np.ndarray:
+                factors = np.array(factors, dtype=np.float32)
+            if factors.size != 3:
+                return None
+            
+            if dims is None:
+                I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+            else:
+                I_dn = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
+            device = torch.device("cuda:" + str(self.get_gpu()))
+            I_dn = torch.from_numpy(I_dn).to(device)
+            self.libprojectors.down_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.down_sample(I.data_ptr(), np.array(I.shape), I_dn.data_ptr(), np.array(I_dn.shape), factors, I.is_cuda == False)
+        else:
+            if type(factors) is not np.ndarray:
+                factors = np.array(factors, dtype=np.float32)
+            if factors.size != 3:
+                return None
+                
+            if dims is None:
+                I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+            else:
+                I_dn = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
+            self.libprojectors.down_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.down_sample(I, np.array(I.shape), I_dn, np.array(I_dn.shape), factors, True)
+        return I_dn
+        
+    def up_sample(self, factors, I, dims=None):
+        """up-samples the given 3D array
+        
+        Args:
+            factors: 3-element array of up-sampling factors
+            I (C contiguous float32 numpy array or torch tensor): data to up-sample
+            
+        Returns:
+            up-sampled array
+        """
+        
+        self.set_model()
+        self.libprojectors.up_sample.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if type(factors) is torch.Tensor:
+                factors = factors.cpu().detach().numpy()
+            elif type(factors) is not np.ndarray:
+                factors = np.array(factors, dtype=np.float32)
+            if factors.size != 3:
+                return None
+            
+            if dims is None:
+                I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
+            else:
+                I_up = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
+            device = torch.device("cuda:" + str(self.get_gpu()))
+            I_up = torch.from_numpy(I_up).to(device)
+            self.libprojectors.up_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.up_sample(I.data_ptr(), np.array(I.shape), I_up.data_ptr(), np.array(I_up.shape), factors, I.is_cuda == False)
+        else:
+            if type(factors) is not np.ndarray:
+                factors = np.array(factors, dtype=np.float32)
+            if factors.size != 3:
+                return None
+                
+            if dims is None:
+                I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
+            else:
+                I_up = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
+            self.libprojectors.up_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.up_sample(I, np.array(I.shape), I_up, np.array(I_up.shape), factors, True)
+        return I_up
+        
+    def scatter_model(self, f, source, energies, detector, sigma, scatterDist, jobType=-1):
+        """simulates first order scatter through an object composed of a single material type (but variable density)
+
+        This is a complicated function and one should refer to the demo script: d31_scatter_correction.py
+        for a full working demonstration.
+        
+        This routine requires that one down-sample the CT detector pixels, volume voxels, and number of source spectra samples.
+        The volume should be no larger than 200^3 voxels
+        The projection data should be no larger than 256^2
+        The source spectra should have no more than 20 samples (we recommend about 10 samples)
+        
+        Note that source and energies are defined on a course grid and the number of samples has an almost
+        linear effect on the computation time of these routines.
+        But detector, sigma, scatterDist are sampled from 1 keV to int(ceil(energies[-1])) in 1 keV bins
+        These three arguments MUST be specified like this and the fine sampling here does not effect computation time
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): volume data in mass density units
+            source (numpy array): source spectra (including response due to filters)
+            energies (numpy array): energy samples for source spectra
+            detector (numpy array): detector response (sampled from 1 keV to int(ceil(energies[-1])) in 1 keV bins)
+            sigma (2D numpy array): sigma[0,:] = sigmaPE, sigma[1,:] = sigmaCS, sigma[2,:] = sigmaRS, energy samples same as detector response
+            scatterDist (3D numpy array): incoherent and coherent scatter distributions [2 x number of energy bins x 181]
+            jobType (int): if -1 estimates scatter correction gain factor, if 1 estimates scatter simulation (adds scatter to data) gain factor, and if 0 estimates scatter transmission
+        
+        Returns:
+            Returns gain factor or scatter transmission numpy array based on the jobType parameter
+        """
+        
+        if self.get_geometry() != 'MODULAR':
+            print('Error: this function only works for modular-beam geometries.  Please use the function\"convert_to_modularbeam()\" prior to running this algorithm to convert your geometry to modular-beam.')
+            return None
+        if len(f.shape) != 3:
+            print('Error: mass density argument must be a 3D numpy or torch tensor.')
+            return None
+        if f.shape[0]*f.shape[1]*f.shape[2] > 200**3:
+            print('Error: number of voxels must be less than 200 x 200 x 200.  Please down-sample volume and try again.')
+            return None
+        if self.get_numCols() * self.get_numRows() > 256**2:
+            print('Error: number of detector pixels must be less than 256 x 256.  Please down-sample projections and try again.')
+            return None
+        if source.size > 20:
+            print('Error: number of energy bins in source spectra must be less than 20.  Please down spectra and try again.')
+            return None
+        if source.size != energies.size:
+            print('Error: \"source\" spectra and \"energies\" must be the same size.')
+            return None
+        maxEnergy = int(np.ceil(energies[-1]))
+        if detector.size != maxEnergy:
+            print('Error: \"detector\" must have exactly ' + str(maxEnergy) + ' bins')
+            return None
+        if sigma.shape[0] != 3 or sigma.shape[1] != maxEnergy:
+            print('Error: \"sigma\" must have exactly 3 x ' + str(maxEnergy) + ' bins')
+            return None
+        if scatterDist.shape[0] != 2 or scatterDist.shape[1] != maxEnergy or scatterDist.shape[2] != 181:
+            print('Error: \"scatterDist\" must have exactly 2 x ' + str(maxEnergy) + ' x 181 bins')
+            return None
+                
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            g = self.allocate_projections(0.0, True)
+            
+            if f.is_cuda:
+                g = g.to(f.get_device())
+            
+            if type(source) is torch.Tensor:
+                source = source.cpu().detach().numpy()
+            if type(energies) is torch.Tensor:
+                energies = energies.cpu().detach().numpy()
+            if type(detector) is torch.Tensor:
+                detector = detector.cpu().detach().numpy()
+            if type(sigma) is torch.Tensor:
+                sigma = sigma.cpu().detach().numpy()
+            if type(scatterDist) is torch.Tensor:
+                scatterDist = scatterDist.cpu().detach().numpy()
+            
+            self.libprojectors.scatter_model.restype = ctypes.c_bool
+            self.libprojectors.scatter_model.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int]
+            self.libprojectors.scatter_model(g.data_ptr(), f.data_ptr(), source, energies, energies.size, detector, sigma, scatterDist, g.is_cuda == False, jobType)
+            
+        else:
+            g = self.allocate_projections()
+            self.libprojectors.scatter_model.restype = ctypes.c_bool
+            self.libprojectors.scatter_model.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int]
+            self.libprojectors.scatter_model(g, f, source, energies, energies.size, detector, sigma, scatterDist, True, jobType)
+        return g
     
     ###################################################################################################################
     ###################################################################################################################
@@ -676,12 +928,40 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_numZ(numZ)
         
+    def set_numY(self, numY):
+        """Set the number of voxels in the y-dimension"""
+        self.libprojectors.set_numY.argtypes = [ctypes.c_int]
+        self.libprojectors.set_numY.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_numY(numY)
+        
+    def set_numX(self, numX):
+        """Set the number of voxels in the x-dimension"""
+        self.libprojectors.set_numX.argtypes = [ctypes.c_int]
+        self.libprojectors.set_numX.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_numX(numX)
+        
     def set_offsetZ(self, offsetZ):
         """Set offsetZ parameter which defines the central z-slice location (mm) of the volume"""
         self.libprojectors.set_offsetZ.argtypes = [ctypes.c_float]
         self.libprojectors.set_offsetZ.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_offsetZ(offsetZ)
+        
+    def set_voxelHeight(self, H):
+        """Sets the voxel height (mm) parameter"""
+        self.libprojectors.set_voxelHeight.argtypes = [ctypes.c_float]
+        self.libprojectors.set_voxelHeight.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_voxelHeight(H)
+        
+    def set_voxelWidth(self, W):
+        """Sets the voxel width (mm) parameter"""
+        self.libprojectors.set_voxelWidth.argtypes = [ctypes.c_float]
+        self.libprojectors.set_voxelWidth.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_voxelWidth(W)
         
     ###################################################################################################################
     ###################################################################################################################
@@ -888,6 +1168,19 @@ class tomographicModels:
             return x_copy
         else:
             return x.copy()
+            
+    def copy_to_device(self, x):
+        """Copies the given argument to a torch tensor on the primary gpu"""
+        if has_torch == False:
+            print('Error: pytorch not installed')
+            return x
+        else:
+            device = torch.device("cuda:" + str(self.get_gpu()))
+            if type(x) is torch.Tensor:
+                x = x.to(device)
+            else:
+                x = torch.from_numpy(x).to(device)
+            return x
     
     ###################################################################################################################
     ###################################################################################################################
@@ -1528,6 +1821,9 @@ class tomographicModels:
         return rowsNeeded
         
     def cropCols(self, colRange, g=None):
+        return self.crop_cols(colRange, g)
+        
+    def crop_cols(self, colRange, g=None):
         """Crops columns from projection data
         
         This function crops columns from the projection data.
@@ -1564,8 +1860,11 @@ class tomographicModels:
         else:
             g_crop = None
         return g_crop
-        
+    
     def cropRows(self, rowRange, g=None):
+        return self.crop_rows(rowRange, g)
+    
+    def crop_rows(self, rowRange, g=None):
         """Crops rows from projection data
         
         This function crops rows from the projection data.
@@ -1604,6 +1903,9 @@ class tomographicModels:
         return g_crop
         
     def cropProjections(self, rowRange, colRange=None, g=None):
+        return self.crop_projections(rowRange, colRange, g)
+        
+    def crop_projections(self, rowRange, colRange=None, g=None):
         """Crops rows and columns from projection data
         
         This function crops rows and columns from the projection data.
@@ -1648,6 +1950,174 @@ class tomographicModels:
         else:
             g_crop = None
         return g_crop
+    
+    def down_sample_projections(self, factors, g=None):
+        """down-samples the given projection data
+
+        This function applies an anti-aliasing filter and down-samples projection data and updates the CT geometry parameters accordingly
+        
+        Args:
+            factors: 3-element array of down-sampling factors
+            g (C contiguous float32 numpy array or torch tensor): projection data to down-sample
+            
+        Returns:
+            down-sampled array (if projection data was provided in the arguments)
+        """
+        if factors[0] != 1.0:
+            print('Error: cannot down-sample the projection angle dimension')
+            return None
+
+        pixelHeight = self.get_pixelHeight()*factors[1]
+        pixelWidth = self.get_pixelWidth()*factors[2]        
+        if g is not None:
+            g_dn = self.down_sample(factors, g)
+            numRows = g_dn.shape[1]
+            numCols = g_dn.shape[2]
+        else:
+            g_dn = None
+            numRows = int(self.get_numRows()/factors[1])
+            numCols = int(self.get_numCols()/factors[2])
+
+        row_shift = (self.get_centerRow() - 0.5*float(self.get_numRows()-1))*self.get_pixelHeight()
+        col_shift = (self.get_centerCol() - 0.5*float(self.get_numCols()-1))*self.get_pixelWidth()
+
+        centerRow = row_shift/pixelHeight + 0.5*float(numRows-1)
+        centerCol = col_shift/pixelWidth + 0.5*float(numCols-1)
+        
+        self.set_pixelHeight(pixelHeight)        
+        self.set_pixelWidth(pixelWidth)
+        self.set_numRows(numRows)
+        self.set_numCols(numCols)
+        
+        self.set_centerRow(centerRow)
+        self.set_centerCol(centerCol)
+        
+        return g_dn
+        
+    def up_sample_projections(self, factors, g=None, dims=None):
+        """up-samples the given projection data
+
+        This function up-samples projection data and updates the CT geometry parameters accordingly
+        
+        Args:
+            factors: 3-element array of up-sampling factors
+            g (C contiguous float32 numpy array or torch tensor): projection data to up-sample
+            
+        Returns:
+            up-sampled array (if projection data was provided in the arguments)
+        """
+        if factors[0] != 1.0:
+            print('Error: cannot up-sample the projection angle dimension')
+            return None
+
+        pixelHeight = self.get_pixelHeight()/factors[1]
+        pixelWidth = self.get_pixelWidth()/factors[2]
+        if g is not None:
+            g_dn = self.up_sample(factors, g, dims)
+            numRows = g_dn.shape[1]
+            numCols = g_dn.shape[2]
+        else:
+            g_dn = None
+            numRows = int(self.get_numRows()*factors[1])
+            numCols = int(self.get_numCols()*factors[2])
+            
+        row_shift = (self.get_centerRow() - 0.5*float(self.get_numRows()-1))*self.get_pixelHeight()
+        col_shift = (self.get_centerCol() - 0.5*float(self.get_numCols()-1))*self.get_pixelWidth()
+
+        centerRow = row_shift/pixelHeight + 0.5*float(numRows-1)
+        centerCol = col_shift/pixelWidth + 0.5*float(numCols-1)
+        
+        self.set_pixelHeight(pixelHeight)        
+        self.set_pixelWidth(pixelWidth)
+        self.set_numRows(numRows)
+        self.set_numCols(numCols)
+        if self.get_geometry() != 'MODULAR':
+            self.set_centerRow(centerRow)
+            self.set_centerCol(centerCol)
+        
+        return g_dn
+        
+    def down_sample_volume(self, factors, f=None):
+        """down-samples the given volume data
+
+        This function applies an anti-aliasing filter and down-samples volume data and updates the CT volume parameters accordingly
+        
+        Args:
+            factors: 3-element array of down-sampling factors
+            f (C contiguous float32 numpy array or torch tensor): volume data to down-sample
+            
+        Returns:
+            down-sampled array (if volume data was provided in the arguments)
+        """
+        if factors[2] != factors[1]:
+            print('Error: voxel pitch must be the same in x and y dimensions')
+            return None
+        #geomText = self.get_geometry()
+        #if factors[2] != 1.0 and geomText == 'FAN' or geomText == 'PARALLEL':
+        #    print('Error: cannot change the voxel pitch in the z dimension for parallel- and fan-beam')
+        #    return None
+        
+        voxelHeight = self.get_voxelHeight()*factors[0]
+        voxelWidth = self.get_voxelWidth()*factors[1]
+        if f is not None:
+            f_dn = self.down_sample(factors, f)
+            numZ = f_dn.shape[0]
+            numY = f_dn.shape[1]
+            numX = f_dn.shape[2]
+        else:
+            f_dn = None
+            numZ = int(self.get_numZ()/factors[0])
+            numY = int(self.get_numY()/factors[1])
+            numX = int(self.get_numX()/factors[2])
+        
+        self.set_voxelHeight(voxelHeight)        
+        self.set_voxelWidth(voxelWidth)
+        self.set_numZ(numZ)
+        self.set_numY(numY)
+        self.set_numX(numX)
+        
+        return f_dn
+        
+    def up_sample_volume(self, factors, f=None, dims=None):
+        """up-samples the given volume data
+
+        This function up-samples volume data and updates the CT volume parameters accordingly
+        
+        Args:
+            factors: 3-element array of up-sampling factors
+            f (C contiguous float32 numpy array or torch tensor): volume data to up-sample
+            
+        Returns:
+            up-sampled array (if volume data was provided in the arguments)
+        """
+        if factors[2] != factors[1]:
+            print('Error: voxel pitch must be the same in x and y dimensions')
+            return None
+        #geomText = self.get_geometry()
+        #if factors[2] != 1.0 and geomText == 'FAN' or geomText == 'PARALLEL':
+        #    print('Error: cannot change the voxel pitch in the z dimension for parallel- and fan-beam')
+        #    return None
+        
+        voxelHeight = self.get_voxelHeight()/factors[0]
+        voxelWidth = self.get_voxelWidth()/factors[1]
+        if f is not None:
+            f_up = self.up_sample(factors, f, dims)
+            numZ = f_dn.shape[0]
+            numY = f_dn.shape[1]
+            numX = f_dn.shape[2]
+        else:
+            f_up = None
+            numZ = int(self.get_numZ()*factors[0])
+            numY = int(self.get_numY()*factors[1])
+            numX = int(self.get_numX()*factors[2])
+        
+        self.set_voxelHeight(voxelHeight)        
+        self.set_voxelWidth(voxelWidth)
+        self.set_numZ(numZ)
+        self.set_numY(numY)
+        self.set_numX(numX)
+        
+        return f_up
     
     ###################################################################################################################
     ###################################################################################################################
@@ -1745,7 +2215,7 @@ class tomographicModels:
                     g_subsets.append(g_subset)
             return g_subsets
     
-    def MLEM(self, g, f, numIter, mask=None):
+    def MLEM(self, g, f, numIter, filters=None, mask=None):
         """Maximum Likelihood-Expectation Maximization reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1757,6 +2227,7 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
+            filters (filterSequence object): list of differentiable regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
             
         
@@ -1792,10 +2263,14 @@ class tomographicModels:
             if mask is not None:
                 Pd[:] = Pd[:] * mask[:]
             self.backproject(Pd,d)
-            f *= d/Pstar1
+            if filters is None:
+                f *= d/Pstar1
+            else:
+                f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
+                
         return f
     
-    def OSEM(self, g, f, numIter, numSubsets=1, mask=None):
+    def OSEM(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
         """Ordered Subsets-Expectation Maximization reconstruction
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -1808,6 +2283,7 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
+            filters (filterSequence object): list of differentiable regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
@@ -1865,7 +2341,12 @@ class tomographicModels:
                     if mask_subsets is not None:
                         Pd[:] = Pd[:] * mask_subsets[m][:]
                     self.backproject(Pd,d)
-                    f *= d/Pstar1
+                    
+                    if filters is None:
+                        f *= d/Pstar1
+                    else:
+                        f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f)/float(numSubsets))
+                    
             subsetParams.setSubset(-1)
             return f
         
@@ -2765,6 +3246,33 @@ class tomographicModels:
             self.libprojectors.convertToRhoeZe(f_L, f_H, f_L.shape[0], f_L.shape[1], f_L.shape[2], sigma_L, sigma_H, True)
         return f_L, f_H
     
+    def synthesize_symmetry(self, f_radial):
+        """Converts symmetric volume to a 3D volume
+        
+        Args:
+            f_radial (C contiguous float32 numpy array): symmetric volume numpy array
+            
+        Returns:
+            3D volume
+        """
+        
+        dim1, dim2, dim3 = self.get_volume_dim()
+        if dim1 <= 0 or dim2 <= 0 and dim3 <= 0:
+            print('Error: CT volume parameters not set')
+            return None
+        
+        if has_torch == True and type(f_radial) is torch.Tensor:
+            print('Error: not yet implemented for pytorch tensors')
+            return None
+        else:
+            f = np.ascontiguousarray(np.zeros((dim1,dim2,dim2),dtype=np.float32), dtype=np.float32)
+            
+            self.libprojectors.synthesize_symmetry.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.synthesize_symmetry.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.synthesize_symmetry(f_radial, f)
+            return f
+    
     def BlurFilter(self, f, FWHM=2.0):
         """Applies a blurring filter to the provided numpy array
         
@@ -2773,7 +3281,7 @@ class tomographicModels:
         This filter is very simular to a Gaussian filter, but is a FIR
         
         Args:
-            f (C contiguous float32 numpy array): numpy array to smooth
+            f (C contiguous float32 numpy array or torch tensor): numpy array to smooth
             FWHM (float): the full width at half maximum (in number of pixels) of the filter
         
         Returns:
@@ -3243,6 +3751,20 @@ class tomographicModels:
         self.libprojectors.set_numRows.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_numRows(numRows)
+        
+    def set_pixelHeight(self, H):
+        """Sets the detector pixel height (mm)"""
+        self.libprojectors.set_pixelHeight.argtypes = [ctypes.c_float]
+        self.libprojectors.set_pixelHeight.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_pixelHeight(H)
+        
+    def set_pixelWidth(self, W):
+        """Sets the detector pixel width (mm)"""
+        self.libprojectors.set_pixelWidth.argtypes = [ctypes.c_float]
+        self.libprojectors.set_pixelWidth.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_pixelWidth(W)
 
     ###################################################################################################################
     ###################################################################################################################

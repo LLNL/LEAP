@@ -14,12 +14,14 @@
 #include <string>
 #include <vector>
 
-#include "cuda_runtime.h"
 #include "parameters.h"
 
 /**
  * This header and associated source file are for generic GPU-based functions that are used in LEAP
  */
+
+#ifndef __USE_CPU
+#include "cuda_runtime.h"
 
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
@@ -45,6 +47,8 @@ extern float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU);
 extern bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU);
 extern float* copy3DdataToGPU(float* g, int3 N, int whichGPU);
 extern bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU);
+extern float* copy1DdataToGPU(float* x, int N, int whichGPU);
+extern bool* copy1DbooleanToGPU(bool* x, int N, int whichGPU);
 
 extern float* copyAngleArrayToGPU(parameters* params);
 bool setProjectionGPUparams(parameters*, int4&, float4&, float4&, bool doNormalize = false);
@@ -76,5 +80,10 @@ bool windowFOV_gpu(float* f, parameters* params);
 
 bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu);
 bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu);
+#else
+extern int numberOfGPUs();
+extern float getAvailableGPUmemory(int whichGPU);
+extern float getAvailableGPUmemory(std::vector<int> whichGPUs);
+#endif
 
 #endif

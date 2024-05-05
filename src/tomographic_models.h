@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.9"
+#define LEAP_VERSION "1.10"
 
 #include <stdlib.h>
 #include "parameters.h"
@@ -820,7 +820,68 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool rebin_curved(float* g, float* fanAngles, int order = 6);
+
+	/**
+	 * \fn          sinogram_replacement
+	 * \brief       replaces specified region in projection data with other projection data
+	 * \param[in]   g, pointer to the projection data to alter
+	 * \param[in]	priorSinogram, poiner to the projection data to use for patching
+	 * \param[in]	metalTrace, pointer to projection mask showing where to do the patching
+	 * \param[in]   windowSize, 3-element int array of the window size in each of the three dimensions
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize);
 	
+	/**
+	 * \fn          down_sample
+	 * \brief       down-samples 3D array
+	 * \param[in]   I, pointer to the original data
+	 * \param[in]	N, 3-element array of the size of each dimension of the original data
+	 * \param[in]	I_dn, pointer to the output (down-sampled) 3D array
+	 * \param[in]	N_dn, 3-element array of the size of each dimension of the down-sampled data
+	 * \param[in]	factors, 3-element array of the down-sampling factors in each dimension
+	 * \param[in]	data_on_cpu true if data (I and I_dn) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, bool data_on_cpu);
+
+	/**
+	 * \fn          up_sample
+	 * \brief       up-samples 3D array
+	 * \param[in]   I, pointer to the original data
+	 * \param[in]	N, 3-element array of the size of each dimension of the original data
+	 * \param[in]	I_up, pointer to the output (up-sampled) 3D array
+	 * \param[in]	N_up, 3-element array of the size of each dimension of the up-sampled data
+	 * \param[in]	factors, 3-element array of the up-sampling factors in each dimension
+	 * \param[in]	data_on_cpu true if data (I and I_up) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu);
+
+	/**
+	 * \fn          scatter_model
+	 * \brief       simulates first order scatter through an object composed of a single material type
+	 * \param[in]   g, pointer to store the simulated scatter data
+	 * \param[in]	f, pointer to the mass density volume (g/mm^3)
+	 * \param[in]	source, pointer to the source spectra
+	 * \param[in]	energies, pointer to the energy bins in the source spectra model
+	 * \param[in]	N_energies: number of energy bins
+	 * \param[in]	detector, pointer to the detector response in 1 keV bins
+	 * \param[in]	sigma, pointer to the PE, CS, and RS cross sections in 1 keV bins
+	 * \param[in]	scatterDist, pointer to the normalized CS and RS distributions sampled in 1 keV bins and 0.1 degree angular bins
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool scatter_model(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType);
+
+	/**
+	 * \fn          synthesize_symmetry
+	 * \brief       converts a symmetric object into a 3D volume
+	 * \param[in]   f_radial: pointer to the radial volume
+	 * \param[in]	f: pointer to the 3D volume
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool synthesize_symmetry(float* f_radial, float* f);
+
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool backprojectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

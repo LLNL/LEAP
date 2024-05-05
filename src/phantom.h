@@ -58,6 +58,7 @@ public:
 
     // Constructor and destructor; these do nothing
     phantom();
+    phantom(parameters*);
     ~phantom();
 
     /**
@@ -94,6 +95,8 @@ public:
     void clearObjects();
 
     double lineIntegral(double* p, double* r);
+
+    bool synthesizeSymmetry(float* f_radial, float* f);
 
     // enumerated list of all the 3D geometric shapes that are supported
     enum objectType_list { ELLIPSOID = 0, PARALLELEPIPED = 1, CYLINDER_X = 2, CYLINDER_Y = 3, CYLINDER_Z = 4, CONE_X = 5, CONE_Y = 6, CONE_Z = 7 };
