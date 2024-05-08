@@ -117,7 +117,7 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
     
     Args:
         g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
-        H (contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
+        H (2D contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
         WienerParam (float): Parameter for Wiener deconvolution, number should be between 0.0 and 1.0
         isAttenuationData (bool): True if g is attenuation data, False otherwise
     
@@ -147,7 +147,7 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
     
     Args:
         g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
-        H (contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
+        H (2D contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
         numIter (int): Number of iterations
         isAttenuationData (bool): True if g is attenuation data, False otherwise
     

@@ -143,7 +143,7 @@ class BilateralFilter(denoisingFilter):
         self.isDifferentiable = False
         
     def apply(self, f):
-        return self.leapct.BilateralFilter(f, self.spatialFWHM, self.intensityFWHM, self.scale)
+        return self.leapct.PriorBilateralFilter(f, self.spatialFWHM, self.intensityFWHM, self.scale)
         
 class MedianFilter(denoisingFilter):
     """This class defines a filter based on leapct.tomographicModels.MedianFilter
@@ -575,7 +575,13 @@ class filterSequence:
         
         """
         self.filters.append(newFilter)
-        
+    
+    def anyDifferentiable(self):
+        for n in range(len(self.filters)):
+                if self.filters[n].isDifferentiable == True:
+                    return True
+        return False
+    
     def clear(self):
         """Removes all filters from the list"""
         self.filters = []

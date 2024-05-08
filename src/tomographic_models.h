@@ -734,6 +734,21 @@ public:
 	bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu);
 
 	/**
+	 * \fn          PriorBilateralFilter
+	 * \brief       applies a 3D bilateral filter (BLF) to a 3D array where the intensity distance is measured against a prior image
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   spatialFWHM the FWHM (in number of pixels) of the spatial closeness term of the BLF
+	 * \param[in]   intensityFWHM the FWHM of the intensity closeness terms of the BLF
+	 * \param[in]   prior pointer to 3D data prior
+	 * \param[in]   data_on_cpu true if data (f and prior) is on the cpu, false if they are both on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* prior, bool data_on_cpu);
+
+	/**
 	 * \fn          dictionaryDenoising
 	 * \brief       represents 3D data by a sparse representation of an overcomplete dictionary
 	 * \param[in]   f pointer to the 3D data (input and output)

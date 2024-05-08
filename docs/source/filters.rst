@@ -15,4 +15,5 @@ Filters Applied to Arbitrary 3D Arrays
 .. autofunction:: leapctype.tomographicModels.TVquadForm
 .. autofunction:: leapctype.tomographicModels.diffuse
 .. autofunction:: leapctype.tomographicModels.BilateralFilter
+.. autofunction:: leapctype.tomographicModels.PriorBilateralFilter
 .. autofunction:: leapctype.tomographicModels.DictionaryDenoising

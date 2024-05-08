@@ -646,9 +646,9 @@ class tomographicModels:
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data to alter
-	        priorSinogram (C contiguous float32 numpy array or torch tensor): projection data to use for patching
-	        metalTrace (C contiguous float32 numpy array or torch tensor): projection mask showing where to do the patching
-	        windowSize (3-element int array): window size in each of the three dimensions, default is [30, 1, 50]
+            priorSinogram (C contiguous float32 numpy array or torch tensor): projection data to use for patching
+            metalTrace (C contiguous float32 numpy array or torch tensor): projection mask showing where to do the patching
+            windowSize (3-element int array): window size in each of the three dimensions, default is [30, 1, 50]
             
         Returns:
             true if operation was sucessful, false otherwise
@@ -1159,7 +1159,9 @@ class tomographicModels:
         
         It is not necessary to use this function. It is included simply for convenience.
         LEAP allows one to specify non-equispaced projection angles for all geometries
-        If one wishes to do this, do not use this function, but specify them yourself in a numpy array as an argument to set_parallelbeam, set_fanbeam, or set_coneBeam
+        If one wishes to do this, do not use this function, but specify them yourself in a numpy array as an argument to set_parallelbeam, set_fanbeam, or set_coneBeam.
+        In any case, angles must be strictly monotonic increasing or monotonic decreasing.
+        If doing multiple revolutions, angles should just keep going past 360.0.
 
         Args:
             numAngles (int): number of projections
@@ -1357,7 +1359,14 @@ class tomographicModels:
         return f
         
     def filterProjections(self, g):
-        """Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction
+        r"""Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction.
+        
+        More specifically, the same results as the FBP function can be achieved by running the following functions
+        
+        .. line-block::
+           filterProjections(f)
+           weightedBackproject(g,f)
+           f \*= get_FBPscalar()
         
         The CT geometry parameters must be set prior to running this function.
         This function take the argument g and returns the same g.
@@ -1380,7 +1389,7 @@ class tomographicModels:
         return g
         
     def rampFilterProjections(self, g):
-        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function
+        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function.
         
         The CT geometry parameters must be set prior to running this function.
         This function take the argument g and returns the same g.
@@ -1439,7 +1448,7 @@ class tomographicModels:
         for FBP reconstruction, we still recommend using this function to perform two-step FBP reconstructions
         because it performs some subtle operations that are only appropriate for FBP reconstruction; for example,
         using extrapolation in the row direction for axial cone-beam FBP (FDK).
-        Don't forget to scale your reconstruction by get_FBPscalar().
+        Don't forget to scale your reconstruction by get_FBPscalar() to get an quantitatively accurate result.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
@@ -1512,7 +1521,19 @@ class tomographicModels:
             return f
         
     def Laplacian(self, g, numDims=2, smoothLaplacian=False):
-        """Applies a Laplacian operation to each projection"""
+        """Applies a Laplacian operation to each projection
+        
+        The CT geometry parameters must be set prior to running this function.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            numDims (int): if 2 calculates the sum of the second derivatives along the rows and columns, if 1 calculates the second derivative along the columns
+            smoothLaplacian (bool): if true, applies an extra low pass filter (given by [0.25, 0.5, 0.25]) to smooth the result
+            
+        Returns:
+            g, the same as the input
+        
+        """
         self.libprojectors.Laplacian.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
@@ -1524,7 +1545,19 @@ class tomographicModels:
         return g
         
     def transmission_filter(self, g, H, isAttenuationData=True):
-        """Applies a 2D Filter to each transmission projection"""
+        """Applies a 2D Filter to each transmission projection
+        
+        The CT geometry parameters must be set prior to running this function.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            H (C contiguous float32 2D numpy array): frequency response of filter (must be real-valued)
+            isAttenuationData (bool): true if the input data is attenuation data, false if it is not (e.g., transmission, raw)
+        
+        Returns:
+            g, the same as the input
+        
+        """
         self.libprojectors.transmissionFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
@@ -1539,6 +1572,8 @@ class tomographicModels:
         
     def AzimuthalBlur(self, f, FWHM):
         """Applies an low pass filter to the volume data in the azimuthal direction, f, for each z-slice
+        
+        The CT volume parameters must be set prior to running this function.
         
         Args:
             f (C contiguous float32 numpy array or torch tensor): volume data
@@ -1572,8 +1607,9 @@ class tomographicModels:
     def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
         
-        This function performs analytic reconstruction (i.e., FBP) of parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries.
-        Note that FDK is an FBP-type algorithm, so for simplicity we just called it FBP in LEAP.
+        This function performs analytic reconstruction (i.e., FBP) of nearly all LEAP geometries: parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries,
+        including both flat and curved detectors, axial or helical scans, Attenuated Radon Transform, symmetric object, etc.
+        Note that FDK is an FBP-type algorithm, so for simplicity we just called it FBP in LEAP.  The same goes for other analytic reconstructions.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function take the argument f and returns the same f.
@@ -2294,7 +2330,17 @@ class tomographicModels:
             if filters is None:
                 f *= d/Pstar1
             else:
-                f *= d/self.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
+                if filters.anyDifferentiable():
+                    f *= d/self.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
+                else:
+                    f *= d/Pstar1
+                    if filters.beta > 0.0 and filters.beta < 1.0:
+                        f_save = self.copyData(f)
+                        filters.apply(f)
+                        f[:] = filters.beta*f[:] + (1.0-filters.beta)*f_save[:]
+                    else:
+                        filters.apply(f)
+                    f[f<0.0] = 0.0
                 
         return f
     
@@ -3347,7 +3393,18 @@ class tomographicModels:
             return self.libprojectors.applyDualTransferFunction(x, y, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.shape[1], True)
     
     def convertToRhoeZe(self, f_L, f_H, sigma_L, sigma_H):
-        """transforms a low and high energy pair to electron density and effective atomic number"""
+        """transforms a low and high energy pair to electron density and effective atomic number
+        
+        Args:
+            f_L (3D C contiguous float32 numpy array or torch tensor): low energy volume in LAC units
+            f_H (3D C contiguous float32 numpy array or torch tensor): high energy volume in LAC units
+            sigma_L (3D C contiguous float32 numpy array or torch tensor): mass cross section values for elements 1-100 at the low energy
+            sigma_H (3D C contiguous float32 numpy array or torch tensor): mass cross section values for elements 1-100 at the high energy
+        
+        Returns:
+            the Ze and rho volumes
+        
+        """
         #bool convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu)
         self.libprojectors.convertToRhoeZe.restype = ctypes.c_bool
         self.set_model()
@@ -3361,6 +3418,8 @@ class tomographicModels:
     
     def synthesize_symmetry(self, f_radial):
         """Converts symmetric volume to a 3D volume
+        
+        The CT volume parameters must be set prior to running this function and must be specified as symmetric.
         
         Args:
             f_radial (C contiguous float32 numpy array): symmetric volume numpy array
@@ -3517,8 +3576,35 @@ class tomographicModels:
             self.libprojectors.MedianFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.MedianFilter2D(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
     
+    def PriorBilateralFilter(self, f, spatialFWHM, intensityFWHM, prior=None):
+        """Performs 3D Bilateral Filter (BLF) denoising method where the intensity distance is measured against a prior image
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
+            spatialFWHM (float): the FWHM (in number of pixels) of the spatial closeness term of the BLF
+            intensityFWHM (float): the FWHM of the intensity closeness terms of the BLF
+            prior (C contiguous float32 numpy array or torch tensor): 3D data prior used for the intensity distance
+        
+        Returns:
+            f, the same as the input
+        
+        """
+        if prior is None or isinstance(prior, (int, float)):
+            return BilateralFilter(f, spatialFWHM, intensityFWHM, prior)
+            
+        self.libprojectors.PriorBilateralFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.PriorBilateralFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_void_p, ctypes.c_bool]
+            return self.libprojectors.PriorBilateralFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, prior.data_ptr(), f.is_cuda == False)
+        else:
+            self.libprojectors.PriorBilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            return self.libprojectors.PriorBilateralFilter(f, f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, prior, True)
+    
     def BilateralFilter(self, f, spatialFWHM, intensityFWHM, scale=1.0):
-        """Performs 3D (Scaled) Bilateral Filter denoising method
+        """Performs 3D (Scaled) Bilateral Filter (BLF) denoising method
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         
