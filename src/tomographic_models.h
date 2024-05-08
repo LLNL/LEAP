@@ -663,6 +663,19 @@ public:
 	bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
 
 	/**
+	 * \fn          HighPassFilter
+	 * \brief       applies a 3D high pass filter
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   FWHM full width at half maximum of the filter (measured in number of voxels)
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool HighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
+
+	/**
 	 * \fn          BlurFilter2D
 	 * \brief       applies a 2D low pass filter to the second two dimensions of a 3D array
 	 * \param[in]   f pointer to the 3D data (input and output)

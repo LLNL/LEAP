@@ -87,6 +87,7 @@ class denoisingFilter:
             if denom <= 1.0e-16:
                 return f
             stepSize = num / denom
+            #print('stepSize = ' + str(stepSize) + ' = ' + str(num) + ' / ' + str(denom))
             f -= stepSize * d
             return f
         else:
@@ -218,7 +219,8 @@ class TV(denoisingFilter):
         
     def apply(self, f):
         if self.f_0 is not None:
-            self.leapct.diffuse(f-self.f_0, self.delta, 1, self.p)
+            f[:] -= self.f_0[:]
+            self.leapct.diffuse(f, self.delta, 1, self.p)
             f[:] += self.f_0[:]
             return f
         else:
@@ -233,56 +235,135 @@ class LpNorm(denoisingFilter):
         weight (float): the regularizaion strength of this denoising filter term
         f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates ||f-f_0||_p^p
     """
-    def __init__(self, leapct, p=1.0, weight=1.0, f_0=None):
+    def __init__(self, leapct, delta=0.0, p=1.0, weight=1.0, f_0=None, FWHM=0.0):
         super(LpNorm, self).__init__(leapct)
         """Constructor for LpNorm class
         
         This constructor sets the following:
         leapct (object of the tomographicModels class)
+        delta (float): parameter for the Huber-like loss function
         p (float): The p-value of the L_p norm
         weight (float): the regularizaion strength of this denoising filter term
         f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates ||f-f_0||_p^p
         """
         
+        self.delta = delta
         self.p = max(0.01, p)
         self.weight = weight
         self.f_0 = f_0
+        self.FWHM = FWHM
         self.isDifferentiable = True
         
-    def cost(self, f):
-        if self.f_0 is not None:
-            return self.weight * self.leapct.sum(self.leapct.abs(f-self.f_0)**self.p)
+        self.HuberSlope = (self.delta**(2.0 - self.p)) / self.p
+        self.HuberShift = (self.delta*self.delta*(0.5 - 1.0/self.p))
+        
+    def Huber(self, x):
+        #torch.nan_to_num
+        
+        if has_torch == True and type(x) is torch.Tensor:
+            ind = self.leapct.abs(x) <= self.delta
+            return ind*(0.5*x*x) + (~ind)*(self.HuberSlope*self.leapct.abs(x)**self.p + self.HuberShift)
         else:
-            return self.weight * self.leapct.sum(self.leapct.abs(f)**self.p)
+            return np.piecewise(x, [self.leapct.abs(x) <= self.delta, self.leapct.abs(x) > self.delta], [lambda x: 0.5*x*x, lambda x: self.HuberSlope*self.leapct.abs(x)**self.p + self.HuberShift])
+        
+    def DHuber(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            ind = self.leapct.abs(x) <= self.delta
+            #return ind*(x) + (~ind)*(self.p * self.HuberSlope * (self.leapct.abs(x)**self.p) / self.leapct.maximum(self.delta, x))
+            return ind*(x) + (~ind)*torch.nan_to_num(self.p * self.HuberSlope * (self.leapct.abs(x)**self.p) / x)
+        else:
+            return np.piecewise(x, [self.leapct.abs(x) <= self.delta, self.leapct.abs(x) > self.delta], [lambda x: x, lambda x: self.p * self.HuberSlope * (self.leapct.abs(x)**self.p) / x])
+        
+    def DDHuber(self, x):
+        if has_torch == True and type(x) is torch.Tensor:
+            ind = self.leapct.abs(x) <= self.delta
+            return ind*1.0 + (~ind)*torch.nan_to_num(self.p * self.HuberSlope * self.leapct.abs(x)**(self.p-2.0))
+            #return ind*1.0 + (~ind)*(self.p * self.HuberSlope * (self.leapct.maximum(self.delta, self.leapct.abs(x))**(self.p-2.0)))
+        else:
+            return np.piecewise(x, [self.leapct.abs(x) <= self.delta, self.leapct.abs(x) > self.delta], [lambda x: 1.0, lambda x: self.p * self.HuberSlope * (self.leapct.abs(x)**(self.p-2.0))])
+        
+    def cost(self, f):
+        f_copy = self.leapct.copyData(f)
+        if self.f_0 is not None:
+            f_copy[:] -= self.f_0[:]
+        
+        if self.FWHM > 1.0:
+            self.leapct.BlurFilter(f_copy, self.FWHM)
+        elif self.FWHM < -1.0:
+            self.leapct.HighPassFilter(f_copy, -self.FWHM)
+        return self.weight * self.leapct.sum(self.Huber(f_copy))
         
     def gradient(self, f):
         Df = self.leapct.copyData(f)
         if self.f_0 is not None:
             Df[:] -= self.f_0[:]
-        #    return self.p * self.leapct.sign(f-self.f_0) * self.leapct.abs(f-self.f_0)**(self.p-1.0)
-        #else:
-        #    return self.p * self.leapct.sign(f) * self.leapct.abs(f)**(self.p-1.0)
-        ind = Df > 0.0
-        Df[ind] = self.weight * self.p * self.leapct.sign(Df[ind]) * self.leapct.abs(Df[ind])**(self.p-1.0)
-        return Df
+        if np.abs(self.FWHM) > 1.0:
+            if self.FWHM > 1.0:
+                self.leapct.BlurFilter(Df, self.FWHM)
+            else:
+                self.leapct.HighPassFilter(Df, np.abs(self.FWHM))
+            #print('range: ' + str(torch.min(Df)) + ' ' + str(torch.max(Df)))
+            
+            '''
+            ind = Df != 0.0
+            if self.p == 1.0:
+                Df[ind] = self.weight * self.p * self.leapct.sign(Df[ind])
+            else:
+                Df[ind] = self.weight * self.p * self.leapct.sign(Df[ind]) * self.leapct.abs(Df[ind])**(self.p-1.0)
+            '''
+            Df = self.weight * self.DHuber(Df)
+            
+            if self.FWHM > 1.0:
+                self.leapct.BlurFilter(Df, self.FWHM)
+            else:
+                self.leapct.HighPassFilter(Df, np.abs(self.FWHM))
+            return Df
+        else:
+            '''
+            ind = Df != 0.0
+            if self.p == 1.0:
+                Df[ind] = self.weight * self.p * self.leapct.sign(Df[ind])
+            else:
+                Df[ind] = self.weight * self.p * self.leapct.sign(Df[ind]) * self.leapct.abs(Df[ind])**(self.p-1.0)
+            '''
+            Df = self.weight * self.DHuber(Df)
+            return Df
         
     def quadForm(self, f, d):
+    
+        f_copy = self.leapct.copyData(f)
         if self.f_0 is not None:
-            f_copy = self.leapct.copyData(f)
-            f_copy[:] = f_copy[:] - self.f_0[:]
+            f_copy[:] -= self.f_0[:]
+        
+        if np.abs(self.FWHM) > 1.0:
+            Bd = self.leapct.copyData(d)
+            if self.FWHM > 1.0:
+                self.leapct.BlurFilter(f_copy, self.FWHM)
+                self.leapct.BlurFilter(Bd, self.FWHM)
+            else:
+                self.leapct.HighPassFilter(f_copy, -self.FWHM)
+                self.leapct.HighPassFilter(Bd, -self.FWHM)
+            
+            '''
             ind = f_copy == 0.0
             f_copy[ind] = 1.0
             f_copy = self.leapct.abs(f_copy)**(self.p-2.0)
             f_copy[ind] = 0.0
-            return self.weight * self.p * self.leapct.innerProd(f_copy, d, d)
+            '''
+            f_copy = self.DDHuber(f_copy)
+            return self.weight * self.p * self.leapct.innerProd(f_copy, Bd, Bd)
+            
         else:
-            ind = f == 0.0
-            f_copy = self.leapct.copyData(f)
+            '''
+            ind = f_copy == 0.0
             f_copy[ind] = 1.0
             f_copy = self.leapct.abs(f_copy)**(self.p-2.0)
             f_copy[ind] = 0.0
+            '''
+            f_copy = self.DDHuber(f_copy)
             return self.weight * self.p * self.leapct.innerProd(f_copy, d, d)
-
+    
+    '''
     def apply(self, f):
         if self.f_0 is not None:
             f[:] = f[:] - self.f_0[:]
@@ -291,6 +372,7 @@ class LpNorm(denoisingFilter):
             return f
         else:
             return super().apply(f)
+    '''
         
 class histogramSparsity(denoisingFilter):
     """This class defines a filter that encourages sparisty in the histogram domain
@@ -434,6 +516,35 @@ class azimuthalFilter(denoisingFilter):
         Bf[ind] = 0.0
         
         return self.weight * self.p * self.leapct.innerProd(Bf, Bd, Bd)
+
+class SparseDictionary(denoisingFilter):
+    """This class defines a filter based on leapct.tomographicModels.DictionaryDenoising(self, f, dictionary, sparsityThreshold=8, epsilon=0.0)
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        dictionary (C contiguous float32 numpy array): 4D array of dictionary patches
+        sparsityThreshold (int): the maximum number of dictionary elements to use to represent a patch in the volume
+        epsilon (float): the L^2 residual threshold to decide of the sparse dictionary representation is close enough (larger numbers perform stronger denoising)
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional
+    
+    """
+    def __init__(self, leapct, dictionary, sparsityThreshold=8, epsilon=0.0, f_0=None):
+        super(SparseDictionary, self).__init__(leapct)
+
+        self.dictionary = dictionary
+        self.sparsityThreshold = sparsityThreshold
+        self.epsilon = epsilon
+        self.f_0 = f_0
+        self.isDifferentiable = False
+        
+    def apply(self, f):
+        if self.f_0 is None:
+            self.leapct.DictionaryDenoising(f, self.dictionary, self.sparsityThreshold, self.epsilon)
+        else:
+            f[:] -= self.f_0[:]
+            self.leapct.DictionaryDenoising(f, self.dictionary, self.sparsityThreshold, self.epsilon)
+            f[:] += self.f_0[:]
+        return f
         
 class filterSequence:
     """This class defines a weighted sum of filters (i.e., regularizers)

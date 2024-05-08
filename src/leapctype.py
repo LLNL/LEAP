@@ -624,6 +624,10 @@ class tomographicModels:
     def rebin_curved(self, g, fanAngles, order=6):
         """ rebin data from a curved array of detector modules
         
+        Note that if your data is already sampled on a curved detector, you do not need to use this function.
+        Real curved detectors are composed of a series of detector modules curved around a polygon shape.
+        There are often gaps between modules that need to be accounted for and that is what this function does.
+        
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             fanAngles (C contiguous float32 numpy array): array of the fan angle (degrees) of every detector pixel in a row
@@ -673,6 +677,9 @@ class tomographicModels:
     def down_sample(self, factors, I, dims=None):
         """down-samples the given 3D array
         
+        Prior to down-sampling, an anti-alias filter is applied to each dimension.  This anti-aliasing filter
+        is the same one used in the LowPassFilter function.
+        
         Args:
             factors: 3-element array of down-sampling factors
             I (C contiguous float32 numpy array or torch tensor): data to down-sample
@@ -715,6 +722,8 @@ class tomographicModels:
         
     def up_sample(self, factors, I, dims=None):
         """up-samples the given 3D array
+        
+        Up-sampling is performed using tri-linear interpolation.
         
         Args:
             factors: 3-element array of up-sampling factors
@@ -1954,7 +1963,8 @@ class tomographicModels:
     def down_sample_projections(self, factors, g=None):
         """down-samples the given projection data
 
-        This function applies an anti-aliasing filter and down-samples projection data and updates the CT geometry parameters accordingly
+        This function applies an anti-aliasing filter and down-samples projection data and updates the CT geometry parameters accordingly.
+        This anti-aliasing filter is the same one used in the LowPassFilter function.
         
         Args:
             factors: 3-element array of down-sampling factors
@@ -1997,7 +2007,8 @@ class tomographicModels:
     def up_sample_projections(self, factors, g=None, dims=None):
         """up-samples the given projection data
 
-        This function up-samples projection data and updates the CT geometry parameters accordingly
+        This function up-samples projection data and updates the CT geometry parameters accordingly.
+        The up-sampling is performed using trilinear interpolation.
         
         Args:
             factors: 3-element array of up-sampling factors
@@ -2040,7 +2051,8 @@ class tomographicModels:
     def down_sample_volume(self, factors, f=None):
         """down-samples the given volume data
 
-        This function applies an anti-aliasing filter and down-samples volume data and updates the CT volume parameters accordingly
+        This function applies an anti-aliasing filter and down-samples volume data and updates the CT volume parameters accordingly.
+        This anti-aliasing filter is the same one used in the LowPassFilter function.
         
         Args:
             factors: 3-element array of down-sampling factors
@@ -2081,7 +2093,8 @@ class tomographicModels:
     def up_sample_volume(self, factors, f=None, dims=None):
         """up-samples the given volume data
 
-        This function up-samples volume data and updates the CT volume parameters accordingly
+        This function up-samples volume data and updates the CT volume parameters accordingly.
+        The up-sampling is performed using trilinear interpolation.
         
         Args:
             factors: 3-element array of up-sampling factors
@@ -2166,6 +2179,12 @@ class tomographicModels:
         else:
             return np.minimum(x, y)
             
+    def maximum(self, x, y):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.maximum(x, y)
+        else:
+            return np.maximum(x, y)
+            
     def sign(self, x):
         if has_torch == True and type(x) is torch.Tensor:
             return torch.sign(x)
@@ -2216,7 +2235,16 @@ class tomographicModels:
             return g_subsets
     
     def MLEM(self, g, f, numIter, filters=None, mask=None):
-        """Maximum Likelihood-Expectation Maximization reconstruction
+        r"""Maximum Likelihood-Expectation Maximization reconstruction
+        
+        This algorithm performs reconstruction with the following update equation
+        
+        .. math::
+           \begin{eqnarray}
+             f_{n+1} &:=& \frac{f_n}{P^T 1 + R'(f_n)} P^T\left[ \frac{g}{Pf_n} \right]
+           \end{eqnarray}
+           
+        where R'(f) is the gradient of the regularization term(s).
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This reconstruction algorithms assumes the projection data, g, is Poisson distributed which is the
@@ -2254,7 +2282,7 @@ class tomographicModels:
         Pstar1[Pstar1==0.0] = 1.0
         d = self.allocateData(f)
         Pd = self.allocateData(g)
-        
+
         for n in range(numIter):
             print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
             self.project(Pd,f)
@@ -2266,12 +2294,17 @@ class tomographicModels:
             if filters is None:
                 f *= d/Pstar1
             else:
-                f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
+                f *= d/self.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
                 
         return f
     
     def OSEM(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
         """Ordered Subsets-Expectation Maximization reconstruction
+        
+        The OSEM algorithm is performed using two nested loops.  The inner loop is performed like
+        the MLEM algorithm (see MLEM algorithm documentation for a description of the algorithm),
+        but the successive updates of the reconstructed volume are done with a subset of the projection
+        angles.  Once every subset of is complete, the process starts over again.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This reconstruction algorithms assumes the projection data, g, is Poisson distributed which is the
@@ -2345,17 +2378,45 @@ class tomographicModels:
                     if filters is None:
                         f *= d/Pstar1
                     else:
-                        f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f)/float(numSubsets))
+                        f *= d/self.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f)/float(numSubsets))
                     
             subsetParams.setSubset(-1)
             return f
         
     def SIRT(self, g, f, numIter, mask=None):
-        """Simultaneous Iterative Reconstruction Technique reconstruction"""
+        r"""Simultaneous Iterative Reconstruction Technique reconstruction
+
+        This is the same algorithm as a SART reconstruction with one subset.
+        The SIRT algorithm is performed using the following update equation
+                
+        .. math::
+           \begin{eqnarray}
+             f_{n+1} &:=& f_n + \frac{0.9}{P^T 1} P^T\left[ \frac{Pf_n - g}{P1} \right]
+           \end{eqnarray}
+           
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        
+        Args:
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
+            numIter (int): number of iterations
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+        
+        Returns:
+            f, the same as the input with the same name
+        
+        """
         return self.SART(g, f, numIter, 1, mask)
         
     def SART(self, g, f, numIter, numSubsets=1, mask=None):
-        """Simultaneous Algebraic Reconstruction Technique reconstruction
+        r"""Simultaneous Algebraic Reconstruction Technique reconstruction
+        
+        The SART algorithm is performed using two nested loops.  The inner loop is performed like
+        the SIRT algorithm (see SIRT algorithm documentation for a description of the algorithm),
+        but the successive updates of the reconstructed volume are done with a subset of the projection
+        angles.  Once every subset of is complete, the process starts over again.
+        
+        If one wishes to combine this algorithm with regularization, (e.g., TV), please see ASDPOCS.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
@@ -2448,6 +2509,9 @@ class tomographicModels:
     def ASDPOCS(self, g, f, numIter, numSubsets, numTV, filters=None, mask=None):
         """Adaptive Steepest Descent-Projection onto Convex Subsets reconstruction
         
+        This algorithm combines SART with regularization (e.g., TV; see \"filters\" argument).  See SART and SIRT documentation
+        for more information.
+        
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function actually implements the iTV reconstruction method which is a slight varition to ASDPOCS
         which we find works slightly better.
@@ -2463,7 +2527,7 @@ class tomographicModels:
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             numTV (int): number of TV diffusion steps
-            filters (filterSequence object): list of differentiable regularization filters
+            filters (filterSequence object): list of regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
         
         Returns:
@@ -2617,12 +2681,19 @@ class tomographicModels:
         
         
     def LS(self, g, f, numIter, preconditioner=None, nonnegativityConstraint=True):
-        """Least Squares reconstruction
-        
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        r"""Least Squares reconstruction
+
         This function minimizes the Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
+        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection.
+        The Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{LS}(f) &:=& \frac{1}{2} \| Pf - g \|^2
+           \end{eqnarray}
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -2636,12 +2707,19 @@ class tomographicModels:
         return self.RWLS(g, f, numIter, None, 1.0, preconditioner, nonnegativityConstraint)
         
     def WLS(self, g, f, numIter, W=None, preconditioner=None, nonnegativityConstraint=True):
-        """Weighted Least Squares reconstruction
+        r"""Weighted Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
+        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection.
+        The Weighted Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{WLS}(f) &:=& \frac{1}{2} (Pf - g)^T W (Pf - g)
+           \end{eqnarray}
+           
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -2656,12 +2734,19 @@ class tomographicModels:
         return self.RWLS(g, f, numIter, None, W, preconditioner, nonnegativityConstraint)
         
     def RLS(self, g, f, numIter, filters=None, preconditioner=None, nonnegativityConstraint=True):
-        """Regularized Least Squares reconstruction
+        r"""Regularized Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Regularized Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
+        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection.
+        The Regularized Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{RLS}(f) &:=& \frac{1}{2} \| Pf - g \|^2 + R(f)
+           \end{eqnarray}
+
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -2676,12 +2761,19 @@ class tomographicModels:
         return self.RWLS(g, f, numIter, filters, 1.0, preconditioner, nonnegativityConstraint)
        
     def RWLS(self, g, f, numIter, filters=None, W=None, preconditioner=None, nonnegativityConstraint=True):
-        """Regularized Weighted Least Squares reconstruction
+        r"""Regularized Weighted Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Regularized Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
+        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection.
+        The Regularized Weighted Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{RWLS}(f) &:=& \frac{1}{2} (Pf - g)^T W (Pf - g) + R(f)
+           \end{eqnarray}
+
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -2872,15 +2964,27 @@ class tomographicModels:
         return stepSize
         
     def DLS(self, g, f, numIter, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=2):
-        """Derivative Least Squares reconstruction"""
+        """Derivative Least Squares reconstruction
+        
+        See documentation for RDLS because this is the same algorithm without the regularization.
+        
+        """
         return self.RDLS(g, f, numIter, 0.0, 0.0, preconditionerFWHM, nonnegativityConstraint, dimDeriv)
         
     def RDLS(self, g, f, numIter, filters=None, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=1):
-        """Regularized Derivative Least Squares reconstruction
+        r"""Regularized Derivative Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Regularized Derivative Least Squares cost function using Preconditioned Conjugate Gradient.
-        The optional preconditioner is a 2D blurring for each z-slice
+        The optional preconditioner is a 2D blurring for each z-slice.
+        The Regularized Weighted Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{RDLS}(f) &:=& \frac{1}{2} (Pf - g)^T \Delta (Pf - g) + R(f)
+           \end{eqnarray}
+           
+        where \Delta is the Laplacian operator.        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -3024,11 +3128,20 @@ class tomographicModels:
         return stepSize
 
     def MLTR(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
-        """Maximum Likelihood Transmission reconstruction
+        r"""Maximum Likelihood Transmission reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function maximizes the Maximum Likelihood function of CT transmission data which assumes a Poisson noise model.
         This algorithm best models the noise for very low transmission/ low count rate data.
+        The MLTR cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{MLTR}(f) &:=& \left< -t\log\left(e^{-Pf}\right) + e^{-Pf} , 1 \right>
+           \end{eqnarray}
+
+        where t is the transmission data and \"1\" is a vector of all ones.  The inner product notation is
+        just use for simplicity, but all it is really doing is performing a sum over all the elements.
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -3273,8 +3386,12 @@ class tomographicModels:
             self.libprojectors.synthesize_symmetry(f_radial, f)
             return f
     
+    def LowPassFilter(self, f, FWHM=2.0):
+        """Alias for BlurFilter"""
+        return self.BlurFilter(f, FWHM)
+    
     def BlurFilter(self, f, FWHM=2.0):
-        """Applies a blurring filter to the provided numpy array
+        """Applies a blurring filter to the provided numpy array or torch tensor
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
@@ -3296,6 +3413,34 @@ class tomographicModels:
         else:
             self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+
+    def HighPassFilter(self, f, FWHM=2.0):
+        """Applies a high pass filter to the provided numpy array or torch tensor
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array or torch tensor of any size
+        The filter is given by delta[i] - cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
+        This filter is very simular to a Gaussian filter, but is a FIR
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): numpy array to sharpen
+            FWHM (float): the full width at half maximum (in number of pixels) of the filter
+        
+        Returns:
+            f, the same as the input
+        """
+        #bool HighPassFilter(float* f, int, int, int, float FWHM);
+        self.libprojectors.HighPassFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.HighPassFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.HighPassFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+        else:
+            self.libprojectors.HighPassFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.HighPassFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+
+    def LowPassFilter2D(self, f, FWHM=2.0):
+        """Alias for BlurFilter2D"""
+        return self.BlurFilter2D(f, FWHM)
             
     def BlurFilter2D(self, f, FWHM=2.0):
         """Applies a 2D blurring filter to the provided numpy array or torch tensor
@@ -3322,11 +3467,11 @@ class tomographicModels:
             return self.libprojectors.BlurFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
     
     def MedianFilter(self, f, threshold=0.0, windowSize=3):
-        """Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided numpy array
+        r"""Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided numpy array
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         This algorithm performs a 3D (3x3x3 or 3x5x5) median around each data value and then replaces this value only if
-        |original value - median value| >= threshold*|median value|
+        \|original value - median value\| >= threshold*\|median value\|
         Note that if threshold is zero, then this is simply a median filter
         
         Args:
@@ -3348,11 +3493,11 @@ class tomographicModels:
             return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
             
     def MedianFilter2D(self, f, threshold=0.0, windowSize=3):
-        """Applies a thresholded 2D median filter (windowSize x windowSize) to the provided numpy array
+        r"""Applies a thresholded 2D median filter (windowSize x windowSize) to the provided numpy array
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         This algorithm performs a 2D (windowSize x windowSize) median around each data value and then replaces this value only if
-        |original value - median value| >= threshold*|median value|
+        \|original value - median value\| >= threshold*\|median value\|
         Note that if threshold is zero, then this is simply a median filter
         
         Args:
@@ -3381,7 +3526,7 @@ class tomographicModels:
             f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
             spatialFWHM (float): the FWHM (in number of pixels) of the spatial closeness term of the BLF
             intensityFWHM (float): the FWHM of the intensity closeness terms of the BLF
-            scale (float): an optional argument to used a blurred volume to calculate the intensity closeness term
+            scale (float): an optional argument to used a blurred volume (and this parameter specifies the FWHM of the blurring) to calculate the intensity closeness term
         
         Returns:
             f, the same as the input
@@ -3413,8 +3558,8 @@ class tomographicModels:
         self.libprojectors.dictionaryDenoising.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.dictionaryDenoising.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.dictionaryDenoising(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, f.is_cuda == False)
+            self.libprojectors.dictionaryDenoising.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.dictionaryDenoising(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, f.is_cuda == False)
         else:
             self.libprojectors.dictionaryDenoising.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.dictionaryDenoising(f, f.shape[0], f.shape[1], f.shape[2], dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, True)
@@ -3427,21 +3572,36 @@ class tomographicModels:
         return self.libprojectors.get_numTVneighbors()
         
     def set_numTVneighbors(self, N):
-        """Sets the number of neighboring voxels to use for 3D TV"""
+        """Sets the number of neighboring voxels to use for 3D TV
+        
+        Args:
+            N (int): the number of neighbors to use for 3D TV calculations (can be 6 or 26)
+        
+        """
         self.libprojectors.set_numTVneighbors.restype = ctypes.c_bool
         self.set_model()
         self.libprojectors.set_numTVneighbors.argtypes = [ctypes.c_int]
         return self.libprojectors.set_numTVneighbors(N)
     
     def TVcost(self, f, delta, beta=0.0, p=1.2):
-        """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
+        r"""Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
         
-        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+        One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+        The Huber-like loss function is given by
+        
+        .. math::
+           \begin{eqnarray}
+             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+           \end{eqnarray}
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size.
         
         Args:
             f (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): TV multiplier (sometimes called the regularizaion strength)
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             TV functional value
@@ -3457,7 +3617,16 @@ class tomographicModels:
             return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
         
     def TVgradient(self, f, delta, beta=0.0, p=1.2):
-        """Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
+        r"""Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
+        
+        This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+        One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+        The Huber-like loss function is given by
+        
+        .. math::
+           \begin{eqnarray}
+             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+           \end{eqnarray}
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         
@@ -3465,6 +3634,7 @@ class tomographicModels:
             f (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): TV multiplier (sometimes called the regularizaion strength)
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
@@ -3486,19 +3656,31 @@ class tomographicModels:
             return Df
     
     def TVquadForm(self, f, d, delta, beta=0.0, p=1.2):
-        """Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays
+        r"""Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays
         
         The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
         This function calculates the following inner product <d, R''(f)d>, where R'' is the Hessian of the TV functional
         The quadraitc surrogate is used here, so this function can be used to calculate the step size of a cost function
         that includes a TV regularization term.
-        See the same  cost in the diffuse function below for an example of its usage
+        See the same  cost in the diffuse function below for an example of its usage.
+        
+        This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+        One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+        The Huber-like loss function is given by
+        
+        .. math::
+           \begin{eqnarray}
+             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+           \end{eqnarray}
+
+        To make this calculate a quadraitc surrogate (upper bound), LEAP uses h'(t)/t instead of h''(t).
         
         Args:
             f (C contiguous float32 numpy array): 3D numpy array
             d (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): TV multiplier (sometimes called the regularizaion strength)
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
@@ -3514,15 +3696,17 @@ class tomographicModels:
             return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
         
     def diffuse(self, f, delta, numIter, p=1.2):
-        """Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
+        r"""Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
         
-        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
-        This function performs a specifies number of iterations of minimizing the aTV functional using gradient descent
+        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size.
+        This function performs a specifies number of iterations of minimizing the aTV functional using gradient descent.
+        The step size calculation uses the method of Separable Quadratic Surrogate (see also TVquadForm).
         
         Args:
             f (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             numIter (int): number of iterations
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             f, the same array as the input denoised

@@ -88,7 +88,7 @@ __device__ void OMPsinglePatch_basis(cudaTextureObject_t f, const float* patches
         f_dot_d[maxInd] = 0.0f; // make sure this patch is not used again
 
         residual -= maxVal * maxVal;
-        if (residual < epsilon)
+        if (residual < epsilon * f_dot_f)
             break;
     }
 }
@@ -107,7 +107,13 @@ __device__ float* OMPsinglePatch(cudaTextureObject_t f, const float* patches, co
     copyVolumePatch(f, voxelIndices, patchSize, Rf);
 
     // Pre-calculate dot product of current volume patch with every element in the dictionary
-    for (int i = 0; i < numPatches; i++) f_dot_d[i] = innerProduct(f, patches, voxelIndices, i, patchSize);
+    //for (int i = 0; i < numPatches; i++) f_dot_d[i] = innerProduct(f, patches, voxelIndices, i, patchSize);
+    float f_dot_f = 0.0f;
+    for (int i = 0; i < numPatches; i++)
+    {
+        f_dot_d[i] = innerProduct(f, patches, voxelIndices, i, patchSize);
+        f_dot_f += f_dot_d[i] * f_dot_d[i];
+    }
 
     float delta = 1.0e-12;
     //float delta = 1.0e-6;
@@ -228,7 +234,7 @@ __device__ float* OMPsinglePatch(cudaTextureObject_t f, const float* patches, co
         {
             float Rf_dot_Rf = 0.0f;
             for (int i = 0; i < numPatchPixels; i++) Rf_dot_Rf += Rf[i] * Rf[i];
-            if (Rf_dot_Rf < epsilon)
+            if (Rf_dot_Rf < epsilon * f_dot_f)
             {
                 k += 1;
                 break;
@@ -586,6 +592,7 @@ bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int
 
 bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int num1, int num2, int num3, float epsilon, int sparsityThreshold, bool data_on_cpu, int whichGPU)
 {
+    //printf("using basis version\n");
     if (f == NULL) return false;
 
     //printf("basis is orthonormal, using faster algorithm\n");

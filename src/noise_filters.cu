@@ -15,6 +15,8 @@
 //#include "device_launch_parameters.h"
 #include "parameters.h"
 
+__constant__ bool d_DO_HIGH_PASS;
+
 __global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, const float3 T, const float3 startVal, const int N_phi_max, const float filterWidth, const float rFOVsq)
 {
     // return;
@@ -402,7 +404,10 @@ __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM
         }
     }
 
-    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    if (d_DO_HIGH_PASS)
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = f[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] - val / sum;
+    else
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FWHM)
@@ -445,7 +450,10 @@ __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FW
         }
     }
 
-    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    if (d_DO_HIGH_PASS)
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = f[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] - val / sum;
+    else
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FWHM)
@@ -479,7 +487,10 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
         }
     }
 
-    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    if (d_DO_HIGH_PASS)
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = f[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] - val / sum;
+    else
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 //########################################################################################################################################################
@@ -532,7 +543,10 @@ __global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, i
         }
     }
 
-    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    if (d_DO_HIGH_PASS)
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+    else
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 __global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM)
@@ -576,7 +590,10 @@ __global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered,
         }
     }
 
-    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    if (d_DO_HIGH_PASS)
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+    else
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
 __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM)
@@ -611,13 +628,49 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
         }
     }
 
-    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    if (d_DO_HIGH_PASS)
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+    else
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 //########################################################################################################################################################
 
+void setConstantMemoryParameters(const bool doHighPass)
+{
+    cudaMemcpyToSymbol(d_DO_HIGH_PASS, &doHighPass, sizeof(bool));
+}
+
 bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
-    return blurFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    cudaSetDevice(whichGPU);
+    setConstantMemoryParameters(false);
+    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+}
+
+bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+{
+    cudaSetDevice(whichGPU);
+    setConstantMemoryParameters(false);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+}
+
+bool highPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+{
+    cudaSetDevice(whichGPU);
+    setConstantMemoryParameters(true);
+    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+}
+
+bool highPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+{
+    cudaSetDevice(whichGPU);
+    setConstantMemoryParameters(true);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+}
+
+bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+{
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
     if (f == NULL) return false;
 
     if (sliceStart < 0)
@@ -702,7 +755,7 @@ bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bo
     return true;
 }
 
-bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
 

@@ -20,12 +20,19 @@ import numpy as np
 from leapctype import *
 
 def makeAttenuationRadiographs(g, air_scan=None, dark_scan=None, ROI=None):
-    """Converts data to attenuation radiographs (flat fielding and negative log)
+    r"""Converts data to attenuation radiographs (flat fielding and negative log)
+
     
+    .. math::
+       \begin{eqnarray}
+         transmission\_data &=& (raw - dark\_scan) / (air\_scan - dark\_scan) \\
+         attenuation\_data &=& -log(transmission\_data)
+       \end{eqnarray}
+       
     Args:
         g (C contiguous float32 numpy array or torch tensor): radiograph data
-        air_scan (C contiguous float32 numpy array or torch tensor): air scan radiograph data
-        dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data
+        air_scan (C contiguous float32 numpy array or torch tensor): air scan radiograph data; if not given, assumes that the input data is transmission data
+        dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data; if not given assumes the inputs have already been dark subtracted
         ROI (4-element integer array): specifies a bounding box for which to estimate a mean value for flux correction
     
     """
@@ -47,7 +54,7 @@ def makeAttenuationRadiographs(g, air_scan=None, dark_scan=None, ROI=None):
     return g
 
 def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData=True):
-    """Removes outliers (zingers) from CT projections
+    r"""Removes outliers (zingers) from CT projections
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -58,7 +65,7 @@ def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
         g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
-        threshold (float): A pixel will be replaced by the median of its neighbors if |g - median(g)|/median(g) > threshold
+        threshold (float): A pixel will be replaced by the median of its neighbors if \|g - median(g)\|/median(g) > threshold
         windowSize (int): The window size of the median filter applied is windowSize x windowSize
         isAttenuationData (bool): True if g is attenuation data, False otherwise
         
@@ -83,7 +90,8 @@ def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     and removes outliers by a series of three thresholded median filters
     
     This outlier correction algorithm should most be used for MV CT or neutron CT
-    where outliers effect a larger neighborhood of pixels.
+    where outliers effect a larger neighborhood of pixels.  This function uses a three-stage
+    thresholded median filter to remove outliers.
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
@@ -126,10 +134,16 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
     return leapct.transmission_filter(g, H, isAttenuationData)
     
 def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True):
-    """Removes detector blur by Richardson-Lucy iterative deconvolution
+    r"""Removes detector blur by Richardson-Lucy iterative deconvolution
     
     Richardson-Lucy iterative deconvolution is developed for Poisson-distributed data
-    and inherently preserve the non-negativity of the input
+    and inherently preserve the non-negativity of the input.  It uses the following update step,
+    where t = transmission data
+    
+    .. math::
+       \begin{eqnarray}
+         t_{n+1} &=& t_n H^T\left[ \frac{t_0}{Ht_n} \right]
+       \end{eqnarray}
     
     Args:
         g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
@@ -158,7 +172,19 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
     return g
 
 def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
-    """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    
+    This algorithm estimates the rings by first averaging all projections.  Then denoises this
+    signal by minimizing the TV norm.  Finally the gain correction map to correct the data
+    is estimated by the difference of the TV-smoothed and averaged projection data (these are all 2D signals).
+    This is summarized by the math equations below.
+    
+    .. math::
+       \begin{eqnarray}
+         \overline{g} &:=& \frac{1}{numAngles}\sum_{angles} g \\
+         gain\_correction &:=&argmin \; TV(\overline{g}) - \overline{g} \\
+         g\_corrected &:=& g + gain\_correction
+       \end{eqnarray}
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -197,7 +223,13 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     return g
 
 def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
-    """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    
+    .. math::
+       \begin{eqnarray}
+         gain\_correction &:=& \frac{1}{numAngles}\sum_{angles} [MedianFilter2D(g) - g] \\
+         g\_corrected &:=& g + gain\_correction
+       \end{eqnarray}
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -207,7 +239,7 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
         g (contiguous float32 numpy array or torch tensor): attenuation projection data
-        threshold (float): A pixel will be replaced by the median of its neighbors if |g - median(g)|/median(g) > threshold
+        threshold (float): The threshold for the thresholded median filter, where a pixel will be replaced by the median of its neighbors if \|g - median(g)\|/median(g) > threshold
         windowSize (int): The window size of the median filter applied is windowSize x windowSize
         numIter (int): Number of iterations
     
@@ -230,7 +262,11 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
     return g
 
 def ringRemoval(leapct, g, delta, beta, numIter):
-    """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    
+    This algorithm estimates the gain correction necessary to remove ring artifacts by solving denoising
+    the data by minimizing the TV norm with the gradient step determined by averaging the gradients over
+    all angles.
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
