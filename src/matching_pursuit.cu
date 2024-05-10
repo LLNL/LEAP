@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright 2022-2024 Lawrence Livermore National Security, LLC and other 
-// LEAP project developers. See the LICENSE file for details.
+// Copyright 2023-2024 Kyle Champley
+// See the LICENSE file for details.
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
@@ -259,9 +259,9 @@ __global__ void OMP_basis(cudaTextureObject_t f, const float* patches,
     const int j_patch = threadIdx.y + blockIdx.y * blockDim.y;
     const int k_patch = threadIdx.z + blockIdx.z * blockDim.z;
 
-    const int i = i_patch * patchSize.x + patchShift.x - (patchShift.x - 1) / 2;
-    const int j = j_patch * patchSize.y + patchShift.y - (patchShift.y - 1) / 2;
-    const int k = k_patch * patchSize.z + patchShift.z - (patchShift.z - 1) / 2;
+    const int i = i_patch * patchSize.x + patchShift.x - (patchSize.x - 1) / 2;
+    const int j = j_patch * patchSize.y + patchShift.y - (patchSize.y - 1) / 2;
+    const int k = k_patch * patchSize.z + patchShift.z - (patchSize.z - 1) / 2;
     if (i >= N.x || j >= N.y || k >= N.z) return;
     //if (i < 0 || j < 0 || k < 0) return;
 
@@ -319,9 +319,9 @@ __global__ void OMP(cudaTextureObject_t f, const float* patches, const float* in
     const int j_patch = threadIdx.y + blockIdx.y * blockDim.y;
     const int k_patch = threadIdx.z + blockIdx.z * blockDim.z;
 
-    const int i = i_patch * patchSize.x + patchShift.x - (patchShift.x - 1) / 2;
-    const int j = j_patch * patchSize.y + patchShift.y - (patchShift.y - 1) / 2;
-    const int k = k_patch * patchSize.z + patchShift.z - (patchShift.z - 1) / 2;
+    const int i = i_patch * patchSize.x + patchShift.x - (patchSize.x - 1) / 2;
+    const int j = j_patch * patchSize.y + patchShift.y - (patchSize.y - 1) / 2;
+    const int k = k_patch * patchSize.z + patchShift.z - (patchSize.z - 1) / 2;
     if (i >= N.x || j >= N.y || k >= N.z) return;
     //if (i < 0 || j < 0 || k < 0) return;
 

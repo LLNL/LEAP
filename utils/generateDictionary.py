@@ -55,6 +55,15 @@ def LegendrePolynomialBasis(order, x=None):
         poly[N,:] = p[:]
     return poly
 
+def BumpBasis(N,scale=2.0):
+    basisFcns = np.zeros((N,N))
+    for k in range(0,N):
+        n = k
+        basisFcns[k,(n-1)%N] = 0.25
+        basisFcns[k,n] = 0.5
+        basisFcns[k,(n+1)%N] = 0.25
+    return basisFcns
+
 def DCTBasis(N,type=2):
 
     ns = np.array(range(N))
@@ -136,9 +145,12 @@ def generateRidgeletDictionary(N_max=8):
     numAngles = N_max+1
     numTerms = numAngles * numTermsPerAngle
 
-    basisFcns = DCTBasis(N_max)
+    basisFcns = BumpBasis(N_max)
+    #print(basisFcns.shape)
 
+    basisFcns = DCTBasis(N_max)
     basisFunctions = np.zeros((numTerms+1, 1, N_max, N_max), dtype=np.float32)
+    #print(basisFcns.shape)
 
     leapct = tomographicModels()
     for iphi in range(numAngles):
@@ -175,6 +187,8 @@ def generateRidgeletDictionary(N_max=8):
     #print(str(np.sum(atom)) + ' ' + str(np.sum(atom**2)))
     basisFunctions[numTerms,0,:,:] = atom[:,:]
     
-    basisFunctions = GramSchmidt(basisFunctions)
+    if basisFunctions.shape[0] <= basisFunctions.shape[1]*basisFunctions.shape[2]*basisFunctions.shape[3]:
+        print('Performing orthogonalization...')
+        basisFunctions = GramSchmidt(basisFunctions)
         
     return basisFunctions

@@ -66,6 +66,7 @@ startTime = time.time()
 leapct.rayTrace(g)
 print('Ray Tracing Simulation Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
+#quit()
 
 # Display the central sinogram
 #plt.imshow(np.squeeze(g[:,g.shape[1]//2,:]), cmap=plt.get_cmap('gray'))
@@ -82,6 +83,6 @@ leapct.FBP(g,f)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the central slice of the result
+#leapct.display(f)
 plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap=plt.get_cmap('gray'))
 plt.show()
-quit()

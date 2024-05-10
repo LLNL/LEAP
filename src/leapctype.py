@@ -2338,9 +2338,10 @@ class tomographicModels:
                         f_save = self.copyData(f)
                         filters.apply(f)
                         f[:] = filters.beta*f[:] + (1.0-filters.beta)*f_save[:]
-                    else:
+                        f[f<0.0] = 0.0
+                    elif filters.beta > 0.0:
                         filters.apply(f)
-                    f[f<0.0] = 0.0
+                        f[f<0.0] = 0.0
                 
         return f
     
@@ -3592,7 +3593,7 @@ class tomographicModels:
         
         """
         if prior is None or isinstance(prior, (int, float)):
-            return BilateralFilter(f, spatialFWHM, intensityFWHM, prior)
+            return self.BilateralFilter(f, spatialFWHM, intensityFWHM, prior)
             
         self.libprojectors.PriorBilateralFilter.restype = ctypes.c_bool
         self.set_model()
@@ -3711,7 +3712,8 @@ class tomographicModels:
         
         .. math::
            \begin{eqnarray}
-             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases} \\
+             h'(t) &=& \begin{cases} t, & \text{if } |t| \leq delta \\ delta^{2 - p}sgn(t)|t|^{p-1}, & \text{if } |t| > delta \end{cases}
            \end{eqnarray}
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
