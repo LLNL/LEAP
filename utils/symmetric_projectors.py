@@ -156,6 +156,8 @@ def project_cone(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0, sod, tau):
             a_ti_inv = 1.0 / sec_sq_plus_u_sq
             disc_ti_shift = b_ti * b_ti - sec_sq_plus_u_sq * Rcos_sq_plus_tau_sq # new
 
+            if np.abs(disc_ti_shift) < 1.0e-8:
+                disc_ti_shift = 0.0
             if np.abs(sec_sq_plus_u_sq) < 1.0e-8 or disc_ti_shift > 0.0:
                 g[j, k] = 0.0
                 continue
@@ -164,7 +166,7 @@ def project_cone(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0, sod, tau):
             r_prev = float(rInd_min)*T_r
             disc_sqrt_prev = np.sqrt(disc_ti_shift + r_prev * r_prev*sec_sq_plus_u_sq)
 
-            curVal = 0.0;
+            curVal = 0.0
 
             # Go back one sample and check
             if rInd_min >= 1:
@@ -249,6 +251,18 @@ def backproject_cone(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0, sod, ta
     tan_beta = sin_beta / cos_beta
     sec_beta = 1.0 / cos_beta
 
+    ind_split = -u_0 / T_u
+    if np.abs(ind_split - np.round(ind_split)) < 1.0e-4:
+        iu_min_left = 0
+        iu_max_left = int(np.round(ind_split))
+        iu_min_right = iu_max_left
+        iu_max_right = numCols - 1
+    else:
+        iu_min_left = 0
+        iu_max_left = int(ind_split)
+        iu_min_right = int(np.ceil(ind_split))
+        iu_max_right = numCols - 1
+
     for j in prange(numR):
         r_unbounded = j * T_r + r_0
         r = np.abs(r_unbounded)
@@ -258,11 +272,15 @@ def backproject_cone(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0, sod, ta
         if r_unbounded < 0.0:
             # left half
             iu_min = 0
-            iu_max = int(-u_0 / T_u)
+            #iu_max = int(-u_0 / T_u)
+            iu_max = iu_max_left
+            #print('left: ' + str(iu_min) + ', ' + str(iu_max))
         else:
             # right half
-            iu_min = int(np.ceil(-u_0 / T_u))
+            #iu_min = int(np.ceil(-u_0 / T_u))
+            iu_min = iu_min_right
             iu_max = numCols - 1
+            #print('right: ' + str(iu_min) + ', ' + str(iu_max))
 
         disc_shift_inner = (r_inner*r_inner - tau*tau)*sec_beta*sec_beta # r_inner^2
         disc_shift_outer = (r_outer*r_outer - tau*tau)*sec_beta*sec_beta # r_outer^2
@@ -466,6 +484,18 @@ def backproject_parallel(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0):
     tan_beta = sin_beta / cos_beta
     sec_beta = 1.0 / cos_beta
 
+    ind_split = -u_0 / T_u
+    if np.abs(ind_split - np.round(ind_split)) < 1.0e-4:
+        iu_min_left = 0
+        iu_max_left = int(np.round(ind_split))
+        iu_min_right = iu_max_left
+        iu_max_right = numCols - 1
+    else:
+        iu_min_left = 0
+        iu_max_left = int(ind_split)
+        iu_min_right = int(np.ceil(ind_split))
+        iu_max_right = numCols - 1
+
     for j in prange(numR):
         r_unbounded = j * T_r + r_0
         r = np.abs(r_unbounded)
@@ -475,10 +505,12 @@ def backproject_parallel(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0):
         if r_unbounded < 0.0:
             # left half
             iu_min = 0
-            iu_max = int(-u_0 / T_u)
+            #iu_max = int(-u_0 / T_u)
+            iu_max = iu_max_left
         else:
             # right half
-            iu_min = int(np.ceil(-u_0 / T_u))
+            #iu_min = int(np.ceil(-u_0 / T_u))
+            iu_min = iu_min_right
             iu_max = numCols - 1
 
         disc_shift_inner = r_inner * r_inner # r_inner^2
@@ -655,8 +687,14 @@ class SymmetricProjectors:
             self.numZ = numZ
         if numR <= 0:
             self.numR = self.numCols
+            if self.numR % 2 == 1:
+                self.numR += 1
+                #print('WARNING: Setting numR to the next largest even number')
         else:
             self.numR = numR
+            if self.numR % 2 == 1:
+                self.numR += 1
+                print('WARNING: Setting numR to the next largest even number')
         if sizeZ <= 0.0:
             self.sizeZ = self.pixelHeight
         else:
@@ -690,10 +728,18 @@ class SymmetricProjectors:
             self.numZ = self.numRows
         else:
             self.numZ = numZ
+        
         if numR <= 0:
             self.numR = self.numCols
+            if self.numR % 2 == 1:
+                self.numR += 1
+                #print('WARNING: Setting numR to the next largest even number')
         else:
             self.numR = numR
+            if self.numR % 2 == 1:
+                self.numR += 1
+                print('WARNING: Setting numR to the next largest even number')
+            
         if sizeZ <= 0.0:
             self.sizeZ = self.pixelHeight * self.sod / self.sdd
         else:
@@ -924,7 +970,8 @@ class SymmetricProjectors:
             return None
 
 
-''' Example Usage
+#''' Example Usage
+import matplotlib.pyplot as plt
 
 # Make an instance of the SymmetricProjectors class
 flash = SymmetricProjectors()
@@ -950,8 +997,10 @@ f = flash.allocateReconstruction()
 
 # For testing purposes, we will set f to a sphere and forward project it
 x = (np.array(range(f.shape[0]))-0.5*(f.shape[0]-1))
+y = (np.array(range(f.shape[1]))-0.5*(f.shape[1]-1))
 x = x/np.max(x)
-x,y = np.meshgrid(x,x)
+y = y/np.max(y)
+y,x = np.meshgrid(y,x)
 f[x**2+y**2 <= 0.5**2] = 1.0
 flash.project(g,f)
 
@@ -960,7 +1009,6 @@ f[:] = 0.0 # initial to the reconstruction to zero, so we are not cheating
 flash.SART(g,f,100)
 
 # Display the result
-import matplotlib.pyplot as plt
 plt.imshow(f)
 plt.show()
 #'''

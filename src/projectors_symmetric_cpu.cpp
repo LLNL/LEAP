@@ -250,6 +250,8 @@ bool CPUproject_AbelCone(float* g, float* f, parameters* params)
 			double a_ti_inv = 1.0 / sec_sq_plus_u_sq;
 			double disc_ti_shift = b_ti * b_ti - sec_sq_plus_u_sq * Rcos_sq_plus_tau_sq; // new
 
+			if (fabs(disc_ti_shift) < 1.0e-8)
+				disc_ti_shift = 0.0;
 			if (fabs(sec_sq_plus_u_sq) < 1.0e-8 || disc_ti_shift > 0.0)
 			{
 				projLine[k] = 0.0;
@@ -385,6 +387,39 @@ bool CPUbackproject_AbelCone(float* g, float* f, parameters* params)
 		double r_inner = r - 0.5*T_y;
 		double r_outer = r + 0.5*T_y;
 
+		//*
+		double ind_split = -u_0 / T_u;
+		int iu_max_left, iu_min_right;
+		if (fabs(ind_split - floor(0.5 + ind_split)) < 1.0e-8)
+		{
+			iu_max_left = int(floor(0.5 + ind_split));
+			iu_min_right = iu_max_left;
+		}
+		else
+		{
+			iu_max_left = int(ind_split);
+			iu_min_right = int(ceil(ind_split));
+		}
+
+		int iu_min;
+		int iu_max;
+		if (r_unbounded < 0.0)
+		{
+			// left half
+			iu_min = 0;
+			//iu_max = int(-startVals_g.z / T_g.z);
+			iu_max = iu_max_left;
+		}
+		else
+		{
+			// right half
+			//iu_min = int(ceil(-startVals_g.z / T_g.z));
+			iu_min = iu_min_right;
+			iu_max = params->numCols - 1;
+		}
+		//*/
+
+		/*
 		int iu_min;
 		int iu_max;
 		if (r_unbounded < 0.0)
@@ -399,6 +434,7 @@ bool CPUbackproject_AbelCone(float* g, float* f, parameters* params)
 			iu_min = int(ceil(-u_0 / T_u));
 			iu_max = params->numCols - 1;
 		}
+		//*/
 
 		double disc_shift_inner = (r_inner*r_inner - params->tau*params->tau)*sec_beta*sec_beta; // r_inner^2
 		double disc_shift_outer = (r_outer*r_outer - params->tau*params->tau)*sec_beta*sec_beta; // r_outer^2
@@ -678,6 +714,37 @@ bool CPUbackproject_AbelParallel(float* g, float* f, parameters* params)
 		double r_inner = r - 0.5*T_y;
 		double r_outer = r + 0.5*T_y;
 
+		double ind_split = -u_0 / T_u;
+		int iu_max_left, iu_min_right;
+		if (fabs(ind_split - floor(0.5 + ind_split)) < 1.0e-8)
+		{
+			iu_max_left = int(floor(0.5 + ind_split));
+			iu_min_right = iu_max_left;
+		}
+		else
+		{
+			iu_max_left = int(ind_split);
+			iu_min_right = int(ceil(ind_split));
+		}
+
+		int iu_min;
+		int iu_max;
+		if (r_unbounded < 0.0)
+		{
+			// left half
+			iu_min = 0;
+			//iu_max = int(-startVals_g.z / T_g.z);
+			iu_max = iu_max_left;
+		}
+		else
+		{
+			// right half
+			//iu_min = int(ceil(-startVals_g.z / T_g.z));
+			iu_min = iu_min_right;
+			iu_max = params->numCols - 1;
+		}
+
+		/*
 		int iu_min;
 		int iu_max;
 		if (r_unbounded < 0.0)
@@ -692,6 +759,7 @@ bool CPUbackproject_AbelParallel(float* g, float* f, parameters* params)
 			iu_min = int(ceil(-u_0 / T_u));
 			iu_max = params->numCols - 1;
 		}
+		//*/
 
 		double disc_shift_inner = r_inner * r_inner; // r_inner^2
 		double disc_shift_outer = r_outer * r_outer; // r_outer^2
