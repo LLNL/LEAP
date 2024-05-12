@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.10"
+#define LEAP_VERSION "1.11"
 
 #include <stdlib.h>
 #include "parameters.h"
@@ -747,6 +747,20 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* prior, bool data_on_cpu);
+
+	/**
+	 * \fn          GuidedFilter
+	 * \brief       applies a (scaled) 3D guided filter to a 3D array
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   r the window radius (in number of pixels)
+	 * \param[in]   epsilon the degree of smoothing
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu);
 
 	/**
 	 * \fn          dictionaryDenoising

@@ -33,6 +33,7 @@
 #include "total_variation.cuh"
 #include "matching_pursuit.cuh"
 #include "bilateral_filter.cuh"
+#include "guided_filter.cuh"
 #include "scatter_models.cuh"
 #endif
 
@@ -2197,6 +2198,38 @@ bool tomographicModels::PriorBilateralFilter(float* f, int N_1, int N_2, int N_3
 	}
 	else
 		return priorBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, prior, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (f == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || r <= 0 || epsilon <= 0.0)
+	{
+		printf("Error: GuidedFilter invalid arguments!\n");
+		return false;
+	}
+
+	int numVol;
+	if (data_on_cpu)
+		numVol = 3;
+	else
+		numVol = 2;
+	double memNeeded = 4.0 * double(numVol) * double(N_1) * double(N_2) * double(N_3) / pow(2.0, 30.0);
+	if (getAvailableGPUmemory(params.whichGPU) < memNeeded)
+	{
+		printf("Error: GuidedFilter not enough GPU memory available for this operation!\n");
+		printf("GPU memory needed: %f GB\n", memNeeded);
+		printf("GPU memory available: %f GB\n", getAvailableGPUmemory(params.whichGPU));
+		printf("It is possible to break this calculation into smaller pieces which would enable this algorithm to work.\n");
+		printf("We plan to fix this in a future release, but if you encountered this error, please submit an issue on the github page.\n");
+		return false;
+	}
+	else
+		return guidedFilter(f, N_1, N_2, N_3, r, epsilon, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;

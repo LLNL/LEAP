@@ -735,6 +735,11 @@ bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM
 	return tomo()->PriorBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, prior, data_on_cpu);
 }
 
+bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu)
+{
+	return tomo()->GuidedFilter(f, N_1, N_2, N_3, r, epsilon, data_on_cpu);
+}
+
 bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)
 {
 	return tomo()->dictionaryDenoising(f, N_1, N_2, N_3, dictionary, numElements, N_d1, N_d2, N_d3, epsilon, sparsityThreshold, data_on_cpu);
@@ -942,6 +947,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("MedianFilter2D", &MedianFilter2D, "");
     m.def("BilateralFilter", &BilateralFilter, "");
 	m.def("PriorBilateralFilter", &PriorBilateralFilter, "");
+	m.def("GuidedFilter", &GuidedFilter, "");
     m.def("dictionaryDenoising", &dictionaryDenoising, "");
     m.def("TVcost", &TVcost, "");
     m.def("TVgradient", &TVgradient, "");

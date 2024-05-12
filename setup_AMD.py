@@ -45,6 +45,7 @@ cpp_files=[
 
 cuda_files=[
     'bilateral_filter.cu', 
+    'guided_filter.cu', 
     'cuda_utils.cu', 
     'matching_pursuit.cu', 
     'noise_filters.cu', 
@@ -98,7 +99,7 @@ else:
 
 setup(
     name='leapct',
-    version='1.10', 
+    version='1.11', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 

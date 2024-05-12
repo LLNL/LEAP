@@ -408,8 +408,8 @@ class tomographicModels:
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
             sourcePositions ((numAngles X 3) numpy array): the (x,y,z) position of each x-ray source
             moduleCenters ((numAngles X 3) numpy array): the (x,y,z) position of the center of the front face of the detectors
-            rowVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector row direction
-            colVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector column direction
+            rowVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector pointing along the positive detector row direction
+            colVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector pointing along the positive detector column direction
             
         Returns:
             True if the parameters were valid, false otherwise
@@ -891,7 +891,8 @@ class tomographicModels:
     def set_default_volume(self,scale=1.0):
         """Sets the default volume parameters
         
-        The default volume parameters are those that fill the field of view of the CT system and use the native voxel sizes
+        The default volume parameters are those that fill the field of view of the CT system and use the native voxel sizes.
+        Note that the CT geometry parameters must be specified before running this function.
         
         Args:
             scale (float): this value scales the voxel size by this value to create denser or sparser voxel representations (not recommended for fast reconstruction)
@@ -1618,6 +1619,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1666,6 +1668,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1702,6 +1705,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 torch tensor): projection data
             f (C contiguous float32 torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1743,6 +1747,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1799,7 +1804,7 @@ class tomographicModels:
         One can get the same result by backprojecting an array of projection data with all entries equal to one.
         The benefit of this function is that it is faster and uses less memory.
         
-        In a volume is provided, the result will be stored there, otherwise a new volume will be allocated
+        In a volume is provided, the result will be stored there, otherwise a new volume will be allocated.
         
         Args:
             f (C contiguous float32 numpy array or torch tensor): (optional argument) volume data to store the result
@@ -2447,7 +2452,7 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
         Returns:
             f, the same as the input with the same name
@@ -2472,7 +2477,7 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
-            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
         Returns:
             f, the same as the input with the same name
@@ -2575,7 +2580,7 @@ class tomographicModels:
             numSubsets (int): number of subsets
             numTV (int): number of TV diffusion steps
             filters (filterSequence object): list of regularization filters
-            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
         Returns:
             f, the same as the input with the same name
@@ -2772,7 +2777,7 @@ class tomographicModels:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
@@ -2827,7 +2832,7 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             filters (filterSequence object): list of differentiable regularization filters
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W:=exp(-g)
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W:=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
@@ -2982,7 +2987,7 @@ class tomographicModels:
             grad (C contiguous float32 numpy or torch array): gradient of the RWLS cost function
             d (C contiguous float32 numpy or torch array): descent direction of the RWLS cost function
             Pd (C contiguous float32 numpy or torch array): forward projection of d
-            W (C contiguous float32 numpy or torch array): weights, should be the same size as g, if not given, W=exp(-g)
+            W (C contiguous float32 numpy or torch array): weights, should be the same size as g, if not given, assumes is all ones
             filters (filterSequence object): list of filters to use as a regularizer terms
         
         Returns:
@@ -3030,7 +3035,7 @@ class tomographicModels:
              C_{RDLS}(f) &:=& \frac{1}{2} (Pf - g)^T \Delta (Pf - g) + R(f)
            \end{eqnarray}
            
-        where \Delta is the Laplacian operator.        
+        where :math:`\Delta` is the Laplacian operator.        
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
@@ -3040,7 +3045,7 @@ class tomographicModels:
             filters (filterSequence object): list of differentiable regularization filters
             preconditionerFWHM (float): specifies the FWHM of the blur preconditioner
             nonnegativityConstraint (bool): whether to apply a nonnegativity constraint
-            dimDeriv (int): number of dimensions to apply the Laplacian derivative
+            dimDeriv (int): number of dimensions (1 or 2) to apply the Laplacian derivative
         
         Returns:
             f, the same as the input with the same name
@@ -3196,7 +3201,7 @@ class tomographicModels:
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             filters (filterSequence object): list of differentiable regularization filters
-            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
         Returns:
             f, the same as the input with the same name
@@ -3563,6 +3568,7 @@ class tomographicModels:
         Args:
             f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
             threshold (float): the threshold of whether to use the filtered value or not
+            windowSize (int): the window size; can be 3 or 5
         
         Returns:
             f, the same as the input
@@ -3626,6 +3632,30 @@ class tomographicModels:
         else:
             self.libprojectors.BilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BilateralFilter(f, f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, scale, True)
+            
+    def GuidedFilter(self, f, r, epsilon):
+        """Performs 3D Guided Filter denoising method
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
+            r (int): the window radius (in number of pixels)
+            epsilon (float): the degree of smoothing
+        
+        Returns:
+            f, the same as the input
+        """
+        
+        r = min(r,10)
+        self.libprojectors.GuidedFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.GuidedFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.GuidedFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], r, epsilon, f.is_cuda == False)
+        else:
+            self.libprojectors.GuidedFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.GuidedFilter(f, f.shape[0], f.shape[1], f.shape[2], r, epsilon, True)
     
     def DictionaryDenoising(self, f, dictionary, sparsityThreshold=8, epsilon=0.0):
         """Represents 3D data by a sparse representation of an overcomplete dictionary, effectively denoising the data

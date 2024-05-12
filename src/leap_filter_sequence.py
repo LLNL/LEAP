@@ -145,6 +145,32 @@ class BilateralFilter(denoisingFilter):
     def apply(self, f):
         return self.leapct.PriorBilateralFilter(f, self.spatialFWHM, self.intensityFWHM, self.scale)
         
+class GuidedFilter(denoisingFilter):
+    """This class defines a filter based on leapct.tomographicModels.GuidedFilter
+    
+    Args:
+        leapct (object of the tomographicModels class)
+        r (int): the window radius (in number of pixels)
+        epsilon (float): the degree of smoothing
+    
+    """
+    def __init__(self, leapct, r, epsilon):
+        super(GuidedFilter, self).__init__(leapct)
+        """Constructor for GuidedFilter class
+        
+        This constructor sets the following:
+        leapct (object of the tomographicModels class)
+        r (int): the window radius (in number of pixels)
+        epsilon (float): the degree of smoothing
+        """
+
+        self.r = r
+        self.epsilon = epsilon
+        self.isDifferentiable = False
+        
+    def apply(self, f):
+        return self.leapct.GuidedFilter(f, self.r, self.epsilon)
+        
 class MedianFilter(denoisingFilter):
     """This class defines a filter based on leapct.tomographicModels.MedianFilter
     
