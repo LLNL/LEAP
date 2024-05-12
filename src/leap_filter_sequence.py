@@ -193,6 +193,13 @@ class MedianFilter(denoisingFilter):
 class TV(denoisingFilter):
     """This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer
     
+    For more information about this filter, please see
+    
+    .. line-block::
+       leapct.tomographicModels.TVcost
+       leapct.tomographicModels.TVgradient
+       leapct.tomographicModels.TVquadForm
+    
     Args:
         leapct (object of the tomographicModels class)
         delta (float): parameter for the Huber-like loss function used in TV
@@ -253,13 +260,25 @@ class TV(denoisingFilter):
             return self.leapct.diffuse(f, self.delta, 1, self.p)
 
 class LpNorm(denoisingFilter):
-    """This class defines a filter based on the L_p norm (raised to the p power) of the input
+    r"""This class defines a filter based on the L_p norm (raised to the p power) of the input
+    
+    This cost functional of this regularizer is given by
+    
+    .. math::
+       \begin{eqnarray}
+         C(f) &:=& \sum h(B(f - f_0)) \\
+         h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+       \end{eqnarray}
+
+    The B operator is either the identity transform (does nothing), a low-pass, or a high-pass filter.  See the FWHM parameter description.
     
     Args:
         leapct (object of the tomographicModels class)
+        delta (float): parameter for the Huber-like loss function used in TV
         p (float): The p-value of the L_p norm
         weight (float): the regularizaion strength of this denoising filter term
-        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates ||f-f_0||_p^p
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this parameter is optional
+        FWHM (float): the units are in number of pixels. if FWHM > 1.0, B is a low-pass filter with the specified FWHM and if FWHM < -1.0, B is a high-pass filter with the specified FWHM, otherwise B is the identity transform
     """
     def __init__(self, leapct, delta=0.0, p=1.0, weight=1.0, f_0=None, FWHM=0.0):
         super(LpNorm, self).__init__(leapct)
@@ -270,7 +289,8 @@ class LpNorm(denoisingFilter):
         delta (float): parameter for the Huber-like loss function
         p (float): The p-value of the L_p norm
         weight (float): the regularizaion strength of this denoising filter term
-        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates ||f-f_0||_p^p
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this parameter is optional
+        FWHM (float): the units are in number of pixels. if FWHM > 1.0, B is a low-pass filter with the specified FWHM and if FWHM < -1.0, B is a high-pass filter with the specified FWHM
         """
         
         self.delta = delta

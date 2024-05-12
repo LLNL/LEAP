@@ -26,7 +26,7 @@ numAngles = 360
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
-numRows = numCols//3
+numRows = numCols#//3
 
 # Set the scanner geometry
 sod = 1100 # source-to-object distance (mm)
@@ -34,7 +34,7 @@ sdd = 1400 # source-to-detector distance (mm)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), sod, sdd)
 
 # Set the lamonography angle which is the rotation of the axis of rotation from the z-axis
-laminographyAngle = 10.0 # degrees
+laminographyAngle = 40.0 # degrees
 
 # Switch to modular-beam coordinates
 leapct.convert_to_modularbeam()
@@ -53,12 +53,22 @@ colVecs = leapct.get_colVectors()
 sourcePositions[:,2] = np.tan(laminographyAngle*np.pi/180.0)*sod
 moduleCenters[:,2] = -np.tan(laminographyAngle*np.pi/180.0)*(sdd-sod)
 
+# Use the following 7 lines to rotate the detector as well
+from scipy.spatial.transform import Rotation as R
+sin_theta = np.sin(-0.5*laminographyAngle*np.pi/180.0)
+cos_theta = np.cos(-0.5*laminographyAngle*np.pi/180.0)
+for n in range(numAngles):
+    q = np.append(colVecs[n,:].copy()*sin_theta, cos_theta)
+    A = R.from_quat(q).as_matrix()
+    rowVecs[n,:] = np.matmul(A, rowVecs[n,:])
+
 # Now re-set the modular-beam geometry with the modified source and detector locations
 leapct.set_modularbeam(numAngles, numRows, numCols, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVecs, colVecs)
 
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
 leapct.set_default_volume()
+leapct.set_numZ(2*int(np.ceil(12.0/leapct.get_voxelHeight()+1))) # reduce the number of z-slices to those that just occupy the object
 
 # If you want to specify the volume yourself, use this function:
 #leapct.set_volume(numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
@@ -68,7 +78,6 @@ leapct.set_default_volume()
 # that the geometry was set properly
 leapct.print_parameters()
 leapct.sketch_system([0, 45, 90, 135, 180])
-#quit()
 
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
@@ -137,7 +146,7 @@ filters.append(TV(leapct, delta=0.02/20.0))
 #leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
 #leapct.LS(g,f,50,'SQS')
-leapct.RWLS(g,f,100,None,None,'SQS')
+leapct.RWLS(g,f,100,filters,None,'SQS')
 #leapct.RDLS(g,f,50,filters,1.0,True,1)
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
