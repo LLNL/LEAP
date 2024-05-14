@@ -27,6 +27,7 @@ bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
     params->setToZero(g, params->projectionData_numberOfElements());
     int numZ_save = params->numZ;
     float offsetZ_save = params->offsetZ;
+    float z_0_save = params->z_0();
 
     params->volumeDimensionOrder = parameters::XYZ;
 
@@ -44,7 +45,8 @@ bool CPUproject_SF_ZYX(float* g, float* f, parameters* params)
 
         float* f_XYZ = reorder_ZYX_to_XYZ(f, params, sliceStart, sliceEnd);
         params->numZ = sliceEnd - sliceStart + 1;
-        params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
+        //params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
+        params->offsetZ += sliceStart * params->voxelHeight + z_0_save - params->z_0();
         if (params->geometry == parameters::CONE)
             CPUproject_SF_cone(g, f_XYZ, params, false);
         else if (params->geometry == parameters::FAN)
@@ -65,6 +67,7 @@ bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
 {
     int numZ_save = params->numZ;
     float offsetZ_save = params->offsetZ;
+    float z_0_save = params->z_0();
 
     params->volumeDimensionOrder = parameters::XYZ;
 
@@ -87,7 +90,10 @@ bool CPUbackproject_SF_ZYX(float* g, float* f, parameters* params)
         int numZ_new = (sliceEnd - sliceStart + 1);
         float* f_XYZ = (float*)malloc(sizeof(float) * params->numX * params->numY * numZ_new);
         params->numZ = numZ_new;
-        params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
+        //params->offsetZ = offsetZ_save + sliceStart * params->voxelHeight;
+        params->offsetZ += sliceStart * params->voxelHeight + z_0_save - params->z_0();
+        //printf("z: %f to %f\n", params->z_samples(0), params->z_samples(params->numZ-1));
+
         if (params->geometry == parameters::CONE)
             CPUbackproject_SF_cone(g, f_XYZ, params);
         else if (params->geometry == parameters::FAN)
