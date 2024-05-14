@@ -124,13 +124,13 @@ def project_cone(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0, sod, tau):
         cos_beta = 1.0
 
     #N_r = int(0.5 + 0.5*numR)
-    N_r = int(0.5 - r_0/T_r)
+    #N_r = int(0.5 - r_0/T_r)
     #N_r = int(np.floor(1.0 - r_0/T_r))
     
     r_center_ind = -r_0/T_r
     N_r_left = int(np.floor(r_center_ind))+1
     N_r_right = numR - N_r_left
-    r_max = max((numR - 1)*T_r + r_0, np.abs(r_0))
+    #r_max = max((numR - 1)*T_r + r_0, np.abs(r_0))
     
     Rcos_sq_plus_tau_sq = sod*sod*cos_beta*cos_beta + tau*tau
 
@@ -147,8 +147,10 @@ def project_cone(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0, sod, tau):
 
             if u_unbounded < 0.0:
                 rInd_max = N_r_left
+                r_max = np.abs(r_0)
             else:
                 rInd_max = N_r_right
+                r_max = (numR - 1)*T_r + r_0
             r_min = 0.5*T_r
 
             sec_sq_plus_u_sq = X * X + u * u
@@ -366,7 +368,7 @@ def project_parallel(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0):
     N_r_left = int(np.floor(r_center_ind))+1
     N_r_right = numR - N_r_left
 
-    r_max = max((numR - 1)*T_r + r_0, np.abs(r_0))
+    #r_max = max((numR - 1)*T_r + r_0, np.abs(r_0))
 
     for j in prange(numRows):
         v = j*T_v+v_0
@@ -382,8 +384,10 @@ def project_parallel(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0):
 
             if u_unbounded < 0.0:
                 rInd_max = N_r_left
+                r_max = np.abs(r_0)
             else:
                 rInd_max = N_r_right
+                r_max = (numR - 1)*T_r + r_0
             r_min = 0.5*T_r
 
             b_ti = v * sin_beta
@@ -687,14 +691,14 @@ class SymmetricProjectors:
             self.numZ = numZ
         if numR <= 0:
             self.numR = self.numCols
-            if self.numR % 2 == 1:
-                self.numR += 1
-                #print('WARNING: Setting numR to the next largest even number')
+            #if self.numR % 2 == 1:
+            #    self.numR += 1
+            #    #print('WARNING: Setting numR to the next largest even number')
         else:
             self.numR = numR
-            if self.numR % 2 == 1:
-                self.numR += 1
-                print('WARNING: Setting numR to the next largest even number')
+            #if self.numR % 2 == 1:
+            #    self.numR += 1
+            #    print('WARNING: Setting numR to the next largest even number')
         if sizeZ <= 0.0:
             self.sizeZ = self.pixelHeight
         else:
@@ -731,14 +735,14 @@ class SymmetricProjectors:
         
         if numR <= 0:
             self.numR = self.numCols
-            if self.numR % 2 == 1:
-                self.numR += 1
-                #print('WARNING: Setting numR to the next largest even number')
+            #if self.numR % 2 == 1:
+            #    self.numR += 1
+            #    #print('WARNING: Setting numR to the next largest even number')
         else:
             self.numR = numR
-            if self.numR % 2 == 1:
-                self.numR += 1
-                print('WARNING: Setting numR to the next largest even number')
+            #if self.numR % 2 == 1:
+            #    self.numR += 1
+            #    print('WARNING: Setting numR to the next largest even number')
             
         if sizeZ <= 0.0:
             self.sizeZ = self.pixelHeight * self.sod / self.sdd
@@ -786,7 +790,7 @@ class SymmetricProjectors:
         if self.geometry == self.CONE:
             u = self.col(np.array(range(self.numCols)))/self.sdd
             v = self.row(np.array(range(self.numRows)))/self.sdd
-            v,u = np.meshgrid(v,u)
+            u,v = np.meshgrid(u,v)
             g = g * (1.0+self.tau/self.sod)/(1.0 + u**2 + v**2)
         return g
         
@@ -970,7 +974,7 @@ class SymmetricProjectors:
             return None
 
 
-''' Example Usage
+#''' Example Usage
 import matplotlib.pyplot as plt
 
 # Make an instance of the SymmetricProjectors class
@@ -996,17 +1000,21 @@ g = flash.allocateProjection()
 f = flash.allocateReconstruction()
 
 # For testing purposes, we will set f to a sphere and forward project it
-x = (np.array(range(f.shape[0]))-0.5*(f.shape[0]-1))
-y = (np.array(range(f.shape[1]))-0.5*(f.shape[1]-1))
-x = x/np.max(x)
-y = y/np.max(y)
-y,x = np.meshgrid(y,x)
-f[x**2+y**2 <= 0.5**2] = 1.0
+r = np.array(range(flash.numR),dtype=np.float32)
+z = np.array(range(flash.numZ),dtype=np.float32)
+for i in range(flash.numR):
+    r[i] = flash.r(i)
+for i in range(flash.numZ):
+    z[i] = flash.z(i)
+r,z = np.meshgrid(r,z)
+f[r**2+z**2 <= (100.0)**2] = 1.0
+
 flash.project(g,f)
 
 # Now let's try to reconstruct this sphere with SART
 f[:] = 0.0 # initial to the reconstruction to zero, so we are not cheating
 flash.SART(g,f,100)
+#flash.FBP(g,f)
 
 # Display the result
 plt.imshow(f)
