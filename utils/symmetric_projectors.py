@@ -974,7 +974,7 @@ class SymmetricProjectors:
             return None
 
 
-#''' Example Usage
+''' Example Usage
 import matplotlib.pyplot as plt
 
 # Make an instance of the SymmetricProjectors class
