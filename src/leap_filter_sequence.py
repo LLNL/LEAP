@@ -204,7 +204,7 @@ class TV(denoisingFilter):
         leapct (object of the tomographicModels class)
         delta (float): parameter for the Huber-like loss function used in TV
         weight (float): the regularizaion strength of this denoising filter term
-        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates TV(f-f_0)
+        f_0 (C contiguous float32 numpy or torch array): a prior volume; this is optional but if specified this class calculates TV(f-f_0), e.g., PICCS
     
     """
     def __init__(self, leapct, delta=0.0, p=1.2, weight=1.0, f_0=None):

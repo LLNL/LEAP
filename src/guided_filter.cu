@@ -54,11 +54,11 @@ __global__ void calcScaleAndShift(const float* f, float* scale, float* shift, co
 
     const float meanI = x * weight;
     const float varI = xx * weight - meanI * meanI;
-    const float a = varI / (varI + epsilon);
-    //const float a = varI / (varI + epsilon*max(meanI,1.0e-8));
+    const float a = varI / (varI + epsilon); // absolute
+    //const float a = varI / (varI + epsilon*max(meanI,1.0e-8)); // relative
     const float b = meanI - a * meanI;
     
-    const int ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+    const uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
     scale[ind] = a;
     shift[ind] = b;
 }
@@ -103,7 +103,7 @@ __global__ void guidedFilterSecondStep(float* f, const float* a, const float* b,
     mean_a *= weight;
     mean_b *= weight;
 
-    const int ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
+    const uint64 ind = uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k);
     f[ind] = mean_a * f[ind] + mean_b;
 }
 

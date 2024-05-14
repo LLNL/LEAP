@@ -324,8 +324,8 @@ float parameters::rFOV()
 
 		//float R_tau = sqrt(sod * sod + tau * tau);
 		float alpha_right = u_0();
-		//float alpha_left = pixelWidth * float(numCols - 1) + u_0();
-		float alpha_left = u(numCols - 1);
+		float alpha_left = pixelWidth * float(numCols - 1) + u_0();
+		//float alpha_left = u(numCols - 1);
 		if (detectorType == FLAT)
 		{
 			alpha_right = atan(alpha_right / sdd);
@@ -334,7 +334,7 @@ float parameters::rFOV()
 		if (offsetScan)
 			return sod * sin(max(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
 		else
-			return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left-float(atan(tau / sod)))));
+			return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
 	}
 	else
 		return float(1.0e16);
@@ -1090,7 +1090,7 @@ bool parameters::set_offsetScan(bool aFlag)
 			offsetScan = false;
 			return false;
 		}
-		printf("Warning: offsetScan not working yet!\n");
+		//printf("Warning: offsetScan not working yet!\n");
 		offsetScan = aFlag;
 		truncatedScan = false;
 	}
