@@ -332,7 +332,7 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * params->T_phi())
+	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi())*180.0/PI)
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;
@@ -408,7 +408,7 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * params->T_phi())
+	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi())*180.0/PI)
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;
@@ -541,7 +541,7 @@ bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* par
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * params->T_phi())
+	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi()) * 180.0 / PI)
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;

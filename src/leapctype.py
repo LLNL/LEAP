@@ -4033,6 +4033,10 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.get_angularRange()
         
+    def set_phis(self,phis):
+        """Set the projection angles"""
+        return self.set_angles(phis)
+        
     def set_angles(self,phis):
         """Set the projection angles"""
         self.libprojectors.set_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]

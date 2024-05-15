@@ -706,8 +706,13 @@ void parameters::printAll()
 	printf("number of angles: %d\n", numAngles);
 	printf("number of detector elements (rows, cols): %d x %d\n", numRows, numCols);
 	if (phis != NULL && numAngles >= 2)
-		printf("angular range: %f degrees\n", angularRange);
+	{
+		if (T_phi() < 0.0)
+			printf("angular range: -%f degrees\n", angularRange);
+		else
+			printf("angular range: %f degrees\n", angularRange);
 		//printf("angular range: %f degrees\n", 180.0 / PI * ((phis[numAngles - 1] - phis[0]) + 0.5 * (phis[numAngles - 1] - phis[numAngles - 2]) + 0.5 * (phis[1] - phis[0])));
+	}
 	printf("detector pixel size: %f mm x %f mm\n", pixelHeight, pixelWidth);
 	printf("center detector pixel: %f, %f\n", centerRow, centerCol);
 	if (geometry == CONE || geometry == FAN)
@@ -1078,9 +1083,10 @@ bool parameters::set_offsetScan(bool aFlag)
 		offsetScan = aFlag;
 	else
 	{
-		if (numAngles <= 1 || angularRange < 360.0 - T_phi())
+		if (numAngles <= 1 || angularRange < 360.0 - fabs(T_phi())*180.0/PI)
 		{
 			printf("Error: offsetScan requires at least 360 degrees of projections!\n");
+			//printf("angularRange = %f, T_phi = %f\n", angularRange, T_phi());
 			offsetScan = false;
 			return false;
 		}
@@ -1337,7 +1343,7 @@ bool parameters::anglesAreEquispaced()
 		for (int i = 1; i < numAngles-1; i++)
 		{
 			float curSpacing = phis[i + 1] - phis[i];
-			if (fabs(curSpacing - firstSpacing) > 5.0e-7)
+			if (fabs(curSpacing - firstSpacing) > 1.0e-6)
 			{
 				//printf("dist: %e\n", fabs(curSpacing - firstSpacing));
 				return false;

@@ -601,7 +601,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
 {
     if (params == NULL)
         return 0;
-    else if (params->helicalPitch != 0.0 || params->offsetScan == false || params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+    else if (params->helicalPitch != 0.0 || params->offsetScan == false || params->angularRange < 360.0 - fabs(params->T_phi()) * 180.0 / PI)
         return 0;
 
     if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)

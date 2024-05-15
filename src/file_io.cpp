@@ -148,7 +148,10 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	param_file << centerCol << " = " << params->centerCol << std::endl;
 	if (params->anglesAreEquispaced())
 	{
-		param_file << angularRange << " = " << params->angularRange << std::endl;
+		if (params->T_phi() < 0.0)
+			param_file << angularRange << " = " << -params->angularRange << std::endl;
+		else
+			param_file << angularRange << " = " << params->angularRange << std::endl;
 	}
 	else
 	{

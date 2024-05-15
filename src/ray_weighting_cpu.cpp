@@ -154,7 +154,7 @@ float* setOffsetScanWeights(parameters* params)
 	//*/
 	if (params->offsetScan == false)
 		return NULL;
-	else if (params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+	else if (params->angularRange < 360.0 - fabs(params->T_phi()) * 180.0 / PI)
 	{
 		printf("Error: offsetScan requires at least 360 degree scan!\n");
 		return NULL;
