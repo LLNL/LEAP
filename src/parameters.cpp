@@ -1098,7 +1098,7 @@ bool parameters::set_offsetScan(bool aFlag)
 		}
 		//printf("Warning: offsetScan not working yet!\n");
 		offsetScan = aFlag;
-		truncatedScan = false;
+		//truncatedScan = false;
 	}
 	return true;
 }
@@ -1110,7 +1110,7 @@ bool parameters::set_truncatedScan(bool aFlag)
 	else
 	{
 		truncatedScan = aFlag;
-		offsetScan = false;
+		//offsetScan = false;
 	}
 	return true;
 }
@@ -1853,6 +1853,10 @@ bool parameters::convert_conebeam_to_modularbeam()
 	delete[] d_pos;
 	delete[] v_vec;
 	delete[] u_vec;
+
+	//for (int i = 0; i < numAngles; i++)
+	//	printf("%f\n", phis[i]*180.0/PI);
+
 	return true;
 }
 

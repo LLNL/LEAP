@@ -39,6 +39,8 @@ cpp_files=[
     'ray_weighting_cpu.cpp', 
     'rebin.cpp', 
     'sensitivity_cpu.cpp', 
+    'resample_cpu.cpp', 
+    'sinogram_replacement.cpp', 
     'tomographic_models_c_interface.cpp', 
     'tomographic_models.cpp', 
 ]
@@ -59,6 +61,7 @@ cuda_files=[
     'ray_weighting.cu', 
     'scatter_models.cu', 
     'sensitivity.cu', 
+    'resample.cu', 
     'total_variation.cu',
 ]
 
@@ -77,12 +80,15 @@ if cuda:
         extra_compile_args={'cxx': ['-D__USE_GPU'], 
                             'nvcc': ['-D__USE_GPU', '-O3']}
     else: # CUDA GPU
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__INCLUDE_CUFFT'], 
-                            'nvcc': ['-D__USE_GPU', '-O3', '-D__INCLUDE_CUFFT']}
+        #extra_compile_args={'cxx': ['-D__USE_GPU'], 
+        #                    'nvcc': ['-D__USE_GPU', '-O3']}
+        extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
+                            'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
     ext_mod = CUDAExtension(
         name='leapct',
         sources=source_files,
         extra_compile_args=extra_compile_args,
+        #extra_link_args=["-lcufft"], 
         extra_cflags=['-O3'])
 else:
     source_files = []
@@ -93,6 +99,7 @@ else:
         name='leapct',
         sources=source_files,
         extra_cflags=['-O3'],
+        #extra_link_args=["-lcufft"], 
         extra_compile_args={'cxx': ['-D__USE_CPU']}
         #extra_compile_args=['-g', '-D__USE_CPU'],
     )
