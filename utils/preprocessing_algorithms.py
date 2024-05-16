@@ -314,3 +314,53 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     
     return g
     
+def parameter_sweep(leapct, g, param, values, iz=None, algorithmName=None):
+    valid_params = ['centerCol', 'centerRow', 'sod', 'sdd']
+    if any(name in param for name in valid_params) == False:
+        print('Invalid parameter, must be one of: ' + str(valid_params))
+        return None
+    if iz is None:
+        iz = int(leapct.get_numZ()//2)
+    if iz < 0 or iz >= leapct.get_numZ():
+        print('Slice index is out of bounds for current volume specification')
+        return None
+    
+    centerCol_save = leapct.get_centerCol()
+    centerRow_save = leapct.get_centerRow()
+    sod_save = leapct.get_sod()
+    sdd_save = leapct.get_sdd()
+    offsetZ_save = leapct.get_offsetZ()
+    numZ_save = leapct.get_numZ()
+    
+    z = leapct.z_samples()
+    leapct.set_numZ(1)
+    offsetZ = z[iz]
+    leapct.set_offsetZ(offsetZ)
+    
+    f = leapct.allocate_volume()
+    f_stack = np.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=np.float32)
+    
+    for n in range(len(values)):
+        if param == 'sod':
+            leapct.set_sod(values[n])
+        elif param == 'sdd':
+            leapct.set_sdd(values[n])
+        elif param == 'centerCol':
+            leapct.set_centerCol(values[n])
+        elif param == 'centerRow':
+            leapct.set_centerRow(values[n])
+        if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
+            leapct.inconsistencyReconstruction(g,f)
+        else:
+            leapct.FBP(g,f)
+        f_stack[n,:,:] = f[0,:,:]
+    
+    leapct.set_centerCol(centerCol_save)
+    leapct.set_centerRow(centerRow_save)
+    leapct.set_sod(sod_save)
+    leapct.set_sdd(sdd_save)
+    leapct.set_numZ(numZ_save)
+    leapct.set_offsetZ(offsetZ_save)
+    return f_stack
+    
+    

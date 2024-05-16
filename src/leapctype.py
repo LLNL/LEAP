@@ -535,6 +535,20 @@ class tomographicModels:
         self.libprojectors.set_centerRow.argtypes = [ctypes.c_float]
         return self.libprojectors.set_centerRow(centerRow)
         
+    def set_sod(self, sod):
+        """Set sod parameter"""
+        self.set_model()
+        self.libprojectors.set_sod.restype = ctypes.c_bool
+        self.libprojectors.set_sod.argtypes = [ctypes.c_float]
+        return self.libprojectors.set_sod(sod)
+        
+    def set_sdd(self, sdd):
+        """Set sdd parameter"""
+        self.set_model()
+        self.libprojectors.set_sdd.restype = ctypes.c_bool
+        self.libprojectors.set_sdd.argtypes = [ctypes.c_float]
+        return self.libprojectors.set_sdd(sdd)
+        
     def convert_to_modularbeam(self):
         """Converts parallel- or cone-beam data to a modular-beam format for extra customization of the scanning geometry"""
         if self.get_geometry() == 'PARALLEL':

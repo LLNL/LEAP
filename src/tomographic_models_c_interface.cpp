@@ -291,6 +291,15 @@ bool set_centerRow(float centerRow)
 	return tomo()->set_centerRow(centerRow);
 }
 
+bool set_sod(float sod)
+{
+	return tomo()->params.set_sod(sod);
+}
+bool set_sdd(float sdd)
+{
+	return tomo()->params.set_sdd(sdd);
+}
+
 bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
 {
 	return tomo()->set_volume(numX, numY, numZ, voxelWidth, voxelHeight, offsetX, offsetY, offsetZ);

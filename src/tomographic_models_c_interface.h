@@ -80,6 +80,9 @@ extern "C" PROJECTOR_API int get_detectorType();
 extern "C" PROJECTOR_API bool set_numCols(int);
 extern "C" PROJECTOR_API bool set_numRows(int);
 
+extern "C" PROJECTOR_API bool set_sod(float);
+extern "C" PROJECTOR_API bool set_sdd(float);
+
 extern "C" PROJECTOR_API bool set_pixelHeight(float);
 extern "C" PROJECTOR_API bool set_pixelWidth(float);
 

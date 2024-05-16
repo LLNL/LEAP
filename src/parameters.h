@@ -310,6 +310,9 @@ public:
 	float* rowVectors;
 	float* colVectors;
 
+	bool set_sod(float);
+	bool set_sdd(float);
+
 	/**
 	 * \fn          set_sourcesAndModules
 	 * \brief       sets the modular-beam source and detector positions and orientations

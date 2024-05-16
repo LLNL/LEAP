@@ -877,6 +877,34 @@ bool parameters::get_angles(float* phis_out)
 	return true;
 }
 
+bool parameters::set_sod(float sod_in)
+{
+	if (sod_in > 0.0 && sod_in < sdd)
+	{
+		sod = sod_in;
+		return true;
+	}
+	else
+	{
+		printf("Error: invalid value!\n");
+		return false;
+	}
+}
+
+bool parameters::set_sdd(float sdd_in)
+{
+	if (sdd_in > 0.0 && sdd_in > sod)
+	{
+		sdd = sdd_in;
+		return true;
+	}
+	else
+	{
+		printf("Error: invalid value!\n");
+		return false;
+	}
+}
+
 bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
 {
 	if (phis != NULL)
