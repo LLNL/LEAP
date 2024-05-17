@@ -301,7 +301,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 			return false;
 
 		float* dev_f = 0;
-		if ((cudaStatus = cudaMalloc((void**)&dev_f, params->numX * params->numY * params->numZ * sizeof(float))) != cudaSuccess)
+		if ((cudaStatus = cudaMalloc((void**)&dev_f, uint64(params->numX) * uint64(params->numY) * uint64(params->numZ) * sizeof(float))) != cudaSuccess)
 		{
 			fprintf(stderr, "cudaMalloc(volume) failed!\n");
 			if (dev_g != 0)
