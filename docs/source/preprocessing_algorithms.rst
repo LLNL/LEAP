@@ -9,3 +9,4 @@ Preprocessing Algorithms
 .. autofunction:: preprocessing_algorithms.ringRemoval_fast
 .. autofunction:: preprocessing_algorithms.ringRemoval_median
 .. autofunction:: preprocessing_algorithms.ringRemoval
+.. autofunction:: preprocessing_algorithms.parameter_sweep

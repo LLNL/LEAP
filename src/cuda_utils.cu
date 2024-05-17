@@ -913,7 +913,7 @@ float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
 	float* dev_g = 0;
 	if (cudaMalloc((void**)&dev_g, N * sizeof(float)) != cudaSuccess)
 	{
-		fprintf(stderr, "cudaMalloc(projection) failed!\n");
+		fprintf(stderr, "cudaMalloc(projection[%d,%d,%d]) failed!\n", params->numAngles, params->numRows, params->numCols);
 		return NULL;
 	}
 	if (cudaMemcpy(dev_g, g, N * sizeof(float), cudaMemcpyHostToDevice))

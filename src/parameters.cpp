@@ -1535,8 +1535,21 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5 * pixelHeight / sdd;
 		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5 * pixelHeight / sdd;
 
-		rowsNeeded[0] = max(0, int(floor((v_lo - v_0() / sdd) / T_v)));
-		rowsNeeded[1] = min(numRows - 1, int(ceil((v_hi - v_0() / sdd) / T_v)));
+		rowsNeeded[0] = min(numRows - 1, max(0, int(floor((v_lo - v_0() / sdd) / T_v))));
+		rowsNeeded[1] = max(0, min(numRows - 1, int(ceil((v_hi - v_0() / sdd) / T_v))));
+
+		/*
+		if (rowsNeeded[0] > rowsNeeded[1])
+		{
+			printf("T_v = %f\n", T_v);
+			printf("v_denom_min = %f\n", v_denom_min);
+			printf("v_denom_max = %f\n", v_denom_max);
+			printf("v_lo = %f\n", v_lo);
+			printf("v_hi = %f\n", v_hi);
+			printf("(v_lo - v_0() / sdd) / T_v = %f\n", (v_lo - v_0() / sdd) / T_v);
+			printf("(v_hi - v_0() / sdd) / T_v = %f\n", (v_hi - v_0() / sdd) / T_v);
+		}
+		//*/
 	}
 	return true;
 }

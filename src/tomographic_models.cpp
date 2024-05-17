@@ -641,6 +641,8 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		else
 			g_chunk = copyRows(g, rowRange[0], rowRange[1]);
 
+		//printf("firstSlice = %d, lastSlice = %d, rowRange: %d to %d\n", firstSlice, lastSlice, rowRange[0], rowRange[1]);
+
 		// make a copy of the params
 		parameters chunk_params;
 		chunk_params = params;
@@ -844,9 +846,9 @@ bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 		else
 		{
 			float* dev_g = 0;
-			if (cudaMalloc((void**)&dev_g, params.numAngles * params.numRows * params.numCols * sizeof(float)) != cudaSuccess)
+			if (cudaMalloc((void**)&dev_g, uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols) * sizeof(float)) != cudaSuccess)
 			{
-				fprintf(stderr, "cudaMalloc(projection) failed!\n");
+				fprintf(stderr, "cudaMalloc(projection[%d,%d,%d]) failed!\n", params.numAngles, params.numRows, params.numCols);
 				return false;
 			}
 			setToConstant(dev_g, 1.0, make_int3(params.numAngles, params.numRows, params.numCols), params.whichGPU);

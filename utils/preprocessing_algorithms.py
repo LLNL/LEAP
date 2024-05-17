@@ -204,6 +204,7 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     """
     if has_torch == True and type(g) is torch.Tensor:
         g_sum = torch.zeros((1,g.shape[1],g.shape[2]), dtype=torch.float32)
+        g_sum = g_sum.to(g.get_device())
         g_sum[0,:] = torch.mean(g,axis=0)
     else:
         g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
@@ -314,19 +315,45 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     
     return g
     
-def parameter_sweep(leapct, g, param, values, iz=None, algorithmName=None):
-    valid_params = ['centerCol', 'centerRow', 'sod', 'sdd']
+def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP'):
+    r"""Performs single-slice reconstructions of several values of a given parameter
+    
+    The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+    The parameters to sweep are all standard LEAP CT geometry parameter names, except 'tilt'
+    The 'tilt' parameter is swept by converting the geometry to modular-beam (see the convert_to_modularbeam function).
+    Then the tilt is achieved by rotating the colVecs and rowVecs parameters (note that the data g is not rotated, 
+    just the model of the detector orientation which is better because no interpolation is necessary).  This rotation
+    is achieved with the rotate_detector function.
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        values (list of floats): the values to reconstruct with
+        param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt'
+        iz (integer): the z-slice index to perform the reconstruction; if not given, uses the central slice
+        algorithmName (string): the name of the algorithm to use for reconstruction; can be 'FBP' or 'inconsistencyReconstruction'
+        
+    Returns:
+        stack of single-slice reconstructions (i.e., 3D numpy array or torch tensor) for all parameter values
+    """
+    valid_params = ['centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt']
+    if param == None:
+        param = 'centerCol'
     if any(name in param for name in valid_params) == False:
-        print('Invalid parameter, must be one of: ' + str(valid_params))
+        print('Error: Invalid parameter, must be one of: ' + str(valid_params))
         return None
     if iz is None:
         iz = int(leapct.get_numZ()//2)
     if iz < 0 or iz >= leapct.get_numZ():
-        print('Slice index is out of bounds for current volume specification')
+        print('Error: Slice index is out of bounds for current volume specification.')
         return None
-    
+    if param == 'tilt' and leapct.get_geometry() == 'FAN':
+        print('Error: Detector tilt can cannot be applied to fan-beam data.')
+        return None
+        
     centerCol_save = leapct.get_centerCol()
     centerRow_save = leapct.get_centerRow()
+    tau_save = leapct.get_tau()
     sod_save = leapct.get_sod()
     sdd_save = leapct.get_sdd()
     offsetZ_save = leapct.get_offsetZ()
@@ -338,25 +365,51 @@ def parameter_sweep(leapct, g, param, values, iz=None, algorithmName=None):
     leapct.set_offsetZ(offsetZ)
     
     f = leapct.allocate_volume()
-    f_stack = np.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=np.float32)
+    if has_torch == True and type(f) is torch.Tensor:
+        f_stack = torch.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=torch.float32)
+        f_stack = f_stack.to(f.get_device())
+    else:
+        f_stack = np.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=np.float32)
+
+    if param == 'tilt':
+        leapct_tilt = tomographicModels()
+        leapct_tilt.copy_parameters(leapct)
+        leapct_tilt.convert_to_modularbeam()
+    else:
+        leapct_tilt = None
     
+    last_value = 0.0
     for n in range(len(values)):
-        if param == 'sod':
-            leapct.set_sod(values[n])
-        elif param == 'sdd':
-            leapct.set_sdd(values[n])
-        elif param == 'centerCol':
+        print(str(n) + ': ' + str(param) + ' = ' + str(values[n]))
+        if param == 'centerCol':
             leapct.set_centerCol(values[n])
         elif param == 'centerRow':
             leapct.set_centerRow(values[n])
-        if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
-            leapct.inconsistencyReconstruction(g,f)
+        elif param == 'tau':
+            leapct.set_tau(values[n])
+        elif param == 'sod':
+            leapct.set_sod(values[n])
+        elif param == 'sdd':
+            leapct.set_sdd(values[n])
+        if param == 'tilt':
+            leapct_tilt.rotate_detector(values[n]-last_value)
+            if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
+                leapct_tilt.inconsistencyReconstruction(g,f)
+                print('  inconsistency metric: ' + str(leapct.sum(f**2)))
+            else:
+                leapct_tilt.FBP(g,f)
         else:
-            leapct.FBP(g,f)
+            if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
+                leapct.inconsistencyReconstruction(g,f)
+                print('  inconsistency metric: ' + str(leapct.sum(f**2)))
+            else:
+                leapct.FBP(g,f)
         f_stack[n,:,:] = f[0,:,:]
+        last_value = values[n]
     
     leapct.set_centerCol(centerCol_save)
     leapct.set_centerRow(centerRow_save)
+    leapct.set_tau(tau_save)
     leapct.set_sod(sod_save)
     leapct.set_sdd(sdd_save)
     leapct.set_numZ(numZ_save)
