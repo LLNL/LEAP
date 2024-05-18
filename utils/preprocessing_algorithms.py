@@ -378,6 +378,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     else:
         leapct_tilt = None
     
+    metrics = np.zeros(len(values))
     last_value = 0.0
     for n in range(len(values)):
         print(str(n) + ': ' + str(param) + ' = ' + str(values[n]))
@@ -395,15 +396,22 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             leapct_tilt.rotate_detector(values[n]-last_value)
             if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
                 leapct_tilt.inconsistencyReconstruction(g,f)
-                print('  inconsistency metric: ' + str(leapct.sum(f**2)))
+                metrics[n] = leapct.sum(f**2)
+                print('   inconsistency metric: ' + str(metrics[n]))
             else:
                 leapct_tilt.FBP(g,f)
+                metrics[n] = entropy(f)
+                print('   entropy metric: ' + str(metrics[n]))
         else:
             if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
                 leapct.inconsistencyReconstruction(g,f)
-                print('  inconsistency metric: ' + str(leapct.sum(f**2)))
+                metrics[n] = leapct.sum(f**2)
+                print('   inconsistency metric: ' + str(metrics[n]))
             else:
                 leapct.FBP(g,f)
+                metrics[n] = entropy(f)
+                print('   entropy metric: ' + str(metrics[n]))
+                
         f_stack[n,:,:] = f[0,:,:]
         last_value = values[n]
     
@@ -416,4 +424,8 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     leapct.set_offsetZ(offsetZ_save)
     return f_stack
     
+def entropy(x):
+    marg = np.histogramdd(np.ravel(x), bins = int(np.sqrt(x.size)))[0]/x.size
+    marg = list(filter(lambda p: p > 0, np.ravel(marg)))
+    return -np.sum(np.multiply(marg, np.log2(marg)))
     

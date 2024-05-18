@@ -227,6 +227,24 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.print_parameters()
         
+    def all_defined(self):
+        """Returns True if all CT geometry and CT volume parameters are defined, False otherwise"""
+        self.set_model()
+        self.libprojectors.all_defined.restype = ctypes.c_bool
+        return self.libprojectors.all_defined()
+    
+    def ct_geometry_defined(self):
+        """Returns True if all CT geometry parameters are defined, False otherwise"""
+        self.set_model()
+        self.libprojectors.ct_geometry_defined.restype = ctypes.c_bool
+        return self.libprojectors.ct_geometry_defined()
+        
+    def ct_volume_defined(self):
+        """Returns True if all CT volume parameters are defined, False otherwise"""
+        self.set_model()
+        self.libprojectors.ct_volume_defined.restype = ctypes.c_bool
+        return self.libprojectors.ct_volume_defined()
+        
     def verify_inputs(self, g, f):
         """ Verifies that the projection data (g) and the volume data (f) are compatible with the specified parameters """
         #if f is None:
@@ -274,15 +292,6 @@ class tomographicModels:
         self.libprojectors.getOptimalFFTsize.argtypes = [ctypes.c_int]
         self.libprojectors.getOptimalFFTsize.restype = ctypes.c_int
         return self.libprojectors.getOptimalFFTsize(N)
-
-    def available_RAM(self):
-        """Returns the amount of available CPU RAM in GB"""
-        try:
-            import psutil
-            return psutil.virtual_memory()[1]/2**30
-        except:
-            print('Error: cannot load psutil module which is used to calculate the amount of available CPU RAM')
-            return 0.0
 
     ###################################################################################################################
     ###################################################################################################################

@@ -76,6 +76,21 @@ bool reset()
 	return tomo()->reset();
 }
 
+bool all_defined()
+{
+	return tomo()->params.allDefined();
+}
+
+bool ct_geometry_defined()
+{
+	return tomo()->params.geometryDefined();
+}
+
+bool ct_volume_defined()
+{
+	return tomo()->params.volumeDefined();
+}
+
 bool include_cufft()
 {
 	#ifdef __INCLUDE_CUFFT

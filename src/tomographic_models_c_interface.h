@@ -37,6 +37,10 @@ extern "C" PROJECTOR_API bool reset();
 extern "C" PROJECTOR_API bool include_cufft();
 extern "C" PROJECTOR_API int getOptimalFFTsize(int N);
 
+extern "C" PROJECTOR_API bool all_defined();
+extern "C" PROJECTOR_API bool ct_geometry_defined();
+extern "C" PROJECTOR_API bool ct_volume_defined();
+
 extern "C" PROJECTOR_API bool verify_input_sizes(int, int, int, int, int, int);
 
 extern "C" PROJECTOR_API bool project_gpu(float* g, float* f);
