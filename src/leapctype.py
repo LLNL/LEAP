@@ -299,9 +299,29 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
-        """Sets the parameters for a cone-beam CT geometry
+        r"""Sets the parameters for a cone-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
+
+        .. math::
+           \begin{eqnarray*}
+           Pf(u,\varphi,v) &:=& \int_\mathbb{R} f\left(R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) + \Delta\varphi\widehat{\boldsymbol{z}}  + \frac{l}{\sqrt{1+u^2+v^2}}\left[-\boldsymbol{\theta}(\varphi)+u\boldsymbol{\theta}^\perp(\varphi) + v\widehat{\boldsymbol{z}} \right] \right) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int \frac{\sqrt{1+ u^2(\boldsymbol{x},\varphi) +v^2(\boldsymbol{x},\varphi)}}{(R-\boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi))^2} g\left( u(\boldsymbol{x},\varphi), \varphi, v(\boldsymbol{x},\varphi)\right) \, d\varphi \\
+           u(\boldsymbol{x},\varphi) &:=& \frac{\boldsymbol{x}\cdot \boldsymbol{\theta}^\perp(\varphi) + \tau}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \\
+           v(\boldsymbol{x},\varphi) &:=& \frac{x_3 - \Delta\varphi}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)}
+           \end{eqnarray*}
+
+        for flat-panel cone-beam and
+        
+        .. math::
+           \begin{eqnarray*}
+           Pf(\alpha,\varphi,\nu) &=& \int_\mathbb{R} f\left(R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) + \Delta\varphi\widehat{\boldsymbol{z}} + \frac{l}{\sqrt{1+\nu^2}}\left[-\boldsymbol{\theta}(\varphi-\alpha) + \nu\widehat{\boldsymbol{z}} \right] \right) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int \frac{\sqrt{1+\nu^2(\boldsymbol{x},\varphi)}}{\| R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) - \boldsymbol{x} \|^2}  g\left(\alpha(\boldsymbol{x},\varphi), \varphi, \nu(\boldsymbol{x},\varphi)\right) \, d\varphi \\
+           \alpha(\boldsymbol{x},\varphi) &:=& \tan^{-1}\left( \frac{\boldsymbol{x}\cdot \boldsymbol{\theta}^\perp(\varphi) + \tau}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \right) \\
+           \nu(\boldsymbol{x},\varphi) &:=& \frac{x_3 - \Delta\varphi}{\|R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) - \boldsymbol{x} \|}
+           \end{eqnarray*}
+        
+        for curved detector cone-beam data.  Here, we have used :math:`R` for sod, :math:`\tau` for tau, :math:`\Delta` for helicalPitch, u = s/sdd, and v = t/sdd.
         
         Args:
             numAngles (int): number of projection angles
@@ -336,9 +356,16 @@ class tomographicModels:
         return self.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
     def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
-        """Sets the parameters for a fan-beam CT geometry
+        r"""Sets the parameters for a fan-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           Pf(u,\varphi,x_3) &:=& \int_\mathbb{R} f\left(R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) - \frac{l}{\sqrt{1+u^2}}\left[\boldsymbol{\theta}(\varphi) - u\boldsymbol{\theta}^\perp(\varphi) \right] + x_3\widehat{\boldsymbol{z}} \right) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int \frac{1}{R-\boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \sqrt{1 + u^2(\boldsymbol{x},\varphi)} g\left( u(\boldsymbol{x},\varphi), \varphi, x_3\right) \, d\varphi \\
+           u(\boldsymbol{x},\varphi) &:=& \frac{\boldsymbol{x}\cdot \boldsymbol{\theta}^\perp(\varphi) + \tau}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)}
+           \end{eqnarray*}
         
         Args:
             numAngles (int): number of projection angles
@@ -372,9 +399,15 @@ class tomographicModels:
         return self.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
 
     def set_parallelbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
-        """Sets the parameters for a parallel-beam CT geometry
+        r"""Sets the parameters for a parallel-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           Pf(s, \varphi, x_3) &:=& \int_\mathbb{R} f(s\boldsymbol{\theta}^\perp(\varphi) - l\boldsymbol{\theta}(\varphi) + x_3\widehat{\boldsymbol{z}}) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int_0^{2\pi} g(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi), \varphi, x_3) \, d\varphi
+           \end{eqnarray*}
         
         Args:
             numAngles (int): number of projection angles
@@ -405,10 +438,19 @@ class tomographicModels:
         return self.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def set_modularbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
-        """Sets the parameters for a modular-beam CT geometry
+        r"""Sets the parameters for a modular-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) projection operator is given by
         
+        .. math::
+           \begin{eqnarray*}
+           Pf(s,t) &:=& \int_{\mathbb{R}} f\left( \boldsymbol{y} + \frac{l}{\sqrt{D^2 + s^2 + t^2}}\left[ \boldsymbol{c}-\boldsymbol{y} + s\boldsymbol{\widehat{u}} + t\boldsymbol{\widehat{v}} \right] \right) \, dl,
+           \end{eqnarray*}
+       
+        where :math:`\boldsymbol{y}` be a location of sourcePositions, :math:`\boldsymbol{c}` be a location of moduleCenters,
+        :math:`\boldsymbol{\widehat{v}}` be a rowVectors instance, :math:`\boldsymbol{\widehat{u}}` be a colVectors instance,
+        and :math:`D := \|\boldsymbol{c}-\boldsymbol{y}\|`.
+       
         Args:
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
@@ -881,7 +923,16 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def set_volume(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
-        """Set the CT volume parameters
+        r"""Set the CT volume parameters
+        
+        The samples are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           x[i] &:=& voxelWidth\left(i - \frac{numX-1}{2}\right) + offsetX, \qquad i = 0,1,\dots,numX-1 \\
+           y[j] &:=& voxelWidth\left(j - \frac{numY-1}{2}\right) + offsetY, \qquad j = 0,1,\dots,numY-1 \\
+           z[k] &:=& voxelHeight\left(k - \frac{numZ-1}{2}\right) + offsetZ, \qquad k = 0,1,\dots,numZ-1
+           \end{eqnarray*}
         
         Args:
             numX (int): number of voxels in the x-dimension
