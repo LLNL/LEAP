@@ -578,7 +578,7 @@ bool CPUproject_AbelParallel(float* g, float* f, parameters* params)
 
 			int rInd_min = (int)ceil(u / T_r);
 			double r_prev = double(rInd_min)*T_r;
-			double disc_sqrt_prev = sqrt(disc_ti_shift + r_prev * r_prev);
+			double disc_sqrt_prev = sqrt(max(0.0, disc_ti_shift + r_prev * r_prev));
 
 			double curVal = 0.0;
 

@@ -475,12 +475,14 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 
 	int rInd_min = (int)ceil(u / T_f.y);
 	float r_prev = (float)(rInd_min)*T_f.y;
+	/*
 	if (disc_ti_shift + r_prev * r_prev < 0.0f)
 	{
 		rInd_min = rInd_min + 1;
 		r_prev = (float)(rInd_min)*T_f.y;
 	}
-	float disc_sqrt_prev = sqrt(disc_ti_shift + r_prev * r_prev);
+	//*/
+	float disc_sqrt_prev = sqrt(max(0.0f, disc_ti_shift + r_prev * r_prev));
 
 	// Go back one sample and check
 	if (rInd_min >= 1)
@@ -561,12 +563,14 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 
 	int rInd_min = (int)ceil(u / T_f.y);
 	float r_prev = (float)(rInd_min)*T_f.y;
+	/*
 	if (disc_ti_shift + r_prev * r_prev < 0.0f)
 	{
 		rInd_min = rInd_min + 1;
 		r_prev = (float)(rInd_min)*T_f.y;
 	}
-	float disc_sqrt_prev = sqrt(disc_ti_shift + r_prev * r_prev);
+	//*/
+	float disc_sqrt_prev = sqrt(max(0.0f, disc_ti_shift + r_prev * r_prev));
 
 	// Go back one sample and check
 	if (rInd_min >= 1)

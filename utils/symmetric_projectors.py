@@ -396,9 +396,9 @@ def project_parallel(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0):
 
             rInd_min = int(np.ceil(u / T_r))
             r_prev = float(rInd_min)*T_r
-            disc_sqrt_prev = np.sqrt(disc_ti_shift + r_prev * r_prev)
+            disc_sqrt_prev = np.sqrt(max(0.0, disc_ti_shift + r_prev * r_prev))
 
-            curVal = 0.0;
+            curVal = 0.0
 
             ####################################################################################
             # Go back one sample and check
@@ -411,9 +411,9 @@ def project_parallel(g, f, beta, T_v, v_0, T_u, u_0, T_z, z_0, T_r, r_0):
                     ir_shifted_or_flipped = N_r_left - 1 - rInd_min_minus
                 else:
                     ir_shifted_or_flipped = N_r_left + rInd_min_minus
-
+                
                 if r_absoluteMinimum < r_max and 0 <= ir_shifted_or_flipped and ir_shifted_or_flipped <= numR-1:
-                    iz_arg_low = (b_ti - 0.5*(disc_sqrt_prev))*a_ti_inv*z_slope + z_shift;
+                    iz_arg_low = (b_ti - 0.5*(disc_sqrt_prev))*a_ti_inv*z_slope + z_shift
                     if 0.0 <= iz_arg_low and iz_arg_low <= numZ - 1:
                         iz_arg_low_floor = int(iz_arg_low)
                         dz = iz_arg_low - float(iz_arg_low_floor)
