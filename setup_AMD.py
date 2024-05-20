@@ -106,7 +106,7 @@ else:
 
 setup(
     name='leapct',
-    version='1.11', 
+    version='1.12', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 
