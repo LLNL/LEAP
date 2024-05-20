@@ -280,7 +280,8 @@ bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, flo
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
 
-    bool useTexture = true;
+    //bool useTexture = true;
+    bool useTexture = false;
 
     cudaTextureObject_t f_data_txt = NULL;
     cudaArray* f_data_array = NULL;
@@ -384,7 +385,8 @@ bool priorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
 
-    bool useTexture = true;
+    //bool useTexture = true;
+    bool useTexture = false;
 
     cudaTextureObject_t f_data_txt = NULL;
     cudaArray* f_data_array = NULL;
@@ -497,7 +499,8 @@ bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWH
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
 
-    bool useTexture = true;
+    //bool useTexture = true;
+    bool useTexture = false;
 
     cudaTextureObject_t f_data_txt = NULL;
     cudaArray* f_data_array = NULL;

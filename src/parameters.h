@@ -481,7 +481,7 @@ public:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns projectionDataSize() + volumeDataSize()
 	 */
-	float requiredGPUmemory(int extraCols = 0);
+	float requiredGPUmemory(int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
 
 	/**
 	 * \fn          hasSufficientGPUmemory
@@ -490,7 +490,7 @@ public:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 */
-	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0);
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
 
 	/**
 	 * \fn          rowRangeNeededForBackprojection

@@ -1652,6 +1652,8 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
         doLinearInterpolation = true;
     //*/
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
+    if (d_data_array == NULL || d_data_txt == NULL)
+        printf("Error loading texture memory for backprojection\n");
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);

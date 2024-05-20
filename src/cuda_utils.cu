@@ -791,10 +791,15 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     if (dev_data == nullptr)
         return nullptr;
     cudaArray* d_data_array = nullptr;
+    cudaError_t cudaStatus;
 
     // Allocate 3D array memory
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-    cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x), 0);
+    if ((cudaStatus = cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x), 0)) != cudaSuccess)
+    {
+        printf("CUDA Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     // Bind 3D array to texture object
     cudaResourceDesc resDesc;

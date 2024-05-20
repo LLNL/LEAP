@@ -241,6 +241,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		// no transfers to/from GPU are necessary; just run the code
 		//printf("WARNING: disabling filtering in FBP for debugging purposes!!!!\n");
 		filterProjections(g, params, false);
+		//printf("sum = %f\n", sum(g, make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU));
 
 		bool retVal = true;
 		bool doWeightedBackprojection_save = params->doWeightedBackprojection;

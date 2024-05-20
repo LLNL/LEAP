@@ -1727,27 +1727,27 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 	return true;
 }
 
-float parameters::requiredGPUmemory(int extraCols)
+float parameters::requiredGPUmemory(int extraCols, int numProjectionData, int numVolumeData)
 {
 	if (mu != NULL)
-		return projectionDataSize(extraCols) + 2.0*volumeDataSize() + extraMemoryReserved;
+		return numProjectionData*projectionDataSize(extraCols) + 2.0* numVolumeData*volumeDataSize() + extraMemoryReserved;
 	else
-		return projectionDataSize(extraCols) + volumeDataSize() + extraMemoryReserved;
+		return numProjectionData*projectionDataSize(extraCols) + numVolumeData*volumeDataSize() + extraMemoryReserved;
 }
 
-bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns)
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, int numProjectionData, int numVolumeData)
 {
 #ifndef __USE_CPU
 	if (useLeastGPUmemory)
 	{
-		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns))
+		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns, numProjectionData, numVolumeData))
 			return false;
 		else
 			return true;
 	}
 	else
 	{
-		if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory(extraColumns))
+		if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory(extraColumns, numProjectionData, numVolumeData))
 			return false;
 		else
 			return true;
