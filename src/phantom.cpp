@@ -126,7 +126,7 @@ bool phantom::addObject(float* f, parameters* params_in, int type, float* c, flo
 	}
 	if (isRotated || (CONE_X <= type && type <= CONE_Z))
 	{
-		float r_max = max(r[0], max(r[1], r[2]));
+		float r_max = sqrt(3.0)*max(r[0], max(r[1], r[2]));
 		minX = int(floor(x_inv(c[0] - r_max - T_x)));
 		maxX = int(ceil(x_inv(c[0] + r_max + T_x)));
 		minY = int(floor(y_inv(c[1] - r_max - T_y)));
