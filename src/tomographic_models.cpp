@@ -7,11 +7,8 @@
 // main API for LEAP
 ////////////////////////////////////////////////////////////////////////////////
 
-#include <stdlib.h>
-#include <stdio.h>
 #include <math.h>
 #include <algorithm>
-#include <cstring>
 #include <omp.h>
 #include "tomographic_models.h"
 #include "ray_weighting_cpu.h"
@@ -37,17 +34,44 @@
 #include "scatter_models.cuh"
 #endif
 
+#include "log.h"
+//Log::ReportingLevel() = logSTATUS;
+
 tomographicModels::tomographicModels()
 {
+	className = "tomographicModels";
 	params.initialize();
 	maxSlicesForChunking = 128;
 	//maxSlicesForChunking = 256;
 	//maxSlicesForChunking = 512;
+
+	/*
+	//std::ofstream pfile;
+
+	pfile.open("LEAPCT.log");
+	if (!pfile.is_open())
+		std::cout << "log file could not be opened" << std::endl;
+
+	Log::Stream() = &pfile;
+
+	Log::ReportingLevel() = logDEBUG;
+	LOG(logDEBUG, className, "") << "Error parsing phantom description!" << std::endl;
+	//*/
 }
 
 tomographicModels::~tomographicModels()
 {
 	reset();
+}
+
+void tomographicModels::set_log_status()
+{
+	Log::ReportingLevel() = logSTATUS;
+}
+
+void tomographicModels::set_log_debug()
+{
+	Log::ReportingLevel() = logDEBUG;
 }
 
 bool tomographicModels::set_maxSlicesForChunking(int N)
@@ -692,9 +716,15 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 
 		//* Do Computation
 		if (doFBP)
+		{
+			LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": FBP: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
 			FBP.execute(g_chunk, f_chunk, &chunk_params, true);
+		}
 		else
+		{
+			LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
 			proj.backproject(g_chunk, f_chunk, &chunk_params, true);
+		}
 		//*/
 
 		// clean up
@@ -832,9 +862,15 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 		
 		// Do Computation
 		if (doFBP)
+		{
+			LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": FBP: z-slices: (" << firstSlice << ", " << lastSlice << "), views = (" << viewRange[0] << ", " << viewRange[1] << ")" << std::endl;
 			FBP.execute(g_chunk, f_chunk, &chunk_params, true);
+		}
 		else
+		{
+			LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << "), views = (" << viewRange[0] << ", " << viewRange[1] << ")" << std::endl;
 			proj.backproject(g_chunk, f_chunk, &chunk_params, true);
+		}
 	}
 	return true;
 #else

@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+//#include "Log.h"
 //#include <torch/torch.h>
 //#include <torch/extension.h>
 //#include <pybind11/pybind11.h>
@@ -89,6 +90,16 @@ bool ct_geometry_defined()
 bool ct_volume_defined()
 {
 	return tomo()->params.volumeDefined();
+}
+
+void set_log_status()
+{
+	tomo()->set_log_status();
+}
+
+void set_log_debug()
+{
+	tomo()->set_log_debug();
 }
 
 bool include_cufft()
@@ -859,6 +870,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("print_parameters", &print_parameters, "");
     m.def("reset", &reset, "");
     m.def("include_cufft", &include_cufft, "");
+	m.def("set_log_status", &set_log_status, "");
+	m.def("set_log_debug", &set_log_debug, "");
     m.def("getOptimalFFTsize", &getOptimalFFTsize, "");
 	m.def("set_maxSlicesForChunking", &set_maxSlicesForChunking, "");
     m.def("verify_input_sizes", &verify_input_sizes, "");

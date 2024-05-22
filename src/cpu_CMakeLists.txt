@@ -36,6 +36,7 @@ set(HEADER
   rebin.h
   file_io.h
   leap_defines.h
+  log.h
 )
 
 set(SRC_CPP

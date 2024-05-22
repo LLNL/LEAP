@@ -180,6 +180,12 @@ class tomographicModels:
         else:
             return self.libprojectors.set_model(i)
             
+    def set_log_status(self):
+        self.libprojectors.set_log_status()
+        
+    def set_log_debug(self):
+        self.libprojectors.set_log_debug()
+            
     def set_maxSlicesForChunking(self, N):
         self.libprojectors.set_maxSlicesForChunking.restype = ctypes.c_bool
         self.libprojectors.set_maxSlicesForChunking.argtypes = [ctypes.c_int]

@@ -15,7 +15,17 @@
 
 #define LEAP_VERSION "1.12"
 
+/*
+#include <iostream>
+#include <ostream>
+#include <fstream>
+#include <sstream>
+//*/
+
 #include <stdlib.h>
+#include <stdio.h>
+#include <cstring>
+#include <string>
 #include "parameters.h"
 #include "projectors.h"
 #include "filtered_backprojection.h"
@@ -35,6 +45,9 @@ class tomographicModels
 public:
 	tomographicModels();
 	~tomographicModels();
+
+	void set_log_status();
+	void set_log_debug();
 
 	/**
 	 * \fn          reset
@@ -1058,6 +1071,9 @@ private:
 
 	filteredBackprojection FBP;
 	projectors proj;
+
+	std::string className;
+	//std::ofstream pfile;
 };
 
 #endif
