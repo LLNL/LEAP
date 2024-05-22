@@ -971,7 +971,7 @@ bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int w
     if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
     {
         printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
-        return nullptr;
+        return false;
     }
 
     uint64 N = params->projectionData_numberOfElements();
@@ -1025,7 +1025,7 @@ bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int which
     if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
     {
         printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
-        return nullptr;
+        return false;
     }
 
     uint64 N = params->volumeData_numberOfElements();
@@ -1136,7 +1136,7 @@ bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
     if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
     {
         printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
-        return nullptr;
+        return false;
     }
 
     uint64 N_prod = uint64(N.x) * uint64(N.y) * uint64(N.z);
@@ -1268,7 +1268,7 @@ bool windowFOV_gpu(float* f, parameters* params)
     if ((cudaStatus = cudaSetDevice(params->whichGPU)) != cudaSuccess)
     {
         printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
-        return nullptr;
+        return false;
     }
 
     float rFOVsq = params->rFOV() * params->rFOV();
