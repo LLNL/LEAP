@@ -179,6 +179,12 @@ class tomographicModels:
             return self.libprojectors.set_model(self.param_id)
         else:
             return self.libprojectors.set_model(i)
+            
+    def set_maxSlicesForChunking(self, N):
+        self.libprojectors.set_maxSlicesForChunking.restype = ctypes.c_bool
+        self.libprojectors.set_maxSlicesForChunking.argtypes = [ctypes.c_int]
+        self.set_model()
+        return self.libprojectors.set_maxSlicesForChunking(N)
 
     def create_new_model(self):
         self.libprojectors.create_new_model.restype = ctypes.c_int
@@ -4806,7 +4812,7 @@ class tomographicModels:
         return True
     
     def save_parameters(self, fileName):
-        """Save the CT volume and CT geometry parameters to the provides file name"""
+        """Save the CT volume and CT geometry parameters to the provided file name"""
         return self.save_param(fileName)
     
     def save_param(self, fileName):
@@ -4819,23 +4825,24 @@ class tomographicModels:
         
         return self.leapct.save_param(fileName)
     
-    def save_projections(self, fileName, g):
+    def save_projections(self, fileName, g, sequence_offset=0):
         """Save projection data to file (tif sequence, nrrd, or npy)
         
         Args:
             fileName (string): the file name to save the projection data to
             g (C contiguous float32 numpy array or torch tensor): projection data
+            sequence_offset (int): if saving as a tif/tiff sequence, this specifies the index of the first file
         
         """
-        return self.saveProjections(fileName, g)
+        return self.saveProjections(fileName, g, sequence_offset)
         
-    def saveProjections(self, fileName, g):
+    def saveProjections(self, fileName, g, sequence_offset=0):
         """Save projection data to file (tif sequence, nrrd, or npy)"""
         if self.get_numAngles() > 0 and self.get_numRows() > 0 and self.get_numCols() > 0:
             pixelWidth = self.get_pixelWidth()
             pixelHeight = self.get_pixelHeight()
-            numCols = self.get_numCols()
-            numRows = self.get_numRows()
+            #numCols = self.get_numCols()
+            #numRows = self.get_numRows()
             centerRow = self.get_centerRow()
             centerCol = self.get_centerCol()
             phis = self.get_angles()
@@ -4849,19 +4856,20 @@ class tomographicModels:
             row_0 = 0.0
             col_0 = 0.0
             T = 1.0
-        return self.saveData(fileName, g, T, phi_0, row_0, col_0)
+        return self.save_data(fileName, g, T, phi_0, row_0, col_0, sequence_offset)
     
-    def save_volume(self, fileName, f):
+    def save_volume(self, fileName, f, sequence_offset=0):
         """Save volume data to file (tif sequence, nrrd, or npy)
         
         Args:
             fileName (string): the file name to save the projection data to
             f (C contiguous float32 numpy array or torch tensor): volume data
+            sequence_offset (int): if saving as a tif/tiff sequence, this specifies the index of the first file
         
         """
-        return self.saveVolume(fileName, f)
+        return self.saveVolume(fileName, f, sequence_offset)
     
-    def saveVolume(self, fileName, f):
+    def saveVolume(self, fileName, f, sequence_offset=0):
         """Save volume data to file (tif sequence, nrrd, or npy)"""
         if self.get_numX() > 0 and self.get_numY() > 0 and self.get_numZ() > 0:
             z_0 = self.z_samples()[0]
@@ -4873,9 +4881,9 @@ class tomographicModels:
             y_0 = 0.0
             z_0 = 0.0
             T = 1.0
-        return self.saveData(fileName, f, T, x_0, y_0, z_0)
+        return self.save_data(fileName, f, T, x_0, y_0, z_0, sequence_offset)
         
-    def saveData(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0):
+    def save_data(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0, sequence_offset=0):
         """Save 3D data to file (tif sequence, nrrd, or npy)"""
         volFilePath, dontCare = os.path.split(fileName)
         if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
@@ -4915,7 +4923,7 @@ class tomographicModels:
                     for i in range(x.shape[0]):
                         im = x[i,:,:]
                         #im.save(baseName + '_' + str(int(i)) + fileExtension)
-                        imageio.imwrite(baseName + '_' + str(int(i)) + fileExtension, im)
+                        imageio.imwrite(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
                 return True
                 
             except:
@@ -4928,37 +4936,87 @@ class tomographicModels:
             print('Error: must be a tif, npy, or nrrd file!')
             return False
             
-    def loadVolume(self, fileName):
+    def loadVolume(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
         """Load 3D volume data from file (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
         
-    def load_volume(self, fileName):
-        """Load 3D volume data from the given file name provided (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
+    def load_volume(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D volume data from the given file name provided (tif sequence, nrrd, or npy)
         
-    def loadProjections(self, fileName):
+        See load_data for more information
+        """
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        
+    def loadProjections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
         """Load 3D projection data from file (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
         
-    def load_projections(self, fileName):
-        """Load 3D projection data from the given file name provided (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
-            
-    def loadData(self, fileName):
-        """Load 3D data from file (tif sequence, nrrd, or npy)"""
+    def load_projections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D projection data from the given file name provided (tif sequence, nrrd, or npy)
+        
+        See load_data for more information
+        """
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        
+    def loadData(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D data from the given file name provided (tif sequence, nrrd, or npy)"""
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        
+    def load_data(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D data from file (tif sequence, nrrd, or npy)
+
+        This function reads 3D data and stores it in a 3D numpy array.  We officially support
+        nrrd, npy, or a a sequence of tif/tiff files.  Note that fileRange, rowRange, and colRange arguments
+        only apply to tif sequences.
+        
+        A tif sequences must be in the following form: basename_XXXX.tif or (tiff).  The XXXX are the sequence numbers
+        which can be padded with zeros or not.  When calling this function be sure to specify the input as basename.tif,
+        i.e., do not include the underscore and digits when providing this file name to this function.
+        
+        Args:
+            fileName (string): full path to npy or nrrd file or sequence of tif files.
+            x (3D float32 numpy array): place to store the data (this argument is optional)
+            fileRange (list with two integers): the first and last files to read of a tif sequence
+            rowRange (list with two integers): the first and last rows to read in a tif sequence
+            colRange (list with two integers): the first and last columns to read in a tif sequence
+        
+        Returns:
+            3D numpy array of the data in the file(s); if x is given, just returns x
+        """
+        
+        if fileRange is not None:
+            if len(fileRange) != 2 or fileRange[0] > fileRange[1] or fileRange[0] < 0 or fileRange[1] < 0:
+                print('Error: fileRange must be a list of two positive numbers')
+                return None
+        if rowRange is not None:
+            if len(rowRange) != 2 or rowRange[0] > rowRange[1] or rowRange[0] < 0 or rowRange[1] < 0:
+                print('Error: rowRange must be a list of two positive numbers')
+                return None
+        if colRange is not None:
+            if len(colRange) != 2 or colRange[0] > colRange[1] or colRange[0] < 0 or colRange[1] < 0:
+                print('Error: colRange must be a list of two positive numbers')
+                return None
+        
         if fileName.endswith('.npy'):
             if os.path.isfile(fileName) == False:
                 print('file does not exist')
                 return None
             else:
-                return np.load(fileName)
+                if x is not None:
+                    x[:] = np.load(fileName)
+                    return x
+                else:
+                    return np.load(fileName)
         elif fileName.endswith('.nrrd'):
             if os.path.isfile(fileName) == False:
                 print('file does not exist')
                 return None
             try:
                 import nrrd
-                x, header = nrrd.read(fileName)
+                if x is not None:
+                    x[:], header = nrrd.read(fileName)
+                else:
+                    x, header = nrrd.read(fileName)
                 T_fromFile = header['spacings'][0]
                 return x
             except:
@@ -4990,23 +5048,62 @@ class tomographicModels:
                     os.chdir(currentWorkingDirectory)
                     print('file sequence does not exist')
                     return None
+                    
+                if fileRange is not None:
+                    # prune fileList
+                    fileList_pruned = []
+                    for i in range(len(fileList)):
+                        digit = int(fileList[i].replace(baseFileName+'_','').replace('.tif',''))
+                        if fileRange[0] <= digit and digit <= fileRange[1]:
+                            fileList_pruned.append(fileList[i])
+                    fileList = fileList_pruned
+                    
                 justDigits = []
                 for i in range(len(fileList)):
                     digitStr = fileList[i].replace(baseFileName+'_','').replace('.tif','')
                     justDigits.append(int(digitStr))
                 ind = np.argsort(justDigits)
 
+
                 #print('found ' + str(len(fileList)) + ' images')
                 #print('reading first image: ' + str(fileList[0]))
                 #firstImg = np.array(Image.open(fileList[0]))
                 firstImg = np.array(imageio.imread(fileList[0]))
-                x = np.zeros((len(fileList), firstImg.shape[0], firstImg.shape[1]), dtype=np.float32)
-                print('found ' + str(x.shape[0]) + ' images of size ' + str(x.shape[1]) + ' x ' + str(x.shape[2]))
+                
+                numRows = firstImg.shape[0]
+                numCols = firstImg.shape[1]
+                if rowRange is not None:
+                    if rowRange[1] > numRows-1:
+                        print('Error: row range is out range')
+                        return None
+                    numRows = rowRange[1] - rowRange[0] + 1
+                if colRange is not None:
+                    if colRange[1] > numCols-1:
+                        print('Error: col range is out range')
+                        return None
+                    numCols = colRange[1] - colRange[0] + 1
+                
+                if x is not None:
+                    if len(x.shape) != 3 or x.shape[0] != len(fileList) or x.shape[1] != numRows or x.shape[2] != numCols:
+                        print('Error: given array size does not match size of data in files!')
+                        return None
+                else:
+                    x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
+                print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
                 for i in range(len(fileList)):
                     #anImage = np.array(Image.open(fileList[ind[i]]))
                     #anImage = np.array(Image.open(fileList[ind[i]]).rotate(-0.5))
                     anImage = np.array(imageio.imread(fileList[ind[i]]))
-                    x[i,:,:] = anImage[:,:]
+                    if rowRange is not None:
+                        if colRange is not None:
+                            x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,colRange[0]:colRange[1]+1]
+                        else:
+                            x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,:]
+                    else:
+                        if colRange is not None:
+                            x[i,:,:] = anImage[:,colRange[0]:colRange[1]+1]
+                        else:
+                            x[i,:,:] = anImage[:,:]
                 os.chdir(currentWorkingDirectory)
                 return x
             '''

@@ -36,6 +36,7 @@ extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
 extern "C" PROJECTOR_API bool include_cufft();
 extern "C" PROJECTOR_API int getOptimalFFTsize(int N);
+extern "C" PROJECTOR_API bool set_maxSlicesForChunking(int N);
 
 extern "C" PROJECTOR_API bool all_defined();
 extern "C" PROJECTOR_API bool ct_geometry_defined();

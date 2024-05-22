@@ -797,7 +797,7 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
     if ((cudaStatus = cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x), 0)) != cudaSuccess)
     {
-        printf("CUDA Error: %s\n", cudaGetErrorString(cudaStatus));
+        printf("cudaMalloc3DArray Error: %s\n", cudaGetErrorString(cudaStatus));
         return nullptr;
     }
 
@@ -833,7 +833,12 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
     }
-    cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr);
+    if ((cudaStatus = cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr)) != cudaSuccess)
+    {
+        printf("cudaCreateTextureObject Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        return nullptr;
+    }
 
     // Update the texture memory
     cudaMemcpy3DParms cudaparams = { 0 };
@@ -843,7 +848,13 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     cudaparams.srcPtr = make_cudaPitchedPtr(dev_data, N_txt.z * sizeof(float), N_txt.z, N_txt.y);
     cudaparams.dstPos = make_cudaPos(0, 0, 0);
     cudaparams.dstArray = (cudaArray_t)d_data_array;
-    cudaMemcpy3D(&cudaparams);
+    if ((cudaStatus = cudaMemcpy3D(&cudaparams)) != cudaSuccess)
+    {
+        printf("cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        cudaDestroyTextureObject(tex_object);
+        return nullptr;
+    }
     return d_data_array;
 }
 
@@ -852,10 +863,15 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
     if (data == nullptr)
         return nullptr;
     cudaArray* d_data_array = nullptr;
+    cudaError_t cudaStatus;
 
     // Allocate 3D array memory
     cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
-    cudaMallocArray(&d_data_array, &channelDesc, N_txt, 1);
+    if ((cudaStatus = cudaMallocArray(&d_data_array, &channelDesc, N_txt, 1)) != cudaSuccess)
+    {
+        printf("cudaMallocArray Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     // Bind 1D array to texture object
     cudaResourceDesc resDesc;
@@ -885,9 +901,20 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
     }
-    cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr);
+    if ((cudaStatus = cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr)) != cudaSuccess)
+    {
+        printf("cudaCreateTextureObject Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        return nullptr;
+    }
 
-    cudaMemcpyToArray(d_data_array, 0, 0, data, sizeof(float) * N_txt, cudaMemcpyHostToDevice);
+    if ((cudaStatus = cudaMemcpyToArray(d_data_array, 0, 0, data, sizeof(float) * N_txt, cudaMemcpyHostToDevice)) != cudaSuccess)
+    {
+        printf("cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        cudaDestroyTextureObject(tex_object);
+        return nullptr;
+    }
 
     /* Update the texture memory
     cudaMemcpy3DParms cudaparams = { 0 };
@@ -909,21 +936,29 @@ extern cudaArray* loadTexture2D(cudaTextureObject_t& tex_object, float* dev_data
 
 float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
 {
-	cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     uint64 N = params->projectionData_numberOfElements();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Copy volume data to GPU
 	float* dev_g = 0;
-	if (cudaMalloc((void**)&dev_g, N * sizeof(float)) != cudaSuccess)
+    if ((cudaStatus = cudaMalloc((void**)&dev_g, N * sizeof(float))) != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMalloc(projection[%d,%d,%d]) failed!\n", params->numAngles, params->numRows, params->numCols);
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
 		return NULL;
 	}
-	if (cudaMemcpy(dev_g, g, N * sizeof(float), cudaMemcpyHostToDevice))
+    if ((cudaStatus = cudaMemcpy(dev_g, g, N * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMemcpy(projection) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_g);
 		return NULL;
 	}
 
@@ -932,8 +967,12 @@ float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
 
 bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int whichGPU)
 {
-	cudaSetDevice(whichGPU);
-	cudaError_t cudaStatus;
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     uint64 N = params->projectionData_numberOfElements();
 
@@ -951,21 +990,29 @@ bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int w
 
 float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU)
 {
-	cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     uint64 N = params->volumeData_numberOfElements();
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Copy volume data to GPU
 	float* dev_f = 0;
-	if (cudaMalloc((void**)&dev_f, N * sizeof(float)) != cudaSuccess)
+    if ((cudaStatus = cudaMalloc((void**)&dev_f, N * sizeof(float))) != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMalloc(volume) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
 		return NULL;
 	}
-	if (cudaMemcpy(dev_f, f, N * sizeof(float), cudaMemcpyHostToDevice))
+    if ((cudaStatus = cudaMemcpy(dev_f, f, N * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMemcpy(volume) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_f);
 		return NULL;
 	}
 
@@ -974,8 +1021,13 @@ float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU)
 
 bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU)
 {
-	cudaSetDevice(whichGPU);
-	cudaError_t cudaStatus;
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+
     uint64 N = params->volumeData_numberOfElements();
 	cudaStatus = cudaMemcpy(f, dev_f, N * sizeof(float), cudaMemcpyDeviceToHost);
 	if (cudaSuccess != cudaStatus)
@@ -991,21 +1043,29 @@ bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int which
 
 float* copy3DdataToGPU(float* g, int3 N, int whichGPU)
 {
-	cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
 	uint64 N_prod = uint64(N.x) * uint64(N.y) * uint64(N.z);
 
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Copy volume data to GPU
 	float* dev_g = 0;
-	if (cudaMalloc((void**)&dev_g, N_prod * sizeof(float)) != cudaSuccess)
+    if ((cudaStatus = cudaMalloc((void**)&dev_g, N_prod * sizeof(float))) != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMalloc(volume) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
 		return NULL;
 	}
-	if (cudaMemcpy(dev_g, g, N_prod * sizeof(float), cudaMemcpyHostToDevice))
+    if ((cudaStatus = cudaMemcpy(dev_g, g, N_prod * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
 	{
-		fprintf(stderr, "cudaMemcpy(volume) failed!\n");
+		fprintf(stderr, "cudaMemcpy(3Ddata) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_g);
 		return NULL;
 	}
 
@@ -1014,19 +1074,27 @@ float* copy3DdataToGPU(float* g, int3 N, int whichGPU)
 
 extern float* copy1DdataToGPU(float* x, int N, int whichGPU)
 {
-    cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Copy volume data to GPU
     float* dev_x = 0;
-    if (cudaMalloc((void**)&dev_x, N * sizeof(float)) != cudaSuccess)
+    if ((cudaStatus = cudaMalloc((void**)&dev_x, N * sizeof(float))) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(1D) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
         return NULL;
     }
-    if (cudaMemcpy(dev_x, x, N * sizeof(float), cudaMemcpyHostToDevice))
+    if ((cudaStatus = cudaMemcpy(dev_x, x, N * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_x);
         return NULL;
     }
 
@@ -1035,19 +1103,27 @@ extern float* copy1DdataToGPU(float* x, int N, int whichGPU)
 
 extern bool* copy1DbooleanToGPU(bool* x, int N, int whichGPU)
 {
-    cudaSetDevice(whichGPU);
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // Copy volume data to GPU
     bool* dev_x = 0;
-    if (cudaMalloc((void**)&dev_x, N * sizeof(bool)) != cudaSuccess)
+    if ((cudaStatus = cudaMalloc((void**)&dev_x, N * sizeof(bool))) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(1D) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
         return NULL;
     }
-    if (cudaMemcpy(dev_x, x, N * sizeof(bool), cudaMemcpyHostToDevice))
+    if ((cudaStatus = cudaMemcpy(dev_x, x, N * sizeof(bool), cudaMemcpyHostToDevice)) != cudaSuccess)
     {
         fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_x);
         return NULL;
     }
 
@@ -1056,11 +1132,15 @@ extern bool* copy1DbooleanToGPU(bool* x, int N, int whichGPU)
 
 bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 {
-	cudaSetDevice(whichGPU);
-	cudaError_t cudaStatus;
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+
     uint64 N_prod = uint64(N.x) * uint64(N.y) * uint64(N.z);
-	cudaStatus = cudaMemcpy(g, dev_g, N_prod * sizeof(float), cudaMemcpyDeviceToHost);
-	if (cudaSuccess != cudaStatus)
+	if ((cudaStatus = cudaMemcpy(g, dev_g, N_prod * sizeof(float), cudaMemcpyDeviceToHost)) != cudaSuccess)
 	{
 		fprintf(stderr, "failed to copy volume data back to host!\n");
 		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
@@ -1073,20 +1153,44 @@ bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 
 float* copyAngleArrayToGPU(parameters* params)
 {
-    cudaSetDevice(params->whichGPU);
+    if (params == NULL)
+    {
+        printf("Error: copyAngleArrayToGPU: invalid argument!\n");
+        return NULL;
+    }
+
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(params->whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+
     //cudaError_t cudaStatus;
     float* dev_phis = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float)))
+    if ((cudaStatus = cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float))) != cudaSuccess)
+    {
         fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
+        return NULL;
+    }
+    if ((cudaStatus = cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
+    {
         fprintf(stderr, "cudaMemcpy(phis) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_phis);
+        return NULL;
+    }
     return dev_phis;
 }
 
 bool setProjectionGPUparams(parameters* params, int4& N, float4& T, float4& startVals, bool doNormalize)
 {
     if (params == NULL)
+    {
+        printf("Error: setProjectionGPUparams: invalid argument!\n");
         return false;
+    }
     else
     {
         N.x = params->numAngles; N.y = params->numRows; N.z = params->numCols;
@@ -1139,7 +1243,10 @@ bool setProjectionGPUparams(parameters* params, int4& N, float4& T, float4& star
 bool setVolumeGPUparams(parameters* params, int4& N, float4& T, float4& startVals)
 {
     if (params == NULL)
+    {
+        printf("Error: setVolumeGPUparams: invalid argument!\n");
         return false;
+    }
     else
     {
         N.x = params->numX; N.y = params->numY; N.z = params->numZ;
@@ -1151,13 +1258,24 @@ bool setVolumeGPUparams(parameters* params, int4& N, float4& T, float4& startVal
 
 bool windowFOV_gpu(float* f, parameters* params)
 {
-    cudaSetDevice(params->whichGPU);
+    if (params == NULL)
+    {
+        printf("Error: windowFOV_gpu: invalid argument!\n");
+        return NULL;
+    }
+
     cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(params->whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
 
     float rFOVsq = params->rFOV() * params->rFOV();
 
     int4 N; float4 T; float4 startVal;
-    setVolumeGPUparams(params, N, T, startVal);
+    if (setVolumeGPUparams(params, N, T, startVal) == false)
+        return false;
 
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);

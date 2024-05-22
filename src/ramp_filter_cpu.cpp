@@ -7,7 +7,6 @@
 // c++ module for CPU-based ramp and Hilbert filters
 ////////////////////////////////////////////////////////////////////////////////
 #include "ramp_filter_cpu.h"
-#include "ray_weighting.cuh"
 #include "ray_weighting_cpu.h"
 #include "cpu_utils.h"
 #include <math.h>
@@ -17,6 +16,10 @@
 #include <iostream>
 #include <valarray>
 #include <omp.h>
+
+//#ifndef __USE_CPU
+//#include "ray_weighting.cuh"
+//#endif
 
 #ifndef PI
 #define PI 3.141592653589793

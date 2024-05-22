@@ -69,8 +69,8 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool data_on_cp
 		return true;
 	else
 	{
-		cudaSetDevice(params->whichGPU);
 		cudaError_t cudaStatus;
+		cudaSetDevice(params->whichGPU);
 
 		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
 		float* dev_g = 0;
@@ -87,17 +87,17 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool data_on_cp
 		if (w_view != NULL)
 		{
 			if (cudaSuccess != cudaMalloc((void**)&dev_w_view, params->numAngles * params->numCols * sizeof(float)))
-				fprintf(stderr, "cudaMalloc failed!\n");
-			if (cudaMemcpy(dev_w_view, w_view, params->numAngles * params->numCols * sizeof(float), cudaMemcpyHostToDevice))
-				fprintf(stderr, "cudaMemcpy failed!\n");
+				fprintf(stderr, "Error: applyPreRampFilterWeights_GPU: cudaMalloc failed!\n");
+			if (cudaSuccess != cudaMemcpy(dev_w_view, w_view, params->numAngles * params->numCols * sizeof(float), cudaMemcpyHostToDevice))
+				fprintf(stderr, "Error: applyPreRampFilterWeights_GPU: cudaMemcpy failed!\n");
 		}
 		float* dev_w_ray = 0;
 		if (w_ray != NULL)
 		{
 			if (cudaSuccess != cudaMalloc((void**)&dev_w_ray, params->numRows * params->numCols * sizeof(float)))
-				fprintf(stderr, "cudaMalloc failed!\n");
-			if (cudaMemcpy(dev_w_ray, w_ray, params->numRows * params->numCols * sizeof(float), cudaMemcpyHostToDevice))
-				fprintf(stderr, "cudaMemcpy failed!\n");
+				fprintf(stderr, "Error: applyPreRampFilterWeights_GPU: cudaMalloc failed!\n");
+			if (cudaSuccess != cudaMemcpy(dev_w_ray, w_ray, params->numRows * params->numCols * sizeof(float), cudaMemcpyHostToDevice))
+				fprintf(stderr, "Error: applyPreRampFilterWeights_GPU: cudaMemcpy failed!\n");
 		}
 
 		dim3 dimBlock = setBlockSize(N);
@@ -108,7 +108,7 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool data_on_cp
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess)
 		{
-			fprintf(stderr, "kernel failed!\n");
+			fprintf(stderr, "Error: applyWeightsKernel: kernel failed!\n");
 			fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		}
@@ -141,8 +141,8 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool data_on_c
 		return true;
 	else
 	{
-		cudaSetDevice(params->whichGPU);
 		cudaError_t cudaStatus;
+		cudaSetDevice(params->whichGPU);
 
 		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
 		float* dev_g = 0;
@@ -160,9 +160,9 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool data_on_c
 		if (w_ray != NULL)
 		{
 			if (cudaSuccess != cudaMalloc((void**)&dev_w_ray, params->numRows * params->numCols * sizeof(float)))
-				fprintf(stderr, "cudaMalloc failed!\n");
-			if (cudaMemcpy(dev_w_ray, w_ray, params->numRows * params->numCols * sizeof(float), cudaMemcpyHostToDevice))
-				fprintf(stderr, "cudaMemcpy failed!\n");
+				fprintf(stderr, "Error: applyPostRampFilterWeights_GPU: cudaMalloc failed!\n");
+			if (cudaSuccess != cudaMemcpy(dev_w_ray, w_ray, params->numRows * params->numCols * sizeof(float), cudaMemcpyHostToDevice))
+				fprintf(stderr, "Error: applyPostRampFilterWeights_GPU: cudaMemcpy failed!\n");
 		}
 
 		dim3 dimBlock = setBlockSize(N);
@@ -173,7 +173,7 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool data_on_c
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess)
 		{
-			fprintf(stderr, "kernel failed!\n");
+			fprintf(stderr, "Error: applyWeightsKernel: kernel failed!\n");
 			fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		}
@@ -195,30 +195,14 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool data_on_c
 	}
 }
 
-bool applyPreRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
-{
-	if (params->whichGPU < 0)
-		return applyPreRampFilterWeights_CPU(g, params);
-	else
-		return applyPreRampFilterWeights_GPU(g, params, data_on_cpu);
-}
-
-bool applyPostRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
-{
-	if (params->whichGPU < 0)
-		return applyPostRampFilterWeights_CPU(g, params);
-	else
-		return applyPostRampFilterWeights_GPU(g, params, data_on_cpu);
-}
-
 bool convertARTtoERT(float* g, parameters* params, bool data_on_cpu, bool doInverse)
 {
 	if (params->whichGPU < 0)
 		return convertARTtoERT_CPU(g, params, doInverse);
 	else
 	{
-		cudaSetDevice(params->whichGPU);
 		cudaError_t cudaStatus;
+		cudaSetDevice(params->whichGPU);
 
 		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
 		float* dev_g = 0;
@@ -239,7 +223,7 @@ bool convertARTtoERT(float* g, parameters* params, bool data_on_cpu, bool doInve
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess)
 		{
-			fprintf(stderr, "kernel failed!\n");
+			fprintf(stderr, "Error: convertARTtoERT: kernel failed!\n");
 			fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		}
@@ -265,8 +249,8 @@ bool applyViewDependentPolarWeights_gpu(float* g, parameters* params, float* w_i
 			w = setViewDependentPolarWeights(params);
 		else
 			w = w_in;
-		cudaSetDevice(params->whichGPU);
 		cudaError_t cudaStatus;
+		cudaSetDevice(params->whichGPU);
 
 		int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
 		float* dev_g = 0;
@@ -277,9 +261,9 @@ bool applyViewDependentPolarWeights_gpu(float* g, parameters* params, float* w_i
 
 		float* dev_w = 0;
 		if (cudaSuccess != cudaMalloc((void**)&dev_w, params->numRows * params->numAngles * sizeof(float)))
-			fprintf(stderr, "cudaMalloc failed!\n");
-		if (cudaMemcpy(dev_w, w, params->numRows * params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
-			fprintf(stderr, "cudaMemcpy failed!\n");
+			fprintf(stderr, "Error: applyViewDependentPolarWeights_gpu: cudaMalloc failed!\n");
+		if (cudaSuccess != cudaMemcpy(dev_w, w, params->numRows * params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+			fprintf(stderr, "Error: applyViewDependentPolarWeights_gpu: cudaMemcpy failed!\n");
 
 		dim3 dimBlock = setBlockSize(N);
 		dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
@@ -289,7 +273,7 @@ bool applyViewDependentPolarWeights_gpu(float* g, parameters* params, float* w_i
 		cudaStatus = cudaDeviceSynchronize();
 		if (cudaStatus != cudaSuccess)
 		{
-			fprintf(stderr, "kernel failed!\n");
+			fprintf(stderr, "Error: applyViewDependentPolarWeightsKernel: kernel failed!\n");
 			fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 			fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		}

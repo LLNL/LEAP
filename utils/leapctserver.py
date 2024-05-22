@@ -126,7 +126,10 @@ class leapctserver:
     ###################################################################################################################
     ###################################################################################################################
     def set_path(self, path):
-        self.path = path
+        if os.path.exists(fullPath):
+            self.path = path
+        else:
+            print('Error: specified path does not exist')
         
     def clear_path(self):
         self.path = None
@@ -166,27 +169,130 @@ class leapctserver:
         self.reconstruction_file = zslices
     
     def save_geometry_file(self):
-        pass
+        self.leapct.save_parameters(self.geometry_file)
     
     def save_spectra_model(self):
-        pass
+        if has_physics:
+            if self.source_spectra_defined():
+                Es, s = self.source_spectra()
+                self.physics.save_spectra(self.source_spectra_file, s, Es)
+            if self.detector_response_defined():
+                Es, d = self.detector_response()
+                self.physics.save_spectra(self.detector_response_file, d, Es)
         
     def save_parameters(self):
         """Saves CT geometry, CT volume, and all spectra parameters to file"""
+        self.save_geometry_file()
         self.save_spectra_model()
-        pass
     
-    def load_projection_angles(self, inds=None):
-        pass
+    def load_projection_angles(self, fileName=None, inds=None):
+        """load selected angles of projections
         
-    def load_projection_rows(self, inds=None):
-        pass
+        Args:
+            fileName (string): full path
+        """
+        if fileName is None:
+            if self.data_type == self.RAW or self.data_type == self.RAW_DARK_SUBTRACTED:
+                if self.raw_scan_file is None:
+                    print('Error: data_type is raw, but raw_scan_file is not specified!')
+                    return
+                fileName = os.path.join(self.path, self.raw_scan_file)
+            else:
+                if self.projection_file is None:
+                    print('Error: projection_file is not specified!')
+                    return
+                fileName = os.path.join(self.path, self.projection_file)
+        if os.path.isfile(fileName) == False:
+            print('Error: ' + str(fileName) + ' does not exist!')
+            return
+        dataFolder, baseFileName = os.path.split(fileName)
+        if "sino" in baseFileName:
+            if inds is not None:
+                g = np.zeros((inds[1]-inds[0]+1, self.leapct.get_numRows(), self.leapct.get_numCols()),dtype=np.float32)
+            else:
+                g = np.zeros((self.leapct.get_numAngles(), self.leapct.get_numRows(), self.leapct.get_numCols()),dtype=np.float32)
+            g = np.swapaxes(g, 0, 1)
+            g = self.leapct.load_data(fileName, x=g, fileRange=None, rowRange=inds, colRange=None)
+            g = np.swapaxes(g, 0, 1)
+            g = np.ascontiguousarray(g, dtype=np.float32)
+        else:
+            g = self.leapct.load_data(fileName, x=None, fileRange=inds, rowRange=None, colRange=None)
+        #self.g = g # ?
+        return g
+        
+    def load_projection_rows(self, fileName=None, inds=None):
+        """load selected rows of projections
+        
+        Args:
+            fileName (string): full path
+        """
+        if fileName is None:
+            if self.data_type == self.RAW or self.data_type == self.RAW_DARK_SUBTRACTED:
+                if self.raw_scan_file is None:
+                    print('Error: data_type is raw, but raw_scan_file is not specified!')
+                    return
+                fileName = os.path.join(self.path, self.raw_scan_file)
+            else:
+                if self.projection_file is None:
+                    print('Error: projection_file is not specified!')
+                    return
+                fileName = os.path.join(self.path, self.projection_file)
+        if os.path.isfile(fileName) == False:
+            print('Error: ' + str(fileName) + ' does not exist!')
+            return
+        dataFolder, baseFileName = os.path.split(fileName)
+        if "sino" in baseFileName:
+            if inds is not None:
+                g = np.zeros((self.leapct.get_numAngles(), inds[1]-inds[0]+1, self.leapct.get_numCols()),dtype=np.float32)
+            else:
+                g = np.zeros((self.leapct.get_numAngles(), self.leapct.get_numRows(), self.leapct.get_numCols()),dtype=np.float32)
+            g = np.swapaxes(g, 0, 1)
+            g = self.leapct.load_data(fileName, x=g, fileRange=inds, rowRange=None, colRange=None)
+            g = np.swapaxes(g, 0, 1)
+            g = np.ascontiguousarray(g, dtype=np.float32)
+        else:
+            g = self.leapct.load_data(fileName, x=None, fileRange=None, rowRange=inds, colRange=None)
+        #self.g = g # ?
+        return g
     
     def save_projection_angles(self, g, seq_offset=0):
-        pass
+        #if self.data_type == self.RAW or self.data_type == self.RAW_DARK_SUBTRACTED:
+        #    fileName = self.raw_scan_file
+        #else:
+        #    fileName = self.projection_file
+        if self.data_type == self.RAW:
+            fileName = 'raw.tif'
+        elif self.data_type == self.RAW_DARK_SUBTRACTED:
+            fileName = 'rawDarkSub.tif'
+        elif self.data_type == self.TRANSMISSION:
+            fileName = 'transRad.tif'
+        elif self.data_type == self.ATTENUATION:
+            fileName = 'attenRad.tif'
+        else:
+            fileName = 'image.tif'
+        fileName = os.path.join(self.path, self.outputDir, fileName)
+        
+        self.leapct.save_projections(fileName, g, seq_offset)
+        return fileName
         
     def save_projection_rows(self, g, seq_offset=0):
-        pass
+        if self.data_type == self.RAW:
+            fileName = 'sino_raw.tif'
+        elif self.data_type == self.RAW_DARK_SUBTRACTED:
+            fileName = 'sino_rawDarkSub.tif'
+        elif self.data_type == self.TRANSMISSION:
+            fileName = 'sino_trans.tif'
+        elif self.data_type == self.ATTENUATION:
+            fileName = 'sino.tif'
+        else:
+            fileName = 'sino.tif'
+        fileName = os.path.join(self.path, self.outputDir, fileName)
+        
+        g = np.swapaxes(g, 0, 1)
+        self.leapct.save_projections(fileName, g, seq_offset)
+        g = np.swapaxes(g, 0, 1)
+        g = np.ascontiguousarray(g, dtype=np.float32)
+        return fileName
     
     
     ###################################################################################################################
@@ -245,6 +351,14 @@ class leapctserver:
         if self.kV >= 1.0:
             return True
         elif self.source_spectra_file is not None and os.path.isfile(self.source_spectra_file):
+            return True
+        else:
+            return False
+    
+    def detector_response_defined(self):
+        if self.detector_response_file is not None and os.path.isfile(self.detector_response_file):
+            return True
+        elif self.detector_response is not None:
             return True
         else:
             return False

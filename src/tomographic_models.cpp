@@ -50,6 +50,17 @@ tomographicModels::~tomographicModels()
 	reset();
 }
 
+bool tomographicModels::set_maxSlicesForChunking(int N)
+{
+	if (N >= 1 && N <= 1024)
+	{
+		maxSlicesForChunking = N;
+		return true;
+	}
+	else
+		return false;
+}
+
 bool tomographicModels::print_parameters()
 {
 	params.printAll();

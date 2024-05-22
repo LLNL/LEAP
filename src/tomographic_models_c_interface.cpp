@@ -105,6 +105,11 @@ int getOptimalFFTsize(int N)
 	return optimalFFTsize(N);
 }
 
+bool set_maxSlicesForChunking(int N)
+{
+	return tomo()->set_maxSlicesForChunking(N);
+}
+
 bool verify_input_sizes(int numAngles, int numRows, int numCols, int numZ, int numY, int numX)
 {
 	parameters* params = &(tomo()->params);
@@ -855,6 +860,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("reset", &reset, "");
     m.def("include_cufft", &include_cufft, "");
     m.def("getOptimalFFTsize", &getOptimalFFTsize, "");
+	m.def("set_maxSlicesForChunking", &set_maxSlicesForChunking, "");
     m.def("verify_input_sizes", &verify_input_sizes, "");
     m.def("project_gpu", &project_gpu, "");
     m.def("backproject_gpu", &backproject_gpu, "");

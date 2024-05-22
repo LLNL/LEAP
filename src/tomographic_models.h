@@ -924,6 +924,14 @@ public:
 	 */
 	bool synthesize_symmetry(float* f_radial, float* f);
 
+	/**
+	 * \fn          set_maxSlicesForChunking
+	 * \brief       sets the maximum number of slices per chunk to process on GPU
+	 * \param[in]   N: maximum number of slices per chunk to process on GPU
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_maxSlicesForChunking(int N);
+
 	// Set all parameters and Project/Backproject
 	bool projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool backprojectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);

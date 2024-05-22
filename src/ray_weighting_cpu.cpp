@@ -7,6 +7,9 @@
 // c++ module for ray weighting
 ////////////////////////////////////////////////////////////////////////////////
 #include "ray_weighting_cpu.h"
+#ifndef __USE_CPU
+#include "ray_weighting.cuh"
+#endif
 
 #include <stdlib.h>
 #include <math.h>
@@ -23,6 +26,30 @@ float FBPscalar(parameters* params)
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
 	else
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth / (params->voxelWidth * params->voxelWidth));
+}
+
+bool applyPreRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params->whichGPU < 0)
+		return applyPreRampFilterWeights_CPU(g, params);
+	else
+		return applyPreRampFilterWeights_GPU(g, params, data_on_cpu);
+#else
+	return applyPreRampFilterWeights_CPU(g, params);
+#endif
+}
+
+bool applyPostRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params->whichGPU < 0)
+		return applyPostRampFilterWeights_CPU(g, params);
+	else
+		return applyPostRampFilterWeights_GPU(g, params, data_on_cpu);
+#else
+	return applyPostRampFilterWeights_CPU(g, params);
+#endif
 }
 
 float* setViewWeights(parameters* params)
