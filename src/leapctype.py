@@ -359,6 +359,11 @@ class tomographicModels:
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+            
+        if phis.size != numAngles:
+            print('Error: phis.size != numAngles')
+            return False
+            
         self.set_model()
         return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
@@ -402,6 +407,11 @@ class tomographicModels:
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+            
+        if phis.size != numAngles:
+            print('Error: phis.size != numAngles')
+            return False
+            
         self.set_model()
         return self.libprojectors.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
         
@@ -434,6 +444,7 @@ class tomographicModels:
         Returns:
             True if the parameters were valid, false otherwise
         """
+        
         self.libprojectors.set_parallelbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_parallelbeam.restype = ctypes.c_bool
         if has_torch and type(phis) is torch.Tensor:
@@ -441,6 +452,11 @@ class tomographicModels:
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+            
+        if phis.size != numAngles:
+            print('Error: phis.size != numAngles')
+            return False
+            
         self.set_model()
         return self.libprojectors.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
@@ -477,6 +493,34 @@ class tomographicModels:
         Returns:
             True if the parameters were valid, false otherwise
         """
+        
+        if sourcePositions.shape[0] != numAngles:
+            print('Error: sourcePositions.shape[0] != numAngles')
+            return False
+        if moduleCenters.shape[0] != numAngles:
+            print('Error: moduleCenters.shape[0] != numAngles')
+            return False
+        if rowVectors.shape[0] != numAngles:
+            print('Error: rowVectors.shape[0] != numAngles')
+            return False
+        if colVectors.shape[0] != numAngles:
+            print('Error: colVectors.shape[0] != numAngles')
+            return False
+            
+        if sourcePositions.shape[1] != 3:
+            print('Error: sourcePositions.shape[1] != 3')
+            return False
+        if moduleCenters.shape[1] != 3:
+            print('Error: moduleCenters.shape[1] != 3')
+            return False
+        if rowVectors.shape[1] != 3:
+            print('Error: rowVectors.shape[1] != 3')
+            return False
+        if colVectors.shape[1] != 3:
+            print('Error: colVectors.shape[1] != 3')
+            return False
+        
+        
         self.libprojectors.set_modularbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_modularbeam.restype = ctypes.c_bool
         self.set_model()

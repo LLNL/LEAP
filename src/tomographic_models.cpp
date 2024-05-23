@@ -455,6 +455,8 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		if (params.mu != NULL)
 			chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
+		LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": projection: z-slices: (" << sliceRange[0] << ", " << sliceRange[1] << "), rows = (" << firstRow << ", " << lastRow << ")" << std::endl;
+
 		// Do Computation
 		proj.project(g_chunk, f_chunk, &chunk_params, true);
 		//printf("about to combine...\n");
@@ -595,6 +597,8 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 
 		//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
 		//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
+
+		LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": projection: z-slices: (" << sliceRange[0] << ", " << sliceRange[1] << "), views = (" << firstView << ", " << lastView << ")" << std::endl;
 
 		// Do Computation
 		proj.project(g_chunk, f_chunk, &chunk_params, true);

@@ -10,6 +10,7 @@
 #include "ray_weighting_cpu.h"
 #include "cuda_runtime.h"
 #include "cuda_utils.h"
+#include "log.h"
 
 #include <stdlib.h>
 #include <math.h>
@@ -69,6 +70,7 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool data_on_cp
 		return true;
 	else
 	{
+		LOG(logDEBUG, "ray_weighting", "applyPreRampFilterWeights_GPU") << "GPU " << params->whichGPU << ": start" << std::endl;
 		cudaError_t cudaStatus;
 		cudaSetDevice(params->whichGPU);
 
@@ -130,6 +132,8 @@ bool applyPreRampFilterWeights_GPU(float* g, parameters* params, bool data_on_cp
 		if (data_on_cpu == true && dev_g != 0)
 			cudaFree(dev_g);
 
+		LOG(logDEBUG, "ray_weighting", "applyPreRampFilterWeights_GPU") << "GPU " << params->whichGPU << ": completed successfully" << std::endl;
+
 		return true;
 	}
 }
@@ -141,6 +145,7 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool data_on_c
 		return true;
 	else
 	{
+		LOG(logDEBUG, "ray_weighting", "applyPostRampFilterWeights_GPU") << "GPU " << params->whichGPU << ": start" << std::endl;
 		cudaError_t cudaStatus;
 		cudaSetDevice(params->whichGPU);
 
@@ -190,6 +195,8 @@ bool applyPostRampFilterWeights_GPU(float* g, parameters* params, bool data_on_c
 			free(w_ray);
 		if (data_on_cpu == true && dev_g != 0)
 			cudaFree(dev_g);
+
+		LOG(logDEBUG, "ray_weighting", "applyPostRampFilterWeights_GPU") << "GPU " << params->whichGPU << ": completed successfully" << std::endl;
 
 		return true;
 	}

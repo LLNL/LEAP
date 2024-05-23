@@ -140,7 +140,7 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 #ifndef __USE_CPU
 			applyPreRampFilterWeights(g, params, data_on_cpu);
 			if (params->muCoeff != 0.0)
-				convertARTtoERT(g, params, false, false);
+				convertARTtoERT(g, params, data_on_cpu, false);
 			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
 			{
 				if (params->whichGPU < 0)
@@ -151,7 +151,7 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			else
 				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
 			if (params->muCoeff != 0.0)
-				convertARTtoERT(g, params, false, true);
+				convertARTtoERT(g, params, data_on_cpu, true);
 			return applyPostRampFilterWeights(g, params, data_on_cpu);
 #else
 			applyPreRampFilterWeights_CPU(g, params);
@@ -185,7 +185,10 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 
 		float* dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		if (dev_g == 0)
+		{
+			printf("Error: failed to copy projections to gpu!\n");
 			return false;
+		}
 		retVal = filterProjections(dev_g, params, false);
 
 		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
@@ -240,6 +243,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 
 		// no transfers to/from GPU are necessary; just run the code
 		//printf("WARNING: disabling filtering in FBP for debugging purposes!!!!\n");
+		//printf("sum = %f\n", sum(g, make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU));
 		filterProjections(g, params, false);
 		//printf("sum = %f\n", sum(g, make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU));
 
@@ -345,9 +349,9 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 
 #ifndef __USE_CPU
 		applyPreRampFilterWeights(g, params, data_on_cpu);
-		convertARTtoERT(g, params, false, false);
+		convertARTtoERT(g, params, data_on_cpu, false);
 		rampFilterProjections(g, params, false, FBPscalar(params));
-		convertARTtoERT(g, params, false, true);
+		convertARTtoERT(g, params, data_on_cpu, true);
 #else
 		applyPreRampFilterWeights_CPU(g, params);
 		convertARTtoERT_CPU(g, params, false);
