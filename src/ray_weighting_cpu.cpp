@@ -69,7 +69,6 @@ float* setParkerWeights(parameters* params)
 	{
 		bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 		params->normalizeConeAndFanCoordinateFunctions = true;
-		float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
 
 		double beta_max = params->angularRange * PI / 180.0;
 
@@ -90,7 +89,12 @@ float* setParkerWeights(parameters* params)
 		double shortScanThreshold = PI + 2.0 * alpha_max;
 
 		if (beta_max < shortScanThreshold)
-			printf("setParkerWeights: Not enough data!\n");
+		{
+			printf("setParkerWeights: Not enough data (need at least %f degrees)!\n", shortScanThreshold*180.0/PI);
+			return NULL;
+		}
+
+		float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
 
 		double thres = (beta_max - PI) / 2.0;
 		if (thres < 0.0)
