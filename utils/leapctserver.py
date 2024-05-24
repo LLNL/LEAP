@@ -15,8 +15,7 @@ import sys
 import uuid
 import numpy as np
 from leapctype import *
-#from preprocessing_algorithms import *
-import preprocessing_algorithms
+import leap_preprocessing_algorithms
 
 try:
     from xrayphysics import *

@@ -67,6 +67,7 @@ extern "C" PROJECTOR_API float get_FBPscalar();
 
 extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool data_on_cpu);
 extern "C" PROJECTOR_API bool inconsistencyReconstruction(float* g, float* f, bool data_on_cpu);
+extern "C" PROJECTOR_API bool lambdaTomography(float* g, float* f, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool sensitivity(float* f, bool data_on_cpu);
 

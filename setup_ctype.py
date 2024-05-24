@@ -49,6 +49,6 @@ setup(
     packages=find_packages("src"), 
     package_dir={'': 'src'},
     install_requires=['numpy'], 
-    py_modules=['leapctype', 'leap_filter_sequence'], 
+    py_modules=['leapctype', 'leap_filter_sequence', 'leap_preprocessing_algorithms'], 
     package_data={'': [lib_fname]},
 )

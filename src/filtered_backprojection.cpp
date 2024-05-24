@@ -141,7 +141,14 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			applyPreRampFilterWeights(g, params, data_on_cpu);
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, data_on_cpu, false);
-			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
+			if (params->lambdaTomography)
+			{
+				if (params->whichGPU < 0)
+					return Laplacian_cpu(g, 1, false, params, -1.0);
+				else
+					return Laplacian_gpu(g, 1, false, params, data_on_cpu, -1.0);
+			}
+			else if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
 			{
 				if (params->whichGPU < 0)
 					ray_derivative_cpu(g, params);
@@ -157,7 +164,11 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			applyPreRampFilterWeights_CPU(g, params);
 			if (params->muCoeff != 0.0)
 				convertARTtoERT_CPU(g, params, false);
-			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
+			if (params->lambdaTomography == true)
+			{
+				Laplacian_cpu(g, 1, false, params, -1.0);
+			}
+			else if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
 			{
 				ray_derivative_cpu(g, params);
 			}

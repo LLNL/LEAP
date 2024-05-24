@@ -61,6 +61,7 @@ void parameters::initialize()
 	offsetScan = false;
 	truncatedScan = false;
 	inconsistencyReconstruction = false;
+	lambdaTomography = false;
 	numTVneighbors = 26;
 
 	geometry = CONE;
@@ -156,6 +157,7 @@ void parameters::assign(const parameters& other)
 	this->offsetScan = other.offsetScan;
 	this->truncatedScan = other.truncatedScan;
 	this->inconsistencyReconstruction = other.inconsistencyReconstruction;
+	this->lambdaTomography = other.lambdaTomography;
 	this->numTVneighbors = other.numTVneighbors;
 	this->mu = other.mu;
 	this->muCoeff = other.muCoeff;
@@ -1105,25 +1107,35 @@ bool parameters::shiftDetector(float r, float c)
 	}
 }
 
+bool parameters::offsetScan_has_adequate_angular_range()
+{
+	if (numAngles <= 1 || angularRange < min(359.0, 360.0 - fabs(T_phi()) * 180.0 / PI))
+		return false;
+	else
+		return true;
+}
+
 bool parameters::set_offsetScan(bool aFlag)
 {
 	if (aFlag == false)
 		offsetScan = aFlag;
 	else
 	{
-		if (numAngles <= 1 || angularRange < 360.0 - fabs(T_phi())*180.0/PI)
+		if (offsetScan_has_adequate_angular_range() == false)
 		{
 			printf("Error: offsetScan requires at least 360 degrees of projections!\n");
 			//printf("angularRange = %f, T_phi = %f\n", angularRange, T_phi());
 			offsetScan = false;
 			return false;
 		}
+		/*
 		if (geometry == MODULAR)
 		{
 			printf("Error: offsetScan only applies to parallel-, fan-, or cone-beam data!\n");
 			offsetScan = false;
 			return false;
 		}
+		//*/
 		//printf("Warning: offsetScan not working yet!\n");
 		offsetScan = aFlag;
 		//truncatedScan = false;

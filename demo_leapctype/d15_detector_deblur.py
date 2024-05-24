@@ -4,8 +4,7 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-sys.path.append(r'..\utils')
-from preprocessing_algorithms import *
+from leap_preprocessing_algorithms import *
 
 '''
 This demo script shows how LEAP can be used to model and deconvole detector blur.  Flat panel x-ray detectors
@@ -111,8 +110,4 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 
 # Display the result with napari
-#if type(f) is torch.Tensor:
-#    leapct.display(f.cpu().detach().numpy())
-#else:
-#    leapct.display(f)
 leapct.display(f)

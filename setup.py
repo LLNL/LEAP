@@ -49,6 +49,6 @@ setup(
     packages=find_packages("src"), 
     package_dir={'': 'src'},
     install_requires=['numpy', 'torch'], 
-    py_modules=['leaptorch', 'leapctype', 'leap_filter_sequence'], 
+    py_modules=['leaptorch', 'leapctype', 'leap_filter_sequence', 'leap_preprocessing_algorithms'], 
     package_data={'': [lib_fname]},
 )

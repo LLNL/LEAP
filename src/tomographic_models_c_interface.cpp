@@ -208,6 +208,17 @@ bool inconsistencyReconstruction(float* g, float* f, bool data_on_cpu)
 	return retVal;
 }
 
+bool lambdaTomography(float* g, float* f, bool data_on_cpu)
+{
+	bool offsetScan_save = tomo()->params.offsetScan;
+	tomo()->params.offsetScan = false;
+	tomo()->params.lambdaTomography = true;
+	bool retVal = FBP(g, f, data_on_cpu);
+	tomo()->params.lambdaTomography = false;
+	tomo()->params.offsetScan = offsetScan_save;
+	return retVal;
+}
+
 bool sensitivity(float* f, bool data_on_cpu)
 {
 	return tomo()->sensitivity(f, data_on_cpu);
@@ -891,6 +902,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("get_FBPscalar", &get_FBPscalar, "");
     m.def("FBP", &FBP, "");
     m.def("inconsistencyReconstruction", &inconsistencyReconstruction, "");
+	m.def("lambdaTomography", &lambdaTomography, "");
     m.def("sensitivity", &sensitivity, "");
     m.def("windowFOV", &windowFOV, "");
     m.def("set_conebeam", &set_conebeam, "");

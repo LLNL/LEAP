@@ -628,6 +628,11 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		extraCols = zeroPadForOffsetScan_numberOfColsToAdd(&params);
 	//printf("extraCols = %d\n", extraCols);
 
+	if (extraCols > 0)
+	{
+		LOG(logDEBUG, className, "") << "Extra columns needed for offset scan reconstruction: " << extraCols << std::endl;
+	}
+
 	int numProjectionData = 2; // need an extra for texture memory
 	int numVolumeData = 1;
 

@@ -4,8 +4,7 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-sys.path.append(r'..\utils')
-from preprocessing_algorithms import *
+from leap_preprocessing_algorithms import *
 
 '''
 The script demonstrates two different methods to mitigate ring artifacts in reconstructions
@@ -73,7 +72,7 @@ leapct.FBP(g,f)
 
 
 # Display the result with napari
-leapct.display(f)
+#leapct.display(f)
 
 import matplotlib.pyplot as plt
 plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')

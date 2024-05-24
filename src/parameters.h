@@ -80,6 +80,13 @@ public:
 	bool volumeDefined();
 
 	/**
+	 * \fn          offsetScan_has_adequate_angular_range
+	 * \brief       returns whether angularRange + epsilon >= 360.0
+	 * \return      returns true if angularRange + epsilon >= 360.0, false otherwise
+	 */
+	bool offsetScan_has_adequate_angular_range();
+
+	/**
 	 * \fn          default_voxelWidth
 	 * \brief       calculates the default voxelWidth value
 	 * \return      returns the default voxelWidth value
@@ -377,6 +384,7 @@ public:
 	bool offsetScan;
 	bool truncatedScan;
 	bool inconsistencyReconstruction;
+	bool lambdaTomography;
 	int numTVneighbors;
     
 	/**

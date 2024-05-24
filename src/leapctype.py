@@ -1768,17 +1768,18 @@ class tomographicModels:
                 q = g
         
         self.libprojectors.FBP.restype = ctypes.c_bool
-        self.set_model()
         if has_torch == True and type(q) is torch.Tensor:
             if f is None:
                 f = self.allocateVolume(0.0,True)
                 f = f.to(g.get_device())
             self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
             self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
         else:
             if f is None:
                 f = self.allocateVolume()
             self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
             self.libprojectors.FBP(q, f, True)
         return f
         
@@ -1816,12 +1817,13 @@ class tomographicModels:
             q = g
             
         self.libprojectors.FBP_cpu.restype = ctypes.c_bool
-        self.set_model()
         if has_torch == True and type(q) is torch.Tensor:
             self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.set_model()
             self.libprojectors.FBP_cpu(q.data_ptr(), f.data_ptr())
         else:
             self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.set_model()
             self.libprojectors.FBP_cpu(q, f)
         return f
         
@@ -1862,7 +1864,55 @@ class tomographicModels:
             self.set_model()
             self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
         return f
+    
+    def LT(self, g, f=None, inplace=False):
+        """Performs a Lambda/Local Tomography (LT) reconstruction of the projection data, g, and stores the result in f
         
+        This function performs Lambda/Local Tomography (LT) reconstruction of nearly all LEAP geometries: parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries,
+        including both flat and curved detectors, axial or helical scans, Attenuated Radon Transform, symmetric object, etc.
+        LT reconstructions work even when the projections are truncated and reconstruct the 2D ramp filtered volume which is essentially an edge map.
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        
+        # Make a copy of g if necessary
+        if has_torch == True and type(g) is torch.Tensor:
+            if inplace == False:
+                q = self.copyData(g)
+            else:
+                q = g
+        else:
+            if self.get_gpu() < 0 and inplace == False:
+                q = self.copyData(g)
+            else:
+                q = g
+        
+        self.libprojectors.lambdaTomography.restype = ctypes.c_bool
+        if has_torch == True and type(q) is torch.Tensor:
+            if f is None:
+                f = self.allocateVolume(0.0,True)
+                f = f.to(g.get_device())
+            self.libprojectors.lambdaTomography.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.lambdaTomography(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
+        else:
+            if f is None:
+                f = self.allocateVolume()
+            self.libprojectors.lambdaTomography.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.lambdaTomography(q, f, True)
+        return f
+    
     def inconsistencyReconstruction(self, g, f=None, inplace=False):
         """Performs an Inconsistency Reconstruction of the projection data, g, and stores the result in f
         
@@ -1890,17 +1940,18 @@ class tomographicModels:
             q = g
         
         self.libprojectors.inconsistencyReconstruction.restype = ctypes.c_bool
-        self.set_model()
         if has_torch == True and type(q) is torch.Tensor:
             if f is None:
                 f = self.allocateVolume(0.0,True)
                 f = f.to(g.get_device())
             self.libprojectors.inconsistencyReconstruction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
             self.libprojectors.inconsistencyReconstruction(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
         else:
             if f is None:
                 f = self.allocateVolume()
             self.libprojectors.inconsistencyReconstruction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
             self.libprojectors.inconsistencyReconstruction(q, f, True)
         return f
         

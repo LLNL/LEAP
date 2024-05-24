@@ -351,77 +351,64 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         print('Error: Detector tilt can cannot be applied to fan-beam data.')
         return None
         
-    centerCol_save = leapct.get_centerCol()
-    centerRow_save = leapct.get_centerRow()
-    tau_save = leapct.get_tau()
-    sod_save = leapct.get_sod()
-    sdd_save = leapct.get_sdd()
-    offsetZ_save = leapct.get_offsetZ()
-    numZ_save = leapct.get_numZ()
-    
-    z = leapct.z_samples()
-    leapct.set_numZ(1)
-    offsetZ = z[iz]
-    leapct.set_offsetZ(offsetZ)
-    
-    f = leapct.allocate_volume()
-    if has_torch == True and type(f) is torch.Tensor:
+    if has_torch == True and type(g) is torch.Tensor:
         f_stack = torch.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=torch.float32)
         f_stack = f_stack.to(f.get_device())
     else:
         f_stack = np.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=np.float32)
 
+    g_sweep = g
+    leapct_sweep = tomographicModels()
+    leapct_sweep.copy_parameters(leapct)
+
     if param == 'tilt':
-        leapct_tilt = tomographicModels()
-        leapct_tilt.copy_parameters(leapct)
-        leapct_tilt.convert_to_modularbeam()
-    else:
-        leapct_tilt = None
+        leapct_sweep.convert_to_modularbeam()
+    elif leapct_sweep.get_geometry() == 'FAN' or leapct_sweep.get_geometry() == 'PARALLEL':
+        leapct_sweep.set_numRows(1)
+        if has_torch == True and type(g) is torch.Tensor:
+            g_sweep = torch.zeros((leapct.get_numAngles(), 1, leapct.get_numCols()), dtype=torch.float32)
+            g_sweep = g_sweep.to(g.get_device())
+            g_sweep[:,0,:] = g[:,iz,:]
+        else:
+            g_sweep = np.zeros((leapct.get_numAngles(), 1, leapct.get_numCols()), dtype=np.float32)
+            g_sweep[:,0,:] = g[:,iz,:]
+    
+    z = leapct_sweep.z_samples()
+    leapct_sweep.set_numZ(1)
+    offsetZ = z[iz]
+    leapct_sweep.set_offsetZ(offsetZ)
+    
+    f = leapct_sweep.allocate_volume()
     
     metrics = np.zeros(len(values))
     last_value = 0.0
     for n in range(len(values)):
         print(str(n) + ': ' + str(param) + ' = ' + str(values[n]))
         if param == 'centerCol':
-            leapct.set_centerCol(values[n])
+            leapct_sweep.set_centerCol(values[n])
         elif param == 'centerRow':
-            leapct.set_centerRow(values[n])
+            leapct_sweep.set_centerRow(values[n])
         elif param == 'tau':
-            leapct.set_tau(values[n])
+            leapct_sweep.set_tau(values[n])
         elif param == 'sod':
-            leapct.set_sod(values[n])
+            leapct_sweep.set_sod(values[n])
         elif param == 'sdd':
-            leapct.set_sdd(values[n])
+            leapct_sweep.set_sdd(values[n])
         if param == 'tilt':
-            leapct_tilt.rotate_detector(values[n]-last_value)
-            if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
-                leapct_tilt.inconsistencyReconstruction(g,f)
-                metrics[n] = leapct.sum(f**2)
-                print('   inconsistency metric: ' + str(metrics[n]))
-            else:
-                leapct_tilt.FBP(g,f)
-                metrics[n] = entropy(f)
-                print('   entropy metric: ' + str(metrics[n]))
+            leapct_sweep.rotate_detector(values[n]-last_value)
+        
+        if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
+            leapct_sweep.inconsistencyReconstruction(g_sweep, f)
+            metrics[n] = leapct_sweep.sum(f**2)
+            print('   inconsistency metric: ' + str(metrics[n]))
         else:
-            if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
-                leapct.inconsistencyReconstruction(g,f)
-                metrics[n] = leapct.sum(f**2)
-                print('   inconsistency metric: ' + str(metrics[n]))
-            else:
-                leapct.FBP(g,f)
-                metrics[n] = entropy(f)
-                print('   entropy metric: ' + str(metrics[n]))
+            leapct_sweep.FBP(g_sweep, f)
+            metrics[n] = entropy(f)
+            print('   entropy metric: ' + str(metrics[n]))
                 
         f_stack[n,:,:] = f[0,:,:]
         last_value = values[n]
     
-    leapct.set_centerCol(centerCol_save)
-    leapct.set_centerRow(centerRow_save)
-    leapct.set_tau(tau_save)
-    leapct.set_sod(sod_save)
-    leapct.set_sdd(sdd_save)
-    leapct.set_numZ(numZ_save)
-    leapct.set_offsetZ(offsetZ_save)
     return f_stack
     
 def entropy(x):
