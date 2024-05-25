@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
+#include "log.h"
 
 using namespace std;
 
@@ -90,7 +91,8 @@ float* setParkerWeights(parameters* params)
 
 		if (beta_max < shortScanThreshold)
 		{
-			printf("setParkerWeights: Not enough data (need at least %f degrees)!\n", shortScanThreshold*180.0/PI);
+			LOG(logWARNING, "ray_weighting", "setParkerWeights") << "Not enough data (need at least " << shortScanThreshold * 180.0 / PI << " degrees)!" << std::endl;
+			//printf("setParkerWeights: Not enough data (need at least %f degrees)!\n", shortScanThreshold*180.0/PI);
 			return NULL;
 		}
 

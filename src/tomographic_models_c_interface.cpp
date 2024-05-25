@@ -67,6 +67,11 @@ void about()
 	tomo()->about();
 }
 
+void version(char* versionText)
+{
+	sprintf(versionText, "%s", LEAP_VERSION);
+}
+
 bool print_parameters()
 {
 	return tomo()->print_parameters();
@@ -90,6 +95,16 @@ bool ct_geometry_defined()
 bool ct_volume_defined()
 {
 	return tomo()->params.volumeDefined();
+}
+
+void set_log_error()
+{
+	tomo()->set_log_error();
+}
+
+void set_log_warning()
+{
+	tomo()->set_log_warning();
 }
 
 void set_log_status()
@@ -878,9 +893,12 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("create_new_model", &create_new_model, "");
     m.def("copy_parameters", &copy_parameters, "");
     m.def("about", &about, "");
+	m.def("version", &version, "");
     m.def("print_parameters", &print_parameters, "");
     m.def("reset", &reset, "");
     m.def("include_cufft", &include_cufft, "");
+	m.def("set_log_error", &set_log_error, "");
+	m.def("set_log_warning", &set_log_warning, "");
 	m.def("set_log_status", &set_log_status, "");
 	m.def("set_log_debug", &set_log_debug, "");
     m.def("getOptimalFFTsize", &getOptimalFFTsize, "");

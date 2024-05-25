@@ -16,7 +16,7 @@
 
 //inline std::string NowTime();
 
-enum TLogLevel {logERROR, logWARNING, logINFO, logSTATUS,logDEBUG, logDEBUG1, logDEBUG2, logDEBUG3, logDEBUG4};
+enum TLogLevel {logERROR, logWARNING, logINFO, logSTATUS, logDEBUG, logDEBUG1, logDEBUG2, logDEBUG3, logDEBUG4};
 
 //*
 class Log
@@ -49,7 +49,7 @@ inline std::ostringstream& Log::Get(TLogLevel level, std::string class_name, std
 //    os << "- " << NowTime();
 //    os << " " << ToString(level) << ": ";
     os << std::string(level > logDEBUG ? level - logDEBUG : 0, '\t');
-    if((level >= logDEBUG) || (level == logERROR))
+    if((level >= logDEBUG) || (level == logERROR) || (level == logWARNING))
     	os << class_name << "::" << func_name << " - ";
 
     log_level = level;
@@ -72,13 +72,14 @@ inline Log::~Log()
 
 inline TLogLevel& Log::ReportingLevel()
 {
-    static TLogLevel reportingLevel = logSTATUS;
+    //static TLogLevel reportingLevel = logSTATUS;
+    static TLogLevel reportingLevel = logWARNING;
     return reportingLevel;
 }
 
 inline std::string Log::ToString(TLogLevel level)
 {
-	static const char* const buffer[] = {"ERROR", "WARNING", "INFO", "STATUS","DEBUG", "DEBUG1", "DEBUG2", "DEBUG3", "DEBUG4"};
+	static const char* const buffer[] = {"ERROR", "WARNING", "INFO", "STATUS", "DEBUG", "DEBUG1", "DEBUG2", "DEBUG3", "DEBUG4"};
     return buffer[level];
 }
 

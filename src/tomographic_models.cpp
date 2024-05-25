@@ -64,6 +64,16 @@ tomographicModels::~tomographicModels()
 	reset();
 }
 
+void tomographicModels::set_log_error()
+{
+	Log::ReportingLevel() = logERROR;
+}
+
+void tomographicModels::set_log_warning()
+{
+	Log::ReportingLevel() = logWARNING;
+}
+
 void tomographicModels::set_log_status()
 {
 	Log::ReportingLevel() = logSTATUS;
@@ -1018,7 +1028,13 @@ bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, fl
 	params.tau = tau;
 	params.set_angles(phis, numAngles);
 	params.set_helicalPitch(helicalPitch);
-	return params.geometryDefined();
+	if (params.geometryDefined())
+	{
+		params.set_offsetScan(params.offsetScan);
+		return true;
+	}
+	else
+		return false;
 }
 
 bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
@@ -1038,7 +1054,13 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 	params.centerRow = centerRow;
 	params.tau = tau;
 	params.set_angles(phis, numAngles);
-	return params.geometryDefined();
+	if (params.geometryDefined())
+	{
+		params.set_offsetScan(params.offsetScan);
+		return true;
+	}
+	else
+		return false;
 }
 
 bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
@@ -1054,7 +1076,13 @@ bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols
 	params.centerCol = centerCol;
 	params.centerRow = centerRow;
 	params.set_angles(phis, numAngles);
-	return params.geometryDefined();
+	if (params.geometryDefined())
+	{
+		params.set_offsetScan(params.offsetScan);
+		return true;
+	}
+	else
+		return false;
 }
 
 bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in)
@@ -1072,7 +1100,13 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 	params.centerCol = float(0.5*float(numCols-1));
 	params.centerRow = float(0.5*float(numRows-1));
 	params.set_sourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
-	return params.geometryDefined();
+	if (params.geometryDefined())
+	{
+		params.set_offsetScan(params.offsetScan);
+		return true;
+	}
+	else
+		return false;
 }
 
 bool tomographicModels::set_flatDetector()

@@ -1,12 +1,12 @@
 Preprocessing Algorithms
 ========================
 
-.. autofunction:: preprocessing_algorithms.makeAttenuationRadiographs
-.. autofunction:: preprocessing_algorithms.outlierCorrection
-.. autofunction:: preprocessing_algorithms.outlierCorrection_highEnergy
-.. autofunction:: preprocessing_algorithms.detectorDeblur_FourierDeconv
-.. autofunction:: preprocessing_algorithms.detectorDeblur_RichardsonLucy
-.. autofunction:: preprocessing_algorithms.ringRemoval_fast
-.. autofunction:: preprocessing_algorithms.ringRemoval_median
-.. autofunction:: preprocessing_algorithms.ringRemoval
-.. autofunction:: preprocessing_algorithms.parameter_sweep
+.. autofunction:: leap_preprocessing_algorithms.makeAttenuationRadiographs
+.. autofunction:: leap_preprocessing_algorithms.outlierCorrection
+.. autofunction:: leap_preprocessing_algorithms.outlierCorrection_highEnergy
+.. autofunction:: leap_preprocessing_algorithms.detectorDeblur_FourierDeconv
+.. autofunction:: leap_preprocessing_algorithms.detectorDeblur_RichardsonLucy
+.. autofunction:: leap_preprocessing_algorithms.ringRemoval_fast
+.. autofunction:: leap_preprocessing_algorithms.ringRemoval_median
+.. autofunction:: leap_preprocessing_algorithms.ringRemoval
+.. autofunction:: leap_preprocessing_algorithms.parameter_sweep

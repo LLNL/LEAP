@@ -52,6 +52,7 @@ For the next releases, we are working on the following:
 3) More noise reduction filters
 4) AMD Support
 5) cone-parallel geometry support
+6) PyQt GUI
 
 ## Authors
 Kyle Champley (champley@gmail.com)

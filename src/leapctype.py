@@ -180,13 +180,50 @@ class tomographicModels:
         else:
             return self.libprojectors.set_model(i)
             
+    def set_log_error(self):
+        """Sets logging level to logERROR
+        
+        This logging level prints out the fewest statements (only error statements)
+        """
+        self.libprojectors.set_log_error()
+        self.print_cost = False
+        
+    def set_log_warning(self):
+        """Sets logging level to logWARNING
+        
+        This logging level prints out the second fewest statements (only error and warning statements)
+        """
+        self.libprojectors.set_log_warning()
+        self.print_cost = False
+            
     def set_log_status(self):
+        """Sets logging level to logSTATUS
+        
+        This logging level prints out the second most statements, including iterative reconstruction
+        cost at every iteration (these extra computations will slow down processing)
+        """
         self.libprojectors.set_log_status()
+        self.print_cost = True
         
     def set_log_debug(self):
+        """Sets logging level to logDEBUG
+        
+        This logging level prints out the most statements
+        """
         self.libprojectors.set_log_debug()
+        self.print_cost = True
             
     def set_maxSlicesForChunking(self, N):
+        """This function effects how forward and backprojection jobs are divided into multiple processing jobs on the GPU
+
+        Smaller numbers use less GPU memory, but may slow down processing.  Only use this function if you know what you are doing.
+        
+        For forward projection it specifies the maximum number of detector rows used per job.
+        For backprojection it specifies the maximum number of CT volume z-slices used per job.
+        
+        Args:
+            N (int): the chunk size
+        """
         self.libprojectors.set_maxSlicesForChunking.restype = ctypes.c_bool
         self.libprojectors.set_maxSlicesForChunking.argtypes = [ctypes.c_int]
         self.set_model()
@@ -211,13 +248,26 @@ class tomographicModels:
         return self.libprojectors.reset()
         
     def include_cufft(self):
+        """Returns True if LEAP is using CUFFT, False otherwise"""
         self.libprojectors.include_cufft.restype = ctypes.c_bool
         return self.libprojectors.include_cufft()
 
     def about(self):
         """prints info about LEAP, including the version number"""
         self.set_model()
-        return self.libprojectors.about()
+        self.libprojectors.about()
+        
+    def version(self):
+        """Returns version number string"""
+        try:
+            versionText = ctypes.create_string_buffer(16)
+            self.libprojectors.version(versionText)
+            if sys.version_info[0] == 3:
+                return versionText.value.decode("utf-8")
+            else:
+                return versionText.value
+        except:
+            return "unknown"
 
     def printParameters(self):
         """printParameters
@@ -681,15 +731,63 @@ class tomographicModels:
         return self.libprojectors.convert_parallelbeam_to_modularbeam()
         
     def rotate_detector(self, alpha):
-        """Rotates modular-beam detector by alpha degrees by updating the modular-beam CT geometry specification"""
+        """Rotates modular-beam detector by updating the modular-beam CT geometry specification
+        
+        The CT geometry parameters must be defined before running this function and the 
+        CT geometry must be modular-beam.  If it is not modular-beam, one may use the
+        convert_to_modularbeam() function.
+        
+        Note that there are two forms for the argument of this function.  If the argument is a scalar, a
+        rotation is performed around the optical axis, otherwise the argument can be specified as a 3x3
+        rotation matrix.  A good method to specify a rotation matrix is the following:
+        from scipy.spatial.transform import Rotation as R
+        A = R.from_euler('xyz', [psi, theta, phi], degrees=True).as_matrix()
+
+        Args:
+            alpha (float or 3x3 numpy array): if alpha is a scalar, a rotation is performed around the optical axis, otherwise alpha can be specified as a 3x3 rotation matrix
+        
+        Returns:
+            True if the operation was successful, False overwise
+        
+        """
         if self.get_geometry() != 'MODULAR':
             print('Error: can only rotate modular-beam detectors')
-            print('Use convert_to_modularbeam first')
+            print('Use convert_to_modularbeam() first')
             return False
-        self.set_model()
-        self.libprojectors.rotate_detector.restype = ctypes.c_bool
-        self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
-        return self.libprojectors.rotate_detector(alpha)
+        if type(alpha) is np.ndarray:
+            if type(alpha) is not np.ndarray or len(alpha.shape) != 2 or alpha.shape[0] != 3 or alpha.shape[1] != 3:
+                print('Error: input argument must be scalar or a 3x3 numpy array')
+                return False
+            A = np.ascontiguousarray(alpha.copy(), dtype=np.float32)
+            if np.linalg.det(A) == 0.0:
+                print('Error: rotation matrix must be nonsingular')
+                return False
+            A = A / np.linalg.det(A) # just make sure people aren't doing anything weird
+            
+            self.set_model()
+            rowVecs = self.get_rowVectors()
+            colVecs = self.get_colVectors()
+            B = A.copy()
+            for n in range(rowVecs.shape[0]):
+                u_vec = colVecs[n,:]
+                v_vec = rowVecs[n,:]
+                n_vec = np.cross(u_vec, v_vec)
+                B[:,1] = n_vec
+                B[:,0] = u_vec
+                B[:,2] = v_vec
+                #rowVecs[n,:] = np.matmul(A, np.matmul(rowVecs[n,:], A.T))
+                #colVecs[n,:] = np.matmul(A, np.matmul(colVecs[n,:], A.T))
+                B = np.matmul(B,A.T)
+                colVecs[n,:] = B[:,0]
+                rowVecs[n,:] = B[:,2]
+            
+            return self.set_modularBeam(self.get_numAngles(), self.get_numRows(), self.get_numCols(), self.get_pixelHeight(), self.get_pixelWidth(), self.get_sourcePositions(), self.get_moduleCenters(), rowVecs, colVecs)
+            
+        else:
+            self.set_model()
+            self.libprojectors.rotate_detector.restype = ctypes.c_bool
+            self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
+            return self.libprojectors.rotate_detector(alpha)
         
     def rotate_coordinate_system(self, R):
         """Rotates the coordinate system
@@ -1323,7 +1421,14 @@ class tomographicModels:
             else:
                 x = torch.from_numpy(x).to(device)
             return x
-    
+            
+    def copy_to_host(self, x):
+        """Copies the given argument to a numpy array"""
+        if has_torch == True and type(x) is torch.Tensor:
+            x = x.cpu().detach().numpy()
+        return x
+            
+            
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS EXECUTE THE MAIN CPU/GPU ROUTINES IN LEAP

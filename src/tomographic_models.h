@@ -46,6 +46,8 @@ public:
 	tomographicModels();
 	~tomographicModels();
 
+	void set_log_error();
+	void set_log_warning();
 	void set_log_status();
 	void set_log_debug();
 

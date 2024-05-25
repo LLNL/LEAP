@@ -1062,8 +1062,10 @@ bool parameters::rotateDetector(float alpha)
 
 			float u_cross_v[3];
 			u_cross_v[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
-			u_cross_v[2] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
-			u_cross_v[1] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+			u_cross_v[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+			u_cross_v[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+			//printf("normal vector: %f, %f, %f\n", u_cross_v[0], u_cross_v[1], u_cross_v[2]);
 
 			rotateAroundAxis(u_cross_v, alpha * PI / 180.0, u_vec);
 			rotateAroundAxis(u_cross_v, alpha * PI / 180.0, v_vec);
@@ -1128,7 +1130,7 @@ bool parameters::set_offsetScan(bool aFlag)
 			offsetScan = false;
 			return false;
 		}
-		/*
+		//*
 		if (geometry == MODULAR)
 		{
 			printf("Error: offsetScan only applies to parallel-, fan-, or cone-beam data!\n");
@@ -1910,6 +1912,8 @@ bool parameters::convert_conebeam_to_modularbeam()
 	//for (int i = 0; i < numAngles; i++)
 	//	printf("%f\n", phis[i]*180.0/PI);
 
+	set_offsetScan(offsetScan);
+
 	return true;
 }
 
@@ -1987,5 +1991,8 @@ bool parameters::convert_parallelbeam_to_modularbeam()
 	delete[] d_pos;
 	delete[] v_vec;
 	delete[] u_vec;
+
+	set_offsetScan(offsetScan);
+
 	return true;
 }

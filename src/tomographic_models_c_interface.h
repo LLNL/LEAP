@@ -32,8 +32,11 @@ extern "C" PROJECTOR_API int create_new_model();
 extern "C" PROJECTOR_API bool copy_parameters(int);
 
 extern "C" PROJECTOR_API void about();
+extern "C" PROJECTOR_API void version(char*);
 extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
+extern "C" PROJECTOR_API void set_log_error();
+extern "C" PROJECTOR_API void set_log_warning();
 extern "C" PROJECTOR_API void set_log_status();
 extern "C" PROJECTOR_API void set_log_debug();
 extern "C" PROJECTOR_API bool include_cufft();
