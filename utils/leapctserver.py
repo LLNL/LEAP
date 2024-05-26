@@ -103,7 +103,7 @@ class leapctserver:
                 self.max_CPU_memory_usage = 5.0/6.0*physicalMemory - 2.0/3.0 # 1 GB if have 2 GB of memory, 6 GB if 8 GB of memory
             elif physicalMemory < 32.0:
                 self.max_CPU_memory_usage = 11.0/12.0*physicalMemory - 4.0/3.0 # 6 GB if 8 GB of memory, 28 GB if 32 GB of memory
-            else
+            else:
                 self.max_CPU_memory_usage = min(physicalMemory - 4.0, 0.95*physicalMemory) # reserve 4 GB of memory; this is likely too much
         else:
             self.max_CPU_memory_usage = 128.0
@@ -293,6 +293,105 @@ class leapctserver:
         g = np.ascontiguousarray(g, dtype=np.float32)
         return fileName
     
+    def get_zslice(self, iz, thickness=1):
+        # TODO: read from file if not loaded in memory
+        if self.f is None:
+            return None
+        elif self.leapct.ct_volume_defined() == False:
+            return None
+        else:
+            return self.get_2Dsubset(self.f, iz, 0, thickness)
+            
+    def get_yslice(self, iy, thickness=1):
+        # TODO: read from file if not loaded in memory
+        if self.f is None:
+            return None
+        elif self.leapct.ct_volume_defined() == False:
+            return None
+        else:
+            return self.get_2Dsubset(self.f, iy, 1, thickness)
+            
+    def get_xslice(self, ix, thickness=1):
+        # TODO: read from file if not loaded in memory
+        if self.f is None:
+            return None
+        elif self.leapct.ct_volume_defined() == False:
+            return None
+        else:
+            return self.get_2Dsubset(self.f, ix, 2, thickness)
+            
+    def get_projection(self, iphi, thickness=1):
+        # TODO: read from file if not loaded in memory
+        if self.g is None:
+            return None
+        elif self.leapct.ct_geometry_defined() == False:
+            return None
+        else:
+            return self.get_2Dsubset(self.g, iphi, 0, thickness)
+            
+    def get_sinogram(self, irow, thickness=1):
+        # TODO: read from file if not loaded in memory
+        if self.g is None:
+            return None
+        elif self.leapct.ct_geometry_defined() == False:
+            return None
+        else:
+            return self.get_2Dsubset(self.g, irow, 1, thickness)
+            
+    def get_2Dsubset(self, x, ind, axis, thickness=1):
+        if x is None:
+            return None
+        elif axis < 0 or axis > 3:
+            return None
+        elif ind < 0 or ind >= x.shape[axis]:
+            return None
+        else:
+            thickness = min(max(1,thickness), ind+1, x.shape[axis]-ind)
+            if axis == 0:
+                slice = np.empty((x.shape[1], x.shape[2]), dtype=np.float32)
+            elif axis == 1:
+                slice = np.empty((x.shape[0], x.shape[2]), dtype=np.float32)
+            else:
+                slice = np.empty((x.shape[0], x.shape[1]), dtype=np.float32)
+            if thickness == 1:
+                if axis == 0:
+                    slice[:,:] = x[ind,:,:]
+                elif axis == 1:
+                    slice[:,:] = x[:,ind,:]
+                else:
+                    slice[:,:] = x[:,:,ind]
+            else:
+                ind_min = ind - thickness//2
+                ind_max = ind + thickness//2
+                if thickness % 2 == 0:
+                    w = np.ones(thickness+1, dtype=np.float32)
+                    w[0] = 0.5
+                    w[-1] = 0.5
+                    w = w / float(thickness)
+                    if axis == 0:
+                        #slice[:,:] = np.tensordot(x[ind_min:ind_max+1,:,:], w, axes=axis)
+                        slice[:,:] = np.sum(x[ind_min:ind_max+1,:,:] * w[:,None,None], axis=axis)
+                    elif axis == 1:
+                        slice[:,:] = np.sum(x[:,ind_min:ind_max+1,:] * w[None,:,None], axis=axis)
+                    else:
+                        slice[:,:] = np.sum(x[:,:,ind_min:ind_max+1] * w[None,None,:], axis=axis)
+                else:
+                    if axis == 0:
+                        slice[:,:] = np.sum(x[ind_min:ind_max+1,:,:], axes=axis) / float(thickness)
+                    elif axis == 1:
+                        slice[:,:] = np.sum(x[:,ind_min:ind_max+1,:], axes=axis) / float(thickness)
+                    else:
+                        slice[:,:] = np.sum(x[:,:,ind_min:ind_max+1], axes=axis) / float(thickness)
+            return slice
+    
+    def basic_stats(self, x):
+        if x is None:
+            return None, None, None, None, None
+        else:
+            #numpy.histogram(a, bins=10, range=None, density=None, weights=None)
+            mu = np.mean(x)
+            sigma = np.std(x)
+            return np.min(x), np.max(x), mu, sigma, mu/sigma
     
     ###################################################################################################################
     ###################################################################################################################
@@ -467,39 +566,39 @@ class leapctserver:
     ###################################################################################################################
     ###################################################################################################################
     def makeAttenuationRadiographs(self, ROI=None):
-        #preprocessing_algorithms.makeAttenuationRadiographs(self.leapct, ...)
+        #leap_preprocessing_algorithms.makeAttenuationRadiographs(self.leapct, ...)
         pass
         
     def outlierCorrection(self, threshold=0.03, windowSize=3, isAttenuationData=True):
-        #preprocessing_algorithms.outlierCorrection(self.leapct, ...)
+        #leap_preprocessing_algorithms.outlierCorrection(self.leapct, ...)
         pass
         
     def outlierCorrection_highEnergy(self, isAttenuationData=True):
-        #preprocessing_algorithms.outlierCorrection_highEnergy(self.leapct, ...)
+        #leap_preprocessing_algorithms.outlierCorrection_highEnergy(self.leapct, ...)
         pass
         
     def detectorDeblur_FourierDeconv(self, H, WienerParam=0.0, isAttenuationData=True):
-        #preprocessing_algorithms.detectorDeblur_FourierDeconv(self.leapct, ...)
+        #leap_preprocessing_algorithms.detectorDeblur_FourierDeconv(self.leapct, ...)
         pass
         
     def detectorDeblur_RichardsonLucy(self, H, numIter=10, isAttenuationData=True):
-        #preprocessing_algorithms.detectorDeblur_RichardsonLucy(self.leapct, ...)
+        #leap_preprocessing_algorithms.detectorDeblur_RichardsonLucy(self.leapct, ...)
         pass
         
     def ringRemoval_fast(self, delta, numIter, maxChange):
-        #preprocessing_algorithms.ringRemoval_fast(self.leapct, ...)
+        #leap_preprocessing_algorithms.ringRemoval_fast(self.leapct, ...)
         pass
         
     def ringRemoval_median(self, threshold=0.0, windowSize=5, numIter=1):
-        #preprocessing_algorithms.ringRemoval_median(self.leapct, ...)
+        #leap_preprocessing_algorithms.ringRemoval_median(self.leapct, ...)
         pass
         
     def ringRemoval(self, delta, beta, numIter):
-        #preprocessing_algorithms.ringRemoval(self.leapct, ...)
+        #leap_preprocessing_algorithms.ringRemoval(self.leapct, ...)
         pass
         
     def parameter_sweep(self, values, param='centerCol', iz=None, algorithmName='FBP'):
-        #preprocessing_algorithms.parameter_sweep(self.leapct, ...)
+        #leap_preprocessing_algorithms.parameter_sweep(self.leapct, ...)
         pass
         
     
