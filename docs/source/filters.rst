@@ -1,6 +1,9 @@
 Filters Applied to Arbitrary 3D Arrays
 ======================================
 
+.. autofunction:: leapctype.tomographicModels.LowPassFilter
+.. autofunction:: leapctype.tomographicModels.LowPassFilter2D
+.. autofunction:: leapctype.tomographicModels.HighPassFilter
 .. autofunction:: leapctype.tomographicModels.BlurFilter
 .. autofunction:: leapctype.tomographicModels.BlurFilter2D
 .. autofunction:: leapctype.tomographicModels.MedianFilter
@@ -12,4 +15,6 @@ Filters Applied to Arbitrary 3D Arrays
 .. autofunction:: leapctype.tomographicModels.TVquadForm
 .. autofunction:: leapctype.tomographicModels.diffuse
 .. autofunction:: leapctype.tomographicModels.BilateralFilter
+.. autofunction:: leapctype.tomographicModels.PriorBilateralFilter
+.. autofunction:: leapctype.tomographicModels.GuidedFilter
 .. autofunction:: leapctype.tomographicModels.DictionaryDenoising

@@ -20,12 +20,19 @@ import numpy as np
 from leapctype import *
 
 def makeAttenuationRadiographs(g, air_scan=None, dark_scan=None, ROI=None):
-    """Converts data to attenuation radiographs (flat fielding and negative log)
+    r"""Converts data to attenuation radiographs (flat fielding and negative log)
+
     
+    .. math::
+       \begin{eqnarray}
+         transmission\_data &=& (raw - dark\_scan) / (air\_scan - dark\_scan) \\
+         attenuation\_data &=& -log(transmission\_data)
+       \end{eqnarray}
+       
     Args:
         g (C contiguous float32 numpy array or torch tensor): radiograph data
-        air_scan (C contiguous float32 numpy array or torch tensor): air scan radiograph data
-        dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data
+        air_scan (C contiguous float32 numpy array or torch tensor): air scan radiograph data; if not given, assumes that the input data is transmission data
+        dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data; if not given assumes the inputs have already been dark subtracted
         ROI (4-element integer array): specifies a bounding box for which to estimate a mean value for flux correction
     
     """
@@ -47,7 +54,7 @@ def makeAttenuationRadiographs(g, air_scan=None, dark_scan=None, ROI=None):
     return g
 
 def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData=True):
-    """Removes outliers (zingers) from CT projections
+    r"""Removes outliers (zingers) from CT projections
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -58,7 +65,7 @@ def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
         g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
-        threshold (float): A pixel will be replaced by the median of its neighbors if |g - median(g)|/median(g) > threshold
+        threshold (float): A pixel will be replaced by the median of its neighbors if \|g - median(g)\|/median(g) > threshold
         windowSize (int): The window size of the median filter applied is windowSize x windowSize
         isAttenuationData (bool): True if g is attenuation data, False otherwise
         
@@ -83,7 +90,8 @@ def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     and removes outliers by a series of three thresholded median filters
     
     This outlier correction algorithm should most be used for MV CT or neutron CT
-    where outliers effect a larger neighborhood of pixels.
+    where outliers effect a larger neighborhood of pixels.  This function uses a three-stage
+    thresholded median filter to remove outliers.
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
@@ -109,7 +117,7 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
     
     Args:
         g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
-        H (contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
+        H (2D contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
         WienerParam (float): Parameter for Wiener deconvolution, number should be between 0.0 and 1.0
         isAttenuationData (bool): True if g is attenuation data, False otherwise
     
@@ -126,14 +134,20 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
     return leapct.transmission_filter(g, H, isAttenuationData)
     
 def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True):
-    """Removes detector blur by Richardson-Lucy iterative deconvolution
+    r"""Removes detector blur by Richardson-Lucy iterative deconvolution
     
     Richardson-Lucy iterative deconvolution is developed for Poisson-distributed data
-    and inherently preserve the non-negativity of the input
+    and inherently preserve the non-negativity of the input.  It uses the following update step,
+    where t = transmission data
+    
+    .. math::
+       \begin{eqnarray}
+         t_{n+1} &=& t_n H^T\left[ \frac{t_0}{Ht_n} \right]
+       \end{eqnarray}
     
     Args:
         g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
-        H (contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
+        H (2D contiguous float32 numpy array or torch tensor): Magnitude of the frequency response of blurring psf, DC is at [0,0]
         numIter (int): Number of iterations
         isAttenuationData (bool): True if g is attenuation data, False otherwise
     
@@ -158,7 +172,19 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
     return g
 
 def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
-    """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    
+    This algorithm estimates the rings by first averaging all projections.  Then denoises this
+    signal by minimizing the TV norm.  Finally the gain correction map to correct the data
+    is estimated by the difference of the TV-smoothed and averaged projection data (these are all 2D signals).
+    This is summarized by the math equations below.
+    
+    .. math::
+       \begin{eqnarray}
+         \overline{g} &:=& \frac{1}{numAngles}\sum_{angles} g \\
+         gain\_correction &:=&argmin \; TV(\overline{g}) - \overline{g} \\
+         g\_corrected &:=& g + gain\_correction
+       \end{eqnarray}
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -178,6 +204,7 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     """
     if has_torch == True and type(g) is torch.Tensor:
         g_sum = torch.zeros((1,g.shape[1],g.shape[2]), dtype=torch.float32)
+        g_sum = g_sum.to(g.get_device())
         g_sum[0,:] = torch.mean(g,axis=0)
     else:
         g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
@@ -197,7 +224,13 @@ def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     return g
 
 def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
-    """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    
+    .. math::
+       \begin{eqnarray}
+         gain\_correction &:=& \frac{1}{numAngles}\sum_{angles} [MedianFilter2D(g) - g] \\
+         g\_corrected &:=& g + gain\_correction
+       \end{eqnarray}
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -207,7 +240,7 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
         g (contiguous float32 numpy array or torch tensor): attenuation projection data
-        threshold (float): A pixel will be replaced by the median of its neighbors if |g - median(g)|/median(g) > threshold
+        threshold (float): The threshold for the thresholded median filter, where a pixel will be replaced by the median of its neighbors if \|g - median(g)\|/median(g) > threshold
         windowSize (int): The window size of the median filter applied is windowSize x windowSize
         numIter (int): Number of iterations
     
@@ -230,7 +263,11 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
     return g
 
 def ringRemoval(leapct, g, delta, beta, numIter):
-    """Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
+    
+    This algorithm estimates the gain correction necessary to remove ring artifacts by solving denoising
+    the data by minimizing the TV norm with the gradient step determined by averaging the gradients over
+    all angles.
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -277,4 +314,105 @@ def ringRemoval(leapct, g, delta, beta, numIter):
     leapct.set_numTVneighbors(numNeighbors)
     
     return g
+    
+def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP'):
+    r"""Performs single-slice reconstructions of several values of a given parameter
+    
+    The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+    The parameters to sweep are all standard LEAP CT geometry parameter names, except 'tilt'
+    The 'tilt' parameter is swept by converting the geometry to modular-beam (see the convert_to_modularbeam function).
+    Then the tilt is achieved by rotating the colVecs and rowVecs parameters (note that the data g is not rotated, 
+    just the model of the detector orientation which is better because no interpolation is necessary).  This rotation
+    is achieved with the rotate_detector function.
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        values (list of floats): the values to reconstruct with
+        param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt'
+        iz (integer): the z-slice index to perform the reconstruction; if not given, uses the central slice
+        algorithmName (string): the name of the algorithm to use for reconstruction; can be 'FBP' or 'inconsistencyReconstruction'
+        
+    Returns:
+        stack of single-slice reconstructions (i.e., 3D numpy array or torch tensor) for all parameter values
+    """
+    valid_params = ['centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt']
+    if param == None:
+        param = 'centerCol'
+    if any(name in param for name in valid_params) == False:
+        print('Error: Invalid parameter, must be one of: ' + str(valid_params))
+        return None
+    if iz is None:
+        iz = int(leapct.get_numZ()//2)
+    if iz < 0 or iz >= leapct.get_numZ():
+        print('Error: Slice index is out of bounds for current volume specification.')
+        return None
+    if param == 'tilt' and leapct.get_geometry() == 'FAN':
+        print('Error: Detector tilt can cannot be applied to fan-beam data.')
+        return None
+        
+    if has_torch == True and type(g) is torch.Tensor:
+        f_stack = torch.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=torch.float32)
+        f_stack = f_stack.to(f.get_device())
+    else:
+        f_stack = np.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=np.float32)
+
+    g_sweep = g
+    leapct_sweep = tomographicModels()
+    leapct_sweep.copy_parameters(leapct)
+
+    if param == 'tilt':
+        leapct_sweep.convert_to_modularbeam()
+    elif leapct_sweep.get_geometry() == 'FAN' or leapct_sweep.get_geometry() == 'PARALLEL':
+        leapct_sweep.set_numRows(1)
+        if has_torch == True and type(g) is torch.Tensor:
+            g_sweep = torch.zeros((leapct.get_numAngles(), 1, leapct.get_numCols()), dtype=torch.float32)
+            g_sweep = g_sweep.to(g.get_device())
+            g_sweep[:,0,:] = g[:,iz,:]
+        else:
+            g_sweep = np.zeros((leapct.get_numAngles(), 1, leapct.get_numCols()), dtype=np.float32)
+            g_sweep[:,0,:] = g[:,iz,:]
+    
+    z = leapct_sweep.z_samples()
+    leapct_sweep.set_numZ(1)
+    offsetZ = z[iz]
+    leapct_sweep.set_offsetZ(offsetZ)
+    
+    f = leapct_sweep.allocate_volume()
+    
+    metrics = np.zeros(len(values))
+    last_value = 0.0
+    for n in range(len(values)):
+        print(str(n) + ': ' + str(param) + ' = ' + str(values[n]))
+        if param == 'centerCol':
+            leapct_sweep.set_centerCol(values[n])
+        elif param == 'centerRow':
+            leapct_sweep.set_centerRow(values[n])
+        elif param == 'tau':
+            leapct_sweep.set_tau(values[n])
+        elif param == 'sod':
+            leapct_sweep.set_sod(values[n])
+        elif param == 'sdd':
+            leapct_sweep.set_sdd(values[n])
+        if param == 'tilt':
+            leapct_sweep.rotate_detector(values[n]-last_value)
+        
+        if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
+            leapct_sweep.inconsistencyReconstruction(g_sweep, f)
+            metrics[n] = leapct_sweep.sum(f**2)
+            print('   inconsistency metric: ' + str(metrics[n]))
+        else:
+            leapct_sweep.FBP(g_sweep, f)
+            metrics[n] = entropy(f)
+            print('   entropy metric: ' + str(metrics[n]))
+                
+        f_stack[n,:,:] = f[0,:,:]
+        last_value = values[n]
+    
+    return f_stack
+    
+def entropy(x):
+    marg = np.histogramdd(np.ravel(x), bins = int(np.sqrt(x.size)))[0]/x.size
+    marg = list(filter(lambda p: p > 0, np.ravel(marg)))
+    return -np.sum(np.multiply(marg, np.log2(marg)))
     

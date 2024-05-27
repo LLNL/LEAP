@@ -15,7 +15,11 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+//#include "Log.h"
+//#include <torch/torch.h>
+//#include <torch/extension.h>
 //#include <pybind11/pybind11.h>
+//namespace py = pybind11;
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -63,6 +67,11 @@ void about()
 	tomo()->about();
 }
 
+void version(char* versionText)
+{
+	sprintf(versionText, "%s", LEAP_VERSION);
+}
+
 bool print_parameters()
 {
 	return tomo()->print_parameters();
@@ -71,6 +80,41 @@ bool print_parameters()
 bool reset()
 {
 	return tomo()->reset();
+}
+
+bool all_defined()
+{
+	return tomo()->params.allDefined();
+}
+
+bool ct_geometry_defined()
+{
+	return tomo()->params.geometryDefined();
+}
+
+bool ct_volume_defined()
+{
+	return tomo()->params.volumeDefined();
+}
+
+void set_log_error()
+{
+	tomo()->set_log_error();
+}
+
+void set_log_warning()
+{
+	tomo()->set_log_warning();
+}
+
+void set_log_status()
+{
+	tomo()->set_log_status();
+}
+
+void set_log_debug()
+{
+	tomo()->set_log_debug();
 }
 
 bool include_cufft()
@@ -85,6 +129,11 @@ bool include_cufft()
 int getOptimalFFTsize(int N)
 {
 	return optimalFFTsize(N);
+}
+
+bool set_maxSlicesForChunking(int N)
+{
+	return tomo()->set_maxSlicesForChunking(N);
 }
 
 bool verify_input_sizes(int numAngles, int numRows, int numCols, int numZ, int numY, int numX)
@@ -171,6 +220,17 @@ bool inconsistencyReconstruction(float* g, float* f, bool data_on_cpu)
 	tomo()->params.inconsistencyReconstruction = true;
 	bool retVal = FBP(g, f, data_on_cpu);
 	tomo()->params.inconsistencyReconstruction = false;
+	return retVal;
+}
+
+bool lambdaTomography(float* g, float* f, bool data_on_cpu)
+{
+	bool offsetScan_save = tomo()->params.offsetScan;
+	tomo()->params.offsetScan = false;
+	tomo()->params.lambdaTomography = true;
+	bool retVal = FBP(g, f, data_on_cpu);
+	tomo()->params.lambdaTomography = false;
+	tomo()->params.offsetScan = offsetScan_save;
 	return retVal;
 }
 
@@ -286,6 +346,15 @@ bool set_centerCol(float centerCol)
 bool set_centerRow(float centerRow)
 {
 	return tomo()->set_centerRow(centerRow);
+}
+
+bool set_sod(float sod)
+{
+	return tomo()->params.set_sod(sod);
+}
+bool set_sdd(float sdd)
+{
+	return tomo()->params.set_sdd(sdd);
 }
 
 bool set_volume(int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -702,6 +771,11 @@ bool BlurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cp
 	return tomo()->BlurFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);
 }
 
+bool HighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
+{
+	return tomo()->HighPassFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);
+}
+
 bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
 {
 	return tomo()->MedianFilter(f, N_1, N_2, N_3, threshold, w, data_on_cpu);
@@ -720,6 +794,16 @@ bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
 bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
 {
 	return tomo()->BilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, data_on_cpu);
+}
+
+bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* prior, bool data_on_cpu)
+{
+	return tomo()->PriorBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, prior, data_on_cpu);
+}
+
+bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu)
+{
+	return tomo()->GuidedFilter(f, N_1, N_2, N_3, r, epsilon, data_on_cpu);
 }
 
 bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)
@@ -805,6 +889,153 @@ bool saveParamsToFile(const char* param_fn)
 
 /*
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
-	m.def("project_cpu", &project_cpu, "forward project on CPU");
+    m.def("set_model", &set_model, "");
+    m.def("create_new_model", &create_new_model, "");
+    m.def("copy_parameters", &copy_parameters, "");
+    m.def("about", &about, "");
+	m.def("version", &version, "");
+    m.def("print_parameters", &print_parameters, "");
+    m.def("reset", &reset, "");
+    m.def("include_cufft", &include_cufft, "");
+	m.def("set_log_error", &set_log_error, "");
+	m.def("set_log_warning", &set_log_warning, "");
+	m.def("set_log_status", &set_log_status, "");
+	m.def("set_log_debug", &set_log_debug, "");
+    m.def("getOptimalFFTsize", &getOptimalFFTsize, "");
+	m.def("set_maxSlicesForChunking", &set_maxSlicesForChunking, "");
+    m.def("verify_input_sizes", &verify_input_sizes, "");
+    m.def("project_gpu", &project_gpu, "");
+    m.def("backproject_gpu", &backproject_gpu, "");
+    m.def("project_cpu", &project_cpu, "");
+    m.def("backproject_cpu", &backproject_cpu, "");
+    m.def("FBP_cpu", &FBP_cpu, "");
+    m.def("FBP_gpu", &FBP_gpu, "");
+    m.def("project", &project, "");
+    m.def("backproject", &backproject, "");
+    m.def("weightedBackproject", &weightedBackproject, "");
+    m.def("HilbertFilterProjections", &HilbertFilterProjections, "");
+    m.def("rampFilterProjections", &rampFilterProjections, "");
+    m.def("filterProjections", &filterProjections, "");
+    m.def("rampFilterVolume", &rampFilterVolume, "");
+    m.def("get_FBPscalar", &get_FBPscalar, "");
+    m.def("FBP", &FBP, "");
+    m.def("inconsistencyReconstruction", &inconsistencyReconstruction, "");
+	m.def("lambdaTomography", &lambdaTomography, "");
+    m.def("sensitivity", &sensitivity, "");
+    m.def("windowFOV", &windowFOV, "");
+    m.def("set_conebeam", &set_conebeam, "");
+    m.def("set_fanbeam", &set_fanbeam, "");
+    m.def("set_parallelbeam", &set_parallelbeam, "");
+    m.def("set_modularbeam", &set_modularbeam, "");
+    m.def("rotate_detector", &rotate_detector, "");
+    m.def("shift_detector", &shift_detector, "");
+    m.def("set_flatDetector", &set_flatDetector, "");
+    m.def("set_curvedDetector", &set_curvedDetector, "");
+    m.def("int get_detectorType", &int get_detectorType, "");
+    m.def("set_numCols", &set_numCols, "");
+    m.def("set_numRows", &set_numRows, "");
+    m.def("set_pixelHeight", &set_pixelHeight, "");
+    m.def("set_pixelWidth", &set_pixelWidth, "");
+    m.def("set_centerCol", &set_centerCol, "");
+    m.def("set_centerRow", &set_centerRow, "");
+    m.def("set_volume", &set_volume, "");
+    m.def("set_volumeDimensionOrder", &set_volumeDimensionOrder, "");
+    m.def("int get_volumeDimensionOrder", &int get_volumeDimensionOrder, "");
+    m.def("set_default_volume", &set_default_volume, "");
+    m.def("set_numZ", &set_numZ, "");
+    m.def("set_numY", &set_numY, "");
+    m.def("set_numX", &set_numX, "");
+    m.def("set_offsetZ", &set_offsetZ, "");
+    m.def("set_voxelWidth", &set_voxelWidth, "");
+    m.def("set_voxelHeight", &set_voxelHeight, "");
+    m.def("projectConeBeam", &projectConeBeam, "");
+    m.def("backprojectConeBeam", &backprojectConeBeam, "");
+    m.def("projectFanBeam", &projectFanBeam, "");
+    m.def("backprojectFanBeam", &backprojectFanBeam, "");
+    m.def("projectParallelBeam", &projectParallelBeam, "");
+    m.def("backprojectParallelBeam", &backprojectParallelBeam, "");
+    m.def("rowRangeNeededForBackprojection", &rowRangeNeededForBackprojection, "");
+    m.def("set_GPU", &set_GPU, "");
+    m.def("set_GPUs", &set_GPUs, "");
+    m.def("get_GPU", &get_GPU, "");
+    m.def("set_axisOfSymmetry", &set_axisOfSymmetry, "");
+    m.def("clear_axisOfSymmetry", &clear_axisOfSymmetry, "");
+    m.def("set_projector", &set_projector, "");
+    m.def("set_rFOV", &set_rFOV, "");
+    m.def("set_offsetScan", &set_offsetScan, "");
+    m.def("set_truncatedScan", &set_truncatedScan, "");
+    m.def("set_numTVneighbors", &set_numTVneighbors, "");
+    m.def("get_numTVneighbors", &get_numTVneighbors, "");
+    m.def("set_rampID", &set_rampID, "");
+    m.def("set_tau", &set_tau, "");
+    m.def("set_helicalPitch", &set_helicalPitch, "");
+    m.def("set_normalizedHelicalPitch", &set_normalizedHelicalPitch, "");
+    m.def("set_attenuationMap", &set_attenuationMap, "");
+    m.def("set_cylindircalAttenuationMap", &set_cylindircalAttenuationMap, "");
+    m.def("convert_conebeam_to_modularbeam", &convert_conebeam_to_modularbeam, "");
+    m.def("convert_parallelbeam_to_modularbeam", &convert_parallelbeam_to_modularbeam, "");
+    m.def("clear_attenuationMap", &clear_attenuationMap, "");
+    m.def("muSpecified", &muSpecified, "");
+    m.def("flipAttenuationMapSign", &flipAttenuationMapSign, "");
+    m.def("get_geometry", &get_geometry, "");
+    m.def("get_sod", &get_sod, "");
+    m.def("get_sdd", &get_sdd, "");
+    m.def("get_numAngles", &get_numAngles, "");
+    m.def("get_numRows", &get_numRows, "");
+    m.def("get_numCols", &get_numCols, "");
+    m.def("get_pixelWidth", &get_pixelWidth, "");
+    m.def("get_pixelHeight", &get_pixelHeight, "");
+    m.def("get_centerRow", &get_centerRow, "");
+    m.def("get_centerCol", &get_centerCol, "");
+    m.def("get_tau", &get_tau, "");
+    m.def("get_helicalPitch", &get_helicalPitch, "");
+    m.def("get_normalizedHelicalPitch", &get_normalizedHelicalPitch, "");
+    m.def("get_z_source_offset", &get_z_source_offset, "");
+    m.def("get_sourcePositions", &get_sourcePositions, "");
+    m.def("get_moduleCenters", &get_moduleCenters, "");
+    m.def("get_rowVectors", &get_rowVectors, "");
+    m.def("get_colVectors", &get_colVectors, "");
+    m.def("set_angles", &set_angles, "");
+    m.def("get_angles", &get_angles, "");
+    m.def("get_angularRange", &get_angularRange, "");
+    m.def("get_numX", &get_numX, "");
+    m.def("get_numY", &get_numY, "");
+    m.def("get_numZ", &get_numZ, "");
+    m.def("get_voxelWidth", &get_voxelWidth, "");
+    m.def("get_voxelHeight", &get_voxelHeight, "");
+    m.def("get_offsetX", &get_offsetX, "");
+    m.def("get_offsetY", &get_offsetY, "");
+    m.def("get_offsetZ", &get_offsetZ, "");
+    m.def("get_z0", &get_z0, "");
+    m.def("find_centerCol", &find_centerCol, "");
+    m.def("Laplacian", &Laplacian, "");
+    m.def("transmissionFilter", &transmissionFilter, "");
+    m.def("applyTransferFunction", &applyTransferFunction, "");
+    m.def("applyDualTransferFunction", &applyDualTransferFunction, "");
+    m.def("convertToRhoeZe", &convertToRhoeZe, "");
+    m.def("BlurFilter", &BlurFilter, "");
+	m.def("HighPassFilter", &HighPassFilter, "");
+    m.def("MedianFilter", &MedianFilter, "");
+    m.def("BlurFilter2D", &BlurFilter2D, "");
+    m.def("MedianFilter2D", &MedianFilter2D, "");
+    m.def("BilateralFilter", &BilateralFilter, "");
+	m.def("PriorBilateralFilter", &PriorBilateralFilter, "");
+	m.def("GuidedFilter", &GuidedFilter, "");
+    m.def("dictionaryDenoising", &dictionaryDenoising, "");
+    m.def("TVcost", &TVcost, "");
+    m.def("TVgradient", &TVgradient, "");
+    m.def("TVquadForm", &TVquadForm, "");
+    m.def("Diffuse", &Diffuse, "");
+    m.def("addObject", &addObject, "");
+    m.def("clearPhantom", &clearPhantom, "");
+    m.def("rayTrace", &rayTrace, "");
+    m.def("rebin_curved", &rebin_curved, "");
+    m.def("sinogram_replacement", &sinogram_replacement, "");
+    m.def("down_sample", &down_sample, "");
+    m.def("up_sample", &up_sample, "");
+    m.def("scatter_model", &scatter_model, "");
+    m.def("synthesize_symmetry", &synthesize_symmetry, "");
+    m.def("AzimuthalBlur", &AzimuthalBlur, "");
+    m.def("saveParamsToFile", &saveParamsToFile, "");
 }
 //*/

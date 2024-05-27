@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
-// LEAP project developers. See the LICENSE file for details.
+// Copyright 2023-2024 Kyle Champley
+// See the LICENSE file for details.
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
@@ -49,7 +49,7 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 	int rowStart = 0;
 	int rowEnd = params->numRows - 1;
 
-	if (params->angularRange + 2.0*params->T_phi() * 180.0 / PI < 180.0)
+	if (params->angularRange + 2.0*fabs(params->T_phi()) * 180.0 / PI < 180.0)
 	{
 		printf("Error: angular range insufficient to estimate centerCol\n");
 		return false;

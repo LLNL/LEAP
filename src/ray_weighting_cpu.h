@@ -21,6 +21,9 @@
  * the ray weighting steps of various FBP algorithms.
  */
 
+bool applyPreRampFilterWeights(float* g, parameters*, bool data_on_cpu);
+bool applyPostRampFilterWeights(float* g, parameters*, bool data_on_cpu);
+
 float FBPscalar(parameters*);
 float* setViewWeights(parameters*);
 float* setParkerWeights(parameters*);

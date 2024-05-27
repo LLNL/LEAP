@@ -7,10 +7,14 @@
 // c++ module for ray weighting
 ////////////////////////////////////////////////////////////////////////////////
 #include "ray_weighting_cpu.h"
+#ifndef __USE_CPU
+#include "ray_weighting.cuh"
+#endif
 
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
+#include "log.h"
 
 using namespace std;
 
@@ -23,6 +27,30 @@ float FBPscalar(parameters* params)
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
 	else
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth / (params->voxelWidth * params->voxelWidth));
+}
+
+bool applyPreRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params->whichGPU < 0)
+		return applyPreRampFilterWeights_CPU(g, params);
+	else
+		return applyPreRampFilterWeights_GPU(g, params, data_on_cpu);
+#else
+	return applyPreRampFilterWeights_CPU(g, params);
+#endif
+}
+
+bool applyPostRampFilterWeights(float* g, parameters* params, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params->whichGPU < 0)
+		return applyPostRampFilterWeights_CPU(g, params);
+	else
+		return applyPostRampFilterWeights_GPU(g, params, data_on_cpu);
+#else
+	return applyPostRampFilterWeights_CPU(g, params);
+#endif
 }
 
 float* setViewWeights(parameters* params)
@@ -42,7 +70,6 @@ float* setParkerWeights(parameters* params)
 	{
 		bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 		params->normalizeConeAndFanCoordinateFunctions = true;
-		float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
 
 		double beta_max = params->angularRange * PI / 180.0;
 
@@ -63,7 +90,13 @@ float* setParkerWeights(parameters* params)
 		double shortScanThreshold = PI + 2.0 * alpha_max;
 
 		if (beta_max < shortScanThreshold)
-			printf("setParkerWeights: Not enough data!\n");
+		{
+			LOG(logWARNING, "ray_weighting", "setParkerWeights") << "Not enough data (need at least " << shortScanThreshold * 180.0 / PI << " degrees)!" << std::endl;
+			//printf("setParkerWeights: Not enough data (need at least %f degrees)!\n", shortScanThreshold*180.0/PI);
+			return NULL;
+		}
+
+		float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
 
 		double thres = (beta_max - PI) / 2.0;
 		if (thres < 0.0)
@@ -154,7 +187,7 @@ float* setOffsetScanWeights(parameters* params)
 	//*/
 	if (params->offsetScan == false)
 		return NULL;
-	else if (params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+	else if (params->offsetScan_has_adequate_angular_range() == false)
 	{
 		printf("Error: offsetScan requires at least 360 degree scan!\n");
 		return NULL;

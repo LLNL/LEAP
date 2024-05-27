@@ -63,11 +63,12 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 
 
 # Add noise to the data (just for demonstration purposes)
+print('Adding noise to data...')
 I_0 = 50000.0
 g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 
-whichDemo = 1
+whichDemo = 2
 if whichDemo == 1:
     # In this first demo, we show how LEAP can estimate the centerCol parameter
     # by minimizing the differences of conjugate rays.
@@ -87,60 +88,44 @@ if whichDemo == 1:
     print('Estimated centerCol = ' + str(leapct.get_centerCol()))
     
 elif whichDemo == 2:
-    # In this second demo, we show how one can use a so-called "inconsistency reconstruction"
-    # to find the centerCol parameter
+    # In this second demo, we show how one can use the parameter_sweep function to reconstruct a 
+    # a sequence of single-slice reconstructions at a range of parameter values which one can inspect
+    # to determine the correct value of a parameter.
+    # This sequence of reconstructions can be performed with FBP or the so-called "inconsistency reconstruction"
     # An Inconsistency Reconstruction is an FBP reconstruction except it replaces the ramp filter with
     # a derivative.  For scans with angular ranges of 360 or more this will result in a pure noise
     # reconstruction if the geometry is calibrated and there are no biases in the data.  This can
     # be used as a robust way to find the centerCol parameter or estimate detector tilt.
     
-    # First we shall demonstrate with centerCol
-    # We will do this by reconstructing only a single slice
-    # For parallel- and fan-beam data this means you have to reset the CT geometry
-    # to be a single row, but for cone-beam we can just set the volume to one slice
-    leapct.set_volume(leapct.get_numX(), leapct.get_numY(), 1, leapct.get_voxelWidth(), leapct.get_voxelHeight(), 0.0, 0.0, -leapct.z_samples()[0])
-
+    # You choose which slice to reconstruct by the iz parameter which is the z-slice index value of the
+    # slice you want to reconstruct.  If you don't provide this value or provide it as None, then
+    # the center-most slice will be used.
     
-    shifts = pixelSize*(np.array(range(11))-5)/5.0
-    leapct.shift_detector(0.0, shifts[0])
-    f_stack = np.zeros((shifts.size,leapct.get_numY(),leapct.get_numX()),dtype=np.float32)
-    L2metric = shifts.copy()
-    centerCols = shifts.copy()
-    for n in range(shifts.size):
-        f = leapct.inconsistencyReconstruction(g)
-        L2metric[n] = np.sum(f**2)
-        centerCols[n] = leapct.get_centerCol()
-        f_stack[n,:,:] = f[0,:,:]
-        leapct.shift_detector(0.0, shifts[1]-shifts[0])
+    # When using an Inconsistency Reconstruction, parameter_sweep will print out an inconsistency
+    # metric for each reconstruction.  The LOWEST value of this metric should correspond to the
+    # correct value for this parameter.
     
-    L2metric = L2metric / np.max(L2metric)
-    tabulatedResults = np.zeros((shifts.size,2))
-    tabulatedResults[:,0] = centerCols
-    tabulatedResults[:,1] = L2metric
-    print(tabulatedResults)
+    # When using FBP reconstruction, parameter_sweep will print out an entropy metric
+    # for each reconstruction..  The LARGEST value of this metric should correspond to the
+    # correct value for this parameter.
+    
+    from leap_preprocessing_algorithms import *
+    centerCols = np.array(range(-5,5+1))+leapct.get_centerCol()
+    #f_stack = parameter_sweep(leapct, g, centerCols, 'centerCol', iz=None, algorithmName='FBP')
+    f_stack = parameter_sweep(leapct, g, centerCols, 'centerCol', iz=None, algorithmName='inconsistencyReconstruction')
     leapct.display(f_stack)
+    
+    
 elif whichDemo == 3:
     # This demo is similar to the second demo above, except we sweep over detector rotation angles
-    # Modular-beam is the only geometry that can handle rotations, so we first switch to modular-beam
-    leapct.convert_to_modularbeam()
-    leapct.set_default_volume()
-    leapct.set_volume(leapct.get_numX(), leapct.get_numY(), 1, leapct.get_voxelWidth(), leapct.get_voxelHeight(), 0.0, 0.0, 0.0)
+    # Internally, the paramer_sweep function is using the function convert_to_modularbeam() to convert
+    # the given geometry to a modular-beam geometry because this is the only geometry that can handle rotations
+    # and then uses the rotate_detector() function to rotate the coordinates of each detector position
     
-    rotations = (np.array(range(11))-5)/5.0 # -1 to 1 degrees
-    leapct.rotate_detector(rotations[0])
-    f_stack = np.zeros((rotations.size,leapct.get_numY(),leapct.get_numX()),dtype=np.float32)
-    L2metric = rotations.copy()
-    for n in range(rotations.size):
-        f = leapct.inconsistencyReconstruction(g)
-        L2metric[n] = np.sum(f**2)
-        f_stack[n,:,:] = f[0,:,:]
-        leapct.rotate_detector(rotations[1]-rotations[0])
-    
-    L2metric = L2metric / np.max(L2metric)
-    tabulatedResults = np.zeros((rotations.size,2))
-    tabulatedResults[:,0] = rotations
-    tabulatedResults[:,1] = L2metric
-    print(tabulatedResults)
+    from leap_preprocessing_algorithms import *
+    tiltAnglesInDegrees = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]
+    #f_stack = parameter_sweep(leapct, g, tiltAnglesInDegrees, 'tilt', iz=None, algorithmName='FBP')
+    f_stack = parameter_sweep(leapct, g, tiltAnglesInDegrees, 'tilt', iz=None, algorithmName='inconsistencyReconstruction')
     leapct.display(f_stack)
     
     

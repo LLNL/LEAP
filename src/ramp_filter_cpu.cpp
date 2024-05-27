@@ -7,7 +7,6 @@
 // c++ module for CPU-based ramp and Hilbert filters
 ////////////////////////////////////////////////////////////////////////////////
 #include "ramp_filter_cpu.h"
-#include "ray_weighting.cuh"
 #include "ray_weighting_cpu.h"
 #include "cpu_utils.h"
 #include <math.h>
@@ -17,6 +16,10 @@
 #include <iostream>
 #include <valarray>
 #include <omp.h>
+
+//#ifndef __USE_CPU
+//#include "ray_weighting.cuh"
+//#endif
 
 #ifndef PI
 #define PI 3.141592653589793
@@ -601,7 +604,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
 {
     if (params == NULL)
         return 0;
-    else if (params->helicalPitch != 0.0 || params->offsetScan == false || params->angularRange < 360.0 - params->T_phi() * 180.0 / PI)
+    else if (params->helicalPitch != 0.0 || params->offsetScan == false || params->angularRange < 360.0 - fabs(params->T_phi()) * 180.0 / PI)
         return 0;
 
     if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)

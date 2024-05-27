@@ -1681,6 +1681,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
     
     float rFOVsq = params->rFOV()*params->rFOV();
+    //printf("rFOV = %f, numCols = %d, u[0] = %f, u[-1] = %f\n", params->rFOV(), params->numCols, params->u(0), params->u(params->numCols - 1));
     
     if (data_on_cpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);

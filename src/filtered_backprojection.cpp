@@ -140,8 +140,15 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 #ifndef __USE_CPU
 			applyPreRampFilterWeights(g, params, data_on_cpu);
 			if (params->muCoeff != 0.0)
-				convertARTtoERT(g, params, false, false);
-			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
+				convertARTtoERT(g, params, data_on_cpu, false);
+			if (params->lambdaTomography)
+			{
+				if (params->whichGPU < 0)
+					return Laplacian_cpu(g, 1, false, params, -1.0);
+				else
+					return Laplacian_gpu(g, 1, false, params, data_on_cpu, -1.0);
+			}
+			else if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
 			{
 				if (params->whichGPU < 0)
 					ray_derivative_cpu(g, params);
@@ -151,13 +158,17 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			else
 				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
 			if (params->muCoeff != 0.0)
-				convertARTtoERT(g, params, false, true);
+				convertARTtoERT(g, params, data_on_cpu, true);
 			return applyPostRampFilterWeights(g, params, data_on_cpu);
 #else
 			applyPreRampFilterWeights_CPU(g, params);
 			if (params->muCoeff != 0.0)
 				convertARTtoERT_CPU(g, params, false);
-			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
+			if (params->lambdaTomography == true)
+			{
+				Laplacian_cpu(g, 1, false, params, -1.0);
+			}
+			else if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
 			{
 				ray_derivative_cpu(g, params);
 			}
@@ -185,7 +196,10 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 
 		float* dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		if (dev_g == 0)
+		{
+			printf("Error: failed to copy projections to gpu!\n");
 			return false;
+		}
 		retVal = filterProjections(dev_g, params, false);
 
 		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
@@ -240,7 +254,9 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 
 		// no transfers to/from GPU are necessary; just run the code
 		//printf("WARNING: disabling filtering in FBP for debugging purposes!!!!\n");
+		//printf("sum = %f\n", sum(g, make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU));
 		filterProjections(g, params, false);
+		//printf("sum = %f\n", sum(g, make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU));
 
 		bool retVal = true;
 		bool doWeightedBackprojection_save = params->doWeightedBackprojection;
@@ -301,7 +317,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 			return false;
 
 		float* dev_f = 0;
-		if ((cudaStatus = cudaMalloc((void**)&dev_f, params->numX * params->numY * params->numZ * sizeof(float))) != cudaSuccess)
+		if ((cudaStatus = cudaMalloc((void**)&dev_f, uint64(params->numX) * uint64(params->numY) * uint64(params->numZ) * sizeof(float))) != cudaSuccess)
 		{
 			fprintf(stderr, "cudaMalloc(volume) failed!\n");
 			if (dev_g != 0)
@@ -332,7 +348,7 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * params->T_phi())
+	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi())*180.0/PI)
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;
@@ -344,9 +360,9 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 
 #ifndef __USE_CPU
 		applyPreRampFilterWeights(g, params, data_on_cpu);
-		convertARTtoERT(g, params, false, false);
+		convertARTtoERT(g, params, data_on_cpu, false);
 		rampFilterProjections(g, params, false, FBPscalar(params));
-		convertARTtoERT(g, params, false, true);
+		convertARTtoERT(g, params, data_on_cpu, true);
 #else
 		applyPreRampFilterWeights_CPU(g, params);
 		convertARTtoERT_CPU(g, params, false);
@@ -408,7 +424,7 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * params->T_phi())
+	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi())*180.0/PI)
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;
@@ -541,7 +557,7 @@ bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* par
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * params->T_phi())
+	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi()) * 180.0 / PI)
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;

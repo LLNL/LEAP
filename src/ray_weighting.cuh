@@ -21,8 +21,8 @@
  * the ray weighting steps of various FBP algorithms.
  */
 
-bool applyPreRampFilterWeights(float* g, parameters*, bool data_on_cpu);
-bool applyPostRampFilterWeights(float* g, parameters*, bool data_on_cpu);
+//bool applyPreRampFilterWeights(float* g, parameters*, bool data_on_cpu);
+//bool applyPostRampFilterWeights(float* g, parameters*, bool data_on_cpu);
 
 bool applyPreRampFilterWeights_GPU(float* g, parameters*, bool data_on_cpu);
 bool applyPostRampFilterWeights_GPU(float* g, parameters*, bool data_on_cpu);

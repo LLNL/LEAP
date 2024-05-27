@@ -161,22 +161,37 @@ __global__ void AbelConeBackprojectorKernel(cudaTextureObject_t g, int4 N_g, flo
 	const float Z = (R + z * sin_beta) * sec_beta; // nominal value: R
 	const float z_slope = (z + R * sin_beta) * sec_beta; // nominal value: 0
 
+	const float ind_split = -startVals_g.z / T_g.z;
+	int iu_max_left, iu_min_right;
+	if (fabs(ind_split - floor(0.5f + ind_split)) < 1.0e-4)
+	{
+		iu_max_left = int(floor(0.5f+ind_split));
+		iu_min_right = iu_max_left;
+	}
+	else
+	{
+		iu_max_left = int(ind_split);
+		iu_min_right = int(ceil(ind_split));
+	}
+
 	int iu_min;
 	int iu_max;
-	if (r_unbounded < 0.0)
+	if (r_unbounded < 0.0f)
 	{
 		// left half
 		iu_min = 0;
-		iu_max = int(-startVals_g.z / T_g.z);
+		//iu_max = int(-startVals_g.z / T_g.z);
+		iu_max = iu_max_left;
 	}
 	else
 	{
 		// right half
-		iu_min = int(ceil(-startVals_g.z / T_g.z));
+		//iu_min = int(ceil(-startVals_g.z / T_g.z));
+		iu_min = iu_min_right;
 		iu_max = N_g.z - 1;
 	}
 
-	float curVal = 0.0;
+	float curVal = 0.0f;
 	for (int iu = iu_min; iu <= iu_max; iu++)
 	{
 		const float u = fabs(T_g.z * float(iu) + startVals_g.z);
@@ -235,8 +250,10 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 	const float sec_sq_plus_u_sq = X * X + u * u;
 	const float b_ti = X * R * cos_beta + u * tau;
 	const float a_ti_inv = 1.0f / sec_sq_plus_u_sq;
-	const float disc_ti_shift = -(u * R * cos_beta - tau * X) * (u * R * cos_beta - tau * X);
+	float disc_ti_shift = -(u * R * cos_beta - tau * X) * (u * R * cos_beta - tau * X);
 
+	if (fabs(disc_ti_shift) < 1.0e-8)
+		disc_ti_shift = 0.0;
 	if (disc_ti_shift > 0.0f || fabs(sec_sq_plus_u_sq) < 1.0e-8)
 		return 0.0f;
 
@@ -329,8 +346,10 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 	const float sec_sq_plus_u_sq = X * X + u * u;
 	const float b_ti = X * R * cos_beta + u * tau;
 	const float a_ti_inv = 1.0f / sec_sq_plus_u_sq;
-	const float disc_ti_shift = -(u * R * cos_beta - tau * X) * (u * R * cos_beta - tau * X);
+	float disc_ti_shift = -(u * R * cos_beta - tau * X) * (u * R * cos_beta - tau * X);
 
+	if (fabs(disc_ti_shift) < 1.0e-8)
+		disc_ti_shift = 0.0;
 	if (disc_ti_shift > 0.0f || fabs(sec_sq_plus_u_sq) < 1.0e-8)
 		return 0.0f;
 
@@ -456,12 +475,14 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 
 	int rInd_min = (int)ceil(u / T_f.y);
 	float r_prev = (float)(rInd_min)*T_f.y;
+	/*
 	if (disc_ti_shift + r_prev * r_prev < 0.0f)
 	{
 		rInd_min = rInd_min + 1;
 		r_prev = (float)(rInd_min)*T_f.y;
 	}
-	float disc_sqrt_prev = sqrt(disc_ti_shift + r_prev * r_prev);
+	//*/
+	float disc_sqrt_prev = sqrt(max(0.0f, disc_ti_shift + r_prev * r_prev));
 
 	// Go back one sample and check
 	if (rInd_min >= 1)
@@ -542,12 +563,14 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 
 	int rInd_min = (int)ceil(u / T_f.y);
 	float r_prev = (float)(rInd_min)*T_f.y;
+	/*
 	if (disc_ti_shift + r_prev * r_prev < 0.0f)
 	{
 		rInd_min = rInd_min + 1;
 		r_prev = (float)(rInd_min)*T_f.y;
 	}
-	float disc_sqrt_prev = sqrt(disc_ti_shift + r_prev * r_prev);
+	//*/
+	float disc_sqrt_prev = sqrt(max(0.0f, disc_ti_shift + r_prev * r_prev));
 
 	// Go back one sample and check
 	if (rInd_min >= 1)
@@ -633,18 +656,33 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 	const float z = T_f.z * (float)k + startVals_f.z;
 	const float Tv_inv = 1.0f / T_g.y;
 
+	const float ind_split = -startVals_g.z / T_g.z;
+	int iu_max_left, iu_min_right;
+	if (fabs(ind_split - floor(0.5f + ind_split)) < 1.0e-4)
+	{
+		iu_max_left = int(floor(0.5f + ind_split));
+		iu_min_right = iu_max_left;
+	}
+	else
+	{
+		iu_max_left = int(ind_split);
+		iu_min_right = int(ceil(ind_split));
+	}
+
 	int iu_min;
 	int iu_max;
-	if (r_unbounded < 0.0)
+	if (r_unbounded < 0.0f)
 	{
 		// left half
 		iu_min = 0;
-		iu_max = int(-startVals_g.z / T_g.z);
+		//iu_max = int(-startVals_g.z / T_g.z);
+		iu_max = iu_max_left;
 	}
 	else
 	{
 		// right half
-		iu_min = int(ceil(-startVals_g.z / T_g.z));
+		//iu_min = int(ceil(-startVals_g.z / T_g.z));
+		iu_min = iu_min_right;
 		iu_max = N_g.z - 1;
 	}
 

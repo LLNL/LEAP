@@ -54,6 +54,7 @@ leapct.set_offsetScan(True)
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
 leapct.set_default_volume()
+#leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX())
 
 # Trouble-Shooting Functions
 leapct.print_parameters()

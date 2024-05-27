@@ -61,6 +61,7 @@ void parameters::initialize()
 	offsetScan = false;
 	truncatedScan = false;
 	inconsistencyReconstruction = false;
+	lambdaTomography = false;
 	numTVneighbors = 26;
 
 	geometry = CONE;
@@ -156,6 +157,7 @@ void parameters::assign(const parameters& other)
 	this->offsetScan = other.offsetScan;
 	this->truncatedScan = other.truncatedScan;
 	this->inconsistencyReconstruction = other.inconsistencyReconstruction;
+	this->lambdaTomography = other.lambdaTomography;
 	this->numTVneighbors = other.numTVneighbors;
 	this->mu = other.mu;
 	this->muCoeff = other.muCoeff;
@@ -324,8 +326,8 @@ float parameters::rFOV()
 
 		//float R_tau = sqrt(sod * sod + tau * tau);
 		float alpha_right = u_0();
-		//float alpha_left = pixelWidth * float(numCols - 1) + u_0();
-		float alpha_left = u(numCols - 1);
+		float alpha_left = pixelWidth * float(numCols - 1) + u_0();
+		//float alpha_left = u(numCols - 1);
 		if (detectorType == FLAT)
 		{
 			alpha_right = atan(alpha_right / sdd);
@@ -334,7 +336,7 @@ float parameters::rFOV()
 		if (offsetScan)
 			return sod * sin(max(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
 		else
-			return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left-float(atan(tau / sod)))));
+			return sod * sin(min(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
 	}
 	else
 		return float(1.0e16);
@@ -706,8 +708,13 @@ void parameters::printAll()
 	printf("number of angles: %d\n", numAngles);
 	printf("number of detector elements (rows, cols): %d x %d\n", numRows, numCols);
 	if (phis != NULL && numAngles >= 2)
-		printf("angular range: %f degrees\n", angularRange);
+	{
+		if (T_phi() < 0.0)
+			printf("angular range: -%f degrees\n", angularRange);
+		else
+			printf("angular range: %f degrees\n", angularRange);
 		//printf("angular range: %f degrees\n", 180.0 / PI * ((phis[numAngles - 1] - phis[0]) + 0.5 * (phis[numAngles - 1] - phis[numAngles - 2]) + 0.5 * (phis[1] - phis[0])));
+	}
 	printf("detector pixel size: %f mm x %f mm\n", pixelHeight, pixelWidth);
 	printf("center detector pixel: %f, %f\n", centerRow, centerCol);
 	if (geometry == CONE || geometry == FAN)
@@ -872,6 +879,34 @@ bool parameters::get_angles(float* phis_out)
 	return true;
 }
 
+bool parameters::set_sod(float sod_in)
+{
+	if (sod_in > 0.0 && sod_in < sdd)
+	{
+		sod = sod_in;
+		return true;
+	}
+	else
+	{
+		printf("Error: invalid value!\n");
+		return false;
+	}
+}
+
+bool parameters::set_sdd(float sdd_in)
+{
+	if (sdd_in > 0.0 && sdd_in > sod)
+	{
+		sdd = sdd_in;
+		return true;
+	}
+	else
+	{
+		printf("Error: invalid value!\n");
+		return false;
+	}
+}
+
 bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleCenters_in, float* rowVectors_in, float* colVectors_in, int numPairs)
 {
 	if (phis != NULL)
@@ -1027,8 +1062,10 @@ bool parameters::rotateDetector(float alpha)
 
 			float u_cross_v[3];
 			u_cross_v[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
-			u_cross_v[2] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
-			u_cross_v[1] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+			u_cross_v[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+			u_cross_v[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+
+			//printf("normal vector: %f, %f, %f\n", u_cross_v[0], u_cross_v[1], u_cross_v[2]);
 
 			rotateAroundAxis(u_cross_v, alpha * PI / 180.0, u_vec);
 			rotateAroundAxis(u_cross_v, alpha * PI / 180.0, v_vec);
@@ -1072,27 +1109,38 @@ bool parameters::shiftDetector(float r, float c)
 	}
 }
 
+bool parameters::offsetScan_has_adequate_angular_range()
+{
+	if (numAngles <= 1 || angularRange < min(359.0, 360.0 - fabs(T_phi()) * 180.0 / PI))
+		return false;
+	else
+		return true;
+}
+
 bool parameters::set_offsetScan(bool aFlag)
 {
 	if (aFlag == false)
 		offsetScan = aFlag;
 	else
 	{
-		if (numAngles <= 1 || angularRange < 360.0 - T_phi())
+		if (offsetScan_has_adequate_angular_range() == false)
 		{
 			printf("Error: offsetScan requires at least 360 degrees of projections!\n");
+			//printf("angularRange = %f, T_phi = %f\n", angularRange, T_phi());
 			offsetScan = false;
 			return false;
 		}
+		//*
 		if (geometry == MODULAR)
 		{
 			printf("Error: offsetScan only applies to parallel-, fan-, or cone-beam data!\n");
 			offsetScan = false;
 			return false;
 		}
-		printf("Warning: offsetScan not working yet!\n");
+		//*/
+		//printf("Warning: offsetScan not working yet!\n");
 		offsetScan = aFlag;
-		truncatedScan = false;
+		//truncatedScan = false;
 	}
 	return true;
 }
@@ -1104,7 +1152,7 @@ bool parameters::set_truncatedScan(bool aFlag)
 	else
 	{
 		truncatedScan = aFlag;
-		offsetScan = false;
+		//offsetScan = false;
 	}
 	return true;
 }
@@ -1337,7 +1385,7 @@ bool parameters::anglesAreEquispaced()
 		for (int i = 1; i < numAngles-1; i++)
 		{
 			float curSpacing = phis[i + 1] - phis[i];
-			if (fabs(curSpacing - firstSpacing) > 5.0e-7)
+			if (fabs(curSpacing - firstSpacing) > 1.0e-6)
 			{
 				//printf("dist: %e\n", fabs(curSpacing - firstSpacing));
 				return false;
@@ -1501,8 +1549,21 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5 * pixelHeight / sdd;
 		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5 * pixelHeight / sdd;
 
-		rowsNeeded[0] = max(0, int(floor((v_lo - v_0() / sdd) / T_v)));
-		rowsNeeded[1] = min(numRows - 1, int(ceil((v_hi - v_0() / sdd) / T_v)));
+		rowsNeeded[0] = min(numRows - 1, max(0, int(floor((v_lo - v_0() / sdd) / T_v))));
+		rowsNeeded[1] = max(0, min(numRows - 1, int(ceil((v_hi - v_0() / sdd) / T_v))));
+
+		/*
+		if (rowsNeeded[0] > rowsNeeded[1])
+		{
+			printf("T_v = %f\n", T_v);
+			printf("v_denom_min = %f\n", v_denom_min);
+			printf("v_denom_max = %f\n", v_denom_max);
+			printf("v_lo = %f\n", v_lo);
+			printf("v_hi = %f\n", v_hi);
+			printf("(v_lo - v_0() / sdd) / T_v = %f\n", (v_lo - v_0() / sdd) / T_v);
+			printf("(v_hi - v_0() / sdd) / T_v = %f\n", (v_hi - v_0() / sdd) / T_v);
+		}
+		//*/
 	}
 	return true;
 }
@@ -1680,27 +1741,27 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 	return true;
 }
 
-float parameters::requiredGPUmemory(int extraCols)
+float parameters::requiredGPUmemory(int extraCols, int numProjectionData, int numVolumeData)
 {
 	if (mu != NULL)
-		return projectionDataSize(extraCols) + 2.0*volumeDataSize() + extraMemoryReserved;
+		return numProjectionData*projectionDataSize(extraCols) + 2.0* numVolumeData*volumeDataSize() + extraMemoryReserved;
 	else
-		return projectionDataSize(extraCols) + volumeDataSize() + extraMemoryReserved;
+		return numProjectionData*projectionDataSize(extraCols) + numVolumeData*volumeDataSize() + extraMemoryReserved;
 }
 
-bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns)
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, int numProjectionData, int numVolumeData)
 {
 #ifndef __USE_CPU
 	if (useLeastGPUmemory)
 	{
-		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns))
+		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns, numProjectionData, numVolumeData))
 			return false;
 		else
 			return true;
 	}
 	else
 	{
-		if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory(extraColumns))
+		if (getAvailableGPUmemory(whichGPU) < requiredGPUmemory(extraColumns, numProjectionData, numVolumeData))
 			return false;
 		else
 			return true;
@@ -1847,6 +1908,12 @@ bool parameters::convert_conebeam_to_modularbeam()
 	delete[] d_pos;
 	delete[] v_vec;
 	delete[] u_vec;
+
+	//for (int i = 0; i < numAngles; i++)
+	//	printf("%f\n", phis[i]*180.0/PI);
+
+	set_offsetScan(offsetScan);
+
 	return true;
 }
 
@@ -1924,5 +1991,8 @@ bool parameters::convert_parallelbeam_to_modularbeam()
 	delete[] d_pos;
 	delete[] v_vec;
 	delete[] u_vec;
+
+	set_offsetScan(offsetScan);
+
 	return true;
 }

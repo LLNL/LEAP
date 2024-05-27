@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "ramp_filter.cuh"
 #include "ramp_filter_cpu.h"
+#include "log.h"
 
 #include <iostream>
 
@@ -599,8 +600,10 @@ __global__ void mergeLeftAndRight(float* g, const float* g_left, const float* g_
 
 __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, int numExtrapolate, const float4 T, const float4 startVals, const float R, const float helicalPitch)
 {
-    int j = threadIdx.x;
-    int i = blockIdx.x + startView;
+    const int i = threadIdx.x + blockIdx.x * blockDim.x + startView;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    //int j = threadIdx.x;
+    //int i = blockIdx.x + startView;
     if (i > endView || j > N.y - 1)
         return;
     float* data_padded_block = &data_padded[uint64(i - startView) * uint64(N_pad * N.y) + uint64(j * N_pad)];
@@ -658,8 +661,10 @@ __global__ void setPaddedDataKernel(float* data_padded, float* data, int3 N, int
 
 __global__ void setFilteredDataKernel(float* data_padded, float* data, int3 N, int N_pad, int startView, int endView, const float4 T, const float4 startVals, const float R, const float helicalPitch)
 {
-    int j = threadIdx.x;
-    int i = blockIdx.x + startView;
+    const int i = threadIdx.x + blockIdx.x * blockDim.x + startView;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    //int j = threadIdx.x;
+    //int i = blockIdx.x + startView;
     if (i > endView || j > N.y - 1)
         return;
     float* data_padded_block = &data_padded[uint64(i - startView) * uint64(N_pad * N.y) + uint64(j * N_pad)];
@@ -740,29 +745,48 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
     }
 
     float* dev_h = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_h, N * sizeof(float)))
+    if ((cudaStatus = cudaMalloc((void**)&dev_h, N * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
+        fprintf(stderr, "cudaMalloc(Hilbert filter) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
         return NULL;
     }
-    cudaStatus = cudaMemcpy(dev_h, h, N * sizeof(float), cudaMemcpyHostToDevice);
+    if ((cudaStatus = cudaMemcpy(dev_h, h, N * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMemcpy(Hilbert filter) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_h);
+        return NULL;
+    }
 
     // Make data for the result of the FFT
     int N_over2 = N / 2 + 1;
     cufftComplex* dev_H = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_H, N_over2 * sizeof(cufftComplex)))
+    if ((cudaStatus = cudaMalloc((void**)&dev_H, N_over2 * sizeof(cufftComplex))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc(Fourier transform of ramp filter) failed!\n");
+        fprintf(stderr, "cudaMalloc(Fourier transform of Hilbert filter) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_h);
         return NULL;
     }
 
     // FFT
     result = cufftExecR2C(forward_plan, (cufftReal*)dev_h, dev_H);
-    cudaDeviceSynchronize();
+    if ((cudaStatus = cudaDeviceSynchronize()) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaDeviceSynchronize failed!\n");
+        printf("cudaDeviceSynchronize Error: %s\n", cudaGetErrorString(cudaStatus));
+        return NULL;
+    }
 
     // get result
     cufftComplex* H_Hilb = new cufftComplex[N_over2];
-    cudaStatus = cudaMemcpy(H_Hilb, dev_H, N_over2 * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+    if ((cudaStatus = cudaMemcpy(H_Hilb, dev_H, N_over2 * sizeof(cufftComplex), cudaMemcpyDeviceToHost)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMemcpy failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        return NULL;
+    }
 
     // Clean up
     cufftDestroy(forward_plan);
@@ -788,29 +812,48 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
     }
 
     float* dev_h = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_h, N * sizeof(float)))
+    if ((cudaStatus = cudaMalloc((void**)&dev_h, N * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
+        fprintf(stderr, "cudaMalloc(ramp filter) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
         return NULL;
     }
-    cudaStatus = cudaMemcpy(dev_h, h, N * sizeof(float), cudaMemcpyHostToDevice);
+    if ((cudaStatus = cudaMemcpy(dev_h, h, N * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMemcpy(ramp filter) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_h);
+        return NULL;
+    }
 
     // Make data for the result of the FFT
     int N_over2 = N / 2 + 1;
     cufftComplex* dev_H = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_H, N_over2 * sizeof(cufftComplex)))
+    if ((cudaStatus = cudaMalloc((void**)&dev_H, N_over2 * sizeof(cufftComplex))) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(Fourier transform of ramp filter) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_h);
         return NULL;
     }
 
     // FFT
     result = cufftExecR2C(forward_plan, (cufftReal*)dev_h, dev_H);
-    cudaDeviceSynchronize();
+    if ((cudaStatus = cudaDeviceSynchronize()) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaDeviceSynchronize failed!\n");
+        printf("cudaDeviceSynchronize Error: %s\n", cudaGetErrorString(cudaStatus));
+        return NULL;
+    }
 
     // get result
     cufftComplex* H_ramp = new cufftComplex[N_over2];
-    cudaStatus = cudaMemcpy(H_ramp, dev_H, N_over2 * sizeof(cufftComplex), cudaMemcpyDeviceToHost);
+    if ((cudaStatus = cudaMemcpy(H_ramp, dev_H, N_over2 * sizeof(cufftComplex), cudaMemcpyDeviceToHost)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMemcpy failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        return NULL;
+    }
 
     float* H_real = new float[N_over2];
     for (int i = 0; i < N_over2; i++)
@@ -830,10 +873,13 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
 
 bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
 {
+    LOG(logDEBUG, "ramp_filter", "conv1D") << "GPU " << params->whichGPU << ": start" << std::endl;
+    //printf("size = %d x %d x %d\n", params->numAngles, params->numRows, params->numCols);
+
     //return true;
     bool retVal = true;
-    cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
+    cudaSetDevice(params->whichGPU);
 
     float* dev_g = 0;
     if (data_on_cpu)
@@ -907,17 +953,19 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
     //return true;
 
     float* dev_g_pad = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_g_pad, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H) * sizeof(float)))
+    if ((cudaStatus = cudaMalloc((void**)&dev_g_pad, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H) * sizeof(float))) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
         retVal = false;
     }
 
     // Make data for the result of the FFT
     cufftComplex* dev_G = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_G, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H_over2) * sizeof(cufftComplex)))
+    if ((cudaStatus = cudaMalloc((void**)&dev_G, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H_over2) * sizeof(cufftComplex))) != cudaSuccess)
     {
         fprintf(stderr, "cudaMalloc(Fourier transform of padded projection data) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
         retVal = false;
     }
 
@@ -968,11 +1016,19 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
             int endView = min(numAngles - 1, startView + N_viewChunk - 1);
             //printf("filtering %d to %d\n", startView, endView);
 
-            setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
+            dim3 dimBlock_setting(min(8, endView - startView + 1), min(8, numRows));
+            dim3 dimGrid_setting(int(ceil(double(endView - startView + 1) / double(dimBlock_setting.x))), int(ceil(double(numRows) / double(dimBlock_setting.y))));
+
+            //setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
+            setPaddedDataKernel <<< dimGrid_setting, dimBlock_setting >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
             //cudaDeviceSynchronize();
 
             // FFT
             result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);
+            if (result != CUFFT_SUCCESS)
+            {
+                printf("cufftExecR2C failed!\n");
+            }
 
             /*
             // Multiply Filter
@@ -992,8 +1048,13 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
 
             // IFFT
             result = cufftExecC2R(backward_plan, (cufftComplex*)dev_G, (cufftReal*)dev_g_pad);
+            if (result != CUFFT_SUCCESS)
+            {
+                printf("cufftExecC2R failed!\n");
+            }
 
-            setFilteredDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, T_g, startVal_g, params->sod, helicalPitch);
+            //setFilteredDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, T_g, startVal_g, params->sod, helicalPitch);
+            setFilteredDataKernel <<< dimGrid_setting, dimBlock_setting >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, T_g, startVal_g, params->sod, helicalPitch);
             //cudaDeviceSynchronize();
         }
         cudaDeviceSynchronize();
@@ -1026,6 +1087,15 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
         delete[] H_real;
     if (H_comp != NULL)
         delete[] H_comp;
+
+    if (retVal)
+    {
+        LOG(logDEBUG, "ramp_filter", "conv1D") << "GPU " << params->whichGPU << ": completed successfully" << std::endl;
+    }
+    else
+    {
+        LOG(logDEBUG, "ramp_filter", "conv1D") << "GPU " << params->whichGPU << ": completed with errors" << std::endl;
+    }
 
     return retVal;
 }

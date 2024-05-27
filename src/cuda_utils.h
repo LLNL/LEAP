@@ -23,6 +23,9 @@
 #ifndef __USE_CPU
 #include "cuda_runtime.h"
 
+#define CUDA_CHECK(expr) cudaSafeCall((expr), __FILE__, __LINE__, #expr)
+#define CHECK_LAST_ERROR() cudaCall(cudaGetLastError(), NULL, __FILE__, __LINE__)
+
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
 extern float getAvailableGPUmemory(std::vector<int> whichGPUs);

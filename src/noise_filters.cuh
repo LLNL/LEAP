@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright 2022-2023 Lawrence Livermore National Security, LLC and other 
-// LEAP project developers. See the LICENSE file for details.
+// Copyright 2023-2024 Kyle Champley
+// See the LICENSE file for details.
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
@@ -23,8 +23,17 @@
 
 class parameters;
 
+void setConstantMemoryParameters(const bool doHighPass);
+
+bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
+bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
+
 bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
 bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
+
+bool highPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
+bool highPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
+
 bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
 
 bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU = 0);

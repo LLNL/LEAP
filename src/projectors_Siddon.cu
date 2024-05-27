@@ -979,11 +979,11 @@ __global__ void fanBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, floa
 	const float y = j * T_f.y + startVals_f.y;
 	const float z = k * T_f.z + startVals_f.z;
 
-	int ind;
+	uint64 ind;
 	if (volumeDimensionOrder == 0)
-		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+		ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
 	else
-		ind = k * N_f.y * N_f.x + j * N_f.x + i;
+		ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
 	if (x * x + y * y > rFOVsq)
 	{
@@ -1099,11 +1099,11 @@ __global__ void coneBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, flo
 	const float y = j * T_f.y + startVals_f.y;
 	const float z = k * T_f.z + startVals_f.z;
 
-	int ind;
+	uint64 ind;
 	if (volumeDimensionOrder == 0)
-		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+		ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
 	else
-		ind = k * N_f.y * N_f.x + j * N_f.x + i;
+		ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
 	if (x * x + y * y > rFOVsq)
 	{
@@ -1222,11 +1222,11 @@ __global__ void parallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g,
 	const float y = j * T_f.y + startVals_f.y;
 	const float z = k * T_f.z + startVals_f.z;
 
-	int ind;
+	uint64 ind;
 	if (volumeDimensionOrder == 0)
-		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+		ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
 	else
-		ind = k * N_f.y * N_f.x + j * N_f.x + i;
+		ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
 	if (x * x + y * y > rFOVsq)
 	{
@@ -1329,11 +1329,11 @@ __global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, 
 	if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
 		return;
 
-	int ind;
+	uint64 ind;
 	if (volumeDimensionOrder == 0)
-		ind = i * N_f.y * N_f.z + j * N_f.z + k;
+		ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
 	else
-		ind = k * N_f.y * N_f.x + j * N_f.x + i;
+		ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
 	const float x = i * T_f.x + startVals_f.x;
 	const float y = j * T_f.y + startVals_f.y;

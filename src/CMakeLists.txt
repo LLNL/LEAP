@@ -54,6 +54,7 @@ set(HEADER
   total_variation.cuh
   matching_pursuit.cuh
   bilateral_filter.cuh
+  guided_filter.cuh
   find_center_cpu.h
   sinogram_replacement.h
   resample_cpu.h
@@ -65,6 +66,7 @@ set(HEADER
   rebin.h
   file_io.h
   leap_defines.h
+  log.h
 )
 
 set(SRC_CPP
@@ -105,6 +107,7 @@ set(SRC_CU
   total_variation.cu
   matching_pursuit.cu
   bilateral_filter.cu
+  guided_filter.cu
   ray_weighting.cu
   scatter_models.cu
   cuda_utils.cu

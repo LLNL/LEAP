@@ -80,6 +80,13 @@ public:
 	bool volumeDefined();
 
 	/**
+	 * \fn          offsetScan_has_adequate_angular_range
+	 * \brief       returns whether angularRange + epsilon >= 360.0
+	 * \return      returns true if angularRange + epsilon >= 360.0, false otherwise
+	 */
+	bool offsetScan_has_adequate_angular_range();
+
+	/**
 	 * \fn          default_voxelWidth
 	 * \brief       calculates the default voxelWidth value
 	 * \return      returns the default voxelWidth value
@@ -310,6 +317,9 @@ public:
 	float* rowVectors;
 	float* colVectors;
 
+	bool set_sod(float);
+	bool set_sdd(float);
+
 	/**
 	 * \fn          set_sourcesAndModules
 	 * \brief       sets the modular-beam source and detector positions and orientations
@@ -374,6 +384,7 @@ public:
 	bool offsetScan;
 	bool truncatedScan;
 	bool inconsistencyReconstruction;
+	bool lambdaTomography;
 	int numTVneighbors;
     
 	/**
@@ -478,7 +489,7 @@ public:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns projectionDataSize() + volumeDataSize()
 	 */
-	float requiredGPUmemory(int extraCols = 0);
+	float requiredGPUmemory(int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
 
 	/**
 	 * \fn          hasSufficientGPUmemory
@@ -487,7 +498,7 @@ public:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 */
-	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0);
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
 
 	/**
 	 * \fn          rowRangeNeededForBackprojection

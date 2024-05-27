@@ -32,10 +32,20 @@ extern "C" PROJECTOR_API int create_new_model();
 extern "C" PROJECTOR_API bool copy_parameters(int);
 
 extern "C" PROJECTOR_API void about();
+extern "C" PROJECTOR_API void version(char*);
 extern "C" PROJECTOR_API bool print_parameters();
 extern "C" PROJECTOR_API bool reset();
+extern "C" PROJECTOR_API void set_log_error();
+extern "C" PROJECTOR_API void set_log_warning();
+extern "C" PROJECTOR_API void set_log_status();
+extern "C" PROJECTOR_API void set_log_debug();
 extern "C" PROJECTOR_API bool include_cufft();
 extern "C" PROJECTOR_API int getOptimalFFTsize(int N);
+extern "C" PROJECTOR_API bool set_maxSlicesForChunking(int N);
+
+extern "C" PROJECTOR_API bool all_defined();
+extern "C" PROJECTOR_API bool ct_geometry_defined();
+extern "C" PROJECTOR_API bool ct_volume_defined();
 
 extern "C" PROJECTOR_API bool verify_input_sizes(int, int, int, int, int, int);
 
@@ -60,6 +70,7 @@ extern "C" PROJECTOR_API float get_FBPscalar();
 
 extern "C" PROJECTOR_API bool FBP(float* g, float* f, bool data_on_cpu);
 extern "C" PROJECTOR_API bool inconsistencyReconstruction(float* g, float* f, bool data_on_cpu);
+extern "C" PROJECTOR_API bool lambdaTomography(float* g, float* f, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool sensitivity(float* f, bool data_on_cpu);
 
@@ -79,6 +90,9 @@ extern "C" PROJECTOR_API int get_detectorType();
 
 extern "C" PROJECTOR_API bool set_numCols(int);
 extern "C" PROJECTOR_API bool set_numRows(int);
+
+extern "C" PROJECTOR_API bool set_sod(float);
+extern "C" PROJECTOR_API bool set_sdd(float);
 
 extern "C" PROJECTOR_API bool set_pixelHeight(float);
 extern "C" PROJECTOR_API bool set_pixelWidth(float);
@@ -180,8 +194,11 @@ extern "C" PROJECTOR_API bool convertToRhoeZe(float* f_L, float* f_H, int N_1, i
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BlurFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
+extern "C" PROJECTOR_API bool HighPassFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter2D(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu);
+extern "C" PROJECTOR_API bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* prior, bool data_on_cpu);
+extern "C" PROJECTOR_API bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu);
 extern "C" PROJECTOR_API bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu);
 
 // Anisotropic Total Variation for 3D data

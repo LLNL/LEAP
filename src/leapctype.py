@@ -179,6 +179,55 @@ class tomographicModels:
             return self.libprojectors.set_model(self.param_id)
         else:
             return self.libprojectors.set_model(i)
+            
+    def set_log_error(self):
+        """Sets logging level to logERROR
+        
+        This logging level prints out the fewest statements (only error statements)
+        """
+        self.libprojectors.set_log_error()
+        self.print_cost = False
+        
+    def set_log_warning(self):
+        """Sets logging level to logWARNING
+        
+        This logging level prints out the second fewest statements (only error and warning statements)
+        """
+        self.libprojectors.set_log_warning()
+        self.print_cost = False
+            
+    def set_log_status(self):
+        """Sets logging level to logSTATUS
+        
+        This logging level prints out the second most statements, including iterative reconstruction
+        cost at every iteration (these extra computations will slow down processing)
+        """
+        self.libprojectors.set_log_status()
+        self.print_cost = True
+        
+    def set_log_debug(self):
+        """Sets logging level to logDEBUG
+        
+        This logging level prints out the most statements
+        """
+        self.libprojectors.set_log_debug()
+        self.print_cost = True
+            
+    def set_maxSlicesForChunking(self, N):
+        """This function effects how forward and backprojection jobs are divided into multiple processing jobs on the GPU
+
+        Smaller numbers use less GPU memory, but may slow down processing.  Only use this function if you know what you are doing.
+        
+        For forward projection it specifies the maximum number of detector rows used per job.
+        For backprojection it specifies the maximum number of CT volume z-slices used per job.
+        
+        Args:
+            N (int): the chunk size
+        """
+        self.libprojectors.set_maxSlicesForChunking.restype = ctypes.c_bool
+        self.libprojectors.set_maxSlicesForChunking.argtypes = [ctypes.c_int]
+        self.set_model()
+        return self.libprojectors.set_maxSlicesForChunking(N)
 
     def create_new_model(self):
         self.libprojectors.create_new_model.restype = ctypes.c_int
@@ -199,13 +248,26 @@ class tomographicModels:
         return self.libprojectors.reset()
         
     def include_cufft(self):
+        """Returns True if LEAP is using CUFFT, False otherwise"""
         self.libprojectors.include_cufft.restype = ctypes.c_bool
         return self.libprojectors.include_cufft()
 
     def about(self):
         """prints info about LEAP, including the version number"""
         self.set_model()
-        return self.libprojectors.about()
+        self.libprojectors.about()
+        
+    def version(self):
+        """Returns version number string"""
+        try:
+            versionText = ctypes.create_string_buffer(16)
+            self.libprojectors.version(versionText)
+            if sys.version_info[0] == 3:
+                return versionText.value.decode("utf-8")
+            else:
+                return versionText.value
+        except:
+            return "unknown"
 
     def printParameters(self):
         """printParameters
@@ -226,6 +288,24 @@ class tomographicModels:
         self.libprojectors.print_parameters.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.print_parameters()
+        
+    def all_defined(self):
+        """Returns True if all CT geometry and CT volume parameters are defined, False otherwise"""
+        self.set_model()
+        self.libprojectors.all_defined.restype = ctypes.c_bool
+        return self.libprojectors.all_defined()
+    
+    def ct_geometry_defined(self):
+        """Returns True if all CT geometry parameters are defined, False otherwise"""
+        self.set_model()
+        self.libprojectors.ct_geometry_defined.restype = ctypes.c_bool
+        return self.libprojectors.ct_geometry_defined()
+        
+    def ct_volume_defined(self):
+        """Returns True if all CT volume parameters are defined, False otherwise"""
+        self.set_model()
+        self.libprojectors.ct_volume_defined.restype = ctypes.c_bool
+        return self.libprojectors.ct_volume_defined()
         
     def verify_inputs(self, g, f):
         """ Verifies that the projection data (g) and the volume data (f) are compatible with the specified parameters """
@@ -275,24 +355,35 @@ class tomographicModels:
         self.libprojectors.getOptimalFFTsize.restype = ctypes.c_int
         return self.libprojectors.getOptimalFFTsize(N)
 
-    def available_RAM(self):
-        """Returns the amount of available CPU RAM in GB"""
-        try:
-            import psutil
-            return psutil.virtual_memory()[1]/2**30
-        except:
-            print('Error: cannot load psutil module which is used to calculate the amount of available CPU RAM')
-            return 0.0
-
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
     ###################################################################################################################
     ###################################################################################################################
     def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
-        """Sets the parameters for a cone-beam CT geometry
+        r"""Sets the parameters for a cone-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
+
+        .. math::
+           \begin{eqnarray*}
+           Pf(u,\varphi,v) &:=& \int_\mathbb{R} f\left(R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) + \Delta\varphi\widehat{\boldsymbol{z}}  + \frac{l}{\sqrt{1+u^2+v^2}}\left[-\boldsymbol{\theta}(\varphi)+u\boldsymbol{\theta}^\perp(\varphi) + v\widehat{\boldsymbol{z}} \right] \right) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int \frac{\sqrt{1+ u^2(\boldsymbol{x},\varphi) +v^2(\boldsymbol{x},\varphi)}}{(R-\boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi))^2} g\left( u(\boldsymbol{x},\varphi), \varphi, v(\boldsymbol{x},\varphi)\right) \, d\varphi \\
+           u(\boldsymbol{x},\varphi) &:=& \frac{\boldsymbol{x}\cdot \boldsymbol{\theta}^\perp(\varphi) + \tau}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \\
+           v(\boldsymbol{x},\varphi) &:=& \frac{x_3 - \Delta\varphi}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)}
+           \end{eqnarray*}
+
+        for flat-panel cone-beam and
+        
+        .. math::
+           \begin{eqnarray*}
+           Pf(\alpha,\varphi,\nu) &=& \int_\mathbb{R} f\left(R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) + \Delta\varphi\widehat{\boldsymbol{z}} + \frac{l}{\sqrt{1+\nu^2}}\left[-\boldsymbol{\theta}(\varphi-\alpha) + \nu\widehat{\boldsymbol{z}} \right] \right) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int \frac{\sqrt{1+\nu^2(\boldsymbol{x},\varphi)}}{\| R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) - \boldsymbol{x} \|^2}  g\left(\alpha(\boldsymbol{x},\varphi), \varphi, \nu(\boldsymbol{x},\varphi)\right) \, d\varphi \\
+           \alpha(\boldsymbol{x},\varphi) &:=& \tan^{-1}\left( \frac{\boldsymbol{x}\cdot \boldsymbol{\theta}^\perp(\varphi) + \tau}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \right) \\
+           \nu(\boldsymbol{x},\varphi) &:=& \frac{x_3 - \Delta\varphi}{\|R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) - \boldsymbol{x} \|}
+           \end{eqnarray*}
+        
+        for curved detector cone-beam data.  Here, we have used :math:`R` for sod, :math:`\tau` for tau, :math:`\Delta` for helicalPitch, u = s/sdd, and v = t/sdd.
         
         Args:
             numAngles (int): number of projection angles
@@ -318,6 +409,11 @@ class tomographicModels:
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+            
+        if phis.size != numAngles:
+            print('Error: phis.size != numAngles')
+            return False
+            
         self.set_model()
         return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
@@ -327,9 +423,16 @@ class tomographicModels:
         return self.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
     def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
-        """Sets the parameters for a fan-beam CT geometry
+        r"""Sets the parameters for a fan-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           Pf(u,\varphi,x_3) &:=& \int_\mathbb{R} f\left(R\boldsymbol{\theta}(\varphi) - \tau\boldsymbol{\theta}^\perp(\varphi) - \frac{l}{\sqrt{1+u^2}}\left[\boldsymbol{\theta}(\varphi) - u\boldsymbol{\theta}^\perp(\varphi) \right] + x_3\widehat{\boldsymbol{z}} \right) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int \frac{1}{R-\boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \sqrt{1 + u^2(\boldsymbol{x},\varphi)} g\left( u(\boldsymbol{x},\varphi), \varphi, x_3\right) \, d\varphi \\
+           u(\boldsymbol{x},\varphi) &:=& \frac{\boldsymbol{x}\cdot \boldsymbol{\theta}^\perp(\varphi) + \tau}{R - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)}
+           \end{eqnarray*}
         
         Args:
             numAngles (int): number of projection angles
@@ -354,6 +457,11 @@ class tomographicModels:
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+            
+        if phis.size != numAngles:
+            print('Error: phis.size != numAngles')
+            return False
+            
         self.set_model()
         return self.libprojectors.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
         
@@ -363,9 +471,15 @@ class tomographicModels:
         return self.set_fanbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)
 
     def set_parallelbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis):
-        """Sets the parameters for a parallel-beam CT geometry
+        r"""Sets the parameters for a parallel-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           Pf(s, \varphi, x_3) &:=& \int_\mathbb{R} f(s\boldsymbol{\theta}^\perp(\varphi) - l\boldsymbol{\theta}(\varphi) + x_3\widehat{\boldsymbol{z}}) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int_0^{2\pi} g(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi), \varphi, x_3) \, d\varphi
+           \end{eqnarray*}
         
         Args:
             numAngles (int): number of projection angles
@@ -380,6 +494,7 @@ class tomographicModels:
         Returns:
             True if the parameters were valid, false otherwise
         """
+        
         self.libprojectors.set_parallelbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_parallelbeam.restype = ctypes.c_bool
         if has_torch and type(phis) is torch.Tensor:
@@ -387,6 +502,11 @@ class tomographicModels:
         elif type(phis) is not np.ndarray:
             angularRange = float(phis)
             phis = self.setAngleArray(numAngles, angularRange)
+            
+        if phis.size != numAngles:
+            print('Error: phis.size != numAngles')
+            return False
+            
         self.set_model()
         return self.libprojectors.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
@@ -396,10 +516,19 @@ class tomographicModels:
         return self.set_parallelbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis)
 
     def set_modularbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
-        """Sets the parameters for a modular-beam CT geometry
+        r"""Sets the parameters for a modular-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) projection operator is given by
         
+        .. math::
+           \begin{eqnarray*}
+           Pf(s,t) &:=& \int_{\mathbb{R}} f\left( \boldsymbol{y} + \frac{l}{\sqrt{D^2 + s^2 + t^2}}\left[ \boldsymbol{c}-\boldsymbol{y} + s\boldsymbol{\widehat{u}} + t\boldsymbol{\widehat{v}} \right] \right) \, dl,
+           \end{eqnarray*}
+       
+        where :math:`\boldsymbol{y}` be a location of sourcePositions, :math:`\boldsymbol{c}` be a location of moduleCenters,
+        :math:`\boldsymbol{\widehat{v}}` be a rowVectors instance, :math:`\boldsymbol{\widehat{u}}` be a colVectors instance,
+        and :math:`D := \|\boldsymbol{c}-\boldsymbol{y}\|`.
+       
         Args:
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
@@ -408,12 +537,40 @@ class tomographicModels:
             pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
             sourcePositions ((numAngles X 3) numpy array): the (x,y,z) position of each x-ray source
             moduleCenters ((numAngles X 3) numpy array): the (x,y,z) position of the center of the front face of the detectors
-            rowVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector row direction
-            colVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector point along the positive detector column direction
+            rowVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector pointing along the positive detector row direction
+            colVectors ((numAngles X 3) numpy array):  the (x,y,z) unit vector pointing along the positive detector column direction
             
         Returns:
             True if the parameters were valid, false otherwise
         """
+        
+        if sourcePositions.shape[0] != numAngles:
+            print('Error: sourcePositions.shape[0] != numAngles')
+            return False
+        if moduleCenters.shape[0] != numAngles:
+            print('Error: moduleCenters.shape[0] != numAngles')
+            return False
+        if rowVectors.shape[0] != numAngles:
+            print('Error: rowVectors.shape[0] != numAngles')
+            return False
+        if colVectors.shape[0] != numAngles:
+            print('Error: colVectors.shape[0] != numAngles')
+            return False
+            
+        if sourcePositions.shape[1] != 3:
+            print('Error: sourcePositions.shape[1] != 3')
+            return False
+        if moduleCenters.shape[1] != 3:
+            print('Error: moduleCenters.shape[1] != 3')
+            return False
+        if rowVectors.shape[1] != 3:
+            print('Error: rowVectors.shape[1] != 3')
+            return False
+        if colVectors.shape[1] != 3:
+            print('Error: colVectors.shape[1] != 3')
+            return False
+        
+        
         self.libprojectors.set_modularbeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
         self.libprojectors.set_modularbeam.restype = ctypes.c_bool
         self.set_model()
@@ -535,6 +692,20 @@ class tomographicModels:
         self.libprojectors.set_centerRow.argtypes = [ctypes.c_float]
         return self.libprojectors.set_centerRow(centerRow)
         
+    def set_sod(self, sod):
+        """Set sod parameter"""
+        self.set_model()
+        self.libprojectors.set_sod.restype = ctypes.c_bool
+        self.libprojectors.set_sod.argtypes = [ctypes.c_float]
+        return self.libprojectors.set_sod(sod)
+        
+    def set_sdd(self, sdd):
+        """Set sdd parameter"""
+        self.set_model()
+        self.libprojectors.set_sdd.restype = ctypes.c_bool
+        self.libprojectors.set_sdd.argtypes = [ctypes.c_float]
+        return self.libprojectors.set_sdd(sdd)
+        
     def convert_to_modularbeam(self):
         """Converts parallel- or cone-beam data to a modular-beam format for extra customization of the scanning geometry"""
         if self.get_geometry() == 'PARALLEL':
@@ -560,15 +731,63 @@ class tomographicModels:
         return self.libprojectors.convert_parallelbeam_to_modularbeam()
         
     def rotate_detector(self, alpha):
-        """Rotates modular-beam detector by alpha degrees by updating the modular-beam CT geometry specification"""
+        """Rotates modular-beam detector by updating the modular-beam CT geometry specification
+        
+        The CT geometry parameters must be defined before running this function and the 
+        CT geometry must be modular-beam.  If it is not modular-beam, one may use the
+        convert_to_modularbeam() function.
+        
+        Note that there are two forms for the argument of this function.  If the argument is a scalar, a
+        rotation is performed around the optical axis, otherwise the argument can be specified as a 3x3
+        rotation matrix.  A good method to specify a rotation matrix is the following:
+        from scipy.spatial.transform import Rotation as R
+        A = R.from_euler('xyz', [psi, theta, phi], degrees=True).as_matrix()
+
+        Args:
+            alpha (float or 3x3 numpy array): if alpha is a scalar, a rotation is performed around the optical axis, otherwise alpha can be specified as a 3x3 rotation matrix
+        
+        Returns:
+            True if the operation was successful, False overwise
+        
+        """
         if self.get_geometry() != 'MODULAR':
             print('Error: can only rotate modular-beam detectors')
-            print('Use convert_to_modularbeam first')
+            print('Use convert_to_modularbeam() first')
             return False
-        self.set_model()
-        self.libprojectors.rotate_detector.restype = ctypes.c_bool
-        self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
-        return self.libprojectors.rotate_detector(alpha)
+        if type(alpha) is np.ndarray:
+            if type(alpha) is not np.ndarray or len(alpha.shape) != 2 or alpha.shape[0] != 3 or alpha.shape[1] != 3:
+                print('Error: input argument must be scalar or a 3x3 numpy array')
+                return False
+            A = np.ascontiguousarray(alpha.copy(), dtype=np.float32)
+            if np.linalg.det(A) == 0.0:
+                print('Error: rotation matrix must be nonsingular')
+                return False
+            A = A / np.linalg.det(A) # just make sure people aren't doing anything weird
+            
+            self.set_model()
+            rowVecs = self.get_rowVectors()
+            colVecs = self.get_colVectors()
+            B = A.copy()
+            for n in range(rowVecs.shape[0]):
+                u_vec = colVecs[n,:]
+                v_vec = rowVecs[n,:]
+                n_vec = np.cross(u_vec, v_vec)
+                B[:,1] = n_vec
+                B[:,0] = u_vec
+                B[:,2] = v_vec
+                #rowVecs[n,:] = np.matmul(A, np.matmul(rowVecs[n,:], A.T))
+                #colVecs[n,:] = np.matmul(A, np.matmul(colVecs[n,:], A.T))
+                B = np.matmul(B,A.T)
+                colVecs[n,:] = B[:,0]
+                rowVecs[n,:] = B[:,2]
+            
+            return self.set_modularBeam(self.get_numAngles(), self.get_numRows(), self.get_numCols(), self.get_pixelHeight(), self.get_pixelWidth(), self.get_sourcePositions(), self.get_moduleCenters(), rowVecs, colVecs)
+            
+        else:
+            self.set_model()
+            self.libprojectors.rotate_detector.restype = ctypes.c_bool
+            self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
+            return self.libprojectors.rotate_detector(alpha)
         
     def rotate_coordinate_system(self, R):
         """Rotates the coordinate system
@@ -624,6 +843,10 @@ class tomographicModels:
     def rebin_curved(self, g, fanAngles, order=6):
         """ rebin data from a curved array of detector modules
         
+        Note that if your data is already sampled on a curved detector, you do not need to use this function.
+        Real curved detectors are composed of a series of detector modules curved around a polygon shape.
+        There are often gaps between modules that need to be accounted for and that is what this function does.
+        
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             fanAngles (C contiguous float32 numpy array): array of the fan angle (degrees) of every detector pixel in a row
@@ -642,9 +865,9 @@ class tomographicModels:
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data to alter
-	        priorSinogram (C contiguous float32 numpy array or torch tensor): projection data to use for patching
-	        metalTrace (C contiguous float32 numpy array or torch tensor): projection mask showing where to do the patching
-	        windowSize (3-element int array): window size in each of the three dimensions, default is [30, 1, 50]
+            priorSinogram (C contiguous float32 numpy array or torch tensor): projection data to use for patching
+            metalTrace (C contiguous float32 numpy array or torch tensor): projection mask showing where to do the patching
+            windowSize (3-element int array): window size in each of the three dimensions, default is [30, 1, 50]
             
         Returns:
             true if operation was sucessful, false otherwise
@@ -672,6 +895,9 @@ class tomographicModels:
             
     def down_sample(self, factors, I, dims=None):
         """down-samples the given 3D array
+        
+        Prior to down-sampling, an anti-alias filter is applied to each dimension.  This anti-aliasing filter
+        is the same one used in the LowPassFilter function.
         
         Args:
             factors: 3-element array of down-sampling factors
@@ -715,6 +941,8 @@ class tomographicModels:
         
     def up_sample(self, factors, I, dims=None):
         """up-samples the given 3D array
+        
+        Up-sampling is performed using tri-linear interpolation.
         
         Args:
             factors: 3-element array of up-sampling factors
@@ -849,7 +1077,16 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def set_volume(self, numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
-        """Set the CT volume parameters
+        r"""Set the CT volume parameters
+        
+        The samples are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           x[i] &:=& voxelWidth\left(i - \frac{numX-1}{2}\right) + offsetX, \qquad i = 0,1,\dots,numX-1 \\
+           y[j] &:=& voxelWidth\left(j - \frac{numY-1}{2}\right) + offsetY, \qquad j = 0,1,\dots,numY-1 \\
+           z[k] &:=& voxelHeight\left(k - \frac{numZ-1}{2}\right) + offsetZ, \qquad k = 0,1,\dots,numZ-1
+           \end{eqnarray*}
         
         Args:
             numX (int): number of voxels in the x-dimension
@@ -882,7 +1119,8 @@ class tomographicModels:
     def set_default_volume(self,scale=1.0):
         """Sets the default volume parameters
         
-        The default volume parameters are those that fill the field of view of the CT system and use the native voxel sizes
+        The default volume parameters are those that fill the field of view of the CT system and use the native voxel sizes.
+        Note that the CT geometry parameters must be specified before running this function.
         
         Args:
             scale (float): this value scales the voxel size by this value to create denser or sparser voxel representations (not recommended for fast reconstruction)
@@ -1150,7 +1388,9 @@ class tomographicModels:
         
         It is not necessary to use this function. It is included simply for convenience.
         LEAP allows one to specify non-equispaced projection angles for all geometries
-        If one wishes to do this, do not use this function, but specify them yourself in a numpy array as an argument to set_parallelbeam, set_fanbeam, or set_coneBeam
+        If one wishes to do this, do not use this function, but specify them yourself in a numpy array as an argument to set_parallelbeam, set_fanbeam, or set_coneBeam.
+        In any case, angles must be strictly monotonic increasing or monotonic decreasing.
+        If doing multiple revolutions, angles should just keep going past 360.0.
 
         Args:
             numAngles (int): number of projections
@@ -1181,7 +1421,14 @@ class tomographicModels:
             else:
                 x = torch.from_numpy(x).to(device)
             return x
-    
+            
+    def copy_to_host(self, x):
+        """Copies the given argument to a numpy array"""
+        if has_torch == True and type(x) is torch.Tensor:
+            x = x.cpu().detach().numpy()
+        return x
+            
+            
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS EXECUTE THE MAIN CPU/GPU ROUTINES IN LEAP
@@ -1348,7 +1595,14 @@ class tomographicModels:
         return f
         
     def filterProjections(self, g):
-        """Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction
+        r"""Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction.
+        
+        More specifically, the same results as the FBP function can be achieved by running the following functions
+        
+        .. line-block::
+           filterProjections(f)
+           weightedBackproject(g,f)
+           f \*= get_FBPscalar()
         
         The CT geometry parameters must be set prior to running this function.
         This function take the argument g and returns the same g.
@@ -1371,7 +1625,7 @@ class tomographicModels:
         return g
         
     def rampFilterProjections(self, g):
-        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function
+        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function.
         
         The CT geometry parameters must be set prior to running this function.
         This function take the argument g and returns the same g.
@@ -1430,7 +1684,7 @@ class tomographicModels:
         for FBP reconstruction, we still recommend using this function to perform two-step FBP reconstructions
         because it performs some subtle operations that are only appropriate for FBP reconstruction; for example,
         using extrapolation in the row direction for axial cone-beam FBP (FDK).
-        Don't forget to scale your reconstruction by get_FBPscalar().
+        Don't forget to scale your reconstruction by get_FBPscalar() to get an quantitatively accurate result.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
@@ -1503,7 +1757,19 @@ class tomographicModels:
             return f
         
     def Laplacian(self, g, numDims=2, smoothLaplacian=False):
-        """Applies a Laplacian operation to each projection"""
+        """Applies a Laplacian operation to each projection
+        
+        The CT geometry parameters must be set prior to running this function.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            numDims (int): if 2 calculates the sum of the second derivatives along the rows and columns, if 1 calculates the second derivative along the columns
+            smoothLaplacian (bool): if true, applies an extra low pass filter (given by [0.25, 0.5, 0.25]) to smooth the result
+            
+        Returns:
+            g, the same as the input
+        
+        """
         self.libprojectors.Laplacian.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
@@ -1515,7 +1781,19 @@ class tomographicModels:
         return g
         
     def transmission_filter(self, g, H, isAttenuationData=True):
-        """Applies a 2D Filter to each transmission projection"""
+        """Applies a 2D Filter to each transmission projection
+        
+        The CT geometry parameters must be set prior to running this function.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            H (C contiguous float32 2D numpy array): frequency response of filter (must be real-valued)
+            isAttenuationData (bool): true if the input data is attenuation data, false if it is not (e.g., transmission, raw)
+        
+        Returns:
+            g, the same as the input
+        
+        """
         self.libprojectors.transmissionFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
@@ -1530,6 +1808,8 @@ class tomographicModels:
         
     def AzimuthalBlur(self, f, FWHM):
         """Applies an low pass filter to the volume data in the azimuthal direction, f, for each z-slice
+        
+        The CT volume parameters must be set prior to running this function.
         
         Args:
             f (C contiguous float32 numpy array or torch tensor): volume data
@@ -1563,8 +1843,9 @@ class tomographicModels:
     def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
         
-        This function performs analytic reconstruction (i.e., FBP) of parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries.
-        Note that FDK is an FBP-type algorithm, so for simplicity we just called it FBP in LEAP.
+        This function performs analytic reconstruction (i.e., FBP) of nearly all LEAP geometries: parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries,
+        including both flat and curved detectors, axial or helical scans, Attenuated Radon Transform, symmetric object, etc.
+        Note that FDK is an FBP-type algorithm, so for simplicity we just called it FBP in LEAP.  The same goes for other analytic reconstructions.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function take the argument f and returns the same f.
@@ -1573,6 +1854,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1591,17 +1873,18 @@ class tomographicModels:
                 q = g
         
         self.libprojectors.FBP.restype = ctypes.c_bool
-        self.set_model()
         if has_torch == True and type(q) is torch.Tensor:
             if f is None:
                 f = self.allocateVolume(0.0,True)
                 f = f.to(g.get_device())
             self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
             self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
         else:
             if f is None:
                 f = self.allocateVolume()
             self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
             self.libprojectors.FBP(q, f, True)
         return f
         
@@ -1621,6 +1904,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1638,12 +1922,13 @@ class tomographicModels:
             q = g
             
         self.libprojectors.FBP_cpu.restype = ctypes.c_bool
-        self.set_model()
         if has_torch == True and type(q) is torch.Tensor:
             self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+            self.set_model()
             self.libprojectors.FBP_cpu(q.data_ptr(), f.data_ptr())
         else:
             self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.set_model()
             self.libprojectors.FBP_cpu(q, f)
         return f
         
@@ -1657,6 +1942,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 torch tensor): projection data
             f (C contiguous float32 torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1683,7 +1969,55 @@ class tomographicModels:
             self.set_model()
             self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
         return f
+    
+    def LT(self, g, f=None, inplace=False):
+        """Performs a Lambda/Local Tomography (LT) reconstruction of the projection data, g, and stores the result in f
         
+        This function performs Lambda/Local Tomography (LT) reconstruction of nearly all LEAP geometries: parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries,
+        including both flat and curved detectors, axial or helical scans, Attenuated Radon Transform, symmetric object, etc.
+        LT reconstructions work even when the projections are truncated and reconstruct the 2D ramp filtered volume which is essentially an edge map.
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        
+        # Make a copy of g if necessary
+        if has_torch == True and type(g) is torch.Tensor:
+            if inplace == False:
+                q = self.copyData(g)
+            else:
+                q = g
+        else:
+            if self.get_gpu() < 0 and inplace == False:
+                q = self.copyData(g)
+            else:
+                q = g
+        
+        self.libprojectors.lambdaTomography.restype = ctypes.c_bool
+        if has_torch == True and type(q) is torch.Tensor:
+            if f is None:
+                f = self.allocateVolume(0.0,True)
+                f = f.to(g.get_device())
+            self.libprojectors.lambdaTomography.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.lambdaTomography(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
+        else:
+            if f is None:
+                f = self.allocateVolume()
+            self.libprojectors.lambdaTomography.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.lambdaTomography(q, f, True)
+        return f
+    
     def inconsistencyReconstruction(self, g, f=None, inplace=False):
         """Performs an Inconsistency Reconstruction of the projection data, g, and stores the result in f
         
@@ -1698,6 +2032,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
             
         Returns:
             f, the same as the input with the same name
@@ -1710,17 +2045,18 @@ class tomographicModels:
             q = g
         
         self.libprojectors.inconsistencyReconstruction.restype = ctypes.c_bool
-        self.set_model()
         if has_torch == True and type(q) is torch.Tensor:
             if f is None:
                 f = self.allocateVolume(0.0,True)
                 f = f.to(g.get_device())
             self.libprojectors.inconsistencyReconstruction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
             self.libprojectors.inconsistencyReconstruction(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
         else:
             if f is None:
                 f = self.allocateVolume()
             self.libprojectors.inconsistencyReconstruction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
             self.libprojectors.inconsistencyReconstruction(q, f, True)
         return f
         
@@ -1754,7 +2090,7 @@ class tomographicModels:
         One can get the same result by backprojecting an array of projection data with all entries equal to one.
         The benefit of this function is that it is faster and uses less memory.
         
-        In a volume is provided, the result will be stored there, otherwise a new volume will be allocated
+        In a volume is provided, the result will be stored there, otherwise a new volume will be allocated.
         
         Args:
             f (C contiguous float32 numpy array or torch tensor): (optional argument) volume data to store the result
@@ -1954,7 +2290,8 @@ class tomographicModels:
     def down_sample_projections(self, factors, g=None):
         """down-samples the given projection data
 
-        This function applies an anti-aliasing filter and down-samples projection data and updates the CT geometry parameters accordingly
+        This function applies an anti-aliasing filter and down-samples projection data and updates the CT geometry parameters accordingly.
+        This anti-aliasing filter is the same one used in the LowPassFilter function.
         
         Args:
             factors: 3-element array of down-sampling factors
@@ -1997,7 +2334,8 @@ class tomographicModels:
     def up_sample_projections(self, factors, g=None, dims=None):
         """up-samples the given projection data
 
-        This function up-samples projection data and updates the CT geometry parameters accordingly
+        This function up-samples projection data and updates the CT geometry parameters accordingly.
+        The up-sampling is performed using trilinear interpolation.
         
         Args:
             factors: 3-element array of up-sampling factors
@@ -2040,7 +2378,8 @@ class tomographicModels:
     def down_sample_volume(self, factors, f=None):
         """down-samples the given volume data
 
-        This function applies an anti-aliasing filter and down-samples volume data and updates the CT volume parameters accordingly
+        This function applies an anti-aliasing filter and down-samples volume data and updates the CT volume parameters accordingly.
+        This anti-aliasing filter is the same one used in the LowPassFilter function.
         
         Args:
             factors: 3-element array of down-sampling factors
@@ -2081,7 +2420,8 @@ class tomographicModels:
     def up_sample_volume(self, factors, f=None, dims=None):
         """up-samples the given volume data
 
-        This function up-samples volume data and updates the CT volume parameters accordingly
+        This function up-samples volume data and updates the CT volume parameters accordingly.
+        The up-sampling is performed using trilinear interpolation.
         
         Args:
             factors: 3-element array of up-sampling factors
@@ -2166,6 +2506,12 @@ class tomographicModels:
         else:
             return np.minimum(x, y)
             
+    def maximum(self, x, y):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.maximum(x, y)
+        else:
+            return np.maximum(x, y)
+            
     def sign(self, x):
         if has_torch == True and type(x) is torch.Tensor:
             return torch.sign(x)
@@ -2216,7 +2562,16 @@ class tomographicModels:
             return g_subsets
     
     def MLEM(self, g, f, numIter, filters=None, mask=None):
-        """Maximum Likelihood-Expectation Maximization reconstruction
+        r"""Maximum Likelihood-Expectation Maximization reconstruction
+        
+        This algorithm performs reconstruction with the following update equation
+        
+        .. math::
+           \begin{eqnarray}
+             f_{n+1} &:=& \frac{f_n}{P^T 1 + R'(f_n)} P^T\left[ \frac{g}{Pf_n} \right]
+           \end{eqnarray}
+           
+        where R'(f) is the gradient of the regularization term(s).
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This reconstruction algorithms assumes the projection data, g, is Poisson distributed which is the
@@ -2254,7 +2609,7 @@ class tomographicModels:
         Pstar1[Pstar1==0.0] = 1.0
         d = self.allocateData(f)
         Pd = self.allocateData(g)
-        
+
         for n in range(numIter):
             print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
             self.project(Pd,f)
@@ -2266,12 +2621,28 @@ class tomographicModels:
             if filters is None:
                 f *= d/Pstar1
             else:
-                f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
+                if filters.anyDifferentiable():
+                    f *= d/self.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f))
+                else:
+                    f *= d/Pstar1
+                    if filters.beta > 0.0 and filters.beta < 1.0:
+                        f_save = self.copyData(f)
+                        filters.apply(f)
+                        f[:] = filters.beta*f[:] + (1.0-filters.beta)*f_save[:]
+                        f[f<0.0] = 0.0
+                    elif filters.beta > 0.0:
+                        filters.apply(f)
+                        f[f<0.0] = 0.0
                 
         return f
     
     def OSEM(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
         """Ordered Subsets-Expectation Maximization reconstruction
+        
+        The OSEM algorithm is performed using two nested loops.  The inner loop is performed like
+        the MLEM algorithm (see MLEM algorithm documentation for a description of the algorithm),
+        but the successive updates of the reconstructed volume are done with a subset of the projection
+        angles.  Once every subset of is complete, the process starts over again.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This reconstruction algorithms assumes the projection data, g, is Poisson distributed which is the
@@ -2345,17 +2716,45 @@ class tomographicModels:
                     if filters is None:
                         f *= d/Pstar1
                     else:
-                        f *= d/np.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f)/float(numSubsets))
+                        f *= d/self.maximum(0.1*Pstar1, Pstar1 + filters.gradient(f)/float(numSubsets))
                     
             subsetParams.setSubset(-1)
             return f
         
     def SIRT(self, g, f, numIter, mask=None):
-        """Simultaneous Iterative Reconstruction Technique reconstruction"""
+        r"""Simultaneous Iterative Reconstruction Technique reconstruction
+
+        This is the same algorithm as a SART reconstruction with one subset.
+        The SIRT algorithm is performed using the following update equation
+                
+        .. math::
+           \begin{eqnarray}
+             f_{n+1} &:=& f_n + \frac{0.9}{P^T 1} P^T\left[ \frac{Pf_n - g}{P1} \right]
+           \end{eqnarray}
+           
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        
+        Args:
+            g (C contiguous float32 numpy or torch array): projection data
+            f (C contiguous float32 numpy or torch array): volume data
+            numIter (int): number of iterations
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
+        
+        Returns:
+            f, the same as the input with the same name
+        
+        """
         return self.SART(g, f, numIter, 1, mask)
         
     def SART(self, g, f, numIter, numSubsets=1, mask=None):
-        """Simultaneous Algebraic Reconstruction Technique reconstruction
+        r"""Simultaneous Algebraic Reconstruction Technique reconstruction
+        
+        The SART algorithm is performed using two nested loops.  The inner loop is performed like
+        the SIRT algorithm (see SIRT algorithm documentation for a description of the algorithm),
+        but the successive updates of the reconstructed volume are done with a subset of the projection
+        angles.  Once every subset of is complete, the process starts over again.
+        
+        If one wishes to combine this algorithm with regularization, (e.g., TV), please see ASDPOCS.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
@@ -2364,7 +2763,7 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             numSubsets (int): number of subsets
-            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
         Returns:
             f, the same as the input with the same name
@@ -2448,6 +2847,9 @@ class tomographicModels:
     def ASDPOCS(self, g, f, numIter, numSubsets, numTV, filters=None, mask=None):
         """Adaptive Steepest Descent-Projection onto Convex Subsets reconstruction
         
+        This algorithm combines SART with regularization (e.g., TV; see \"filters\" argument).  See SART and SIRT documentation
+        for more information.
+        
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function actually implements the iTV reconstruction method which is a slight varition to ASDPOCS
         which we find works slightly better.
@@ -2463,8 +2865,8 @@ class tomographicModels:
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             numTV (int): number of TV diffusion steps
-            filters (filterSequence object): list of differentiable regularization filters
-            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            filters (filterSequence object): list of regularization filters
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
         Returns:
             f, the same as the input with the same name
@@ -2617,12 +3019,19 @@ class tomographicModels:
         
         
     def LS(self, g, f, numIter, preconditioner=None, nonnegativityConstraint=True):
-        """Least Squares reconstruction
-        
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        r"""Least Squares reconstruction
+
         This function minimizes the Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
+        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection.
+        The Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{LS}(f) &:=& \frac{1}{2} \| Pf - g \|^2
+           \end{eqnarray}
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -2636,18 +3045,25 @@ class tomographicModels:
         return self.RWLS(g, f, numIter, None, 1.0, preconditioner, nonnegativityConstraint)
         
     def WLS(self, g, f, numIter, W=None, preconditioner=None, nonnegativityConstraint=True):
-        """Weighted Least Squares reconstruction
+        r"""Weighted Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
+        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection.
+        The Weighted Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{WLS}(f) &:=& \frac{1}{2} (Pf - g)^T W (Pf - g)
+           \end{eqnarray}
+           
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g)
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
@@ -2656,12 +3072,19 @@ class tomographicModels:
         return self.RWLS(g, f, numIter, None, W, preconditioner, nonnegativityConstraint)
         
     def RLS(self, g, f, numIter, filters=None, preconditioner=None, nonnegativityConstraint=True):
-        """Regularized Least Squares reconstruction
+        r"""Regularized Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Regularized Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection
+        which is given by (P*P1)^-1, where 1 is a volume of all ones, P is forward projection, and P* is backprojection.
+        The Regularized Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{RLS}(f) &:=& \frac{1}{2} \| Pf - g \|^2 + R(f)
+           \end{eqnarray}
+
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -2676,19 +3099,26 @@ class tomographicModels:
         return self.RWLS(g, f, numIter, filters, 1.0, preconditioner, nonnegativityConstraint)
        
     def RWLS(self, g, f, numIter, filters=None, W=None, preconditioner=None, nonnegativityConstraint=True):
-        """Regularized Weighted Least Squares reconstruction
+        r"""Regularized Weighted Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Regularized Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
         The optional preconditioner is the Separable Quadratic Surrogate for the Hessian of the cost function
-        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection
+        which is given by (P*WP1)^-1, where 1 is a volume of all ones, W are the weights, P is forward projection, and P* is backprojection.
+        The Regularized Weighted Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{RWLS}(f) &:=& \frac{1}{2} (Pf - g)^T W (Pf - g) + R(f)
+           \end{eqnarray}
+
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             filters (filterSequence object): list of differentiable regularization filters
-            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W:=exp(-g)
+            W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W:=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
         
         Returns:
@@ -2843,7 +3273,7 @@ class tomographicModels:
             grad (C contiguous float32 numpy or torch array): gradient of the RWLS cost function
             d (C contiguous float32 numpy or torch array): descent direction of the RWLS cost function
             Pd (C contiguous float32 numpy or torch array): forward projection of d
-            W (C contiguous float32 numpy or torch array): weights, should be the same size as g, if not given, W=exp(-g)
+            W (C contiguous float32 numpy or torch array): weights, should be the same size as g, if not given, assumes is all ones
             filters (filterSequence object): list of filters to use as a regularizer terms
         
         Returns:
@@ -2872,15 +3302,27 @@ class tomographicModels:
         return stepSize
         
     def DLS(self, g, f, numIter, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=2):
-        """Derivative Least Squares reconstruction"""
+        """Derivative Least Squares reconstruction
+        
+        See documentation for RDLS because this is the same algorithm without the regularization.
+        
+        """
         return self.RDLS(g, f, numIter, 0.0, 0.0, preconditionerFWHM, nonnegativityConstraint, dimDeriv)
         
     def RDLS(self, g, f, numIter, filters=None, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=1):
-        """Regularized Derivative Least Squares reconstruction
+        r"""Regularized Derivative Least Squares reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function minimizes the Regularized Derivative Least Squares cost function using Preconditioned Conjugate Gradient.
-        The optional preconditioner is a 2D blurring for each z-slice
+        The optional preconditioner is a 2D blurring for each z-slice.
+        The Regularized Weighted Least Squares cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{RDLS}(f) &:=& \frac{1}{2} (Pf - g)^T \Delta (Pf - g) + R(f)
+           \end{eqnarray}
+           
+        where :math:`\Delta` is the Laplacian operator.        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -2889,7 +3331,7 @@ class tomographicModels:
             filters (filterSequence object): list of differentiable regularization filters
             preconditionerFWHM (float): specifies the FWHM of the blur preconditioner
             nonnegativityConstraint (bool): whether to apply a nonnegativity constraint
-            dimDeriv (int): number of dimensions to apply the Laplacian derivative
+            dimDeriv (int): number of dimensions (1 or 2) to apply the Laplacian derivative
         
         Returns:
             f, the same as the input with the same name
@@ -3024,11 +3466,20 @@ class tomographicModels:
         return stepSize
 
     def MLTR(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
-        """Maximum Likelihood Transmission reconstruction
+        r"""Maximum Likelihood Transmission reconstruction
         
-        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This function maximizes the Maximum Likelihood function of CT transmission data which assumes a Poisson noise model.
         This algorithm best models the noise for very low transmission/ low count rate data.
+        The MLTR cost function is given by the following
+        
+        .. math::
+           \begin{eqnarray}
+             C_{MLTR}(f) &:=& \left< -t\log\left(e^{-Pf}\right) + e^{-Pf} , 1 \right>
+           \end{eqnarray}
+
+        where t is the transmission data and \"1\" is a vector of all ones.  The inner product notation is
+        just use for simplicity, but all it is really doing is performing a sum over all the elements.
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         
         Args:
             g (C contiguous float32 numpy or torch array): projection data
@@ -3036,7 +3487,7 @@ class tomographicModels:
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             filters (filterSequence object): list of differentiable regularization filters
-            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc.
+            mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
         Returns:
             f, the same as the input with the same name
@@ -3234,7 +3685,18 @@ class tomographicModels:
             return self.libprojectors.applyDualTransferFunction(x, y, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.shape[1], True)
     
     def convertToRhoeZe(self, f_L, f_H, sigma_L, sigma_H):
-        """transforms a low and high energy pair to electron density and effective atomic number"""
+        """transforms a low and high energy pair to electron density and effective atomic number
+        
+        Args:
+            f_L (3D C contiguous float32 numpy array or torch tensor): low energy volume in LAC units
+            f_H (3D C contiguous float32 numpy array or torch tensor): high energy volume in LAC units
+            sigma_L (3D C contiguous float32 numpy array or torch tensor): mass cross section values for elements 1-100 at the low energy
+            sigma_H (3D C contiguous float32 numpy array or torch tensor): mass cross section values for elements 1-100 at the high energy
+        
+        Returns:
+            the Ze and rho volumes
+        
+        """
         #bool convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu)
         self.libprojectors.convertToRhoeZe.restype = ctypes.c_bool
         self.set_model()
@@ -3248,6 +3710,8 @@ class tomographicModels:
     
     def synthesize_symmetry(self, f_radial):
         """Converts symmetric volume to a 3D volume
+        
+        The CT volume parameters must be set prior to running this function and must be specified as symmetric.
         
         Args:
             f_radial (C contiguous float32 numpy array): symmetric volume numpy array
@@ -3273,8 +3737,12 @@ class tomographicModels:
             self.libprojectors.synthesize_symmetry(f_radial, f)
             return f
     
+    def LowPassFilter(self, f, FWHM=2.0):
+        """Alias for BlurFilter"""
+        return self.BlurFilter(f, FWHM)
+    
     def BlurFilter(self, f, FWHM=2.0):
-        """Applies a blurring filter to the provided numpy array
+        """Applies a blurring filter to the provided numpy array or torch tensor
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
@@ -3296,6 +3764,34 @@ class tomographicModels:
         else:
             self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+
+    def HighPassFilter(self, f, FWHM=2.0):
+        """Applies a high pass filter to the provided numpy array or torch tensor
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array or torch tensor of any size
+        The filter is given by delta[i] - cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
+        This filter is very simular to a Gaussian filter, but is a FIR
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): numpy array to sharpen
+            FWHM (float): the full width at half maximum (in number of pixels) of the filter
+        
+        Returns:
+            f, the same as the input
+        """
+        #bool HighPassFilter(float* f, int, int, int, float FWHM);
+        self.libprojectors.HighPassFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.HighPassFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.HighPassFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+        else:
+            self.libprojectors.HighPassFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.HighPassFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+
+    def LowPassFilter2D(self, f, FWHM=2.0):
+        """Alias for BlurFilter2D"""
+        return self.BlurFilter2D(f, FWHM)
             
     def BlurFilter2D(self, f, FWHM=2.0):
         """Applies a 2D blurring filter to the provided numpy array or torch tensor
@@ -3322,11 +3818,11 @@ class tomographicModels:
             return self.libprojectors.BlurFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
     
     def MedianFilter(self, f, threshold=0.0, windowSize=3):
-        """Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided numpy array
+        r"""Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided numpy array
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         This algorithm performs a 3D (3x3x3 or 3x5x5) median around each data value and then replaces this value only if
-        |original value - median value| >= threshold*|median value|
+        \|original value - median value\| >= threshold*\|median value\|
         Note that if threshold is zero, then this is simply a median filter
         
         Args:
@@ -3348,16 +3844,17 @@ class tomographicModels:
             return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
             
     def MedianFilter2D(self, f, threshold=0.0, windowSize=3):
-        """Applies a thresholded 2D median filter (windowSize x windowSize) to the provided numpy array
+        r"""Applies a thresholded 2D median filter (windowSize x windowSize) to the provided numpy array
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         This algorithm performs a 2D (windowSize x windowSize) median around each data value and then replaces this value only if
-        |original value - median value| >= threshold*|median value|
+        \|original value - median value\| >= threshold*\|median value\|
         Note that if threshold is zero, then this is simply a median filter
         
         Args:
             f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
             threshold (float): the threshold of whether to use the filtered value or not
+            windowSize (int): the window size; can be 3 or 5
         
         Returns:
             f, the same as the input
@@ -3372,8 +3869,8 @@ class tomographicModels:
             self.libprojectors.MedianFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.MedianFilter2D(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
     
-    def BilateralFilter(self, f, spatialFWHM, intensityFWHM, scale=1.0):
-        """Performs 3D (Scaled) Bilateral Filter denoising method
+    def PriorBilateralFilter(self, f, spatialFWHM, intensityFWHM, prior=None):
+        """Performs 3D Bilateral Filter (BLF) denoising method where the intensity distance is measured against a prior image
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         
@@ -3381,7 +3878,34 @@ class tomographicModels:
             f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
             spatialFWHM (float): the FWHM (in number of pixels) of the spatial closeness term of the BLF
             intensityFWHM (float): the FWHM of the intensity closeness terms of the BLF
-            scale (float): an optional argument to used a blurred volume to calculate the intensity closeness term
+            prior (C contiguous float32 numpy array or torch tensor): 3D data prior used for the intensity distance
+        
+        Returns:
+            f, the same as the input
+        
+        """
+        if prior is None or isinstance(prior, (int, float)):
+            return self.BilateralFilter(f, spatialFWHM, intensityFWHM, prior)
+            
+        self.libprojectors.PriorBilateralFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.PriorBilateralFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_void_p, ctypes.c_bool]
+            return self.libprojectors.PriorBilateralFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, prior.data_ptr(), f.is_cuda == False)
+        else:
+            self.libprojectors.PriorBilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            return self.libprojectors.PriorBilateralFilter(f, f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, prior, True)
+    
+    def BilateralFilter(self, f, spatialFWHM, intensityFWHM, scale=1.0):
+        """Performs 3D (Scaled) Bilateral Filter (BLF) denoising method
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
+            spatialFWHM (float): the FWHM (in number of pixels) of the spatial closeness term of the BLF
+            intensityFWHM (float): the FWHM of the intensity closeness terms of the BLF
+            scale (float): an optional argument to used a blurred volume (and this parameter specifies the FWHM of the blurring) to calculate the intensity closeness term
         
         Returns:
             f, the same as the input
@@ -3394,6 +3918,30 @@ class tomographicModels:
         else:
             self.libprojectors.BilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BilateralFilter(f, f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, scale, True)
+            
+    def GuidedFilter(self, f, r, epsilon):
+        """Performs 3D Guided Filter denoising method
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
+            r (int): the window radius (in number of pixels)
+            epsilon (float): the degree of smoothing
+        
+        Returns:
+            f, the same as the input
+        """
+        
+        r = min(r,10)
+        self.libprojectors.GuidedFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.GuidedFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.GuidedFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], r, epsilon, f.is_cuda == False)
+        else:
+            self.libprojectors.GuidedFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.GuidedFilter(f, f.shape[0], f.shape[1], f.shape[2], r, epsilon, True)
     
     def DictionaryDenoising(self, f, dictionary, sparsityThreshold=8, epsilon=0.0):
         """Represents 3D data by a sparse representation of an overcomplete dictionary, effectively denoising the data
@@ -3413,8 +3961,8 @@ class tomographicModels:
         self.libprojectors.dictionaryDenoising.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.dictionaryDenoising.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.dictionaryDenoising(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, f.is_cuda == False)
+            self.libprojectors.dictionaryDenoising.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.dictionaryDenoising(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, f.is_cuda == False)
         else:
             self.libprojectors.dictionaryDenoising.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.dictionaryDenoising(f, f.shape[0], f.shape[1], f.shape[2], dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, True)
@@ -3427,21 +3975,36 @@ class tomographicModels:
         return self.libprojectors.get_numTVneighbors()
         
     def set_numTVneighbors(self, N):
-        """Sets the number of neighboring voxels to use for 3D TV"""
+        """Sets the number of neighboring voxels to use for 3D TV
+        
+        Args:
+            N (int): the number of neighbors to use for 3D TV calculations (can be 6 or 26)
+        
+        """
         self.libprojectors.set_numTVneighbors.restype = ctypes.c_bool
         self.set_model()
         self.libprojectors.set_numTVneighbors.argtypes = [ctypes.c_int]
         return self.libprojectors.set_numTVneighbors(N)
     
     def TVcost(self, f, delta, beta=0.0, p=1.2):
-        """Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
+        r"""Calculates the anisotropic Total Variation (TV) functional, i.e., cost of the provided numpy array
         
-        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+        One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+        The Huber-like loss function is given by
+        
+        .. math::
+           \begin{eqnarray}
+             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+           \end{eqnarray}
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size.
         
         Args:
             f (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): TV multiplier (sometimes called the regularizaion strength)
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             TV functional value
@@ -3457,7 +4020,17 @@ class tomographicModels:
             return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
         
     def TVgradient(self, f, delta, beta=0.0, p=1.2):
-        """Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
+        r"""Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
+        
+        This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+        One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+        The Huber-like loss function is given by
+        
+        .. math::
+           \begin{eqnarray}
+             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases} \\
+             h'(t) &=& \begin{cases} t, & \text{if } |t| \leq delta \\ delta^{2 - p}sgn(t)|t|^{p-1}, & \text{if } |t| > delta \end{cases}
+           \end{eqnarray}
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         
@@ -3465,6 +4038,7 @@ class tomographicModels:
             f (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): TV multiplier (sometimes called the regularizaion strength)
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
@@ -3486,19 +4060,31 @@ class tomographicModels:
             return Df
     
     def TVquadForm(self, f, d, delta, beta=0.0, p=1.2):
-        """Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays
+        r"""Calculates the quadratic form of the anisotropic Total Variation (TV) functional of the provided numpy arrays
         
         The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
         This function calculates the following inner product <d, R''(f)d>, where R'' is the Hessian of the TV functional
         The quadraitc surrogate is used here, so this function can be used to calculate the step size of a cost function
         that includes a TV regularization term.
-        See the same  cost in the diffuse function below for an example of its usage
+        See the same  cost in the diffuse function below for an example of its usage.
+        
+        This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+        One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+        The Huber-like loss function is given by
+        
+        .. math::
+           \begin{eqnarray}
+             h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+           \end{eqnarray}
+
+        To make this calculate a quadraitc surrogate (upper bound), LEAP uses h'(t)/t instead of h''(t).
         
         Args:
             f (C contiguous float32 numpy array): 3D numpy array
             d (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): TV multiplier (sometimes called the regularizaion strength)
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
@@ -3514,15 +4100,17 @@ class tomographicModels:
             return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
         
     def diffuse(self, f, delta, numIter, p=1.2):
-        """Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
+        r"""Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
         
-        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size
-        This function performs a specifies number of iterations of minimizing the aTV functional using gradient descent
+        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size.
+        This function performs a specifies number of iterations of minimizing the aTV functional using gradient descent.
+        The step size calculation uses the method of Separable Quadratic Surrogate (see also TVquadForm).
         
         Args:
             f (C contiguous float32 numpy array): 3D numpy array
             delta (float): parameter for the Huber-like loss function used in TV
             numIter (int): number of iterations
+            p (float): the exponent for the Huber-like loss function used in TV
         
         Returns:
             f, the same array as the input denoised
@@ -3730,6 +4318,10 @@ class tomographicModels:
         self.libprojectors.get_angularRange.restype = ctypes.c_float
         self.set_model()
         return self.libprojectors.get_angularRange()
+        
+    def set_phis(self,phis):
+        """Set the projection angles"""
+        return self.set_angles(phis)
         
     def set_angles(self,phis):
         """Set the projection angles"""
@@ -4426,7 +5018,7 @@ class tomographicModels:
         return True
     
     def save_parameters(self, fileName):
-        """Save the CT volume and CT geometry parameters to the provides file name"""
+        """Save the CT volume and CT geometry parameters to the provided file name"""
         return self.save_param(fileName)
     
     def save_param(self, fileName):
@@ -4439,23 +5031,24 @@ class tomographicModels:
         
         return self.leapct.save_param(fileName)
     
-    def save_projections(self, fileName, g):
+    def save_projections(self, fileName, g, sequence_offset=0):
         """Save projection data to file (tif sequence, nrrd, or npy)
         
         Args:
             fileName (string): the file name to save the projection data to
             g (C contiguous float32 numpy array or torch tensor): projection data
+            sequence_offset (int): if saving as a tif/tiff sequence, this specifies the index of the first file
         
         """
-        return self.saveProjections(fileName, g)
+        return self.saveProjections(fileName, g, sequence_offset)
         
-    def saveProjections(self, fileName, g):
+    def saveProjections(self, fileName, g, sequence_offset=0):
         """Save projection data to file (tif sequence, nrrd, or npy)"""
         if self.get_numAngles() > 0 and self.get_numRows() > 0 and self.get_numCols() > 0:
             pixelWidth = self.get_pixelWidth()
             pixelHeight = self.get_pixelHeight()
-            numCols = self.get_numCols()
-            numRows = self.get_numRows()
+            #numCols = self.get_numCols()
+            #numRows = self.get_numRows()
             centerRow = self.get_centerRow()
             centerCol = self.get_centerCol()
             phis = self.get_angles()
@@ -4469,19 +5062,20 @@ class tomographicModels:
             row_0 = 0.0
             col_0 = 0.0
             T = 1.0
-        return self.saveData(fileName, g, T, phi_0, row_0, col_0)
+        return self.save_data(fileName, g, T, phi_0, row_0, col_0, sequence_offset)
     
-    def save_volume(self, fileName, f):
+    def save_volume(self, fileName, f, sequence_offset=0):
         """Save volume data to file (tif sequence, nrrd, or npy)
         
         Args:
             fileName (string): the file name to save the projection data to
             f (C contiguous float32 numpy array or torch tensor): volume data
+            sequence_offset (int): if saving as a tif/tiff sequence, this specifies the index of the first file
         
         """
-        return self.saveVolume(fileName, f)
+        return self.saveVolume(fileName, f, sequence_offset)
     
-    def saveVolume(self, fileName, f):
+    def saveVolume(self, fileName, f, sequence_offset=0):
         """Save volume data to file (tif sequence, nrrd, or npy)"""
         if self.get_numX() > 0 and self.get_numY() > 0 and self.get_numZ() > 0:
             z_0 = self.z_samples()[0]
@@ -4493,9 +5087,9 @@ class tomographicModels:
             y_0 = 0.0
             z_0 = 0.0
             T = 1.0
-        return self.saveData(fileName, f, T, x_0, y_0, z_0)
+        return self.save_data(fileName, f, T, x_0, y_0, z_0, sequence_offset)
         
-    def saveData(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0):
+    def save_data(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0, sequence_offset=0):
         """Save 3D data to file (tif sequence, nrrd, or npy)"""
         volFilePath, dontCare = os.path.split(fileName)
         if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
@@ -4535,7 +5129,7 @@ class tomographicModels:
                     for i in range(x.shape[0]):
                         im = x[i,:,:]
                         #im.save(baseName + '_' + str(int(i)) + fileExtension)
-                        imageio.imwrite(baseName + '_' + str(int(i)) + fileExtension, im)
+                        imageio.imwrite(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
                 return True
                 
             except:
@@ -4548,37 +5142,87 @@ class tomographicModels:
             print('Error: must be a tif, npy, or nrrd file!')
             return False
             
-    def loadVolume(self, fileName):
+    def loadVolume(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
         """Load 3D volume data from file (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
         
-    def load_volume(self, fileName):
-        """Load 3D volume data from the given file name provided (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
+    def load_volume(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D volume data from the given file name provided (tif sequence, nrrd, or npy)
         
-    def loadProjections(self, fileName):
+        See load_data for more information
+        """
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        
+    def loadProjections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
         """Load 3D projection data from file (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
         
-    def load_projections(self, fileName):
-        """Load 3D projection data from the given file name provided (tif sequence, nrrd, or npy)"""
-        return self.loadData(fileName)
-            
-    def loadData(self, fileName):
-        """Load 3D data from file (tif sequence, nrrd, or npy)"""
+    def load_projections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D projection data from the given file name provided (tif sequence, nrrd, or npy)
+        
+        See load_data for more information
+        """
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        
+    def loadData(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D data from the given file name provided (tif sequence, nrrd, or npy)"""
+        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        
+    def load_data(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+        """Load 3D data from file (tif sequence, nrrd, or npy)
+
+        This function reads 3D data and stores it in a 3D numpy array.  We officially support
+        nrrd, npy, or a a sequence of tif/tiff files.  Note that fileRange, rowRange, and colRange arguments
+        only apply to tif sequences.
+        
+        A tif sequences must be in the following form: basename_XXXX.tif or (tiff).  The XXXX are the sequence numbers
+        which can be padded with zeros or not.  When calling this function be sure to specify the input as basename.tif,
+        i.e., do not include the underscore and digits when providing this file name to this function.
+        
+        Args:
+            fileName (string): full path to npy or nrrd file or sequence of tif files.
+            x (3D float32 numpy array): place to store the data (this argument is optional)
+            fileRange (list with two integers): the first and last files to read of a tif sequence
+            rowRange (list with two integers): the first and last rows to read in a tif sequence
+            colRange (list with two integers): the first and last columns to read in a tif sequence
+        
+        Returns:
+            3D numpy array of the data in the file(s); if x is given, just returns x
+        """
+        
+        if fileRange is not None:
+            if len(fileRange) != 2 or fileRange[0] > fileRange[1] or fileRange[0] < 0 or fileRange[1] < 0:
+                print('Error: fileRange must be a list of two positive numbers')
+                return None
+        if rowRange is not None:
+            if len(rowRange) != 2 or rowRange[0] > rowRange[1] or rowRange[0] < 0 or rowRange[1] < 0:
+                print('Error: rowRange must be a list of two positive numbers')
+                return None
+        if colRange is not None:
+            if len(colRange) != 2 or colRange[0] > colRange[1] or colRange[0] < 0 or colRange[1] < 0:
+                print('Error: colRange must be a list of two positive numbers')
+                return None
+        
         if fileName.endswith('.npy'):
             if os.path.isfile(fileName) == False:
                 print('file does not exist')
                 return None
             else:
-                return np.load(fileName)
+                if x is not None:
+                    x[:] = np.load(fileName)
+                    return x
+                else:
+                    return np.load(fileName)
         elif fileName.endswith('.nrrd'):
             if os.path.isfile(fileName) == False:
                 print('file does not exist')
                 return None
             try:
                 import nrrd
-                x, header = nrrd.read(fileName)
+                if x is not None:
+                    x[:], header = nrrd.read(fileName)
+                else:
+                    x, header = nrrd.read(fileName)
                 T_fromFile = header['spacings'][0]
                 return x
             except:
@@ -4610,23 +5254,62 @@ class tomographicModels:
                     os.chdir(currentWorkingDirectory)
                     print('file sequence does not exist')
                     return None
+                    
+                if fileRange is not None:
+                    # prune fileList
+                    fileList_pruned = []
+                    for i in range(len(fileList)):
+                        digit = int(fileList[i].replace(baseFileName+'_','').replace('.tif',''))
+                        if fileRange[0] <= digit and digit <= fileRange[1]:
+                            fileList_pruned.append(fileList[i])
+                    fileList = fileList_pruned
+                    
                 justDigits = []
                 for i in range(len(fileList)):
                     digitStr = fileList[i].replace(baseFileName+'_','').replace('.tif','')
                     justDigits.append(int(digitStr))
                 ind = np.argsort(justDigits)
 
+
                 #print('found ' + str(len(fileList)) + ' images')
                 #print('reading first image: ' + str(fileList[0]))
                 #firstImg = np.array(Image.open(fileList[0]))
                 firstImg = np.array(imageio.imread(fileList[0]))
-                x = np.zeros((len(fileList), firstImg.shape[0], firstImg.shape[1]), dtype=np.float32)
-                print('found ' + str(x.shape[0]) + ' images of size ' + str(x.shape[1]) + ' x ' + str(x.shape[2]))
+                
+                numRows = firstImg.shape[0]
+                numCols = firstImg.shape[1]
+                if rowRange is not None:
+                    if rowRange[1] > numRows-1:
+                        print('Error: row range is out range')
+                        return None
+                    numRows = rowRange[1] - rowRange[0] + 1
+                if colRange is not None:
+                    if colRange[1] > numCols-1:
+                        print('Error: col range is out range')
+                        return None
+                    numCols = colRange[1] - colRange[0] + 1
+                
+                if x is not None:
+                    if len(x.shape) != 3 or x.shape[0] != len(fileList) or x.shape[1] != numRows or x.shape[2] != numCols:
+                        print('Error: given array size does not match size of data in files!')
+                        return None
+                else:
+                    x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
+                print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
                 for i in range(len(fileList)):
                     #anImage = np.array(Image.open(fileList[ind[i]]))
                     #anImage = np.array(Image.open(fileList[ind[i]]).rotate(-0.5))
                     anImage = np.array(imageio.imread(fileList[ind[i]]))
-                    x[i,:,:] = anImage[:,:]
+                    if rowRange is not None:
+                        if colRange is not None:
+                            x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,colRange[0]:colRange[1]+1]
+                        else:
+                            x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,:]
+                    else:
+                        if colRange is not None:
+                            x[i,:,:] = anImage[:,colRange[0]:colRange[1]+1]
+                        else:
+                            x[i,:,:] = anImage[:,:]
                 os.chdir(currentWorkingDirectory)
                 return x
             '''

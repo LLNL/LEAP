@@ -4,8 +4,7 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-sys.path.append(r'..\utils')
-from preprocessing_algorithms import *
+from leap_preprocessing_algorithms import *
 
 '''
 The script demonstrates two different methods to handle outliers (zingers) in your projection data

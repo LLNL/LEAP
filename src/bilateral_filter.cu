@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright 2022-2024 Lawrence Livermore National Security, LLC and other 
-// LEAP project developers. See the LICENSE file for details.
+// Copyright 2023-2024 Kyle Champley
+// See the LICENSE file for details.
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
@@ -280,7 +280,8 @@ bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, flo
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
 
-    bool useTexture = true;
+    //bool useTexture = true;
+    bool useTexture = false;
 
     cudaTextureObject_t f_data_txt = NULL;
     cudaArray* f_data_array = NULL;
@@ -333,6 +334,118 @@ bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, flo
 }
 
 //*
+bool priorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* Bf, bool data_on_cpu, int whichGPU)
+{
+    if (Bf == NULL)
+        return bilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, data_on_cpu, whichGPU);
+    if (f == NULL) return false;
+
+    spatialFWHM = float(max(0.25, min(100.0, spatialFWHM)));
+    intensityFWHM = float(max(1.0e-8, min(1.0e8, intensityFWHM)));
+
+    // convert FWHM input parameters to sigmas
+    float sigma_d_sq = float(spatialFWHM / (2.0 * sqrt(2.0 * log(2.0))));
+    sigma_d_sq *= sigma_d_sq;
+    float sigma_i_sq = float(intensityFWHM / (2.0 * sqrt(2.0 * log(2.0))));
+    sigma_i_sq *= sigma_i_sq;
+
+    float sigma_d_sq_inv = float(0.5 / sigma_d_sq);
+    float sigma_i_sq_inv = float(0.5 / sigma_i_sq);
+
+    // define filter window width by full width, tenth max
+    int w = max(1, int(ceil(sqrt(2.0 * log(10.0) * sigma_d_sq))));
+
+    cudaSetDevice(whichGPU);
+
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    if (data_on_cpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
+
+    // Allocate space on GPU for the gradient
+    float* dev_Bf = 0;
+    if (data_on_cpu)
+        dev_Bf = copy3DdataToGPU(Bf, N, whichGPU);
+    else
+        dev_Bf = Bf;
+
+    // Allocate space on GPU for the gradient
+    float* dev_Df = 0;
+    if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
+        return false;
+    }
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid = setGridSize(N, dimBlock);
+
+    //bool useTexture = true;
+    bool useTexture = false;
+
+    cudaTextureObject_t f_data_txt = NULL;
+    cudaArray* f_data_array = NULL;
+    cudaTextureObject_t Bf_data_txt = NULL;
+    cudaArray* Bf_data_array = NULL;
+    if (useTexture)
+    {
+        f_data_array = loadTexture(f_data_txt, dev_f, N, false, false);
+        Bf_data_array = loadTexture(Bf_data_txt, dev_Bf, N, false, false);
+        scaledBilateralFilterKernel_txt <<< dimGrid, dimBlock >>> (f_data_txt, Bf_data_txt, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+    }
+    else
+    {
+        scaledBilateralFilterKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Bf, dev_Df, N, sigma_d_sq_inv, sigma_i_sq_inv, w);
+    }
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (useTexture)
+    {
+        cudaFreeArray(f_data_array);
+        cudaDestroyTextureObject(f_data_txt);
+        cudaFreeArray(Bf_data_array);
+        cudaDestroyTextureObject(Bf_data_txt);
+    }
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        /*
+        if (f_out != NULL)
+        {
+            float* dev_Df_shift = &dev_Df[uint64(sliceStart) * uint64(N.y) * uint64(N.z)];
+            int3 N_crop = make_int3(sliceEnd - sliceStart + 1, N_2, N_3);
+            pull3DdataFromGPU(f_out, N_crop, dev_Df_shift, whichGPU);
+        }
+        else //*/
+        pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+    else
+    {
+        // copy dev_Df to dev_f
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * uint64(N.x) * uint64(N.y) * uint64(N.z), cudaMemcpyDeviceToDevice);
+        //cudaDeviceSynchronize();
+    }
+    if (dev_Df != 0)
+    {
+        cudaFree(dev_Df);
+    }
+    if (dev_Bf != 0 && data_on_cpu == true)
+    {
+        cudaFree(dev_Bf);
+    }
+
+    return true;
+}
+
 bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu, int whichGPU)
 {
     if (scale <= 1.0)
@@ -372,6 +485,7 @@ bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWH
         fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
         return false;
     }
+    blurFilter(dev_f, N_1, N_2, N_3, scale, 3, false, whichGPU, -1, -1, dev_Bf);
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
@@ -385,9 +499,8 @@ bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWH
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
 
-    blurFilter(dev_f, N_1, N_2, N_3, scale, 3, false, whichGPU, -1, -1, dev_Bf);
-
-    bool useTexture = true;
+    //bool useTexture = true;
+    bool useTexture = false;
 
     cudaTextureObject_t f_data_txt = NULL;
     cudaArray* f_data_array = NULL;

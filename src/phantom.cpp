@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////////////////////////////////
-// Copyright 2022-2022 Lawrence Livermore National Security, LLC and other 
-// LEAP project developers. See the LICENSE file for details.
+// Copyright 2023-2024 Kyle Champley
+// See the LICENSE file for details.
 // SPDX-License-Identifier: MIT
 //
 // LivermorE AI Projector for Computed Tomography (LEAP)
@@ -126,7 +126,7 @@ bool phantom::addObject(float* f, parameters* params_in, int type, float* c, flo
 	}
 	if (isRotated || (CONE_X <= type && type <= CONE_Z))
 	{
-		float r_max = max(r[0], max(r[1], r[2]));
+		float r_max = sqrt(3.0)*max(r[0], max(r[1], r[2]));
 		minX = int(floor(x_inv(c[0] - r_max - T_x)));
 		maxX = int(ceil(x_inv(c[0] + r_max + T_x)));
 		minY = int(floor(y_inv(c[1] - r_max - T_y)));
@@ -401,8 +401,11 @@ double phantom::lineIntegral(double* p, double* r)
 	//*/
 
 	vector<double> endPoints;
-	double* intersection_0 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
-	double* intersection_1 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
+	vector<int> objectIndices;
+	//double* intersection_0 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
+	//double* intersection_1 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
+	double* intersection_0 = (double*)malloc(size_t(2*int(objects.size())) * sizeof(double));
+	double* intersection_1 = &intersection_0[int(objects.size())];
 	for (int i = 0; i < int(objects.size()); i++)
 	{
 		double ts[2];
@@ -412,6 +415,7 @@ double phantom::lineIntegral(double* p, double* r)
 			endPoints.push_back(ts[1]);
 			intersection_0[i] = ts[0];
 			intersection_1[i] = ts[1];
+			objectIndices.push_back(i);
 			//printf("intersection: %f to %f\n", ts[0], ts[1]);
 		}
 		else
@@ -426,37 +430,46 @@ double phantom::lineIntegral(double* p, double* r)
 	{
 		sort(endPoints.begin(), endPoints.end());
 
+		/*
 		double* arealDensities = (double*)malloc(size_t(int(objects.size()))*sizeof(double));
 		for (int j = 0; j < int(objects.size()); j++)
 			arealDensities[j] = 0.0;
+		//*/
 
 		for (int i = 0; i < int(endPoints.size())-1; i++)
 		{
 			// Consider the interval (allPoints[i], allPoints[i+1])
 			double midPoint = (endPoints[i + 1] + endPoints[i]) / 2.0;
-			for (int j = int(objects.size())-1; j >= 0; j--)
+			//for (int j = int(objects.size())-1; j >= 0; j--)
+			for (int ind = int(objectIndices.size())-1; ind >= 0; ind--)
 			{
-				// Find which object this interval belongs to
-				if (intersection_0[j] <= midPoint && midPoint <= intersection_1[j])
+				int j = objectIndices[ind];
+				//if (objects[j].val != 0.0)
 				{
-					//if (isnan(arealDensities[j]))
-					//	arealDensities[j] = 0.0;
-					arealDensities[j] += objects[j].val * (endPoints[i + 1] - endPoints[i]);
-					break;
+					// Find which object this interval belongs to
+					if (intersection_0[j] <= midPoint && midPoint <= intersection_1[j])
+					{
+						//if (isnan(arealDensities[j]))
+						//	arealDensities[j] = 0.0;
+						//arealDensities[j] += objects[j].val * (endPoints[i + 1] - endPoints[i]);
+						retVal += objects[j].val * (endPoints[i + 1] - endPoints[i]);
+						break;
+					}
 				}
 			}
 		}
+		/*
 		for (int j = 0; j < int(objects.size()); j++)
 		{
 			//if (isnan(arealDensities[j]))
 			//	arealDensities[j] = 0.0;
 			retVal += arealDensities[j];
 		}
-
 		free(arealDensities);
+		//*/
 	}
 	free(intersection_0);
-	free(intersection_1);
+	//free(intersection_1);
 	return retVal;
 }
 
@@ -655,11 +668,13 @@ bool geometricObject::intersectionEndPoints(double* p, double* r, double* ts)
 	//printf("q = (%f, %f, %f)\n", q[0], q[1], q[2]);
 	//printf("Minv_r = (%f, %f, %f)\n", Minv_r[0], Minv_r[1], Minv_r[2]);
 
-	intersectionEndPoints_centeredAndNormalized(q, Minv_r, ts);
+	if (intersectionEndPoints_centeredAndNormalized(q, Minv_r, ts) == false)
+		return false;
 	if (parametersOfClippingPlaneIntersections(ts, p, r) == false)
 	{
 		ts[0] = -OUT_OF_BOUNDS;
 		ts[1] = ts[0];
+		return false;
 	}
 	if (ts[1] > ts[0])
 		return true;
@@ -676,29 +691,34 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 
 	// r != (0,0,1)
 	double r_dot_r = r[0] * r[0] + r[1] * r[1] + r[2] * r[2];
+	double p_dot_r = r[0] * p[0] + r[1] * p[1] + r[2] * p[2];
 	//double t0 = (r[0]*p[0] + r[1]*p[1] + r[2]*p[2])/r_dot_r;
+	/*
 	if (type != phantom::CONE_Y && type != phantom::CONE_Z && type != phantom::CONE_X)
 	{
-		double t0 = -(r[0] * p[0] + r[1] * p[1] + r[2] * p[2]) / r_dot_r;
+		double t0 = -p_dot_r / r_dot_r;
 		//if (fabs(p[0]+t0*r[0]) > 1.0 || fabs(p[1]+t0*r[1]) > 1.0 || fabs(p[2]+t0*r[2]) > 1.0)
 		//if ((p[0]-t0*r[0])*(p[0]-t0*r[0]) + (p[1]-t0*r[1])*(p[1]-t0*r[1]) + (p[2]-t0*r[2])*(p[2]-t0*r[2]) > 3.0)
 		if ((p[0] + t0 * r[0]) * (p[0] + t0 * r[0]) + (p[1] + t0 * r[1]) * (p[1] + t0 * r[1]) + (p[2] + t0 * r[2]) * (p[2] + t0 * r[2]) > 3.0)
-			return ts;
+			return false;
 	}
+	//*/
 
 	if (type == phantom::ELLIPSOID)
 	{
 		//double p_dot_r = dot(p,r);
-		double p_dot_r = r[0] * p[0] + r[1] * p[1] + r[2] * p[2];
+		//double p_dot_r = r[0] * p[0] + r[1] * p[1] + r[2] * p[2];
 		//double p_dot_r = t0*r_dot_r;
-		double disc = p_dot_r * p_dot_r + r_dot_r * (1.0 - dot(p, p));
-		//double disc = p_dot_r*p_dot_r + r_dot_r*(1.0 - (p[0]*p[0]+p[1]*p[1]+p[2]*p[2]));
+		//double disc = p_dot_r * p_dot_r + r_dot_r * (1.0 - dot(p, p));
+		double disc = p_dot_r * p_dot_r + r_dot_r * (1.0 - (p[0]*p[0] + p[1]*p[1] + p[2]*p[2]));
 		if (disc > 0.0)
 		{
 			disc = sqrt(disc);
 			ts[0] = (-p_dot_r - disc) / r_dot_r;
 			ts[1] = (-p_dot_r + disc) / r_dot_r;
 		}
+		else
+			return false;
 	}
 	else if (type == phantom::PARALLELEPIPED)
 	{
@@ -714,18 +734,29 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 					ts[0] = max(max(tx[0], ty[0]), tz[0]);
 					ts[1] = min(min(tx[1], ty[1]), tz[1]);
 				}
+				else
+					return false;
 			}
+			else
+				return false;
 		}
+		else
+			return false;
 	}
 	else if (type == phantom::CYLINDER_Z)
 	{
-		double r_dot_r_2D = r[0] * r[0] + r[1] * r[1];
-		double disc = (p[0] * r[0] + p[1] * r[1]) * (p[0] * r[0] + p[1] * r[1]) - r_dot_r_2D * (p[0] * p[0] + p[1] * p[1] - 1.0);
+		//double r_dot_r_2D = r[0] * r[0] + r[1] * r[1]; // 3
+		double r_dot_r_2D = r_dot_r - r[2] * r[2]; // 2
+		double p_dor_r_2D = p_dot_r - p[2] * r[2]; // 2
+		//double disc = (p[0] * r[0] + p[1] * r[1]) * (p[0] * r[0] + p[1] * r[1]) - r_dot_r_2D * (p[0] * p[0] + p[1] * p[1] - 1.0); // 13
+		double disc = p_dor_r_2D * p_dor_r_2D - r_dot_r_2D * (p[0] * p[0] + p[1] * p[1] - 1.0); // 7
 		if (disc > 0.0)
 		{
 			disc = sqrt(disc);
-			double tmin = (-(p[0] * r[0] + r[1] * p[1]) - disc) / r_dot_r_2D;
-			double tmax = (-(p[0] * r[0] + r[1] * p[1]) + disc) / r_dot_r_2D;
+			//double tmin = (-(p[0] * r[0] + r[1] * p[1]) - disc) / r_dot_r_2D; // 5
+			//double tmax = (-(p[0] * r[0] + r[1] * p[1]) + disc) / r_dot_r_2D; // 5
+			double tmin = (-p_dor_r_2D - disc) / r_dot_r_2D; // 2
+			double tmax = (-p_dor_r_2D + disc) / r_dot_r_2D; // 2
 
 			double tz[2];
 			if (parametersOfIntersection_1D(&tz[0], p[2], r[2]) == true)
@@ -733,15 +764,20 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 				ts[0] = max(tmin, tz[0]);
 				ts[1] = min(tmax, tz[1]);
 			}
+			else
+				return false;
 		}
 		else if (r[0] == 0.0 && r[1] == 0.0 && p[0] * p[0] + p[1] * p[1] <= 1.0)
 		{
-			parametersOfIntersection_1D(ts, p[2], r[2]);
+			return parametersOfIntersection_1D(ts, p[2], r[2]);
 		}
+		else
+			return false;
 	}
 	else if (type == phantom::CYLINDER_X) // ellipsoidal cross sections parallel to x-y axis
 	{
-		double r_dot_r_2D = r[2] * r[2] + r[1] * r[1];
+		//double r_dot_r_2D = r[2] * r[2] + r[1] * r[1];
+		double r_dot_r_2D = r_dot_r - r[0] * r[0];
 		double disc = (p[2] * r[2] + p[1] * r[1]) * (p[2] * r[2] + p[1] * r[1]) - r_dot_r_2D * (p[2] * p[2] + p[1] * p[1] - 1.0);
 		if (disc > 0.0)
 		{
@@ -755,15 +791,20 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 				ts[0] = max(tmin, tz[0]);
 				ts[1] = min(tmax, tz[1]);
 			}
+			else
+				return false;
 		}
 		else if (r[1] == 0.0 && r[2] == 0.0 && p[1] * p[1] + p[2] * p[2] <= 1.0)
 		{
-			parametersOfIntersection_1D(ts, p[0], r[0]);
+			return parametersOfIntersection_1D(ts, p[0], r[0]);
 		}
+		else
+			return false;
 	}
 	else if (type == phantom::CYLINDER_Y) // ellipsoidal cross sections parallel to x-y axis
 	{
-		double r_dot_r_2D = r[0] * r[0] + r[2] * r[2];
+		//double r_dot_r_2D = r[0] * r[0] + r[2] * r[2];
+		double r_dot_r_2D = r_dot_r - r[1] * r[1];
 		double disc = (p[0] * r[0] + p[2] * r[2]) * (p[0] * r[0] + p[2] * r[2]) - r_dot_r_2D * (p[0] * p[0] + p[2] * p[2] - 1.0);
 		if (disc > 0.0)
 		{
@@ -777,11 +818,15 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 				ts[0] = max(tmin, tz[0]);
 				ts[1] = min(tmax, tz[1]);
 			}
+			else
+				return false;
 		}
 		else if (r[0] == 0.0 && r[2] == 0.0 && p[0] * p[0] + p[2] * p[2] <= 1.0)
 		{
-			parametersOfIntersection_1D(ts, p[1], r[1]);
+			return parametersOfIntersection_1D(ts, p[1], r[1]);
 		}
+		else
+			return false;
 	}
 	else if (type == phantom::CONE_Z)
 	{
@@ -811,7 +856,11 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 				ts[0] = max(tmin, tz[0]);
 				ts[1] = min(tmax, tz[1]);
 			}
+			else
+				return false;
 		}
+		else
+			return false;
 	}
 	else if (type == phantom::CONE_X)
 	{
@@ -841,7 +890,11 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 				ts[0] = max(tmin, tz[0]);
 				ts[1] = min(tmax, tz[1]);
 			}
+			else
+				return false;
 		}
+		else
+			return false;
 	}
 	else if (type == phantom::CONE_Y)
 	{
@@ -936,6 +989,7 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 							{
 								ts[0] = -OUT_OF_BOUNDS;
 								ts[1] = ts[0];
+								return false;
 							}
 						}
 					}
@@ -952,12 +1006,14 @@ bool geometricObject::intersectionEndPoints_centeredAndNormalized(double* p, dou
 	{
 		ts[0] = -OUT_OF_BOUNDS;
 		ts[1] = -OUT_OF_BOUNDS;
+		return false;
 	}
 
 	if (ts[0] >= ts[1])
 	{
 		ts[0] = -OUT_OF_BOUNDS;
 		ts[1] = ts[0];
+		return false;
 	}
 
 	return true;
