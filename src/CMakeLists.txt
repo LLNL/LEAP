@@ -3,8 +3,8 @@
 # You could use cmake as old as version 3.18 if you replaced
 # the line below that specifies all-major with the line below
 # it which specifies the list of CUDA architectures 
-cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
-#cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
+#cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
 
 project(leapct CXX CUDA)
 
@@ -157,7 +157,11 @@ target_compile_options(leapct PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
 
 #set_property(TARGET leapct PROPERTY CXX_STANDARD 14)
 #set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES native)
-set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
+if(CMAKE_VERSION VERSION_GREATER "3.23")
+    message("Building for all major cuda architectures")
+    set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
+endif()
+#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
 #set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 60 61 62 70 72 75 80 86 87 89)
 #set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 75 86 87 89)
 #set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES OFF)

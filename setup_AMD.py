@@ -79,15 +79,18 @@ if cuda:
     if rocm: # AMD ROCM GPU
         extra_compile_args={'cxx': ['-D__USE_GPU'], 
                             'nvcc': ['-D__USE_GPU', '-O3']}
+        libraries = []
     else: # CUDA GPU
         #extra_compile_args={'cxx': ['-D__USE_GPU'], 
         #                    'nvcc': ['-D__USE_GPU', '-O3']}
         extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
                             'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
+        libraries = ['cufft']
     ext_mod = CUDAExtension(
         name='leapct',
         sources=source_files,
         extra_compile_args=extra_compile_args,
+        libraries = libraries,
         #extra_link_args=["-lcufft"], 
         extra_cflags=['-O3'])
 else:

@@ -28,7 +28,7 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow = -1);
 bool findCenter_fan_cpu(float* g, parameters* params, int iRow = -1);
 bool findCenter_cone_cpu(float* g, parameters* params, int iRow = -1);
 
-bool setDefaultRange_centerCol(int numCols, int& centerCol_low, int& centerCol_high);
+bool setDefaultRange_centerCol(parameters* params, int& centerCol_low, int& centerCol_high);
 float findMinimum(double* costVec, int startInd, int endInd, bool findOnlyLocalMin = true);
 
 #endif

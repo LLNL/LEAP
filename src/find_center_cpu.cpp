@@ -14,6 +14,7 @@
 #include "find_center_cpu.h"
 
 using namespace std;
+#define USE_MEAN_DIFFERENCE_METRIC
 
 bool findCenter_cpu(float* g, parameters* params, int iRow)
 {
@@ -68,7 +69,7 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 
 	int centerCol_low, centerCol_high;
 
-	setDefaultRange_centerCol(params->numCols, centerCol_low, centerCol_high);
+	setDefaultRange_centerCol(params, centerCol_low, centerCol_high);
 
 	double* shiftCosts = (double*)malloc(sizeof(double) * params->numCols);
 
@@ -90,6 +91,7 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 		float u_0 = -(float(n) + params->colShiftFromFilter) * params->pixelWidth;
 
 		double num = 0.0;
+		double count = 0.0;
 		for (int i = 0; i <= conj_ind - 1; i++)
 		{
 			float phi = params->phis[i];
@@ -122,13 +124,21 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 							//	printf("%f and %f\n", val, val_conj);
 
 							num += (val - val_conj) * (val - val_conj);
+							count += 1.0;
 						}
 					}
 				}
 			}
 		}
 		//printf("%f ", num);
+#ifdef USE_MEAN_DIFFERENCE_METRIC
+		if (count > 0.0)
+			shiftCosts[n] = num / count;
+		else
+			shiftCosts[n] = 0.0;
+#else
 		shiftCosts[n] = num;
+#endif
 	}
 
 	for (int i = centerCol_low; i <= centerCol_high; i++)
@@ -162,7 +172,7 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 
 	int centerCol_low, centerCol_high;
 
-	setDefaultRange_centerCol(params->numCols, centerCol_low, centerCol_high);
+	setDefaultRange_centerCol(params, centerCol_low, centerCol_high);
 	
 	double* shiftCosts = (double*)malloc(sizeof(double) * params->numCols);
 
@@ -193,6 +203,7 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 			u_0 = -(float(n) + params->colShiftFromFilter) * atanTu;
 
 		double num = 0.0;
+		double count = 0.0;
 		for (int i = 0; i <= conj_ind - 1; i++)
 		{
 			float phi = params->phis[i];
@@ -225,12 +236,20 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 						//	printf("%f and %f\n", val, val_conj);
 
 						num += (val - val_conj) * (val - val_conj);
+						count += 1.0;
 					}
 				}
 			}
 		}
 		//printf("%f ", num);
+#ifdef USE_MEAN_DIFFERENCE_METRIC
+		if (count > 0.0)
+			shiftCosts[n] = num / count;
+		else
+			shiftCosts[n] = 0.0;
+#else
 		shiftCosts[n] = num;
+#endif
 	}
 
 	for (int i = centerCol_low; i <= centerCol_high; i++)
@@ -285,15 +304,17 @@ float findMinimum(double* costVec, int startInd, int endInd, bool findOnlyLocalM
 	return retVal;
 }
 
-bool setDefaultRange_centerCol(int numCols, int& centerCol_low, int& centerCol_high)
+bool setDefaultRange_centerCol(parameters* params, int& centerCol_low, int& centerCol_high)
 {
 	double c = 0.23;
+	if (params->offsetScan == true)
+		c = 0.1;
 	int N_trim = 50;
-	if (numCols < 200)
+	if (params->numCols < 200)
 		N_trim = 5;
 
-	centerCol_low = int(floor(c * numCols));
-	centerCol_high = int(ceil(numCols - c * numCols));
+	centerCol_low = int(floor(c * params->numCols));
+	centerCol_high = int(ceil(params->numCols - c * params->numCols));
 
 	/*
 	if (left_center_right == -1)
@@ -306,12 +327,12 @@ bool setDefaultRange_centerCol(int numCols, int& centerCol_low, int& centerCol_h
 		centerCol_high = numCols - 1 - N_trim;
 	//*/
 
-	centerCol_low = max(0, min(numCols - 1, centerCol_low));
-	centerCol_high = max(0, min(numCols - 1, centerCol_high));
+	centerCol_low = max(0, min(params->numCols - 1, centerCol_low));
+	centerCol_high = max(0, min(params->numCols - 1, centerCol_high));
 	if (centerCol_low > centerCol_high)
 	{
 		centerCol_low = 5;
-		centerCol_high = numCols - 1 - 5;
+		centerCol_high = params->numCols - 1 - 5;
 	}
 	return true;
 }

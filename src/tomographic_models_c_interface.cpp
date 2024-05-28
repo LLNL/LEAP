@@ -931,7 +931,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("shift_detector", &shift_detector, "");
     m.def("set_flatDetector", &set_flatDetector, "");
     m.def("set_curvedDetector", &set_curvedDetector, "");
-    m.def("int get_detectorType", &int get_detectorType, "");
+    m.def("get_detectorType", &get_detectorType, "");
     m.def("set_numCols", &set_numCols, "");
     m.def("set_numRows", &set_numRows, "");
     m.def("set_pixelHeight", &set_pixelHeight, "");
@@ -940,7 +940,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("set_centerRow", &set_centerRow, "");
     m.def("set_volume", &set_volume, "");
     m.def("set_volumeDimensionOrder", &set_volumeDimensionOrder, "");
-    m.def("int get_volumeDimensionOrder", &int get_volumeDimensionOrder, "");
+    m.def("get_volumeDimensionOrder", &get_volumeDimensionOrder, "");
     m.def("set_default_volume", &set_default_volume, "");
     m.def("set_numZ", &set_numZ, "");
     m.def("set_numY", &set_numY, "");
