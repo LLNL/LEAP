@@ -63,6 +63,7 @@ cuda_files=[
     'sensitivity.cu', 
     'resample.cu', 
     'total_variation.cu',
+    'geometric_calibration.cu',
 ]
 
 cuda = torch.cuda.is_available()

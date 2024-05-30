@@ -32,6 +32,7 @@
 #include "bilateral_filter.cuh"
 #include "guided_filter.cuh"
 #include "scatter_models.cuh"
+#include "geometric_calibration.cuh"
 #endif
 
 #include "log.h"
@@ -2765,6 +2766,24 @@ bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
 		printf("Error: find_centerCol not yet implemented for data on the GPU\n");
 		return false;
 	}
+}
+
+float tomographicModels::consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: consistency_cost not yet implemented for data on the CPU\n");
+		return -1.0;
+	}
+	else
+	{
+		return consistencyCost(g, &params, data_on_cpu, Delta_centerRow, Delta_centerCol, Delta_tau, Delta_tilt);
+	}
+#else
+	printf("Error: consistency_cost not yet implemented for data on the CPU\n");
+	return -1.0;
+#endif
 }
 
 bool tomographicModels::Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu)

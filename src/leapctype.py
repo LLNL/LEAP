@@ -685,6 +685,33 @@ class tomographicModels:
             self.libprojectors.find_centerCol(g, iRow, True)
         return g
         
+    def consistency_cost(self, g, Delta_centerRow=0.0, Delta_centerCol=0.0, Delta_tau=0.0, Delta_tilt=0.0):
+        """Calculates a cost metric for the given CT geometry perturbations
+
+        Note that it only works for the cone-beam CT geometry type
+        and the projections cannot be truncated on the right or left sides.
+        If you have any bad edge detectors, these must be cropped out before running this algorithm.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            Delta_centerRow (float): detector shift (detector row pixel index) in the row direction
+            Delta_centerCol (float): detector shift (detector column pixel index) in the column direction
+            Delta_tau (float): horizonal shift (mm) of the detector; can also be used to model detector rotations along the vector pointing across the detector rows
+            Delta_tilt (float): detector rotation (degree) around the optical axis
+            
+        Returns:
+            the cost value of the metric
+        
+        """
+        self.libprojectors.consistency_cost.restype = ctypes.c_float
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.consistency_cost.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.consistency_cost(g.data_ptr(), Delta_centerRow, Delta_centerCol, Delta_tau, Delta_tilt, g.is_cuda == False)
+        else:
+            self.libprojectors.consistency_cost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.consistency_cost(g, Delta_centerRow, Delta_centerCol, Delta_tau, Delta_tilt, True)
+        
     def set_centerRow(self, centerRow):
         """Set centerRow parameter"""
         self.set_model()

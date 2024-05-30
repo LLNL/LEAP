@@ -582,6 +582,19 @@ public:
 	bool find_centerCol(float* g, int iRow, bool data_on_cpu);
 
 	/**
+	 * \fn          consistency_cost
+	 * \brief       calculates of geometric calibration cost with the given perturbations
+	 * \param[in]   g: pointer to the projection data
+	 * \param[in]	Delta_centerRow: detector shift (detector row pixel index) in the row direction
+	 * \param[in]	Delta_centerCol: detector shift (detector column pixel index) in the column direction
+	 * \param[in]	Delta_tau: horizonal shift (mm) of the detector; can also be used to model detector rotations along the vector pointing across the detector rows
+	 * \param[in]	Delta_tilt: rotation (degrees) of the detector around the optical axis
+	 * \param[in]   data_on_cpu: true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      cost of the calibration metric
+	 */
+	float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu);
+
+	/**
 	 * \fn          Laplacian
 	 * \brief       Applies the 2D Laplacian to each projection
 	 * \param[in]   g pointer to the projection data

@@ -741,6 +741,11 @@ bool find_centerCol(float* g, int iRow, bool data_on_cpu)
 	return tomo()->find_centerCol(g, iRow, data_on_cpu);
 }
 
+float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu)
+{
+	return tomo()->consistency_cost(g, Delta_centerRow, Delta_centerCol, Delta_tau, Delta_tilt, data_on_cpu);
+}
+
 bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu)
 {
 	return tomo()->Laplacian(g, numDims, smooth, data_on_cpu);

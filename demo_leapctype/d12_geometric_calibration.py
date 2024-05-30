@@ -65,10 +65,10 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 # Add noise to the data (just for demonstration purposes)
 print('Adding noise to data...')
 I_0 = 50000.0
-g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 
-whichDemo = 2
+whichDemo = 4
 if whichDemo == 1:
     # In this first demo, we show how LEAP can estimate the centerCol parameter
     # by minimizing the differences of conjugate rays.
@@ -128,4 +128,8 @@ elif whichDemo == 3:
     f_stack = parameter_sweep(leapct, g, tiltAnglesInDegrees, 'tilt', iz=None, algorithmName='inconsistencyReconstruction')
     leapct.display(f_stack)
     
+elif whichDemo == 4:
+    print(leapct.consistency_cost(g, Delta_centerRow=-2.0, Delta_centerCol=0.0, Delta_tilt=0.0))
+    print(leapct.consistency_cost(g, Delta_centerRow=0.0, Delta_centerCol=0.0, Delta_tilt=0.0))
+    print(leapct.consistency_cost(g, Delta_centerRow=2.0, Delta_centerCol=0.0, Delta_tilt=0.0))
     

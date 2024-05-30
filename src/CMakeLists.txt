@@ -55,6 +55,7 @@ set(HEADER
   matching_pursuit.cuh
   bilateral_filter.cuh
   guided_filter.cuh
+  geometric_calibration.cuh
   find_center_cpu.h
   sinogram_replacement.h
   resample_cpu.h
@@ -108,6 +109,7 @@ set(SRC_CU
   matching_pursuit.cu
   bilateral_filter.cu
   guided_filter.cu
+  geometric_calibration.cu
   ray_weighting.cu
   scatter_models.cu
   cuda_utils.cu

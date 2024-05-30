@@ -442,6 +442,8 @@ bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int
     }
     //*/
 
+    cudaSetDevice(whichGPU);
+
     // Calculate the number of non-overlapping patches across the whole volume
     int3 N_tiles = make_int3(int(ceil(float(N_1) / float(num1))), int(ceil(float(N_2) / float(num2))), int(ceil(float(N_3) / float(num3))));
     uint64 N_tiles_prod = uint64(N_tiles.x) * uint64(N_tiles.y) * uint64(N_tiles.z);
@@ -501,7 +503,6 @@ bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int
         return false;
     //*/
 
-    cudaSetDevice(whichGPU);
     //cudaError_t cudaStatus;
 
     // Copy volume to GPU
@@ -606,6 +607,8 @@ bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionar
     // Number of pixels in a patch
     int numPatchPixels = num1 * num2 * num3;
 
+    cudaSetDevice(whichGPU);
+
     // Allocate space for temporary arrays
     //int* indexMap = (int*)malloc(size_t(numPatches) * sizeof(int));
     int* dev_indexMap = 0;
@@ -639,7 +642,6 @@ bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionar
         return false;
     //*/
 
-    cudaSetDevice(whichGPU);
     //cudaError_t cudaStatus;
 
     // Copy volume to GPU

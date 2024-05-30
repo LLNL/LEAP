@@ -182,6 +182,7 @@ extern "C" PROJECTOR_API float get_offsetZ();
 extern "C" PROJECTOR_API float get_z0();
 
 extern "C" PROJECTOR_API bool find_centerCol(float* g, int iRow, bool data_on_cpu);
+extern "C" PROJECTOR_API float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu);
 extern "C" PROJECTOR_API bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu);

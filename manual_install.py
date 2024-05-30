@@ -15,13 +15,18 @@ import shutil
 from sys import platform as _platform
 
 if _platform == "linux" or _platform == "linux2":
-    fname_list = ['libleapct.so', 'src/leaptorch.py', 'src/leapctype.py', 'src/leap_filter_sequence.py']
+    fname_list = ['libleapct.so']
     
 elif _platform == "win32":
-    fname_list = ['libleapct.dll', r'src\leaptorch.py', r'src\leapctype.py', r'src\leap_filter_sequence.py']
+    fname_list = ['libleapct.dll']
     
 elif _platform == "darwin":
-    fname_list = ['libleapct.dylib', 'src/leaptorch.py', 'src/leapctype.py', 'src/leap_filter_sequence.py']
+    fname_list = ['libleapct.dylib']
+
+fname_list.append('src/leaptorch.py')
+fname_list.append('src/leapctype.py')
+fname_list.append('src/leap_filter_sequence.py')
+fname_list.append('src/leap_preprocessing_algorithms.py')
     
 current_dir = os.path.dirname(os.path.realpath(__file__))
 if os.path.isfile(os.path.join(current_dir, fname_list[0])) == False:
