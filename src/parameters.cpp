@@ -1491,6 +1491,13 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 				}
 
 				float accountForClockingAndPixelSize = fabs(u_vec[2] * 0.5 * pixelWidth * float(numCols - 1)) + 0.5 * pixelHeight;
+				//printf("accountForClockingAndPixelSize = %f\n", accountForClockingAndPixelSize);
+
+				//*
+				v_lo -= accountForClockingAndPixelSize;
+				v_hi += accountForClockingAndPixelSize;
+				//*/
+				/*
 				if (v_lo < 0.0)
 					v_lo -= accountForClockingAndPixelSize;
 				if (v_hi < 0.0)
@@ -1499,6 +1506,7 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 					v_lo += accountForClockingAndPixelSize;
 				if (v_hi > 0.0)
 					v_hi += accountForClockingAndPixelSize;
+				//*/
 
 				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - v_0()) / pixelHeight)))));
 				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));
@@ -1515,6 +1523,11 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 				t_hi = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
 				v_hi = (s[0] + t_hi * r[0] - c[0]) * v_vec[0] + (s[1] + t_hi * r[1] - c[1]) * v_vec[1] + (s[2] + t_hi * r[2] - c[2]) * v_vec[2];
 
+				//*
+				v_lo -= accountForClockingAndPixelSize;
+				v_hi += accountForClockingAndPixelSize;
+				//*/
+				/*
 				if (v_lo < 0.0)
 					v_lo -= accountForClockingAndPixelSize;
 				if (v_hi < 0.0)
@@ -1523,6 +1536,7 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 					v_lo += accountForClockingAndPixelSize;
 				if (v_hi > 0.0)
 					v_hi += accountForClockingAndPixelSize;
+				//*/
 
 				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - v_0()) / pixelHeight)))));
 				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));

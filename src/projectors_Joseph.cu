@@ -19,6 +19,181 @@
 #include "ray_weighting.cuh"
 #include "ray_weighting_cpu.h"
 
+//*
+__global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOVsq)
+{
+    const int l = threadIdx.x + blockIdx.x * blockDim.x;
+    const int m = threadIdx.y + blockIdx.y * blockDim.y;
+    const int n = threadIdx.z + blockIdx.z * blockDim.z;
+    if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
+        return;
+
+    float* moduleCenter = &moduleCenters[3 * l];
+    const float3 p = make_float3(sourcePositions[3 * l + 0], sourcePositions[3 * l + 1], sourcePositions[3 * l + 2]);
+    const float3 u_vec = make_float3(colVectors[3 * l + 0], colVectors[3 * l + 1], colVectors[3 * l + 2]);
+    const float3 v_vec = make_float3(rowVectors[3 * l + 0], rowVectors[3 * l + 1], rowVectors[3 * l + 2]);
+
+    //const float3 detNormal = make_float3(u_vec.y * v_vec.z - u_vec.z * v_vec.y,
+    //    u_vec.z * v_vec.x - u_vec.x * v_vec.z,
+    //    u_vec.x * v_vec.y - u_vec.y * v_vec.x);
+
+    const float u_vec_flat_normalizer = rsqrtf(u_vec.x * u_vec.x + u_vec.y * u_vec.y);
+    const float3 u_vec_flat = make_float3(u_vec.x* u_vec_flat_normalizer, u_vec.y* u_vec_flat_normalizer, 0.0f);
+
+    const float t = m * T_g.y + startVals_g.y; // row
+    const float s = n * T_g.z + startVals_g.z; // column
+
+    const float m_pos = float(m) + 0.5f;
+    const float m_neg = float(m) - 0.5f;
+    const float n_pos = float(n) + 0.5f;
+    const float n_neg = float(n) - 0.5f;
+
+    const float T_u_inv = 1.0f / T_g.z;
+    const float T_v_inv = 1.0f / T_g.y;
+    const float T_x_inv = 1.0f / T_f.x;
+    const float T_y_inv = 1.0f / T_f.y;
+    const float T_z_inv = 1.0f / T_f.z;
+
+    const float3 detPos = make_float3(moduleCenter[0] + u_vec.x * s + v_vec.x * t, moduleCenter[1] + u_vec.y * s + v_vec.y * t, moduleCenter[2] + u_vec.z * s + v_vec.z * t);
+    const float3 r = make_float3(detPos.x - p.x, detPos.y - p.y, detPos.z - p.z);
+    const float D = sqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
+
+    const float3 p_minus_c = make_float3(p.x - moduleCenter[0], p.y - moduleCenter[1], p.z - moduleCenter[2]);
+
+    const float p_minus_c_dot_u = p_minus_c.x * u_vec.x + p_minus_c.y * u_vec.y + p_minus_c.z * u_vec.z;
+    const float p_minus_c_dot_v = p_minus_c.x * v_vec.x + p_minus_c.y * v_vec.y + p_minus_c.z * v_vec.z;
+
+    float g_output = 0.0f;
+
+    // Line Integral: p + t*r
+    if (fabs(r.y) > fabs(r.x))
+    {
+        const float r_y_inv = 1.0f / r.y;
+        for (int j = 0; j < N_f.y; j++)
+        {
+            const float y = (float)j * T_f.y + startVals_f.y;
+            const float x = p.x + (y - p.y) * r_y_inv * r.x;
+            if (x * x + y * y > rFOVsq)
+                continue;
+            const float z = p.z + (y - p.y) * r_y_inv * r.z;
+
+            // Calculate the index and position of central voxel
+            const int ix = int(0.5f + (x - startVals_f.x) * T_x_inv);
+            const int iz = int(0.5f + (z - startVals_f.z) * T_z_inv);
+            const float x_c = ix * T_f.x + startVals_f.x;
+            const float z_c = iz * T_f.z + startVals_f.z;
+
+            // consider: three x positions and three z positions
+            const float vox_dist_inv = rsqrtf((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) + (p.z - z) * (p.z - z));
+            const float t = D * vox_dist_inv;
+
+            const float iu_c = (p_minus_c_dot_u + t * ((x_c - p.x) * u_vec.x + (y - p.y) * u_vec.y + (z_c - p.z) * u_vec.z) - startVals_g.z) * T_u_inv;
+            const float iv_c = (p_minus_c_dot_v + t * ((x_c - p.x) * v_vec.x + (y - p.y) * v_vec.y + (z_c - p.z) * v_vec.z) - startVals_g.y) * T_v_inv;
+
+            const float horizontal_footprint_half_width = 0.5f * T_f.x * t * fabs(u_vec_flat.x) * T_u_inv;
+            const float vertical_footprint_half_width = 0.5f * T_f.z * t * T_v_inv;
+
+            float hWeight_0;
+            if (u_vec_flat.x > 0.0f)
+                hWeight_0 = max(0.0f, min(n_pos, iu_c - horizontal_footprint_half_width) - max(n_neg, iu_c - 2.0f * horizontal_footprint_half_width));
+            else
+                hWeight_0 = max(0.0f, min(n_pos, iu_c + 2.0f * horizontal_footprint_half_width) - max(n_neg, iu_c + horizontal_footprint_half_width));
+            const float hWeight_1 = max(0.0f, min(n_pos, iu_c + horizontal_footprint_half_width) - max(n_neg, iu_c - horizontal_footprint_half_width));
+            //const float hWeight_2 = max(0.0f, min(n_pos, iu_c + 2.0f*horizontal_footprint_half_width) - max(n_neg, iu_c + horizontal_footprint_half_width));
+            const float hWeight_2 = max(0.0f, 1.0f - hWeight_1 - hWeight_0);
+
+            const float vWeight_0 = max(0.0f, min(m_pos, iv_c - vertical_footprint_half_width) - max(m_neg, iv_c - 2.0f * vertical_footprint_half_width));
+            const float vWeight_1 = max(0.0f, min(m_pos, iv_c + vertical_footprint_half_width) - max(m_neg, iv_c - vertical_footprint_half_width));
+            //const float vWeight_2 = max(0.0f, min(m_pos, iv_c + 2.0f * vertical_footprint_half_width) - max(m_neg, iv_c + vertical_footprint_half_width));
+            const float vWeight_2 = max(0.0f, 1.0f - vWeight_1 - vWeight_0);
+
+            const float x_12 = float(ix-1) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1);
+            const float z_12 = float(iz-1) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
+
+            if (volumeDimensionOrder == 0)
+            {
+                g_output += (tex3D<float>(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, float(iz + 1) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, z_12, float(j) + 0.5f, float(ix + 1) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(iz + 1) + 0.5f, float(j) + 0.5f, float(ix + 1) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+            else
+            {
+                g_output += (tex3D<float>(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, x_12, float(j) + 0.5f, float(iz + 1) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, float(ix + 1) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(ix + 1) + 0.5f, float(j) + 0.5f, float(iz + 1) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+        }
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(r.x*r.x + r.y*r.y) * fabs(r_y_inv) * g_output;
+    }
+    else
+    {
+        const float r_x_inv = 1.0f / r.x;
+        for (int i = 0; i < N_f.x; i++)
+        {
+            const float x = (float)i * T_f.x + startVals_f.x;
+            const float y = p.y + (x - p.x) * r_x_inv * r.y;
+            if (x * x + y * y > rFOVsq)
+                continue;
+
+            const float z = p.z + (x - p.x) * r_x_inv * r.z;
+
+            // Calculate the index and position of central voxel
+            const int iy = int(0.5f + (y - startVals_f.y) * T_y_inv);
+            const int iz = int(0.5f + (z - startVals_f.z) * T_z_inv);
+            const float y_c = iy * T_f.y + startVals_f.y;
+            const float z_c = iz * T_f.z + startVals_f.z;
+
+            // consider: three x positions and three z positions
+            const float vox_dist_inv = rsqrtf((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) + (p.z - z) * (p.z - z));
+            const float t = D * vox_dist_inv;
+
+            const float iu_c = (p_minus_c_dot_u + t * ((x - p.x) * u_vec.x + (y_c - p.y) * u_vec.y + (z_c - p.z) * u_vec.z) - startVals_g.z) * T_u_inv;
+            const float iv_c = (p_minus_c_dot_v + t * ((x - p.x) * v_vec.x + (y_c - p.y) * v_vec.y + (z_c - p.z) * v_vec.z) - startVals_g.y) * T_v_inv;
+
+            const float horizontal_footprint_half_width = 0.5f * T_f.y * t * fabs(u_vec_flat.y) * T_u_inv;
+            const float vertical_footprint_half_width = 0.5f * T_f.z * t * T_v_inv;
+
+            //const float hWeight_0 = max(0.0f, min(n_pos, iu_c - horizontal_footprint_half_width) - max(n_neg, iu_c - 2.0f * horizontal_footprint_half_width));
+            float hWeight_0;
+            if (u_vec_flat.y > 0.0f)
+                hWeight_0 = max(0.0f, min(n_pos, iu_c - horizontal_footprint_half_width) - max(n_neg, iu_c - 2.0f * horizontal_footprint_half_width));
+            else
+                hWeight_0 = max(0.0f, min(n_pos, iu_c + 2.0f * horizontal_footprint_half_width) - max(n_neg, iu_c + horizontal_footprint_half_width));
+            const float hWeight_1 = max(0.0f, min(n_pos, iu_c + horizontal_footprint_half_width) - max(n_neg, iu_c - horizontal_footprint_half_width));
+            //const float hWeight_2 = max(0.0f, min(n_pos, iu_c + 2.0f * horizontal_footprint_half_width) - max(n_neg, iu_c + horizontal_footprint_half_width));
+            const float hWeight_2 = max(0.0f, 1.0f - hWeight_1 - hWeight_0);
+
+            const float vWeight_0 = max(0.0f, min(m_pos, iv_c - vertical_footprint_half_width) - max(m_neg, iv_c - 2.0f * vertical_footprint_half_width));
+            const float vWeight_1 = max(0.0f, min(m_pos, iv_c + vertical_footprint_half_width) - max(m_neg, iv_c - vertical_footprint_half_width));
+            //const float vWeight_2 = max(0.0f, min(m_pos, iv_c + 2.0f * vertical_footprint_half_width) - max(m_neg, iv_c + vertical_footprint_half_width));
+            const float vWeight_2 = max(0.0f, 1.0f - vWeight_1 - vWeight_0);
+
+            const float y_12 = float(iy-1) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1);
+            const float z_12 = float(iz-1) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
+
+            if (volumeDimensionOrder == 0)
+            {
+                g_output += (tex3D<float>(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, float(iz + 1) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, z_12, float(iy + 1) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(iz + 1) + 0.5f, float(iy + 1) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+            else
+            {
+                g_output += (tex3D<float>(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
+                    + tex3D<float>(f, float(i) + 0.5f, y_12, float(iz + 1) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (tex3D<float>(f, float(i) + 0.5f, float(iy + 1) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + tex3D<float>(f, float(i) + 0.5f, float(iy + 1) + 0.5f, float(iz + 1) + 0.5f) * vWeight_2) * hWeight_2;
+            }
+        }
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(r.x * r.x + r.y * r.y) * fabs(r_x_inv) * g_output;
+    }
+}
+//*/
+
+/*
 __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOVsq)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
@@ -132,6 +307,7 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
             const float vWeight_2 = max(0.0f, min(m_plus_half - xi_high - v_phi_x_step, 1.0f)) * ((k + 2 < N_f.z) ? 1.0f : 0.0f);
             const float x_12 = float(i) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1);
             const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
+
             if (volumeDimensionOrder == 0)
             {
                 g_output += (tex3D<float>(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
@@ -230,6 +406,7 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
         g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
     }
 }
+//*/
 
 //*
 __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)

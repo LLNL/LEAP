@@ -171,6 +171,7 @@ class tomographicModels:
                 self.param_id = self.create_new_model()
             self.set_model()
         self.print_cost = False
+        self.print_warnings = True
 
     def set_model(self, i=None):
         self.libprojectors.set_model.restype = ctypes.c_bool
@@ -187,14 +188,17 @@ class tomographicModels:
         """
         self.libprojectors.set_log_error()
         self.print_cost = False
+        self.print_warnings = False
         
     def set_log_warning(self):
         """Sets logging level to logWARNING
         
         This logging level prints out the second fewest statements (only error and warning statements)
+        and is the default setting.  It includes iterative reconstruction warnings and iteration number.
         """
         self.libprojectors.set_log_warning()
         self.print_cost = False
+        self.print_warnings = True
             
     def set_log_status(self):
         """Sets logging level to logSTATUS
@@ -204,6 +208,7 @@ class tomographicModels:
         """
         self.libprojectors.set_log_status()
         self.print_cost = True
+        self.print_warnings = True
         
     def set_log_debug(self):
         """Sets logging level to logDEBUG
@@ -212,6 +217,7 @@ class tomographicModels:
         """
         self.libprojectors.set_log_debug()
         self.print_cost = True
+        self.print_warnings = True
             
     def set_maxSlicesForChunking(self, N):
         """This function effects how forward and backprojection jobs are divided into multiple processing jobs on the GPU
@@ -662,10 +668,12 @@ class tomographicModels:
         """Find the centerCol parameter
 
         Note that it only works for parallel-, fan-, and cone-beam CT geometry types (i.e., everything but modular-beam)
-        and the projections cannot be truncated on the right or left sides.
+        and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
         If you have any bad edge detectors, these must be cropped out before running this algorithm.
         If this function does not return a good estimate, try changing the iRow parameter value or try using the
         inconsistencyReconstruction function is this class.
+        
+        See d12_geometric_calibration.py for a working example that uses this function.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
@@ -686,23 +694,44 @@ class tomographicModels:
         return g
         
     def consistency_cost(self, g, Delta_centerRow=0.0, Delta_centerCol=0.0, Delta_tau=0.0, Delta_tilt=0.0):
-        """Calculates a cost metric for the given CT geometry perturbations
+        r"""Calculates a cost metric for the given CT geometry perturbations
 
-        Note that it only works for the cone-beam CT geometry type
+        Note that it only works for the axial flat-panel cone-beam CT geometry type
         and the projections cannot be truncated on the right or left sides.
         If you have any bad edge detectors, these must be cropped out before running this algorithm.
+        
+        This function implements the algorithm in the following paper:
+        Lesaint, Jerome, Simon Rit, Rolf Clackdoyle, and Laurent Desbat.
+        Calibration for circular cone-beam CT based on consistency conditions.
+        IEEE Transactions on Radiation and Plasma Medical Sciences 1, no. 6 (2017): 517-526.
+        
+        See d12_geometric_calibration.py for a working example that uses this function.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             Delta_centerRow (float): detector shift (detector row pixel index) in the row direction
             Delta_centerCol (float): detector shift (detector column pixel index) in the column direction
             Delta_tau (float): horizonal shift (mm) of the detector; can also be used to model detector rotations along the vector pointing across the detector rows
-            Delta_tilt (float): detector rotation (degree) around the optical axis
+            Delta_tilt (float): detector rotation (degrees) around the optical axis
             
         Returns:
             the cost value of the metric
         
         """
+        if type(Delta_centerRow) is list or type(Delta_centerRow) is np.ndarray:
+            if len(Delta_centerRow) == 2:
+                Delta_centerCol = Delta_centerRow[1]
+                Delta_centerRow = Delta_centerRow[0]
+            elif len(Delta_centerRow) == 3:
+                Delta_tilt = Delta_centerRow[2]
+                #Delta_tau = Delta_centerRow[2]
+                Delta_centerCol = Delta_centerRow[1]
+                Delta_centerRow = Delta_centerRow[0]
+            elif len(Delta_centerRow) == 4:
+                Delta_tilt = Delta_centerRow[3]
+                Delta_tau = Delta_centerRow[2]
+                Delta_centerCol = Delta_centerRow[1]
+                Delta_centerRow = Delta_centerRow[0]
         self.libprojectors.consistency_cost.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
@@ -1296,7 +1325,8 @@ class tomographicModels:
             else:
                 g = np.ascontiguousarray(val*np.ones((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
             if has_torch:
-                g = torch.from_numpy(g).float().to(max(0,self.get_gpu()))
+                #g = torch.from_numpy(g).float().to(max(0,self.get_gpu()))
+                g = self.copy_to_device(g)
             return g
         else:
             return None
@@ -1386,7 +1416,8 @@ class tomographicModels:
             else:
                 f = np.ascontiguousarray(val*np.ones((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
             if has_torch:
-                f = torch.from_numpy(f).float().to(max(0,self.get_gpu()))
+                #f = torch.from_numpy(f).float().to(max(0,self.get_gpu()))
+                f = self.copy_to_device(f)
             return f
         else:
             return None
@@ -1437,7 +1468,17 @@ class tomographicModels:
             return x.copy()
             
     def copy_to_device(self, x):
-        """Copies the given argument to a torch tensor on the primary gpu"""
+        """Copies the given argument to a torch tensor on the primary gpu
+        
+        This function is just provided for convenience and is not necessary for any LEAP process.
+        
+        Args:
+            x (numpy array or torch tensor): data to copy to device number defined by get_gpu()
+            
+        Returns:
+            torch tensor on the specified GPU
+        
+        """
         if has_torch == False:
             print('Error: pytorch not installed')
             return x
@@ -1450,7 +1491,7 @@ class tomographicModels:
             return x
             
     def copy_to_host(self, x):
-        """Copies the given argument to a numpy array"""
+        """Copies the given argument to a numpy array (on the cpu)"""
         if has_torch == True and type(x) is torch.Tensor:
             x = x.cpu().detach().numpy()
         return x
@@ -2210,16 +2251,17 @@ class tomographicModels:
         self.set_numCols(colRange[1]-colRange[0]+1)
         self.shift_detector(0.0, self.get_pixelWidth()*colRange[0])
         if g is not None:
-        
+
+            dim3 = colRange[1]-colRange[0]+1        
             if has_torch == True and type(g) is torch.Tensor:
-                dim3 = colRange[1]-colRange[0]+1
                 if g.is_cuda:
                     g_crop = torch.zeros([g.shape[0], g.shape[1], dim3], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
                 else:
                     g_crop = torch.zeros([g.shape[0], g.shape[1], dim3], dtype=torch.float32)
                 g_crop[:,:,:] = g[:, :, colRange[0]:colRange[1]+1]
             else:
-                g_crop = np.ascontiguousarray(g[:, :, colRange[0]:colRange[1]+1], np.float32)
+                g_crop = np.empty([g.shape[0], g.shape[1], dim3], dtype=np.float32)
+                g_crop[:,:,:] = g[:, :, colRange[0]:colRange[1]+1]
         else:
             g_crop = None
         return g_crop
@@ -2638,7 +2680,8 @@ class tomographicModels:
         Pd = self.allocateData(g)
 
         for n in range(numIter):
-            print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
+            if self.print_warnings:
+                print('MLEM iteration ' + str(n+1) + ' of ' + str(numIter))
             self.project(Pd,f)
             ind = Pd != 0.0
             Pd[ind] = g[ind]/Pd[ind]
@@ -2717,7 +2760,8 @@ class tomographicModels:
                 
             d = self.allocateData(f)
             for n in range(numIter):
-                print('OSEM iteration ' + str(n+1) + ' of ' + str(numIter))
+                if self.print_warnings:
+                    print('OSEM iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
                 
                     # set angle array
@@ -2815,7 +2859,8 @@ class tomographicModels:
             d = self.allocateData(f)
 
             for n in range(numIter):
-                print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
+                if self.print_warnings:
+                    print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
                 self.project(Pd,f)
                 if mask is not None:
                     Pd = (g-Pd) / P1 * mask
@@ -2843,7 +2888,8 @@ class tomographicModels:
             
             d = self.allocateData(f)
             for n in range(numIter):
-                print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
+                if self.print_warnings:
+                    print('SART iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
                 
                     # set angle array
@@ -2911,12 +2957,12 @@ class tomographicModels:
         if filters is None:
             filters = filterSequence()
             filters.append(TV(self, delta=0.0))
-            print('None?')
+            #print('None?')
         elif isinstance(filters, (int, float)):
             delta = filters
             filters = filterSequence()
             filters.append(TV(self, delta))
-            print('float?')
+            #print('float?')
             
         numSubsets = min(numSubsets, self.get_numAngles())
         omega = 0.8
@@ -2949,7 +2995,8 @@ class tomographicModels:
         curCost = self.innerProd(Pf_minus_g, Pf_minus_g)
         
         for n in range(numIter):
-            print('ASDPOCS iteration ' + str(n+1) + ' of ' + str(numIter))
+            if self.print_warnings:
+                print('ASDPOCS iteration ' + str(n+1) + ' of ' + str(numIter))
             
             # SART Update
             if numSubsets <= 1:
@@ -3013,7 +3060,8 @@ class tomographicModels:
             alpha_1 = 0.0
             alpha_2 = 0.0
             if disc < 0.0:
-                print("  Unable to estimate step size, setting lambda to zero!")
+                if self.print_warnings:
+                    print("  Unable to estimate step size, setting lambda to zero!")
                 alpha = 0.0
             else:
                 if a != 0.0:
@@ -3027,11 +3075,13 @@ class tomographicModels:
                     alpha = alpha_2
             alpha = min(1.0, alpha)
             alpha = max(0.0, min(1.0, alpha))  # force lambda to be a valid number
-            print('  lambda = ' + str(np.round(1000.0*alpha)/1000.0) + ' (' + str(np.round(1000.0*alpha_1)/1000.0) + ', ' + str(np.round(1000.0*alpha_2)/1000.0) + ')')
+            if self.print_warnings:
+                print('  lambda = ' + str(np.round(1000.0*alpha)/1000.0) + ' (' + str(np.round(1000.0*alpha_1)/1000.0) + ', ' + str(np.round(1000.0*alpha_2)/1000.0) + ')')
             if self.print_cost:
                 print('\tcost = ' + str(epsilon_SART))
             if alpha < 0.0:
-                print("  Stopping criteria met, stopping iterations.")
+                if self.print_warnings:
+                    print("  Stopping criteria met, stopping iterations.")
                 break
                 
                 
@@ -3207,7 +3257,8 @@ class tomographicModels:
             Q = 1.0
         
         for n in range(numIter):
-            print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
+            if self.print_warnings:
+                print('RWLS iteration ' + str(n+1) + ' of ' + str(numIter))
             #WPf_minus_g = self.copyData(Pf_minus_g)
             WPf_minus_g = Pf_minus_g
             if W is not None:
@@ -3251,7 +3302,8 @@ class tomographicModels:
                 #Pd = Pu + gamma*Pd
 
                 if self.innerProd(d,grad) <= 0.0:
-                    print('\tRLWS-CG: CG descent condition violated, must use GD descent direction')
+                    if self.print_warnings:
+                        print('\tRLWS-CG: CG descent condition violated, must use GD descent direction')
                     d[:] = u[:]
                     #Pd[:] = Pu[:]
             
@@ -3269,7 +3321,8 @@ class tomographicModels:
                 num = self.innerProd(d,grad)
             stepSize = self.RWLSstepSize(f, grad, d, Pd, W, filters, num)
             if stepSize <= 0.0:
-                print('invalid step size; quitting!')
+                if self.print_warnings:
+                    print('invalid step size; quitting!')
                 break
             
             f[:] = f[:] - stepSize*d[:]
@@ -3325,7 +3378,8 @@ class tomographicModels:
         stepSize = 0.0
         if np.abs(denom) > 1.0e-16:
             stepSize = num / denom
-        print('\tlambda = ' + str(stepSize))
+        if self.print_warnings:
+            print('\tlambda = ' + str(stepSize))
         return stepSize
         
     def DLS(self, g, f, numIter, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=2):
@@ -3406,7 +3460,8 @@ class tomographicModels:
         grad_old = self.allocateData(f)
                 
         for n in range(numIter):
-            print('RDLS iteration ' + str(n+1) + ' of ' + str(numIter))
+            if self.print_warnings:
+                print('RDLS iteration ' + str(n+1) + ' of ' + str(numIter))
             LPf_minus_g[:] = Pf_minus_g[:]
             self.Laplacian(LPf_minus_g, dimDeriv, smoothLaplacian)
             LPf_minus_g *= -1.0
@@ -3431,7 +3486,8 @@ class tomographicModels:
                 #Pd[:] = Pu[:] + gamma*Pd[:]
 
                 if self.innerProd(d,grad) <= 0.0:
-                    print('\tRDLS-CG: CG descent condition violated, must use gradient descent direction')
+                    if self.print_warnings:
+                        print('\tRDLS-CG: CG descent condition violated, must use gradient descent direction')
                     d[:] = u[:]
                     #Pd[:] = Pu[:]
             
@@ -3486,10 +3542,11 @@ class tomographicModels:
         stepSize = 0.0
         if np.abs(denom) > 1.0e-16:
             stepSize = num / denom
-        if stepSize < 0.0:
-            print('\tlambda = ' + str(stepSize) + ' = ' + str(num) + ' / ' + str(denom))
-        else:
-            print('\tlambda = ' + str(stepSize))
+        if self.print_warnings:
+            if stepSize < 0.0:
+                print('\tlambda = ' + str(stepSize) + ' = ' + str(num) + ' / ' + str(denom))
+            else:
+                print('\tlambda = ' + str(stepSize))
         return stepSize
 
     def MLTR(self, g, f, numIter, numSubsets=1, filters=None, mask=None):
@@ -3554,7 +3611,8 @@ class tomographicModels:
             
             transDiff = self.allocateData(g)
             for n in range(numIter):
-                print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
+                if self.print_warnings:
+                    print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
                 self.project(Pf,f)
                 
                 transDiff[:] = self.expNeg(Pf)
@@ -3600,7 +3658,8 @@ class tomographicModels:
             else:
                 mask_subsets = None
             for n in range(numIter):
-                print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
+                if self.print_warnings:
+                    print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
                 for m in range(numSubsets):
                     subsetParams.setSubset(m)
                     transDiff = self.allocateData(t_subsets[m])

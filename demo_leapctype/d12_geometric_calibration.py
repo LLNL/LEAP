@@ -2,6 +2,8 @@ import sys
 import os
 import time
 import numpy as np
+import matplotlib.pyplot as plt
+from leap_preprocessing_algorithms import *
 from leapctype import *
 leapct = tomographicModels()
 
@@ -63,9 +65,9 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 
 
 # Add noise to the data (just for demonstration purposes)
-print('Adding noise to data...')
 I_0 = 50000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+print('Adding noise to data...')
+g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 
 whichDemo = 4
@@ -109,6 +111,9 @@ elif whichDemo == 2:
     # for each reconstruction..  The LARGEST value of this metric should correspond to the
     # correct value for this parameter.
     
+    # Note that parameter_sweep does not automatically change any parameter.  It is up to the
+    # user to look at the reconstructions and given metrics and set the parameters themselves.
+    
     from leap_preprocessing_algorithms import *
     centerCols = np.array(range(-5,5+1))+leapct.get_centerCol()
     #f_stack = parameter_sweep(leapct, g, centerCols, 'centerCol', iz=None, algorithmName='FBP')
@@ -129,7 +134,97 @@ elif whichDemo == 3:
     leapct.display(f_stack)
     
 elif whichDemo == 4:
-    print(leapct.consistency_cost(g, Delta_centerRow=-2.0, Delta_centerCol=0.0, Delta_tilt=0.0))
-    print(leapct.consistency_cost(g, Delta_centerRow=0.0, Delta_centerCol=0.0, Delta_tilt=0.0))
-    print(leapct.consistency_cost(g, Delta_centerRow=2.0, Delta_centerCol=0.0, Delta_tilt=0.0))
+
+    """
+    This demo demonstrates the use of the automated geometric calibration procedure in LEAP.
+    This function can estimate centerRow, centerCol, tau, and detector tilt (detector rotation around the optical axis).
+    We recommend that the current geometry specification be close to the true values, otherwise this function may
+    fail to find a global minimum or stop early before the absolute minimum is found.
+    We also recommend that after this function is applied, that one still run the find_centerCol() function
+    because this is the most accurate automatic estimation of the centerCol parameter
+    """
+
+    # First we perturb the true geometry specification
+    Delta_centerRow = 10.0
+    Delta_centerCol = 20.0
+    #Delta_tau = 3.0
+
+    leapct.set_centerRow(leapct.get_centerRow()+Delta_centerRow)
+    leapct.set_centerCol(leapct.get_centerCol()+Delta_centerCol)
+    #leapct.set_tau(Delta_tau)
+    
+    # Specify the number of times the minimize function is called
+    # This may help estimate a more accurate estimate
+    numIter = 2
+    
+    from scipy.optimize import minimize
+
+    # Start by trying to find the center column
+    leapct.find_centerCol(g)
+
+    # We will now try to estimate both centerRow and centerCol
+    # Define the cost function for the minimize function  
+    # This function is in the tomographicModels Python class
+    costFcn_rc = lambda x: leapct.consistency_cost(g, x[0], x[1], 0.0, 0.0)
+
+    # Specify the initial guess and bounds for the parameters
+    # Here we demonstrate using just 2 of the 4 possible parameters:  centerRow, centerCol
+    # Feel free to make the search region (bounds) bigger or smaller to fit your needs
+    x0 = (0.0, 0.0)
+    bounds = ((-200, 200), (-200, 200))
+
+    # Run the estimation algorithm
+    print('\nestimating geometry parameters...')
+    startTime = time.time()
+    for n in range(numIter):
+        res = minimize(costFcn_rc, x0, method='Powell', bounds=bounds)
+        x0 = res.x
+
+    # Print out estimated parameters and various cost values
+    print(res.message)
+    print('estimated perturbations: ' + str(res.x))
+    print('optimized cost = ' + str(costFcn_rc(res.x)))
+    
+    # Set the estimated geometry parameters
+    # The estimated values were perturbations of the current values
+    # So make sure you add these estimates to the current values
+    leapct.set_centerRow(leapct.get_centerRow() + res.x[0])
+    leapct.set_centerCol(leapct.get_centerCol() + res.x[1])
+    print('Current estimate of detector center: ' + str(leapct.get_centerRow()) + ', ' + str(leapct.get_centerCol()) + '\n')
+
+    # Now let's repeat the above, adding in detector tilt (rotation around the optical axis) which is measured in degrees
+    # Sometimes this estimate fails to provide a good estimate.  The search window (bounds) should be about +/- 2 degrees
+    costFcn_rct = lambda x: leapct.consistency_cost(g, x[0], x[1], 0.0, x[2])
+    x0 = (0.0, 0.0, 0.0)
+    bounds = ((-50, 50), (-50, 50), (-2, 2))
+    for n in range(numIter):
+        res = minimize(costFcn_rct, x0, method='Powell', bounds=bounds)
+        x0 = res.x
+    
+    # Print out estimated parameters and various cost values
+    print(res.message)
+    print('estimated perturbations: ' + str(res.x))
+    print('optimized cost = ' + str(costFcn_rc(res.x)))
+    
+    if np.abs(res.x[2]) > 0.1:
+        # A significant detector rotation was detected, so let's assume this is correct
+        # In this case, we have to switch to modular-beam geometry
+        leapct.set_centerRow(leapct.get_centerRow() + res.x[0])
+        leapct.set_centerCol(leapct.get_centerCol() + res.x[1])
+        leapct.convert_to_modular()
+        leapct.rotate_detector(res.x[2])
+    else:
+        # Assume the detector is not tilted
+        # Refine the centerCol estimate now that we have a good estimate of the centerRow
+        leapct.find_centerCol(g)
+    print('Current estimate of detector center: ' + str(leapct.get_centerRow()) + ', ' + str(leapct.get_centerCol()))
+    
+    print('Elapsed time: ' + str(time.time()-startTime) + ' seconds')
+    
+    # Perform a single-slice reconstruction to inspect its quality
+    leapct.set_numZ(1)
+    f = leapct.FBP(g)
+    plt.imshow(np.squeeze(f), cmap='gray')
+    plt.show()
+    
     
