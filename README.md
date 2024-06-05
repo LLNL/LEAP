@@ -50,7 +50,7 @@ For the next releases, we are working on the following:
 1) Fixes of bugs reported by our users
 2) Feature requests from our users
 3) More noise reduction filters
-4) AMD Support
+4) AMD GPU Support
 5) cone-parallel geometry support
 6) PyQt GUI
 

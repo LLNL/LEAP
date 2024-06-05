@@ -2605,6 +2605,7 @@ class tomographicModels:
         if numSubsets <= 0 or len(g.shape) != 3:
             return None
         else:
+            N = g.shape[0]
             g_subsets = []
             for m in range(numSubsets):
                 if m == g.shape[0]-1:
@@ -2619,14 +2620,14 @@ class tomographicModels:
                     g_subsets.append(g_subset)
                 else:
                     if has_torch == True and type(g) is torch.Tensor:
-                        dim1 = g[m:-1:numSubsets,0,0].shape[0]
+                        dim1 = g[m:N:numSubsets,0,0].shape[0]
                         if g.is_cuda:
                             g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
                         else:
                             g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32)
-                        g_subset[:,:,:] = g[m:-1:numSubsets,:,:]
+                        g_subset[:,:,:] = g[m:N:numSubsets,:,:]
                     else:
-                        g_subset = np.ascontiguousarray(g[m:-1:numSubsets,:,:], np.float32)
+                        g_subset = np.ascontiguousarray(g[m:N:numSubsets,:,:], np.float32)
                     g_subsets.append(g_subset)
             return g_subsets
     
@@ -5589,6 +5590,7 @@ class subsetParameters:
             self.phis = self.ctModel.get_angles()
             
         # Now set parameters for each subset
+        N = self.ctModel.get_numAngles()
         if self.ctModel.get_geometry() == 'MODULAR':
             for m in range(self.numSubsets):
                 if m == self.sourcePositions.shape[0]-1:
@@ -5609,16 +5611,16 @@ class subsetParameters:
                     self.colVectors_subsets.append(colVectors_subset)
 
                 else:
-                    sourcePositions_subset = np.ascontiguousarray(self.sourcePositions[m:-1:self.numSubsets,:], np.float32)
+                    sourcePositions_subset = np.ascontiguousarray(self.sourcePositions[m:N:self.numSubsets,:], np.float32)
                     self.sourcePositions_subsets.append(sourcePositions_subset)
                     
-                    moduleCenters_subset = np.ascontiguousarray(self.moduleCenters[m:-1:self.numSubsets,:], np.float32)
+                    moduleCenters_subset = np.ascontiguousarray(self.moduleCenters[m:N:self.numSubsets,:], np.float32)
                     self.moduleCenters_subsets.append(moduleCenters_subset)
                     
-                    rowVectors_subset = np.ascontiguousarray(self.rowVectors[m:-1:self.numSubsets,:], np.float32)
+                    rowVectors_subset = np.ascontiguousarray(self.rowVectors[m:N:self.numSubsets,:], np.float32)
                     self.rowVectors_subsets.append(rowVectors_subset)
                     
-                    colVectors_subset = np.ascontiguousarray(self.colVectors[m:-1:self.numSubsets,:], np.float32)
+                    colVectors_subset = np.ascontiguousarray(self.colVectors[m:N:self.numSubsets,:], np.float32)
                     self.colVectors_subsets.append(colVectors_subset)
         else:
             phis_subsets = []
@@ -5628,7 +5630,7 @@ class subsetParameters:
                     phis_subset[0,0] = self.phis[m]
                     self.phis_subsets.append(phis_subset)
                 else:
-                    phis_subset = np.ascontiguousarray(self.phis[m:-1:self.numSubsets], np.float32)
+                    phis_subset = np.ascontiguousarray(self.phis[m:N:self.numSubsets], np.float32)
                     self.phis_subsets.append(phis_subset)
         
     def setSubset(self, isubset):

@@ -211,7 +211,7 @@ elif whichDemo == 4:
         # In this case, we have to switch to modular-beam geometry
         leapct.set_centerRow(leapct.get_centerRow() + res.x[0])
         leapct.set_centerCol(leapct.get_centerCol() + res.x[1])
-        leapct.convert_to_modular()
+        leapct.convert_to_modularbeam()
         leapct.rotate_detector(res.x[2])
     else:
         # Assume the detector is not tilted
