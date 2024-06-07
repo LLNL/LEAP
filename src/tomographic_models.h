@@ -732,6 +732,20 @@ public:
 	bool MedianFilter(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
 
 	/**
+	 * \fn          MeanOrVarianceFilter
+	 * \brief       applies a 3D mean or variance filter
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   r the radius (in number of pixels) of the window
+	 * \param[in]	order 1 for mean, 2 for variance filter
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool MeanOrVarianceFilter(float* f, int, int, int, int r, int order, bool data_on_cpu);
+
+	/**
 	 * \fn          MedianFilter2D
 	 * \brief       applies a thresholded 2D median filter to the second two dimensions of a 3D array
 	 * \param[in]   f pointer to the 3D data (input and output)

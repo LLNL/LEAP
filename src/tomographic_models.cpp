@@ -2244,6 +2244,86 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 #endif
 }
 
+bool tomographicModels::MeanOrVarianceFilter(float* f, int N_1, int N_2, int N_3, int r, int order, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	//uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	{
+		if (data_on_cpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			float* f_out = f;
+			float* f_in = (float*)malloc(sizeof(float) * numElements);
+			equal_cpu(f_in, f_out, N_1, N_2, N_3);
+
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				int sliceStart_pad = std::max(0, sliceStart - 1);
+				int sliceEnd_pad = std::min(N_1 - 1, sliceEnd + 1);
+				int numSlices_pad = sliceEnd_pad - sliceStart_pad + 1;
+
+				int sliceStart_relative = sliceStart - sliceStart_pad;
+				int sliceEnd_relative = sliceStart_relative + (sliceEnd - sliceStart);
+
+				float* f_out_chunk = &f_out[uint64(sliceStart) * uint64(N_2 * N_3)];
+				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				//medianFilter(f_in_chunk, numSlices_pad, N_2, N_3, threshold, w, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				momentFilter(f, N_1, N_2, N_3, r, order, data_on_cpu, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+			}
+			free(f_in);
+
+			return true;
+		}
+	}
+	else
+		return momentFilter(f, N_1, N_2, N_3, r, order, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
 bool tomographicModels::BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
 {
 #ifndef __USE_CPU

@@ -34,6 +34,8 @@ bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims
 bool highPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
 bool highPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
 
+bool momentFilter(float* f, int N_1, int N_2, int N_3, int r, int order, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
+
 bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU = 0, int sliceStart = -1, int sliceEnd = -1, float* f_out = NULL);
 
 bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU = 0);

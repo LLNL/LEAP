@@ -214,6 +214,85 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
     }
 }
 
+__global__ void meanFilterKernel(float* f, float* f_filtered, int3 N, const int r, int sliceStart, int sliceEnd)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
+        return;
+    }
+
+    const int di_min = -min(i, r);
+    const int di_max = min(N.x - 1 - i, r);
+
+    const int dj_min = -min(j, r);
+    const int dj_max = min(N.y - 1 - j, r);
+
+    const int dk_min = -min(k, r);
+    const int dk_max = min(N.z - 1 - k, r);
+
+    float x = 0.0f;
+    for (int di = di_min; di <= di_max; di++)
+    {
+        for (int dj = dj_min; dj <= dj_max; dj++)
+        {
+            for (int dk = dk_min; dk <= dk_max; dk++)
+            {
+                x += f[uint64(i + di) * uint64(N.z * N.y) + uint64((j + dj) * N.z + (k + dk))];
+            }
+        }
+    }
+    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = x / float((di_max - di_min + 1) * (dj_max - dj_min + 1) * (dk_max - dk_min + 1));
+}
+
+__global__ void varianceFilterKernel(float* f, float* f_filtered, int3 N, const int r, int sliceStart, int sliceEnd)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
+        return;
+    }
+
+    const int di_min = -min(i, r);
+    const int di_max = min(N.x - 1 - i, r);
+
+    const int dj_min = -min(j, r);
+    const int dj_max = min(N.y - 1 - j, r);
+
+    const int dk_min = -min(k, r);
+    const int dk_max = min(N.z - 1 - k, r);
+
+    const float weight = 1.0f / float((di_max - di_min + 1) * (dj_max - dj_min + 1) * (dk_max - dk_min + 1));
+
+    float x = 0.0f;
+    float xx = 0.0f;
+    for (int di = di_min; di <= di_max; di++)
+    {
+        for (int dj = dj_min; dj <= dj_max; dj++)
+        {
+            for (int dk = dk_min; dk <= dk_max; dk++)
+            {
+                const float curVal = f[uint64(i + di) * uint64(N.z * N.y) + uint64((j + dj) * N.z + (k + dk))];
+                x += curVal;
+                xx += curVal * curVal;
+            }
+        }
+    }
+
+    const float meanI = x * weight;
+    const float varI = xx * weight - meanI * meanI;
+
+    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = varI;
+}
+
 __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -839,6 +918,85 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
         }
     }
     if (dev_Df != 0 && (f_out == NULL || data_on_cpu == true))
+    {
+        cudaFree(dev_Df);
+    }
+
+    return true;
+}
+
+bool momentFilter(float* f, int N_1, int N_2, int N_3, int r, int order, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+{
+    if (f == NULL) return false;
+
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = N_1 - 1;
+    sliceStart = max(0, min(N_1 - 1, sliceStart));
+    sliceEnd = max(0, min(N_1 - 1, sliceEnd));
+    if (sliceStart > sliceEnd)
+        return false;
+
+    r = max(1, min(r, 100));
+
+    cudaSetDevice(whichGPU);
+    //cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    if (data_on_cpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
+
+    // Allocate space on GPU for the gradient
+    float* dev_Df = 0;
+    if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
+        return false;
+    }
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    if (order == 1)
+    {
+        meanFilterKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, r, sliceStart, sliceEnd);
+    }
+    else
+    {
+        varianceFilterKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, r, sliceStart, sliceEnd);
+    }
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        if (f_out != NULL)
+        {
+            float* dev_Df_shift = &dev_Df[uint64(sliceStart) * uint64(N.y) * uint64(N.z)];
+            int3 N_crop = make_int3(sliceEnd - sliceStart + 1, N_2, N_3);
+            pull3DdataFromGPU(f_out, N_crop, dev_Df_shift, whichGPU);
+        }
+        else
+            pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+    else
+    {
+        // copy dev_Df to dev_f
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * uint64(N.x) * uint64(N.y) * uint64(N.z), cudaMemcpyDeviceToDevice);
+    }
+    if (dev_Df != 0)
     {
         cudaFree(dev_Df);
     }

@@ -194,6 +194,7 @@ extern "C" PROJECTOR_API bool convertToRhoeZe(float* f_L, float* f_H, int N_1, i
 // Filters for 3D data
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
+extern "C" PROJECTOR_API bool MeanOrVarianceFilter(float* f, int, int, int, int r, int order, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BlurFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool HighPassFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter2D(float* f, int, int, int, float threshold, int w, bool data_on_cpu);

@@ -435,7 +435,10 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     const float v = m * T.y + startVal.y;
     const float u = n * T.z + startVal.z + 0.5f*T.z;
 
-    const float lineLength = (R + tau * u) / (1.0f + u * u);
+    //const float lineLength = (R + tau * u) / (1.0f + u * u);
+    //const float lineLength = (R + tau * u) * rsqrtf(1.0f + u * u);
+    //const float lineLength = R + tau * u;
+    const float lineLength = R + tau * u / (1.0f + u * u);
 
     const float one_over_T_v = 1.0f / T.y;
     const float one_over_T_u = 1.0f / T.z;

@@ -3903,6 +3903,50 @@ class tomographicModels:
         else:
             self.libprojectors.BlurFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BlurFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+            
+    def MeanFilter(self, f, windowRadius=1):
+        r"""Applies a 3D mean filter to the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This algorithm performs a 3D (2*r+1)^3 mean around each data value
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            windowRadius (int): the radius of the window
+        
+        Returns:
+            f, the same as the input
+        """
+        self.libprojectors.MeanOrVarianceFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.MeanOrVarianceFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MeanOrVarianceFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], windowRadius, 1, f.is_cuda == False)
+        else:
+            self.libprojectors.MeanOrVarianceFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MeanOrVarianceFilter(f, f.shape[0], f.shape[1], f.shape[2], windowRadius, 1, True)
+            
+    def VarianceFilter(self, f, windowRadius=1):
+        r"""Applies a 3D variance filter to the provided numpy array
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        This algorithm performs a 3D (2*r+1)^3 variance around each data value
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            windowRadius (int): the radius of the window
+        
+        Returns:
+            f, the same as the input
+        """
+        self.libprojectors.MeanOrVarianceFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.MeanOrVarianceFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MeanOrVarianceFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], windowRadius, 2, f.is_cuda == False)
+        else:
+            self.libprojectors.MeanOrVarianceFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.MeanOrVarianceFilter(f, f.shape[0], f.shape[1], f.shape[2], windowRadius, 2, True)
     
     def MedianFilter(self, f, threshold=0.0, windowSize=3):
         r"""Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided numpy array
