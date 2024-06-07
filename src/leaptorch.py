@@ -77,7 +77,7 @@ class BackProjectorFunctionCPU(torch.autograd.Function):
             g = proj[batch]
             lct.project_cpu(g, f, param_id.item()) # compute proj (g) from input (f)
             #proj[batch] = g
-        return None, proj, None, None
+        return proj, None, None, None
 
 # GPU BackProjector for forward and backward propagation
 class BackProjectorFunctionGPU(torch.autograd.Function):
@@ -99,7 +99,7 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
             g = proj[batch]
             lct.project_gpu(g, f, param_id.item()) # compute proj (g) from input (f)
             #proj[batch] = g
-        return None, proj, None, None
+        return proj, None, None, None
 
 
 # Pytorch Projector class
