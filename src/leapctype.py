@@ -613,7 +613,7 @@ class tomographicModels:
         self.libprojectors.set_helicalPitch.argtypes = [ctypes.c_float]
         self.libprojectors.set_helicalPitch.restype = ctypes.c_bool
         self.set_model()
-        return self.libprojectors.set_helicalPitch(h)
+        return self.libprojectors.set_helicalPitch(helicalPitch)
         
     def set_normalizedHelicalPitch(self, normalizedHelicalPitch):
         """Set the helicalPitch parameter
@@ -4262,7 +4262,20 @@ class tomographicModels:
         return self.libprojectors.get_GPU()
         
     def set_diameterFOV(self, d):
-        """Set the diameterFOV parameter"""
+        """Set the diameterFOV parameter
+
+        This function sets the parameter that specifies the diameter of the circular mask on the reconstruction z-slices.
+        If this parameter is not specified, then the mask diameter will be calculated based on the size of the
+        reconstructable field of view as determined by the CT geometry parameters (and setting of the offsetScan parameter).
+        Applying this mask removes artifacts outside the field of view that can be distracting.  It also provides
+        speed improvements and for cone-beam geometries can help algorithms to use less memory.
+        If one does not want any masking applied, just provide a very large number to this function's argument.
+        
+        
+        Args:
+            d (float): the diameter (mm) of the circular mask on the reconstruction z-slices
+        
+        """
         self.libprojectors.set_rFOV.argtypes = [ctypes.c_float]
         self.libprojectors.set_rFOV.restype = ctypes.c_bool
         self.set_model()

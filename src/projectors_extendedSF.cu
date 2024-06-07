@@ -358,7 +358,7 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
             const int N_turns_above_conj = min(int(floor((d_phi_end - phi_cur_conj) * twoPI_inv)), int(floor(v_bound_B_conj)));
             for (int iturn = N_turns_below_conj; iturn <= N_turns_above_conj; iturn++)
                 sumWeights += helicalConeWeight_e(v_arg_conj + iturn * v_arg_shift_conj);
-            const float helicalWeight = centralWeight / (centralWeight + sumWeights);
+            //const float helicalWeight = centralWeight / (centralWeight + sumWeights);
             // End Calculate the View Redundancy Weight
 
             //const int iv_c = (v_c - startVals_g.y) / T_g.y;
@@ -389,6 +389,8 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
                 //const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi) / (0.5f * T_g.z))));
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
+
+                const float helicalWeight = centralWeight / (centralWeight + sumWeights) * R * dist_from_source_inv / (l_phi * (u_max - u_min) * fabs(v_B - v_A));
 
                 for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
@@ -429,6 +431,8 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
 
+                const float helicalWeight = centralWeight / (centralWeight + sumWeights) * R * dist_from_source_inv / (l_phi * (u_max - u_min) * fabs(v_B - v_A));
+
                 for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
                     const float uWeight = helicalWeight * l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
@@ -456,7 +460,7 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
             }
         }
     }
-    f[ind] = val;
+    f[ind] = val * (T_f.x * T_f.y * T_f.z) / (R*R*T_g.y * T_g.z);
 }
 
 __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
@@ -556,7 +560,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
             const int N_turns_above_conj = min(int(floor((d_phi_end - phi_cur_conj) * twoPI_inv)), int(floor(v_bound_B_conj)));
             for (int iturn = N_turns_below_conj; iturn <= N_turns_above_conj; iturn++)
                 sumWeights += helicalConeWeight_e(v_arg_conj + iturn * v_arg_shift_conj);
-            const float helicalWeight = centralWeight / (centralWeight + sumWeights);
+            //const float helicalWeight = centralWeight / (centralWeight + sumWeights);
             // End Calculate the View Redundancy Weight
 
             //const int iv_c = (v_c - startVals_g.y) / T_g.y;
@@ -587,6 +591,8 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
                 //const int diu = max(1, int(ceil(T_f.x * R_minus_x_dot_theta_inv * fabs(sin_phi) / (0.5f * T_g.z))));
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
+
+                const float helicalWeight = centralWeight / (centralWeight + sumWeights) * R * R_minus_x_dot_theta_inv / (l_phi * (u_max - u_min) * fabs(v_B - v_A));
 
                 for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
@@ -626,6 +632,8 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
                 const int iu_min = int(ceil(u_min - 0.5f));
                 const int iu_max = int(floor(u_max + 0.5f));
 
+                const float helicalWeight = centralWeight / (centralWeight + sumWeights) * R * R_minus_x_dot_theta_inv / (l_phi * (u_max - u_min) * fabs(v_B - v_A));
+
                 for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
                     const float uWeight = helicalWeight * l_phi * max(0.0f, min(float(iu) + 0.5f, u_max) - max(float(iu) - 0.5f, u_min));
@@ -652,7 +660,8 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
             }
         }
     }
-    f[ind] = val;
+    //f[ind] = val;
+    f[ind] = val * (T_f.x * T_f.y * T_f.z) / (R * R * T_g.y * T_g.z);
 }
 //#####################################################################################################################
 
