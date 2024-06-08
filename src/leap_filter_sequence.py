@@ -191,14 +191,21 @@ class MedianFilter(denoisingFilter):
         return self.leapct.MedianFilter(f, self.threshold, self.windowSize)
 
 class TV(denoisingFilter):
-    """This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer
+    r"""This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer
     
-    For more information about this filter, please see
-    
-    .. line-block::
-       leapct.tomographicModels.TVcost
-       leapct.tomographicModels.TVgradient
-       leapct.tomographicModels.TVquadForm
+    This regularization functional uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+    One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+    The Huber-like loss function is given by
+        
+    .. math::
+       \begin{eqnarray}
+         h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+       \end{eqnarray}
+
+    It is recommended that one set the value of delta to be smaller than the difference of two materials that one wishes to discriminate between.
+    For example, if the reconstructed values of two materials are 0.02 and 0.04, than one should set delta to be smaller than 0.04-0.02 = 0.02.
+    The guidance of "smaller than" is rather vague; I usually start with dividing this difference by 20, i.e., set delta = (0.04-0.02)/20.0.
+    The delta parameter needs to be optimized for your specific problem, but the above strategy is a good place to start.
     
     Args:
         leapct (object of the tomographicModels class)

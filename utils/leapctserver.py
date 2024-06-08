@@ -121,7 +121,7 @@ class leapctserver:
     
     ###################################################################################################################
     ###################################################################################################################
-    # FILE NAMES
+    # FILE I/O
     ###################################################################################################################
     ###################################################################################################################
     def set_path(self, path):
@@ -184,26 +184,33 @@ class leapctserver:
         self.save_geometry_file()
         self.save_spectra_model()
     
+    def load_projections(self, fileName):
+        return self.load_projection_angles(fileName)
+    
     def load_projection_angles(self, fileName=None, inds=None):
         """load selected angles of projections
         
         Args:
             fileName (string): full path
+            inds (list of two integers): specifies the range of projections to load
+            
+        Returns:
+            3D numpy of the projections loaded from file
         """
         if fileName is None:
             if self.data_type == self.RAW or self.data_type == self.RAW_DARK_SUBTRACTED:
                 if self.raw_scan_file is None:
                     print('Error: data_type is raw, but raw_scan_file is not specified!')
-                    return
+                    return None
                 fileName = os.path.join(self.path, self.raw_scan_file)
             else:
                 if self.projection_file is None:
                     print('Error: projection_file is not specified!')
-                    return
+                    return None
                 fileName = os.path.join(self.path, self.projection_file)
         if os.path.isfile(fileName) == False:
             print('Error: ' + str(fileName) + ' does not exist!')
-            return
+            return None
         dataFolder, baseFileName = os.path.split(fileName)
         if "sino" in baseFileName:
             if inds is not None:
@@ -224,21 +231,25 @@ class leapctserver:
         
         Args:
             fileName (string): full path
+            inds (list of two integers): specifies the range of detector rows to load
+            
+        Returns:
+            3D numpy of the sinograms loaded from file
         """
         if fileName is None:
             if self.data_type == self.RAW or self.data_type == self.RAW_DARK_SUBTRACTED:
                 if self.raw_scan_file is None:
                     print('Error: data_type is raw, but raw_scan_file is not specified!')
-                    return
+                    return None
                 fileName = os.path.join(self.path, self.raw_scan_file)
             else:
                 if self.projection_file is None:
                     print('Error: projection_file is not specified!')
-                    return
+                    return None
                 fileName = os.path.join(self.path, self.projection_file)
         if os.path.isfile(fileName) == False:
             print('Error: ' + str(fileName) + ' does not exist!')
-            return
+            return None
         dataFolder, baseFileName = os.path.split(fileName)
         if "sino" in baseFileName:
             if inds is not None:
@@ -255,6 +266,15 @@ class leapctserver:
         return g
     
     def save_projection_angles(self, g, seq_offset=0):
+        """Saves the projection data in a sequence of tif files, one file for each projection angle
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            seq_offset (int): the file sequence number for the first file
+            
+        Returns:
+            The base file name of the saved data, if failed to write to file returns None
+        """
         #if self.data_type == self.RAW or self.data_type == self.RAW_DARK_SUBTRACTED:
         #    fileName = self.raw_scan_file
         #else:
@@ -271,10 +291,31 @@ class leapctserver:
             fileName = 'image.tif'
         fileName = os.path.join(self.path, self.outputDir, fileName)
         
-        self.leapct.save_projections(fileName, g, seq_offset)
-        return fileName
+        if self.leapct.save_projections(fileName, g, seq_offset) == True:
+            return fileName
+        else:
+            return None
+            
+    def load_volume(fileName, inds):
+        if fileName is None:
+            fileName = os.path.join(self.path, self.reconstruction_file)
+        if os.path.isfile(fileName) == False:
+            print('Error: ' + str(fileName) + ' does not exist!')
+            return None
+        f = self.leapct.load_data(fileName, x=None, fileRange=inds, rowRange=None, colRange=None)
+        #self.f = f # ?
+        return f
         
     def save_projection_rows(self, g, seq_offset=0):
+        """Saves the projection data in a sequence of tif files, one file for each detector row
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            seq_offset (int): the file sequence number for the first file
+            
+        Returns:
+            The base file name of the saved data, if failed to write to file returns None
+        """
         if self.data_type == self.RAW:
             fileName = 'sino_raw.tif'
         elif self.data_type == self.RAW_DARK_SUBTRACTED:
@@ -288,10 +329,13 @@ class leapctserver:
         fileName = os.path.join(self.path, self.outputDir, fileName)
         
         g = np.swapaxes(g, 0, 1)
-        self.leapct.save_projections(fileName, g, seq_offset)
+        isSuccessful = self.leapct.save_projections(fileName, g, seq_offset)
         g = np.swapaxes(g, 0, 1)
         g = np.ascontiguousarray(g, dtype=np.float32)
-        return fileName
+        if isSuccessful:
+            return fileName
+        else:
+            return None
     
     def get_zslice(self, iz, thickness=1):
         # TODO: read from file if not loaded in memory
@@ -395,7 +439,7 @@ class leapctserver:
     
     ###################################################################################################################
     ###################################################################################################################
-    # DATA
+    # DATA MANAGEMENT
     ###################################################################################################################
     ###################################################################################################################
     def set_projection_data(self, g):
@@ -662,4 +706,18 @@ class leapctserver:
     def MLTR(self, numIter, numSubsets=1, filters=None, mask=None):
         #self.leapct.MLTR(g, f, numIter, numSubsets, filters, mask)
         pass
+    
+    def cmd(self, text):
+        print('Error: text command not yet implemented!')
+        print(text)
+        return False
+        
+    def getParam(self, text):
+        return False
+        
+    def unknown(self, text):
+        return False
+        
+    def getHelpText(self, text):
+        return "---"
     
