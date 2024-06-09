@@ -391,6 +391,8 @@ class tomographicModels:
         
         for curved detector cone-beam data.  Here, we have used :math:`R` for sod, :math:`\tau` for tau, :math:`\Delta` for helicalPitch, u = s/sdd, and v = t/sdd.
         
+        To switch between flat and curved detectors, use the set_flatDetector() and set_curvedDetector() functions.  Flat detectors are the default setting.
+        
         Args:
             numAngles (int): number of projection angles
             numRows (int): number of rows in the x-ray detector
@@ -1143,6 +1145,9 @@ class tomographicModels:
            y[j] &:=& voxelWidth\left(j - \frac{numY-1}{2}\right) + offsetY, \qquad j = 0,1,\dots,numY-1 \\
            z[k] &:=& voxelHeight\left(k - \frac{numZ-1}{2}\right) + offsetZ, \qquad k = 0,1,\dots,numZ-1
            \end{eqnarray*}
+        
+        For convenience we also provide an automated volume specification function: set_default_volume().
+        See also the set_diameterFOV() function which affects the circular mask applied to the z-slices of the reconstruction.
         
         Args:
             numX (int): number of voxels in the x-dimension
@@ -2713,7 +2718,8 @@ class tomographicModels:
         The OSEM algorithm is performed using two nested loops.  The inner loop is performed like
         the MLEM algorithm (see MLEM algorithm documentation for a description of the algorithm),
         but the successive updates of the reconstructed volume are done with a subset of the projection
-        angles.  Once every subset of is complete, the process starts over again.
+        angles.  Once every subset of is complete, the process starts over again.  Using these ordered
+        subsets reduces the time it takes for this algorithm to converge.
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
         This reconstruction algorithms assumes the projection data, g, is Poisson distributed which is the
@@ -2824,7 +2830,8 @@ class tomographicModels:
         The SART algorithm is performed using two nested loops.  The inner loop is performed like
         the SIRT algorithm (see SIRT algorithm documentation for a description of the algorithm),
         but the successive updates of the reconstructed volume are done with a subset of the projection
-        angles.  Once every subset of is complete, the process starts over again.
+        angles.  Once every subset of is complete, the process starts over again.  Using these ordered
+        subsets reduces the time it takes for this algorithm to converge.
         
         If one wishes to combine this algorithm with regularization, (e.g., TV), please see ASDPOCS.
         
@@ -3567,15 +3574,15 @@ class tomographicModels:
              C_{MLTR}(f) &:=& \left< -t\log\left(e^{-Pf}\right) + e^{-Pf} , 1 \right>
            \end{eqnarray}
 
-        where t is the transmission data and \"1\" is a vector of all ones.  The inner product notation is
+        where :math:`t = e^{-g}` is the transmission data and \"1\" is a vector of all ones.  The inner product notation is
         just use for simplicity, but all it is really doing is performing a sum over all the elements.
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
-        
+
         Args:
             g (C contiguous float32 numpy or torch array): projection data
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
-            numSubsets (int): number of subsets
+            numSubsets (int): number of subsets (reduces the time it takes for this algorithm to converge)
             filters (filterSequence object): list of differentiable regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
         
