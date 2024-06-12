@@ -38,24 +38,54 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data; if not given assumes the inputs have already been dark subtracted
         ROI (4-element integer array): specifies a bounding box ([first row, last row, first column, last column]) for which to estimate a mean value for flux correction
     
+    Returns:
+        True if successful, False otherwise
     """
+
+    # Check Inputs
+    if g is None:
+        print('Error: no data given')
+        return False
+    if len(g.shape) != 3:
+        print('Error: input data must by 3D')
+        return False
+    if dark_scan is not None:
+        if g.shape[1] != dark_scan.shape[0] or g.shape[2] != dark_scan.shape[1]:
+            print('Error: dark scan image size is invalid')
+            return False
+    if air_scan is not None:
+        if g.shape[1] != air_scan.shape[0] or g.shape[2] != air_scan.shape[1]:
+            print('Error: air scan image size is invalid')
+            return False
+    if ROI is not None:
+        if ROI[0] < 0 or ROI[2] < 0 or ROI[1] < ROI[0] or ROI[3] < ROI[2] or ROI[1] >= g.shape[1] or ROI[3] >= g.shape[2]:
+            print('Error: invalid ROI')
+            return False
+    
+    # Perform Flat Fielding
     if dark_scan is not None:
         if air_scan is not None:
-            g = (g - dark_scan) / (air_scan - dark_scan)
+            g[:,:,:] = (g[:,:,:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
         else:
-            g = g - dark_scan
+            g[:,:,:] = g[:,:,:] - dark_scan[None,:,:]
     else:
         if air_scan is not None:
-            g = g / air_scan
+            g[:,:,:] = g[:,:,:] / air_scan[None,:,:]
+    
+    # Perform Flux Correction
     if ROI is not None:
         if has_torch == True and type(g) is torch.Tensor:
             postageStamp = torch.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
         else:
             postageStamp = np.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
-        print('ROI mean: ' + str(np.mean(postageStamp)))
-        g = g / postageStamp[:,None,None]
-    g = leapct.negLog(g)
-    return g
+        print('ROI mean: ' + str(np.mean(postageStamp)) + ', standard deviation: ' + str(np.std(postageStamp)))
+        g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
+
+    # Convert to attenuation
+    g[g<=0.0] = 2.0**-16
+    leapct.negLog(g)
+    
+    return True
 
 def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData=True):
     r"""Removes outliers (zingers) from CT projections
@@ -74,15 +104,19 @@ def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData
         isAttenuationData (bool): True if g is attenuation data, False otherwise
         
     Returns:
-        The corrected data
+        True if successful, False otherwise
     """
+    
+    if g is None:
+        return False
+    
     # This algorithm processes each transmission
     if isAttenuationData:
-        g = leapct.expNeg(g)
+        leapct.expNeg(g)
     leapct.MedianFilter2D(g, threshold, windowSize)
     if isAttenuationData:
-        g = leapct.negLog(g)
-    return g
+        leapct.negLog(g)
+    return True
 
 def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     """Removes outliers (zingers) from CT projections
@@ -103,17 +137,17 @@ def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
         isAttenuationData (bool): True if g is attenuation data, False otherwise
         
     Returns:
-        The corrected data
+        True if successful, False otherwise
     """
     
     if isAttenuationData:
-        g = leapct.expNeg(g)
+        leapct.expNeg(g)
     leapct.MedianFilter2D(g, 0.08, 7)
     leapct.MedianFilter2D(g, 0.024, 5)
     leapct.MedianFilter2D(g, 0.0032, 3)
     if isAttenuationData:
-        g = leapct.negLog(g)
-    return g
+        leapct.negLog(g)
+    return True
     
 
 def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True):
@@ -125,6 +159,8 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
         WienerParam (float): Parameter for Wiener deconvolution, number should be between 0.0 and 1.0
         isAttenuationData (bool): True if g is attenuation data, False otherwise
     
+    Returns:
+        True if successful, False otherwise
     """
     if has_torch == True and type(H) is torch.Tensor:
         H = H.cpu().detach().numpy()
@@ -135,7 +171,8 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
     else:
         H = 1.0 / H
     H = H / H[0,0]
-    return leapct.transmission_filter(g, H, isAttenuationData)
+    leapct.transmission_filter(g, H, isAttenuationData)
+    return True
     
 def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True):
     r"""Removes detector blur by Richardson-Lucy iterative deconvolution
@@ -155,12 +192,13 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
         numIter (int): Number of iterations
         isAttenuationData (bool): True if g is attenuation data, False otherwise
     
+    Returns:
+        True if successful, False otherwise
     """
     H = H / H[0,0]
     if isAttenuationData:
-        t = leapct.expNeg(g)
-    else:
-        t = g
+        leapct.expNeg(g)
+    t = g
     t_0 = leapct.copyData(t)
     Ht = leapct.copyData(t)
     for n in range(numIter):
@@ -170,10 +208,8 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
         Ht = leapct.transmission_filter(Ht, H, False)
         t[:] = t[:] * Ht[:]
     if isAttenuationData:
-        g[:] = leapct.negLog(t)
-    else:
-        g[:] = t[:]
-    return g
+        leapct.negLog(t)
+    return True
 
 def ringRemoval_fast(leapct, g, delta, numIter, maxChange):
     r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images

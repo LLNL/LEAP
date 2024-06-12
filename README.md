@@ -53,6 +53,7 @@ For the next releases, we are working on the following:
 4) AMD GPU Support
 5) cone-parallel geometry support
 6) PyQt GUI
+7) beam hardening correction algorithms that account for variable takeoff angle and graded collimator/ bowtie filter
 
 ## Authors
 Kyle Champley (champley@gmail.com)

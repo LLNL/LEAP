@@ -589,6 +589,27 @@ class tomographicModels:
         """
         return self.set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
     
+    def set_geometry(self, which):
+        """Sets the CT geometry type parameter"""
+        self.libprojectors.set_geometry.argtypes = [ctypes.c_int]
+        self.libprojectors.set_geometry.restype = ctypes.c_bool
+        self.set_model()
+        if isinstance(which, int):
+            return self.set_geometry(which)
+        elif isinstance(which, str):
+            if which == 'CONE':
+                return self.set_geometry(0)
+            elif which == 'PARALLEL':
+                return self.set_geometry(1)
+            elif which == 'FAN':
+                return self.set_geometry(2)
+            elif which == 'MODULAR':
+                return self.set_geometry(3)
+            else:
+                return False
+        else:
+            return False
+    
     def set_tau(self, tau):
         """Set the tau parameter
         
@@ -2595,16 +2616,19 @@ class tomographicModels:
     def expNeg(self, x):
         """ Returns exp(-x), converting attenuation data to transmission data """
         if has_torch == True and type(x) is torch.Tensor:
-            return torch.exp(-x)
+            torch.exp(-x, out=x)
         else:
-            return np.exp(-x)
+            np.exp(-x, out=x)
+        return x
             
     def negLog(self, x):
         """ Returns -log(x), converting transmission data to attenuation data """
         if has_torch == True and type(x) is torch.Tensor:
-            return -torch.log(x)
+            torch.log(x, out=x)
         else:
-            return -np.log(x)
+            np.log(x, out=x)
+        x *= -1.0
+        return x
     
     def breakIntoSubsets(self, g, numSubsets):
         if numSubsets <= 0 or len(g.shape) != 3:
@@ -4383,6 +4407,13 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_axisOfSymmetry(val)
         
+    def get_axisOfSymmetry(self):
+        """Gets the axisOfSymmetry parameter"""
+        #self.libprojectors.get_axisOfSymmetry.argtypes = []
+        self.libprojectors.get_axisOfSymmetry.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_axisOfSymmetry()
+        
     def clear_axisOfSymmetry(self):
         """Clears the axisOfSymmetry parameter (revert back to voxelized volume models)"""
         self.libprojectors.clear_axisOfSymmetry.argtypes = []
@@ -4499,6 +4530,13 @@ class tomographicModels:
         self.libprojectors.set_numRows.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_numRows(numRows)
+        
+    def set_numAngles(self, numAngles):
+        """Set the number of projection angles"""
+        self.libprojectors.set_numAngles.argtypes = [ctypes.c_int]
+        self.libprojectors.set_numAngles.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_numAngles(numAngles)
         
     def set_pixelHeight(self, H):
         """Sets the detector pixel height (mm)"""
@@ -5379,7 +5417,7 @@ class tomographicModels:
                     x[:], header = nrrd.read(fileName)
                 else:
                     x, header = nrrd.read(fileName)
-                T_fromFile = header['spacings'][0]
+                #T_fromFile = header['spacings'][0]
                 return x
             except:
                 print('Error: Failed to load nrrd library!')

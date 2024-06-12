@@ -881,7 +881,7 @@ bool parameters::get_angles(float* phis_out)
 
 bool parameters::set_sod(float sod_in)
 {
-	if (sod_in > 0.0 && sod_in < sdd)
+	if (sod_in >= 0.0)// && (sod_in < sdd || sdd == 0.0))
 	{
 		sod = sod_in;
 		return true;
@@ -895,7 +895,7 @@ bool parameters::set_sod(float sod_in)
 
 bool parameters::set_sdd(float sdd_in)
 {
-	if (sdd_in > 0.0 && sdd_in > sod)
+	if (sdd_in >= 0.0)// && sdd_in > sod)
 	{
 		sdd = sdd_in;
 		return true;

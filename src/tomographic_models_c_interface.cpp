@@ -296,7 +296,7 @@ int get_detectorType()
 
 bool set_numCols(int numCols)
 {
-	if (numCols >= 1)
+	if (numCols >= 0)
 	{
 		tomo()->params.numCols = numCols;
 		return true;
@@ -307,7 +307,7 @@ bool set_numCols(int numCols)
 
 bool set_numRows(int numRows)
 {
-	if (numRows >= 1)
+	if (numRows >= 0)
 	{
 		tomo()->params.numRows = numRows;
 		return true;
@@ -316,9 +316,26 @@ bool set_numRows(int numRows)
 		return false;
 }
 
+bool set_numAngles(int numAngles)
+{
+	if (numAngles >= 0)
+	{
+		if (tomo()->params.numAngles != numAngles)
+		{
+			if (tomo()->params.phis != NULL)
+				delete[] tomo()->params.phis;
+			tomo()->params.phis = NULL;
+			tomo()->params.numAngles = numAngles;
+		}
+		return true;
+	}
+	else
+		return false;
+}
+
 bool set_pixelHeight(float H)
 {
-	if (H > 0.0)
+	if (H >= 0.0)
 	{
 		tomo()->params.pixelHeight = H;
 		return true;
@@ -329,7 +346,7 @@ bool set_pixelHeight(float H)
 
 bool set_pixelWidth(float W)
 {
-	if (W > 0.0)
+	if (W >= 0.0)
 	{
 		tomo()->params.pixelWidth = W;
 		return true;
@@ -369,7 +386,7 @@ bool set_default_volume(float scale)
 
 bool set_numZ(int numZ)
 {
-	if (numZ > 0)
+	if (numZ >= 0)
 	{
 		tomo()->params.numZ = numZ;
 		return true;
@@ -380,7 +397,7 @@ bool set_numZ(int numZ)
 
 bool set_numY(int numY)
 {
-	if (numY > 0)
+	if (numY >= 0)
 	{
 		tomo()->params.numY = numY;
 		return true;
@@ -391,7 +408,7 @@ bool set_numY(int numY)
 
 bool set_numX(int numX)
 {
-	if (numX > 0)
+	if (numX >= 0)
 	{
 		tomo()->params.numX = numX;
 		return true;
@@ -408,7 +425,7 @@ bool set_offsetZ(float offsetZ)
 
 bool set_voxelWidth(float W)
 {
-	if (W > 0.0)
+	if (W >= 0.0)
 	{
 		tomo()->params.voxelWidth = W;
 		return true;
@@ -419,7 +436,7 @@ bool set_voxelWidth(float W)
 
 bool set_voxelHeight(float H)
 {
-	if (H > 0.0 /*&& (tomo()->params.geometry == parameters::CONE || tomo()->params.geometry == parameters::MODULAR)*/)
+	if (H >= 0.0 /*&& (tomo()->params.geometry == parameters::CONE || tomo()->params.geometry == parameters::MODULAR)*/)
 	{
 		tomo()->params.voxelHeight = H;
 		return true;
@@ -461,6 +478,11 @@ bool set_projector(int which)
 bool set_axisOfSymmetry(float axisOfSymmetry)
 {
 	return tomo()->set_axisOfSymmetry(axisOfSymmetry);
+}
+
+float get_axisOfSymmetry()
+{
+	return tomo()->params.axisOfSymmetry;
 }
 
 bool clear_axisOfSymmetry()
@@ -546,6 +568,18 @@ bool muSpecified()
 bool flipAttenuationMapSign(bool data_on_cpu)
 {
 	return tomo()->flipAttenuationMapSign(data_on_cpu);
+}
+
+bool set_geometry(int which)
+{
+	//CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3
+	if (which < parameters::CONE || which > parameters::MODULAR)
+		return false;
+	else
+	{
+		tomo()->params.geometry = which;
+		return true;
+	}
 }
 
 bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -944,6 +978,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("get_detectorType", &get_detectorType, "");
     m.def("set_numCols", &set_numCols, "");
     m.def("set_numRows", &set_numRows, "");
+	m.def("set_numAngles", &set_numAngles, "");
     m.def("set_pixelHeight", &set_pixelHeight, "");
     m.def("set_pixelWidth", &set_pixelWidth, "");
     m.def("set_centerCol", &set_centerCol, "");
@@ -958,6 +993,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("set_offsetZ", &set_offsetZ, "");
     m.def("set_voxelWidth", &set_voxelWidth, "");
     m.def("set_voxelHeight", &set_voxelHeight, "");
+	m.def("set_geometry", &set_geometry, "");
     m.def("projectConeBeam", &projectConeBeam, "");
     m.def("backprojectConeBeam", &backprojectConeBeam, "");
     m.def("projectFanBeam", &projectFanBeam, "");
@@ -969,6 +1005,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("set_GPUs", &set_GPUs, "");
     m.def("get_GPU", &get_GPU, "");
     m.def("set_axisOfSymmetry", &set_axisOfSymmetry, "");
+	m.def("get_axisOfSymmetry", &get_axisOfSymmetry, "");
     m.def("clear_axisOfSymmetry", &clear_axisOfSymmetry, "");
     m.def("set_projector", &set_projector, "");
     m.def("set_rFOV", &set_rFOV, "");
@@ -1026,6 +1063,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("BlurFilter", &BlurFilter, "");
 	m.def("HighPassFilter", &HighPassFilter, "");
     m.def("MedianFilter", &MedianFilter, "");
+	m.def("MeanOrVarianceFilter", &MeanOrVarianceFilter, "");
     m.def("BlurFilter2D", &BlurFilter2D, "");
     m.def("MedianFilter2D", &MedianFilter2D, "");
     m.def("BilateralFilter", &BilateralFilter, "");

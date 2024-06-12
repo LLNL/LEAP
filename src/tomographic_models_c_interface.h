@@ -113,6 +113,8 @@ extern "C" PROJECTOR_API bool set_offsetZ(float offsetZ);
 extern "C" PROJECTOR_API bool set_voxelWidth(float W);
 extern "C" PROJECTOR_API bool set_voxelHeight(float H);
 
+extern "C" PROJECTOR_API bool set_geometry(int);
+
 extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
@@ -128,6 +130,7 @@ extern "C" PROJECTOR_API bool set_GPU(int whichGPU);
 extern "C" PROJECTOR_API bool set_GPUs(int* whichGPUs, int N);
 extern "C" PROJECTOR_API int get_GPU();
 extern "C" PROJECTOR_API bool set_axisOfSymmetry(float axisOfSymmetry);
+extern "C" PROJECTOR_API float get_axisOfSymmetry();
 extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool set_projector(int which);
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);

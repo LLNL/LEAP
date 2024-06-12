@@ -129,7 +129,10 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 #ifndef __USE_CPU
 			parallelRay_derivative(g, params, false);
 			applyPostRampFilterWeights(g, params, false);
-			return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
+			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
+				return true;
+			else
+				return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
 #else
 			printf("Error: helical FBP filtering is only implemented on the GPU at this time!\n");
 			return false;
