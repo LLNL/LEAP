@@ -2229,12 +2229,12 @@ class tomographicModels:
             self.libprojectors.windowFOV(f, True)
         return f
     
-    def rowRangeNeededForBackprojection(self):
-        """Calculates the detector rows necessary to reconstruct the current volume specification
+    def rowRangeNeededForBackprojection(self, ):
+        r"""Calculates the detector rows necessary to reconstruct the current volume specification
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
-        For anything but cone-beam data this function will return np.array([0, numRows-1]).
-        For cone-beam data, the function can be used to inform the user of the only detector rows that
+        For anything but cone-beam or axially-aligned modular-beam data this function will return np.array([0, numRows-1]).
+        For cone-beam or axially-aligned modular-beam data, the function can be used to inform the user of the only detector row indies that
         are necessary to reconstruct the volume.  This can be used to reduce the input data size which can
         be important to speed up calculations or reduce the CPU and/or GPU memory necessary to perform reconstruction.
         
@@ -2249,6 +2249,31 @@ class tomographicModels:
         self.set_model()
         self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
         return rowsNeeded
+        
+    def sliceRangeNeededForProjection(self, doClip=True):
+        r"""Calculates the volume z-slices necessary to forward project the view seen by the detectors
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        For anything but cone-beam or axially-aligned modular-beam data this function will return np.array([0, numZ-1]).
+        For cone-beam or axially-aligned modular-beam data, the function can be used to inform the user of the only z-slices indices that
+        are necessary to forward project the volume (does not include slices which would fall outside all detectors.
+        This can be used to reduce the volume data size which can
+        be important to speed up calculations or reduce the CPU and/or GPU memory necessary to perform reconstruction.
+
+        Args:
+            doClip (boolean): if True, clips the return values to be between 0 and numZ-1
+        
+        Returns:
+            slicesNeeded, a 2X1 numpy array where the values are the first and last z-slice index needed to project the volume.
+        
+        """
+        slicesNeeded = np.zeros(2,dtype=np.int32)
+        slicesNeeded[1] = self.get_numZ()-1
+        self.libprojectors.sliceRangeNeededForProjection.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.sliceRangeNeededForProjection.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.sliceRangeNeededForProjection(slicesNeeded, doClip)
+        return slicesNeeded
         
     def cropCols(self, colRange, g=None):
         return self.crop_cols(colRange, g)

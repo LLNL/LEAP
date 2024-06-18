@@ -620,6 +620,14 @@ bool rowRangeNeededForBackprojection(int* rowsNeeded)
 		return tomo()->params.rowRangeNeededForBackprojection(0, tomo()->params.numZ - 1, rowsNeeded);
 }
 
+bool sliceRangeNeededForProjection(int* slicesNeeded, bool doClip)
+{
+	if (slicesNeeded == NULL || tomo()->params.allDefined() == false)
+		return false;
+	else
+		return tomo()->params.sliceRangeNeededForProjection(0, tomo()->params.numRows - 1, slicesNeeded, doClip);
+}
+
 int get_geometry()
 {
 	return tomo()->params.geometry;
@@ -1001,6 +1009,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("projectParallelBeam", &projectParallelBeam, "");
     m.def("backprojectParallelBeam", &backprojectParallelBeam, "");
     m.def("rowRangeNeededForBackprojection", &rowRangeNeededForBackprojection, "");
+	m.def("sliceRangeNeededForProjection", &sliceRangeNeededForProjection, "");
     m.def("set_GPU", &set_GPU, "");
     m.def("set_GPUs", &set_GPUs, "");
     m.def("get_GPU", &get_GPU, "");

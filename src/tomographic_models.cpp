@@ -442,41 +442,43 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		params.sliceRangeNeededForProjection(firstRow, lastRow, sliceRange);
 		int numSlices = sliceRange[1] - sliceRange[0] + 1;
 
-		//printf("row range: %d to %d\n", firstRow, lastRow);
-		//printf("slices range: %d to %d\n", sliceRange[0], sliceRange[1]);
+		if (numSlices > 0)
+		{
+			//printf("row range: %d to %d\n", firstRow, lastRow);
+			//printf("slices range: %d to %d\n", sliceRange[0], sliceRange[1]);
 
-		float* f_chunk = &f[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
+			float* f_chunk = &f[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
-		// make a copy of the relavent rows
-		float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numRows);
+			// make a copy of the relavent rows
+			float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numRows);
 
-		// make a copy of the params
-		parameters chunk_params;
-		chunk_params = params;
-		chunk_params.numRows = numRows;
-		chunk_params.numZ = numSlices;
-		//chunk_params.offsetZ = params.offsetZ + (sliceRange[0] - firstRow) * params.voxelHeight;
-		chunk_params.centerRow = params.centerRow - firstRow;
+			// make a copy of the params
+			parameters chunk_params;
+			chunk_params = params;
+			chunk_params.numRows = numRows;
+			chunk_params.numZ = numSlices;
+			//chunk_params.offsetZ = params.offsetZ + (sliceRange[0] - firstRow) * params.voxelHeight;
+			chunk_params.centerRow = params.centerRow - firstRow;
 
-		// need: chunk_params.z_0() + z_shift = sliceRange[0]*params.voxelHeight + params.z_0()
-		chunk_params.offsetZ += sliceRange[0] * params.voxelHeight + params.z_0() - chunk_params.z_0();
+			// need: chunk_params.z_0() + z_shift = sliceRange[0]*params.voxelHeight + params.z_0()
+			chunk_params.offsetZ += sliceRange[0] * params.voxelHeight + params.z_0() - chunk_params.z_0();
 
-		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
-		chunk_params.whichGPUs.clear();
-		if (params.mu != NULL)
-			chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
+			chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+			chunk_params.whichGPUs.clear();
+			if (params.mu != NULL)
+				chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
-		LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": projection: z-slices: (" << sliceRange[0] << ", " << sliceRange[1] << "), rows = (" << firstRow << ", " << lastRow << ")" << std::endl;
+			LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": projection: z-slices: (" << sliceRange[0] << ", " << sliceRange[1] << "), rows = (" << firstRow << ", " << lastRow << ")" << std::endl;
 
-		// Do Computation
-		proj.project(g_chunk, f_chunk, &chunk_params, true);
-		//printf("about to combine...\n");
-		combineRows(g, g_chunk, firstRow, lastRow);
-		//printf("combine done\n");
+			// Do Computation
+			proj.project(g_chunk, f_chunk, &chunk_params, true);
+			//printf("about to combine...\n");
+			combineRows(g, g_chunk, firstRow, lastRow);
+			//printf("combine done\n");
 
-		// clean up
-		free(g_chunk);
-
+			// clean up
+			free(g_chunk);
+		}
 	}
 	return true;
 #else

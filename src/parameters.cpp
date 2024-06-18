@@ -494,6 +494,7 @@ bool parameters::volumeDefined()
 {
 	if (numX <= 0 || numY <= 0 || numZ <= 0 || voxelWidth <= 0.0 || voxelHeight <= 0.0 || volumeDimensionOrder < 0 || volumeDimensionOrder > 1)
 	{
+		printf("numZ = %d voxelHeight = %f\n", numZ, voxelHeight);
 		printf("Error: volume voxel sizes and number of data elements must be positive\n");
 		return false;
 	}
@@ -1748,8 +1749,11 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 
 		if (doClip)
 		{
-			slicesNeeded[0] = max(0, slicesNeeded[0]);
-			slicesNeeded[1] = min(numZ - 1, slicesNeeded[1]);
+			//slicesNeeded[0] = max(0, slicesNeeded[0]);
+			//slicesNeeded[1] = min(numZ - 1, slicesNeeded[1]);
+
+			slicesNeeded[0] = max(0, min(numZ - 1, slicesNeeded[0]));
+			slicesNeeded[1] = max(0, min(numZ - 1, slicesNeeded[1]));
 		}
 	}
 	return true;
