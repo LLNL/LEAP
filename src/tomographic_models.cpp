@@ -1929,7 +1929,7 @@ bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float 
 				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				blurFilter(f_chunk, numSlices, N_2, N_3, FWHM, 2, true, whichGPU);
+				blurFilter(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, FWHM, 2, true, whichGPU);
 			}
 
 			return true;
@@ -2153,7 +2153,7 @@ bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, floa
 				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				medianFilter2D(f_chunk, numSlices, N_2, N_3, threshold, w, true, whichGPU);
+				medianFilter2D(f_chunk, sliceEnd - sliceStart+1, N_2, N_3, threshold, w, true, whichGPU);
 			}
 
 			return true;

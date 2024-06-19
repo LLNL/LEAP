@@ -4183,13 +4183,15 @@ class tomographicModels:
         
         This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
         One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
-        The Huber-like loss function is given by
+        The aTV functional with Huber-like loss function is given by
         
         .. math::
            \begin{eqnarray}
+             R(x) &:=& \sum_{\boldsymbol{i}} \sum_{\boldsymbol{j} \in N_{\boldsymbol{i}}} \|\boldsymbol{i} - \boldsymbol{j}\|^{-1} h(x_\boldsymbol{i} - x_\boldsymbol{j}) \\
              h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
            \end{eqnarray}
-        
+
+        where :math:`N_{\boldsymbol{i}}` is a neighborhood around the 3D pixel index :math:`\boldsymbol{i} = (i_1, i_2, i_3)`.
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size.
         
         Args:
@@ -4216,14 +4218,16 @@ class tomographicModels:
         
         This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
         One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
-        The Huber-like loss function is given by
+        The aTV functional with Huber-like loss function is given by
         
         .. math::
            \begin{eqnarray}
+             R(x) &:=& \sum_{\boldsymbol{i}} \sum_{\boldsymbol{j} \in N_{\boldsymbol{i}}} \|\boldsymbol{i} - \boldsymbol{j}\|^{-1} h(x_\boldsymbol{i} - x_\boldsymbol{j}) \\
              h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases} \\
              h'(t) &=& \begin{cases} t, & \text{if } |t| \leq delta \\ delta^{2 - p}sgn(t)|t|^{p-1}, & \text{if } |t| > delta \end{cases}
            \end{eqnarray}
-        
+
+        where :math:`N_{\boldsymbol{i}}` is a neighborhood around the 3D pixel index :math:`\boldsymbol{i} = (i_1, i_2, i_3)`.
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
         
         Args:
@@ -4262,13 +4266,15 @@ class tomographicModels:
         
         This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
         One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
-        The Huber-like loss function is given by
+        The aTV functional with Huber-like loss function is given by
         
         .. math::
            \begin{eqnarray}
+             R(x) &:=& \sum_{\boldsymbol{i}} \sum_{\boldsymbol{j} \in N_{\boldsymbol{i}}} \|\boldsymbol{i} - \boldsymbol{j}\|^{-1} h(x_\boldsymbol{i} - x_\boldsymbol{j}) \\
              h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
            \end{eqnarray}
 
+        where :math:`N_{\boldsymbol{i}}` is a neighborhood around the 3D pixel index :math:`\boldsymbol{i} = (i_1, i_2, i_3)`.
         To make this calculate a quadraitc surrogate (upper bound), LEAP uses h'(t)/t instead of h''(t).
         
         Args:
