@@ -172,6 +172,7 @@ class tomographicModels:
             self.set_model()
         self.print_cost = False
         self.print_warnings = True
+        self.volume_mask = None
 
     def set_model(self, i=None):
         self.libprojectors.set_model.restype = ctypes.c_bool
@@ -241,6 +242,11 @@ class tomographicModels:
         
     def copy_parameters(self, leapct):
         """Copies the parameters from another instance of this class"""
+        
+        self.print_cost = leapct.print_cost
+        self.print_warnings = leapct.print_warnings
+        self.volume_mask = leapct.volume_mask
+        
         self.set_model()
         self.libprojectors.copy_parameters.restype = ctypes.c_bool
         self.libprojectors.copy_parameters.argtypes = [ctypes.c_int]
@@ -328,6 +334,12 @@ class tomographicModels:
             if type(g) is not np.ndarray and type(g) is not torch.Tensor:
                 print('Error: projection and volume data must be either numpy arrays or torch tensors')
                 return False
+                
+            if type(g) is torch.Tensor:
+                if g.is_cuda != f.is_cuda:
+                    print('Error: projection and volume data must either both be on the CPU or both be on the GPU')
+                    return False
+                
         elif type(g) is not np.ndarray:
             print('Error: projection and volume data must be either numpy arrays or torch tensors')
             return False
@@ -1543,6 +1555,7 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
+        self.apply_volume_mask(f)
         self.libprojectors.project.restype = ctypes.c_bool
         self.set_model(param_id)
         if has_torch == True and type(g) is torch.Tensor:
@@ -1574,9 +1587,11 @@ class tomographicModels:
             if g.is_cuda:
                 print('Error: project_cpu requires that the data be on the CPU')
             else:
+                self.apply_volume_mask(f)
                 self.libprojectors.project_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
                 self.libprojectors.project_cpu(g.data_ptr(), f.data_ptr())
         else:
+            self.apply_volume_mask(f)
             self.libprojectors.project_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.project_cpu(g, f)
         return g
@@ -1602,6 +1617,7 @@ class tomographicModels:
             if g.is_cuda == False:
                 print('Error: project_gpu requires that the data be on the GPU')
             else:
+                self.apply_volume_mask(f)
                 self.libprojectors.project_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
                 self.libprojectors.project_gpu(g.data_ptr(), f.data_ptr())
         else:
@@ -1631,6 +1647,7 @@ class tomographicModels:
         else:
             self.libprojectors.backproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.backproject(g, f, True)
+        self.apply_volume_mask(f)
         return f
         
     def backproject_cpu(self, g, f, param_id=None):
@@ -1656,9 +1673,11 @@ class tomographicModels:
             else:
                 self.libprojectors.backproject_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
                 self.libprojectors.backproject_cpu(g.data_ptr(), f.data_ptr())
+                self.apply_volume_mask(f)
         else:
             self.libprojectors.backproject_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.libprojectors.backproject_cpu(g, f)
+            self.apply_volume_mask(f)
         return f
         
     def backproject_gpu(self, g, f, param_id=None):
@@ -1684,6 +1703,7 @@ class tomographicModels:
             else:
                 self.libprojectors.backproject_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
                 self.libprojectors.backproject_gpu(g.data_ptr(), f.data_ptr())
+                self.apply_volume_mask(f)
         else:
             print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
@@ -1795,6 +1815,7 @@ class tomographicModels:
         else:
             self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.libprojectors.weightedBackproject(g, f, True)
+        self.apply_volume_mask(f)
         return f
         
     def rampFilterVolume(self, f):
@@ -2578,6 +2599,53 @@ class tomographicModels:
         self.set_numX(numX)
         
         return f_up
+        
+    def set_volume_mask(self, vol_mask):
+        r"""Sets the tomographicModels member variable called volume_mask
+        
+        The purpose of the volume mask is to remove user-specified regions from the reconstruction.
+        This mask must by a 3D numpy or torch tensor of the same size as the reconstruction volume.
+        Ideally this array should have just ones and zeros, where the zeros mark the voxels in the
+        reconstruction that should be assumed to have zero value and the ones mark the voxels in the
+        reconstruction that can be any value.
+        This masking can remove unwanted regions from the reconstruction or potentially improve the quality of
+        iterative reconstruction algorithms by removing unknowns from the reconstruction problem.
+        Using this mask does not improve the speed of forward or backprojection algorithms.
+        This mask is applied after performing a backprojection and before performing a projection.
+        Note that masks applied to the projection data can be applied as arguments to the various
+        iterative reconstruction algorithms (see "W" or "mask" arguments).
+        
+        Args:
+            vol_mask (C contiguous float32 numpy array or torch tensor): the mask to be applied to the volume
+            
+        Returns:
+            no return value
+        
+        """
+        self.volume_mask = vol_mask
+        
+    def clear_volume_mask(self):
+        r"""Clears the tomographicModels member variable called volume_mask
+        
+        After running this function, the volume masking will no longer be performed because volume_mask is set to None
+        
+        """
+        self.volume_mask = None
+        
+    def apply_volume_mask(self, f):
+        r"""Multiplies the given input by the tomographicModels member variable called volume_mask
+
+        This function performs the following: f = f * self.volume_mask        
+        If the volume_mask has not been set (see set_volume_mask) or does not match the size or type of the input, this function does nothing
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): reconstruction volume
+        
+        Returns:
+            no return value
+        """
+        if self.volume_mask is not None and f is not None and type(f) == type(self.volume_mask) and f.shape == self.volume_mask.shape:
+            f[:,:,:] = f[:,:,:] * self.volume_mask[:,:,:]
     
     ###################################################################################################################
     ###################################################################################################################
@@ -2685,6 +2753,40 @@ class tomographicModels:
                     g_subsets.append(g_subset)
             return g_subsets
     
+    def space_carving(self, projection_mask, vol_mask):
+        r"""Space Carving Segmentation-Reconstruction Algorithm
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        The volume mask will be set to zero where the rays of the zero values of the projection_mask input argument are located.
+        The space carving reconstruction algorithm is given by
+        
+        .. math::
+           \begin{eqnarray}
+             f_{mask} &:=& 1 - u\left( P^T(1-g_{mask}) \right)
+           \end{eqnarray}
+        
+        where :math:`g_{mask}` is the projection mask, :math:`f_{mask}` is the volume mask, and :math:`u(\cdot)` is the step or heaviside function.
+        
+        Args:
+            projection_mask (C contiguous float32 numpy or torch array): projection mask/segmentation data (all values should be 0 or 1)
+            vol_mask (C contiguous float32 numpy or torch array): volume mask/segmentation data
+            
+        Returns:
+            vol_mask, the same as the input with the same name
+        
+        """
+        projection_mask[:,:,:] = 1.0 - projection_mask[:,:,:]
+        self.backproject(projection_mask, vol_mask)
+        projection_mask[:,:,:] = 1.0 - projection_mask[:,:,:]
+        if type(vol_mask) is np.ndarray:
+            np.heaviside(vol_mask, 0.0, out=vol_mask)
+        elif has_torch and type(vol_mask) is torch.Tensor:
+            torch.heaviside(vol_mask, vol_mask, out=vol_mask)
+        vol_mask[:,:,:] = 1.0 - vol_mask[:,:,:]
+        self.windowFOV(vol_mask)
+        return vol_mask
+        
+    
     def MLEM(self, g, f, numIter, filters=None, mask=None):
         r"""Maximum Likelihood-Expectation Maximization reconstruction
         
@@ -2719,6 +2821,8 @@ class tomographicModels:
         #    return f
         if mask is not None and mask.shape != g.shape:
             print('Error: mask must be the same shape as the projection data!')
+            return None
+        if self.verify_inputs(g,f) == False:
             return None
         if self.isAllZeros(f) == True:
             f[:] = 1.0
@@ -2792,6 +2896,8 @@ class tomographicModels:
         #    return f
         if mask is not None and mask.shape != g.shape:
             print('Error: mask must be the same shape as the projection data!')
+            return None
+        if self.verify_inputs(g,f) == False:
             return None
         if self.isAllZeros(f) == True:
             f[:] = 1.0
@@ -2903,6 +3009,8 @@ class tomographicModels:
         if mask is not None and mask.shape != g.shape:
             print('Error: mask must be the same shape as the projection data!')
             return None
+        if self.verify_inputs(g,f) == False:
+            return None
         numSubsets = min(numSubsets, self.get_numAngles())
         if numSubsets <= 1:
             P1 = self.allocateData(g)
@@ -3012,6 +3120,8 @@ class tomographicModels:
         #    return f
         if mask is not None and mask.shape != g.shape:
             print('Error: mask must be the same shape as the projection data!')
+            return None
+        if self.verify_inputs(g,f) == False:
             return None
         if numTV <= 0:
             return self.SART(g,f,numIter,numSubsets,mask)
@@ -3270,11 +3380,14 @@ class tomographicModels:
             print('Error: invalid inputs!  Note that algorithm syntax has changed, please see documentation.')
             return None
         
+        if self.verify_inputs(g,f) == False:
+            return None
+        
         conjGradRestart = 50
         if W is None:
             W = self.copyData(g)
             self.BlurFilter2D(W,3.0)
-            W = self.expNeg(W)
+            self.expNeg(W)
             
         Pf = self.copyData(g)
         if self.isAllZeros(f) == False:
@@ -3401,6 +3514,8 @@ class tomographicModels:
                 if filters.beta > 0.0:
                     #regularizationCost = self.TVcost(f, delta, beta)
                     regularizationCost = filters.cost(f)
+                    if has_torch == True and type(regularizationCost) is torch.Tensor:
+                        regularizationCost = regularizationCost.cpu().detach().numpy()
                     print('\tcost = ' + str(dataFidelity+regularizationCost) + ' = ' + str(dataFidelity) + ' + ' + str(regularizationCost))
                 else:
                     print('\tcost = ' + str(dataFidelity))
@@ -3484,6 +3599,9 @@ class tomographicModels:
             filters = filterSequence(0.0)
         elif isinstance(filters, (int, float)):
             print('Error: invalid inputs!  Note that algorithm syntax has changed, please see documentation.')
+            return None
+        
+        if self.verify_inputs(g,f) == False:
             return None
         
         if preconditionerFWHM > 1.0:
@@ -3646,6 +3764,9 @@ class tomographicModels:
             print('Error: mask must be the same shape as the projection data!')
             return None
             
+        if self.verify_inputs(g,f) == False:
+            return None
+            
         if filters is None:
             filters = filterSequence(0.0)
         elif isinstance(filters, (int, float)):
@@ -3655,7 +3776,8 @@ class tomographicModels:
         numSubsets = max(1,numSubsets)
         filters.beta = max(0.0, filters.beta/float(numSubsets))
     
-        t = self.expNeg(g)
+        self.expNeg(g)
+        t = g
 
         if self.isAllZeros(f) == False:
             f[f<=0.0] = 0.0
@@ -3677,7 +3799,8 @@ class tomographicModels:
                     print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
                 self.project(Pf,f)
                 
-                transDiff[:] = self.expNeg(Pf)
+                transDiff[:] = Pf[:]
+                self.expNeg(transDiff)
                 
                 if mask is not None:
                     transDiff[:] = transDiff[:] * P1[:] * mask[:]
@@ -3729,7 +3852,8 @@ class tomographicModels:
                     
                     self.project(Pf,f)
                     
-                    transDiff[:] = self.expNeg(Pf)
+                    transDiff[:] = Pf[:]
+                    self.expNeg(transDiff)
                     
                     if mask_subsets is not None:
                         transDiff[:] = transDiff[:] * P1_subsets[m][:] * mask_subsets[m][:]
@@ -3765,7 +3889,8 @@ class tomographicModels:
         
             subsetParams.setSubset(-1)
         
-        g = self.negLog(t)
+        g = t
+        self.negLog(g)
         filters.beta = filters.beta*float(numSubsets)
         
         return f

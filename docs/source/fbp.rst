@@ -14,3 +14,4 @@ Analytic Reconstruction (FBP)
 .. autofunction:: leapctype.tomographicModels.set_offsetScan
 .. autofunction:: leapctype.tomographicModels.LT
 .. autofunction:: leapctype.tomographicModels.inconsistencyReconstruction
+.. autofunction:: leapctype.tomographicModels.space_carving

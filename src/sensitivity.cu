@@ -231,16 +231,32 @@ __global__ void coneBeamSensitivityKernel(const int4 N_g, const float4 T_g, cons
             const float dist_from_source_components_y = fabs(R * sin_phi - tau * cos_phi - y);
             const float v_denom_inv = rsqrtf(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
             const float v_arg = (z - z_source) * v_denom_inv;
-            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            if (T_g.w == 0.0f)
+            {
+                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                    val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
+            else
+            {
+                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                    val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
         }
         else
         {
             const float v_denom_inv = 1.0f / (R - x * cos_phi - y * sin_phi);
             const float u_arg = (-sin_phi * x + cos_phi * y + tau) * v_denom_inv;
             const float v_arg = (z - z_source) * v_denom_inv;
-            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                val += sqrtf(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            if (T_g.w == 0.0f)
+            {
+                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                    val += sqrtf(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
+            else
+            {
+                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                    val += sqrtf(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
         }
     }
     if (val == 0.0f)
