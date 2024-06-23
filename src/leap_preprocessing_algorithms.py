@@ -472,3 +472,70 @@ def entropy(x):
     marg = list(filter(lambda p: p > 0, np.ravel(marg)))
     return -np.sum(np.multiply(marg, np.log2(marg)))
     
+def MTF(leapct, f, r, center=None):
+    if leapct.ct_volume_defined() == False:
+        return None
+    x = leapct.x_samples()
+    y = leapct.y_samples()
+    z = leapct.z_samples()
+
+    if center is None:
+        x_c = 0.0
+        y_c = 0.0
+        z_c = 0.0
+    else:
+        x_c = center[0]
+        y_c = center[1]
+        z_c = center[2]
+    
+    iz = np.argmin(np.abs(z-z_c))
+    iz = max(0, min(leapct.get_numZ()-1, iz))
+    f_slice = np.squeeze(f[iz,:,:])
+    y,x = np.meshgrid(y,x, indexing='ij')
+    dist = np.sqrt((x-x_c)**2 + (y-y_c)**2)
+    ind = dist < 2.0*r
+    mus = f_slice[ind]
+    distanceFromCenter = dist[ind]
+    
+    M = 4 # the oversampling factor
+    T_samples = leapct.get_voxelWidth() / float(M)
+    N_samples = 2*M * int(r / (2*M * T_samples)) # N*T/2 <= r
+    r_0 = r - float(N_samples) / 2.0 * T_samples
+    
+    #float r_min = (float(i) - 0.5) * T_samples + r_0;
+    #float r_max = r_min + T_samples;
+    radial_bins = np.array(range(N_samples))*T_samples + r_0 - 0.5*T_samples
+
+    mus_equispaced = np.zeros(N_samples)
+    for i in range(N_samples-1, -1, -1):
+        r_min = (float(i) - 0.5) * T_samples + r_0
+        r_max = r_min + T_samples
+        
+        ind = np.logical_and(r_min < distanceFromCenter , distanceFromCenter <= r_max)
+        if np.any(ind):
+            mus_equispaced[i] = np.mean(mus[ind])
+        else:
+            if i + 1 < N_samples:
+                mus_equispaced[i] = mus_equispaced[i + 1]
+            else:
+                mus_equispaced[i] = 0.0
+
+    #LSF[i] = -1.0 * (mus_equispaced[i + 1] - mus_equispaced[i - 1]) / (2.0 * T_samples);
+    LSF = (np.roll(mus_equispaced, -1) - np.roll(mus_equispaced, 1)) / (2.0 * T_samples)
+    LSF[0] = 0.0
+    LSF[-1] = 0.0
+    
+    abs_FFT_LSF = np.abs(np.fft.fft(LSF))
+    DCvalue = abs_FFT_LSF[0]
+    abs_FFT_LSF = abs_FFT_LSF[0:N_samples//2]
+    
+    #import matplotlib.pyplot as plt
+    #plt.plot(abs_FFT_LSF, 'k-*')
+    #plt.show()
+    
+    omega = np.array(range(N_samples//2)) * 2.0 / float(N_samples)
+    MTF = abs_FFT_LSF / DCvalue / np.sinc(omega)
+    MTF = MTF[0:N_samples//8]
+    
+    return MTF
+    

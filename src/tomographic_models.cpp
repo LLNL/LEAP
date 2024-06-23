@@ -761,6 +761,26 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 #endif
 }
 
+int tomographicModels::numRowsRequiredForBackprojectingSlab(int numSlicesPerChunk)
+{
+	int maxRows = 0;
+
+	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstSlice = ichunk * numSlicesPerChunk;
+		int lastSlice = std::min(firstSlice + numSlicesPerChunk - 1, params.numZ - 1);
+		int numSlices = lastSlice - firstSlice + 1;
+
+		int rowRange[2];
+		params.rowRangeNeededForBackprojection(firstSlice, lastSlice, rowRange);
+		int numRows = rowRange[1] - rowRange[0] + 1;
+
+		maxRows = std::max(maxRows, numRows);
+	}
+	return maxRows;
+}
+
 float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols)
 {
 	float maxMemory = 0.0;

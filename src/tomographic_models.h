@@ -984,6 +984,14 @@ public:
 	bool projectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool backprojectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
+	/**
+	 * \fn          numRowsRequiredForBackprojectingSlab
+	 * \brief       determines the maximum number of detector rows required to backproject a sub-volume with a specified number of z-slices
+	 * \param[in]   numSlicesPerChunk: number of z-slices in a subvolume
+	 * \return      number of slices required
+	 */
+	int numRowsRequiredForBackprojectingSlab(int numSlicesPerChunk);
+
 	parameters params;
 	phantom geometricPhantom;
 private:

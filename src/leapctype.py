@@ -2250,7 +2250,7 @@ class tomographicModels:
             self.libprojectors.windowFOV(f, True)
         return f
     
-    def rowRangeNeededForBackprojection(self, ):
+    def rowRangeNeededForBackprojection(self):
         r"""Calculates the detector rows necessary to reconstruct the current volume specification
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2270,6 +2270,42 @@ class tomographicModels:
         self.set_model()
         self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
         return rowsNeeded
+        
+    def viewRangeNeededForBackprojection(self):
+        r"""Calculates the detector projections necessary to reconstruct the current volume specification
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        For anything but helical cone-beam data this function will return np.array([0, numAngles-1]).
+        For helical cone-beam data, the function can be used to inform the user of the only projection angle indies that
+        are necessary to reconstruct the volume.  This can be used to reduce the input data size which can
+        be important to speed up calculations or reduce the CPU and/or GPU memory necessary to perform reconstruction.
+        
+        Returns:
+            viewsNeeded, a 2X1 numpy array where the values are the first and last projection index needed to reconstruct the volume.
+        
+        """
+        viewsNeeded = np.zeros(2,dtype=np.int32)
+        viewsNeeded[1] = self.get_numAngles()-1
+        self.libprojectors.viewRangeNeededForBackprojection.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
+        self.libprojectors.viewRangeNeededForBackprojection.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.viewRangeNeededForBackprojection(viewsNeeded)
+        return viewsNeeded
+        
+    def numRowsRequiredForBackprojectingSlab(self, numSlicesPerChunk):
+        r"""Determines the maximum number of detector rows required to backproject a sub-volume with a specified number of z-slices
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        
+        Args:
+            numSlicesPerChunk (int): the number of z-slices in a sub-volume
+            
+        Returns:
+            the maximum number of rows required to backproject a sub-volume of the specified number of slices
+        """
+        self.libprojectors.numRowsRequiredForBackprojectingSlab.argtypes = [ctypes.c_int]
+        self.libprojectors.numRowsRequiredForBackprojectingSlab.restype = ctypes.c_bool
+        return self.libprojectors.numRowsRequiredForBackprojectingSlab(numSlicesPerChunk)
         
     def sliceRangeNeededForProjection(self, doClip=True):
         r"""Calculates the volume z-slices necessary to forward project the view seen by the detectors
