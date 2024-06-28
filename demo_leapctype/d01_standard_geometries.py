@@ -58,6 +58,11 @@ leapct.set_default_volume()
 # If you want to specify the volume yourself, use this function:
 #leapct.set_volume(numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
 
+# By default, LEAP applies a circular field of view mask to the CT volume.  The diameter of this mask is determined by the 
+# CT geometry parameters, but this may be overriden (mask can be made smaller, bigger, or completely removed) by using the
+# following function where d is the diameter of the field of view measured in mm
+#leapct.set_diameterFOV(d)
+
 # Trouble-Shooting Functions
 leapct.print_parameters()
 #leapct.sketch_system()

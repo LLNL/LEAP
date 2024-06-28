@@ -6,6 +6,13 @@ import matplotlib.pyplot as plt
 from leapctype import *
 
 '''
+!!! PLEASE READ THIS FIRST !!!
+
+If all one is interested in is how to reconstruct curved detector cone-beam CT data, just see the first demo script: d01_standard_geometries.py
+and uncomment the line that says: leapct.set_curvedDetector()
+
+This script demonstrates a method to rebin an array of modules arranged on an arc to a continuous curved detector.
+
 Most cone-beam systems with a curved detector are actually made up of a collection of modules that are arranged on an
 arc whose radius is given by the source to detector distance (sdd).  In other words, each detector is normal to the
 ray from the source to itself.  Making each detector module normal increases the x-ray flux and allows for anti-scatter
