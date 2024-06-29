@@ -173,7 +173,7 @@ bool tomographicModels::project_cpu(float* g, float* f)
 {
 	int whichGPU_save = params.whichGPU;
 	params.whichGPU = -1;
-	bool retVal = project(g, f, false);
+	bool retVal = project(g, f, true);
 	params.whichGPU = whichGPU_save;
 	return retVal;
 }
@@ -182,16 +182,40 @@ bool tomographicModels::backproject_cpu(float* g, float* f)
 {
 	int whichGPU_save = params.whichGPU;
 	params.whichGPU = -1;
-	bool retVal = backproject(g, f, false);
+	bool retVal = backproject(g, f, true);
 	params.whichGPU = whichGPU_save;
 	return retVal;
+}
+
+bool tomographicModels::filterProjections_cpu(float* g)
+{
+	int whichGPU_save = params.whichGPU;
+	params.whichGPU = -1;
+	bool retVal = filterProjections(g, true);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
+bool tomographicModels::filterProjections_gpu(float* g)
+{
+#ifndef __USE_CPU
+	int whichGPU_save = params.whichGPU;
+	if (params.whichGPU < 0)
+		params.whichGPU = 0;
+	bool retVal = filterProjections(g, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
 }
 
 bool tomographicModels::FBP_cpu(float* g, float* f)
 {
 	int whichGPU_save = params.whichGPU;
 	params.whichGPU = -1;
-	bool retVal = doFBP(g, f, false);
+	bool retVal = doFBP(g, f, true);
 	params.whichGPU = whichGPU_save;
 	return retVal;
 }

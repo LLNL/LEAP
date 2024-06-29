@@ -191,6 +191,22 @@ public:
 	bool filterProjections(float* g, bool data_on_cpu);
 
 	/**
+	 * \fn          filterProjections_cpu
+	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
+	 * \param[in]   g pointer to the projection data (input and output) on the cpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool filterProjections_cpu(float* g);
+
+	/**
+	 * \fn          filterProjections_gpu
+	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
+	 * \param[in]   g pointer to the projection data (input and output) on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool filterProjections_gpu(float* g);
+
+	/**
 	 * \fn          rampFilterVolume
 	 * \brief       applies a 2D ramp filter to each z-slice
 	 * \param[in]   f pointer to the volume data (input and output)

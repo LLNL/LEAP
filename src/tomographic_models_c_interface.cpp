@@ -195,6 +195,16 @@ bool filterProjections(float* g, bool data_on_cpu)
 	return tomo()->filterProjections(g, data_on_cpu);
 }
 
+bool filterProjections_gpu(float* g)
+{
+	return tomo()->filterProjections_gpu(g);
+}
+
+bool filterProjections_cpu(float* g)
+{
+	return tomo()->filterProjections_cpu(g);
+}
+
 bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar)
 {
 	return tomo()->HilbertFilterProjections(g, data_on_cpu, scalar);
@@ -953,7 +963,8 @@ bool saveParamsToFile(const char* param_fn)
 }
 
 /*
-PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+//PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
+PYBIND11_MODULE(leapct, m) {
     m.def("set_model", &set_model, "");
     m.def("create_new_model", &create_new_model, "");
     m.def("copy_parameters", &copy_parameters, "");
@@ -981,6 +992,8 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("HilbertFilterProjections", &HilbertFilterProjections, "");
     m.def("rampFilterProjections", &rampFilterProjections, "");
     m.def("filterProjections", &filterProjections, "");
+	m.def("filterProjections_gpu", &filterProjections_gpu, "");
+	m.def("filterProjections_cpu", &filterProjections_cpu, "");
     m.def("rampFilterVolume", &rampFilterVolume, "");
     m.def("get_FBPscalar", &get_FBPscalar, "");
     m.def("FBP", &FBP, "");

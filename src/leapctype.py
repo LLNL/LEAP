@@ -1738,6 +1738,30 @@ class tomographicModels:
             self.libprojectors.filterProjections(g, True)
         return g
         
+    def filterProjections_cpu(self, g):
+        self.libprojectors.filterProjections_cpu.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            if g.is_cuda:
+                print('Error: filterProjections_cpu requires the input be on the cpu')
+            else:
+                self.libprojectors.filterProjections_cpu.argtypes = [ctypes.c_void_p]
+                self.libprojectors.filterProjections_cpu(g.data_ptr())
+        else:
+            self.libprojectors.filterProjections_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.filterProjections_cpu(g)
+        return g
+        
+    def filterProjections_gpu(self, g):
+        self.libprojectors.filterProjections_gpu.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor and g.is_cuda == True:
+            self.libprojectors.filterProjections_gpu.argtypes = [ctypes.c_void_p]
+            self.libprojectors.filterProjections_gpu(g.data_ptr())
+        else:
+            print('Error: filterProjections_gpu requires the input be a torch tensor on a gpu')
+        return g
+        
     def rampFilterProjections(self, g):
         """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function.
         
@@ -2063,7 +2087,7 @@ class tomographicModels:
             f, the same as the input with the same name
         """
         
-        # First make validation checks that the data is on the CPU
+        # First make validation checks that the data is on the GPU
         if has_torch == True and type(g) is torch.Tensor:
             if g.is_cuda == False:
                 print('Error: FBP_gpu requires that the data be on the GPU')
@@ -2084,6 +2108,57 @@ class tomographicModels:
             self.set_model()
             self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
         return f
+    
+    def fbp_adjoint(self, g, f):
+        return self.FBP_adjoint(g, f)
+    
+    def FBP_adjoint(self, g, f):
+        """Performs the adjoint of the Filtered Backprojection (FBP) reconstruction of the volume data, f, and stores the result in g
+        
+        This function performs the adjoint of analytic reconstruction (i.e., adjoint of FBP) of nearly all LEAP geometries: parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries,
+        including both flat and curved detectors, axial or helical scans, Attenuated Radon Transform, symmetric object, etc.
+        Note that FDK is an FBP-type algorithm, so for simplicity we just called it FBP in LEAP.  The same goes for other analytic reconstructions.
+        
+        This function will not provide an exact adjoint of FBP for fan-beam or helical scans.
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
+        self.project(g,f)
+        self.filterProjections(g)
+        return g
+        
+    def fbp_adjoint_cpu(self, g, f):
+        # First make validation checks that the data is on the CPU
+        if has_torch == True and type(f) is torch.Tensor and f.is_cuda == True:
+            print('Error: fbp_adjoint_cpu requires that the data be on the CPU')
+            return g
+
+        self.project_cpu(g,f)
+        self.filterProjections_cpu(g)
+        return g
+        
+    def fbp_adjoint_gpu(self, g, f):
+        # First make validation checks that the data is on the GPU
+        if has_torch == True and type(f) is torch.Tensor:
+            if f.is_cuda == False:
+                print('Error: fbp_adjoint_gpu requires that the data be on the GPU')
+                return g
+        else:
+            print('Error: fbp_adjoint_gpu requires that the data be pytorch tensors on the GPU')
+            return g
+
+        self.project_gpu(g,f)
+        self.filterProjections_gpu(g)
+        return g
     
     def LT(self, g, f=None, inplace=False):
         """Performs a Lambda/Local Tomography (LT) reconstruction of the projection data, g, and stores the result in f

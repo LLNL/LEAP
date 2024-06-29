@@ -13,7 +13,7 @@ from torch.utils.cpp_extension import CUDAExtension
 from torch.utils.cpp_extension import CppExtension
 from torch.utils.cpp_extension import BuildExtension
 import os
-#import pybind11
+import pybind11
 import torch
 from sys import platform as _platform
 
@@ -82,11 +82,12 @@ if cuda:
                             'nvcc': ['-D__USE_GPU', '-O3']}
         libraries = []
     else: # CUDA GPU
-        #extra_compile_args={'cxx': ['-D__USE_GPU'], 
-        #                    'nvcc': ['-D__USE_GPU', '-O3']}
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
-                            'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
-        libraries = ['cufft']
+        extra_compile_args={'cxx': ['-D__USE_GPU'], 
+                            'nvcc': ['-D__USE_GPU', '-O3']}
+        #extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
+        #                    'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
+        #libraries = ['cufft']
+        libraries = []
     ext_mod = CUDAExtension(
         name='leapct',
         sources=source_files,

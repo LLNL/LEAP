@@ -65,6 +65,8 @@ extern "C" PROJECTOR_API bool weightedBackproject(float* g, float* f, bool data_
 extern "C" PROJECTOR_API bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar);
 extern "C" PROJECTOR_API bool rampFilterProjections(float* g, bool data_on_cpu, float scalar);
 extern "C" PROJECTOR_API bool filterProjections(float* g, bool data_on_cpu);
+extern "C" PROJECTOR_API bool filterProjections_gpu(float* g);
+extern "C" PROJECTOR_API bool filterProjections_cpu(float* g);
 extern "C" PROJECTOR_API bool rampFilterVolume(float* f, bool data_on_cpu);
 extern "C" PROJECTOR_API float get_FBPscalar();
 
