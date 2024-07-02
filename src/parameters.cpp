@@ -366,7 +366,7 @@ float parameters::furthestFromCenter()
 	//*/
 }
 
-bool parameters::voxelSizeWorksForFastSF()
+bool parameters::voxelSizeWorksForFastSF(int whichDirection)
 {
 	float r = min(furthestFromCenter(), rFOV());
 	if (geometry == CONE || geometry == MODULAR) // || geometry == FAN)
@@ -380,15 +380,32 @@ bool parameters::voxelSizeWorksForFastSF()
 		float largestDetectorHeight = (sod + r) / sdd * pixelHeight;
 		float smallestDetectorHeight = (sod - r) / sdd * pixelHeight;
 		//printf("%f to %f\n", 0.5*largestDetectorWidth, 2.0*smallestDetectorWidth);
-		if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
+		if (whichDirection == -1) // backprojection
 		{
-			//printf("using SF projector\n");
-			return true;
+			if (voxelWidth > 2.0 * smallestDetectorWidth || voxelHeight > 2.0 * smallestDetectorHeight)
+				return false;
+			else
+				return true;
 		}
-		else
+		else if (whichDirection == 1) // forward projection
 		{
-			//printf("using Siddon projector\n");
-			return false;
+			if (0.5 * largestDetectorWidth > voxelWidth || 0.5 * largestDetectorHeight > voxelHeight)
+				return false;
+			else
+				return true;
+		}
+		else //if (whichDirection == 0)
+		{
+			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
+			{
+				//printf("using SF projector\n");
+				return true;
+			}
+			else
+			{
+				//printf("using Siddon projector\n");
+				return false;
+			}
 		}
 	}
 	else if (geometry == FAN)
@@ -396,23 +413,51 @@ bool parameters::voxelSizeWorksForFastSF()
 		float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
 		float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
 
-		if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
+		if (whichDirection == -1) // backprojection
 		{
-			//printf("using SF projector\n");
-			return true;
+			if (voxelWidth > 2.0 * smallestDetectorWidth)
+				return false;
+			else
+				return true;
+		}
+		else if (whichDirection == 1) // projection
+		{
+			if (0.5 * largestDetectorWidth > voxelWidth)
+				return false;
+			else
+				return true;
 		}
 		else
 		{
-			//printf("using Siddon projector\n");
-			return false;
+			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
+				return true;
+			else
+				return false;
 		}
 	}
 	else //if (geometry == PARALLEL)
 	{
-		if (0.5 * pixelWidth <= voxelWidth && voxelWidth <= 2.0 * pixelWidth)
-			return true;
+		if (whichDirection == -1) // backprojection
+		{
+			if (voxelWidth > 2.0 * pixelWidth)
+				return false;
+			else
+				return true;
+		}
+		else if (whichDirection == 1) // projection
+		{
+			if (0.5 * pixelWidth > voxelWidth)
+				return false;
+			else
+				return true;
+		}
 		else
-			return false;
+		{
+			if (0.5 * pixelWidth <= voxelWidth && voxelWidth <= 2.0 * pixelWidth)
+				return true;
+			else
+				return false;
+		}
 	}
 }
 

@@ -1219,7 +1219,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
     // -sin_phi*u - cos_phi; u*cos_phi - sin_phi
     if (fabs(u * cos_phi - sin_phi) > fabs(u * sin_phi + cos_phi))
     {
-        const float rayParam_slope = 1.0 / (-sin_phi + u * cos_phi);
+        const float rayParam_slope = 1.0f / (-sin_phi + u * cos_phi);
         const float rayParam_offset = (-R * sin_phi + tau * cos_phi) * rayParam_slope;
 
         const float x_shift = R * cos_phi + tau * sin_phi;
@@ -1260,7 +1260,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
                 for (int iz = iz_c - diz; iz <= iz_c + diz; iz++)
                 {
                     // calculate v index for z-0.5*T_f.z and z+0.5*T_f.z
-                    const float z = iz * T_f.z + startVals_f.z;
+                    const float z = iz * T_f.z + startVals_f.z - z_source;
                     const float z_A = ((z - 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
                     const float z_B = ((z + 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
 
@@ -1277,7 +1277,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
     }
     else
     {
-        const float rayParam_slope = 1.0 / (-cos_phi - u * sin_phi);
+        const float rayParam_slope = 1.0f / (-cos_phi - u * sin_phi);
         const float rayParam_offset = (-R * cos_phi - tau * sin_phi) * rayParam_slope;
 
         const float y_shift = R * sin_phi - tau * cos_phi;
@@ -1316,7 +1316,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
                 for (int iz = iz_c - diz; iz <= iz_c + diz; iz++)
                 {
                     // calculate v index for z-0.5*T_f.z and z+0.5*T_f.z
-                    const float z = iz * T_f.z + startVals_f.z;
+                    const float z = iz * T_f.z + startVals_f.z - z_source;
                     const float z_A = ((z - 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
                     const float z_B = ((z + 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
 
@@ -1342,9 +1342,11 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
     if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
         return;
 
-    const float u = tan(n * T_g.z + startVals_g.z);
-    const float sqrt_1_plus_u_sq = sqrtf(1.0 + u * u);
-    const float v = (m * T_g.y + startVals_g.y) * sqrt_1_plus_u_sq;
+    const float alpha = n * T_g.z + startVals_g.z;
+    const float u = tan(alpha);
+    const float cos_alpha = cos(alpha);
+    const float sqrt_1_plus_u_sq = sqrtf(1.0f + u * u);
+    const float v = (m * T_g.y + startVals_g.y);// *sqrt_1_plus_u_sq;
 
     const float z_source = phis[l] * T_g.w + startVals_g.w;
 
@@ -1368,14 +1370,15 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
     float g_output = 0.0f;
 
     // x = R*theta - tau*theta_perp + l*[-theta + u*theta_perp + v*z]
+    // x = R*theta - tau*theta_perp + l*[-theta(phi-u) + v*z]
     // -sin_phi*u - cos_phi; u*cos_phi - sin_phi
     if (fabs(u * cos_phi - sin_phi) > fabs(u * sin_phi + cos_phi))
     {
-        const float rayParam_slope = 1.0 / (-sin_phi + u * cos_phi);
+        const float rayParam_slope = 1.0f / (cos_alpha*(-sin_phi + u * cos_phi));
         const float rayParam_offset = (-R * sin_phi + tau * cos_phi) * rayParam_slope;
 
         const float x_shift = R * cos_phi + tau * sin_phi;
-        const float x_slope = -cos_phi - u * sin_phi;
+        const float x_slope = cos_alpha * (-cos_phi - u * sin_phi);
 
         const float cos_over_sin = cos_phi / sin_phi;
 
@@ -1404,15 +1407,15 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
                 // calculate u index for x-0.5*T_f.x and x+0.5*T_f.x
                 const float x = ix * T_f.x + startVals_f.x;
 
-                const float x_A = (((x_shift - x + vox_half) * rayParam_sin_inv - cos_over_sin) - startVals_g.z) * T_u_inv;
-                const float x_B = (((x_shift - x - vox_half) * rayParam_sin_inv - cos_over_sin) - startVals_g.z) * T_u_inv;
+                const float x_A = (atan((x_shift - x + vox_half) * rayParam_sin_inv * sqrt_1_plus_u_sq - cos_over_sin) - startVals_g.z) * T_u_inv;
+                const float x_B = (atan((x_shift - x - vox_half) * rayParam_sin_inv * sqrt_1_plus_u_sq - cos_over_sin) - startVals_g.z) * T_u_inv;
                 const float uFootprint = max(0.0f, min(max(x_A, x_B), u_hi) - max(min(x_A, x_B), u_lo));
                 if (uFootprint == 0.0f)
                     continue;
                 for (int iz = iz_c - diz; iz <= iz_c + diz; iz++)
                 {
                     // calculate v index for z-0.5*T_f.z and z+0.5*T_f.z
-                    const float z = iz * T_f.z + startVals_f.z;
+                    const float z = iz * T_f.z + startVals_f.z - z_source;
                     const float z_A = ((z - 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
                     const float z_B = ((z + 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
 
@@ -1425,15 +1428,15 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
                 }
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs((u * cos_phi - sin_phi)) * sqrt(1.0f + v * v) * g_output;
     }
     else
     {
-        const float rayParam_slope = 1.0 / (-cos_phi - u * sin_phi);
+        const float rayParam_slope = 1.0f / (cos_alpha*(-cos_phi - u * sin_phi));
         const float rayParam_offset = (-R * cos_phi - tau * sin_phi) * rayParam_slope;
 
         const float y_shift = R * sin_phi - tau * cos_phi;
-        const float y_slope = -sin_phi + u * cos_phi;
+        const float y_slope = cos_alpha * (-sin_phi + u * cos_phi);
 
         const float sin_over_cos = sin_phi / cos_phi;
 
@@ -1460,15 +1463,15 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
                 // calculate u index for y-0.5*T_f.y and y+0.5*T_f.y
                 const float y = iy * T_f.y + startVals_f.y;
 
-                const float y_A = (((y - vox_half - y_shift) * rayParam_cos_inv + sin_over_cos) - startVals_g.z) * T_u_inv;
-                const float y_B = (((y + vox_half - y_shift) * rayParam_cos_inv + sin_over_cos) - startVals_g.z) * T_u_inv;
+                const float y_A = (atan((y - vox_half - y_shift) * rayParam_cos_inv * sqrt_1_plus_u_sq + sin_over_cos) - startVals_g.z) * T_u_inv;
+                const float y_B = (atan((y + vox_half - y_shift) * rayParam_cos_inv * sqrt_1_plus_u_sq + sin_over_cos) - startVals_g.z) * T_u_inv;
                 const float uFootprint = max(0.0f, min(max(y_A, y_B), u_hi) - max(min(y_A, y_B), u_lo));
                 if (uFootprint == 0.0f)
                     continue;
                 for (int iz = iz_c - diz; iz <= iz_c + diz; iz++)
                 {
                     // calculate v index for z-0.5*T_f.z and z+0.5*T_f.z
-                    const float z = iz * T_f.z + startVals_f.z;
+                    const float z = iz * T_f.z + startVals_f.z - z_source;
                     const float z_A = ((z - 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
                     const float z_B = ((z + 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
 
@@ -1481,8 +1484,7 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
                 }
             }
         }
-
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs((u * sin_phi + cos_phi)) * sqrt(1.0f + v * v) * g_output;
     }
 }
 

@@ -422,6 +422,7 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
+    //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
 }
 
 __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
@@ -527,6 +528,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
+    //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
 }
 
 __global__ void splitLeftAndRight(const float* g, float* g_left, float* g_right, int4 N, float4 T, float4 startVal)
@@ -1730,7 +1732,8 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
 
-    float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    //float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    float epsilon = float(std::min(0.5, T_g.z / (4.0 * fabs(params->T_phi()))));
 
     float* dev_g = 0;
     float* dev_Dg = 0;
@@ -1797,7 +1800,9 @@ bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cp
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
 
-    float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    //float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    float epsilon = float(std::min(0.5, T_g.z / (4.0 * fabs(params->T_phi()))));
+    //float epsilon = T_g.z / (4.0 * fabs(params->T_phi()));
 
     int maxChunkSize = 100;
     int numChunks = int(ceil(double(params->numAngles) / double(maxChunkSize)));

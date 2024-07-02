@@ -102,46 +102,119 @@ class BackProjectorFunctionGPU(torch.autograd.Function):
         return proj, None, None, None
 
 
-# Pytorch Projector class
-class Projector(torch.nn.Module):
-    """ Python class for PyTorch binding of LEAP
-    
-    Note that leapct is a member variable of this class which is an object of the leapctype.tomographicModels class.
-    
-    Thus all tomography functions can be access by (object of this class).leapct.XXX
-    
-    Usage Example:
-    
-    from leaptorch import Projector
-    
-    proj = Projector(forward_project=True, use_static=True, use_gpu=use_cuda, gpu_device=device)
-    
-    proj.set_conebeam(...)
-    
-    proj.set_default_volume(...)
-    ...
-    """
 
-    def __init__(self, forward_project=True, use_static=False, use_gpu=False, gpu_device=None, batch_size=1):
-        super(Projector, self).__init__()
-        self.forward_project = forward_project
 
-        if use_static:
+# CPU FBP for forward and backward propagation
+class FBPFunctionCPU(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, proj, vol, param_id): # input: projection (sinogram), output: image
+        for batch in range(input.shape[0]):
+            f = vol[batch]
+            g = input[batch]
+            lct.fbp_cpu(g, f) # compute input (f) from proj (g)
+        ctx.save_for_backward(input, proj, param_id)
+        return vol
+        
+    @staticmethod
+    def backward(ctx, grad_output): # grad_output: image, grad_input: projection (sinogram)
+        input, proj, param_id = ctx.saved_tensors
+        for batch in range(input.shape[0]):
+            f = grad_output[batch]
+            g = proj[batch]
+            lct.fbp_adjoint_cpu(g, f) # compute proj (g) from input (f) -> needs to be replaced!!!
+        return proj, None, None, None
+
+
+# GPU FBP for forward and backward propagation
+class FBPFunctionGPU(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, proj, vol, param_id): # input: projection (sinogram), output: image
+        for batch in range(input.shape[0]):
+            f = vol[batch]
+            g = input[batch]
+            lct.fbp_gpu(g, f) # compute input (f) from proj (g)
+        ctx.save_for_backward(input, proj, param_id)
+        return vol
+        
+    @staticmethod
+    def backward(ctx, grad_output): # grad_output: image, grad_input: projection (sinogram)
+        input, proj, param_id = ctx.saved_tensors
+        for batch in range(input.shape[0]):
+            f = grad_output[batch]
+            g = proj[batch]
+            lct.fbp_adjoint_gpu(g, f) # compute proj (g) from input (f) -> needs to be replaced!!!
+        return proj, None, None, None
+
+
+
+# CPU reverse FBP for forward and backward propagation
+class FBPReverseFunctionCPU(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, proj, vol, param_id): # input: image, output: projection (sinogram)
+        for batch in range(input.shape[0]):
+            f = input[batch]
+            g = proj[batch]
+            lct.fbp_adjoint_cpu(g, f) # compute proj (g) from input (f)
+        ctx.save_for_backward(input, vol, param_id)
+        return proj
+
+    @staticmethod
+    def backward(ctx, grad_output): # grad_output: projection (sinogram) grad_input: image
+        input, vol, param_id = ctx.saved_tensors
+        for batch in range(input.shape[0]):
+            f = vol[batch]
+            g = grad_output[batch]
+            lct.fbp_cpu(g, f) # compute input (f) from proj (g)
+        return vol, None, None, None
+
+# GPU reverse FBP for forward and backward propagation
+class FBPReverseFunctionGPU(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, input, proj, vol, param_id): # input: image, output: projection (sinogram)
+        for batch in range(input.shape[0]):
+            f = input[batch]
+            g = proj[batch]
+            lct.fbp_adjoint_gpu(g, f) # compute proj (g) from input (f)
+        ctx.save_for_backward(input, vol, param_id)
+        return proj
+
+    @staticmethod
+    def backward(ctx, grad_output): # grad_output: projection (sinogram) grad_input: image
+        input, vol, param_id = ctx.saved_tensors
+        for batch in range(input.shape[0]):
+            f = vol[batch]
+            g = grad_output[batch]
+            lct.fbp_gpu(g, f) # compute input (f) from proj (g)
+        return vol, None, None, None    
+    
+
+# base abstract Projector class
+class BaseProjector(torch.nn.Module):
+    def __init__(self, use_static=False, use_gpu=False, gpu_device=None, batch_size=1):
+        super(BaseProjector, self).__init__()
+
+        self.use_static = use_static
+        self.use_gpu = use_gpu
+        self.gpu_device = gpu_device
+        self.batch_size = batch_size
+
+        if self.use_static:
             self.param_id = 0
             self.leapct = tomographicModels(self.param_id)
         else:
             self.leapct = tomographicModels()
             self.param_id = self.leapct.param_id
         lct.param_id = self.param_id
-        self.param_id_t = torch.tensor(self.param_id).to(gpu_device) if use_gpu else torch.tensor(self.param_id)
-        self.use_gpu = use_gpu
-        self.gpu_device = gpu_device
+        self.param_id_t = torch.tensor(self.param_id).to(self.gpu_device) if self.use_gpu else torch.tensor(self.param_id)
         if self.use_gpu:
             self.set_gpu(self.gpu_device)
         self.batch_size = batch_size
         self.vol_data = None
         self.proj_data = None
-        
+
+    def forward(self, input):
+        return None
+
     def set_volume(self, numX, numY, numZ, voxelWidth, voxelHeight, offsetX=0.0, offsetY=0.0, offsetZ=0.0):
         """Set the CT volume parameters
         
@@ -355,6 +428,45 @@ class Projector(torch.nn.Module):
     def print_parameters(self):
         """Prints the CT geometry and CT volume parameters to the screen"""
         self.leapct.print_parameters()
+
+   ###################################################################################################################
+    ###################################################################################################################
+    # THIS SECTION OF FUNCTIONS ARE ALIASES OF FUNCTIONS ABOVE INCLUDED FOR BACKWARD COMPATIBILITY
+    ###################################################################################################################
+    ###################################################################################################################
+    def print_param(self):
+        self.print_parameters()
+
+    def set_GPU(self,which):
+        return self.set_gpu(which)
+        
+    def set_GPUs(self,listofgpus):
+        return self.set_gpus(listofgpus)
+
+
+# Pytorch Projector class
+class Projector(BaseProjector):
+    """ Python class for PyTorch binding of LEAP
+    
+    Note that leapct is a member variable of this class which is an object of the leapctype.tomographicModels class.
+    
+    Thus all tomography functions can be access by (object of this class).leapct.XXX
+    
+    Usage Example:
+    
+    from leaptorch import Projector
+    
+    proj = Projector(forward_project=True, use_static=True, use_gpu=use_cuda, gpu_device=device)
+    
+    proj.set_conebeam(...)
+    
+    proj.set_default_volume(...)
+    ...
+    """
+
+    def __init__(self, forward_project=True, use_static=False, use_gpu=False, gpu_device=None, batch_size=1):
+        super(Projector, self).__init__(use_static, use_gpu, gpu_device, batch_size)
+        self.forward_project = forward_project
     
     def fbp(self, input): # input is projection data (g batch)
         """Performs Filtered Backprojection (FBP) reconstruction of any CT geometry on the batch data"""
@@ -378,19 +490,23 @@ class Projector(torch.nn.Module):
             else:
                 return BackProjectorFunctionCPU.apply(input, self.proj_data, self.vol_data, self.param_id_t)
 
-    
 
-    ###################################################################################################################
-    ###################################################################################################################
-    # THIS SECTION OF FUNCTIONS ARE ALIASES OF FUNCTIONS ABOVE INCLUDED FOR BACKWARD COMPATIBILITY
-    ###################################################################################################################
-    ###################################################################################################################
-    def print_param(self):
-        self.print_parameters()
 
-    def set_GPU(self,which):
-        return self.set_gpu(which)
-        
-    def set_GPUs(self,listofgpus):
-        return self.set_gpus(listofgpus)
-    
+class FBP(BaseProjector):
+
+    def __init__(self, forward_FBP=True, use_static=False, use_gpu=False, gpu_device=None, batch_size=1):
+        super(FBP, self).__init__(use_static, use_gpu, gpu_device, batch_size)
+        self.forward_FBP = forward_FBP
+
+    def forward(self, input):
+        if self.forward_FBP:
+            if self.use_gpu:
+                return FBPFunctionGPU.apply(input, self.proj_data, self.vol_data, self.param_id_t)
+            else:
+                return FBPFunctionCPU.apply(input, self.proj_data, self.vol_data, self.param_id_t)
+        else:
+            if self.use_gpu:
+                return FBPReverseFunctionGPU.apply(input, self.proj_data, self.vol_data, self.param_id_t)
+            else:
+                return FBPReverseFunctionCPU.apply(input, self.proj_data, self.vol_data, self.param_id_t)
+

@@ -452,7 +452,7 @@ public:
 	 * \brief       returns whether or not the voxel size is appropriate for the fast SF projectors
 	 * \return      returns true if the voxel size is appropriate for the fast SF projectors, false otherwise
 	 */
-	bool voxelSizeWorksForFastSF();
+	bool voxelSizeWorksForFastSF(int whichDirection = 0);
 
 	/**
 	 * \fn          projectionData_numberOfElements

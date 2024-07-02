@@ -1558,7 +1558,7 @@ bool backproject_SF_cone(float* g, float*& f, parameters* params, bool data_on_c
 
 bool project_SF(float *&g, float *f, parameters* params, bool data_on_cpu)
 {
-    if (params->voxelSizeWorksForFastSF() == false)
+    if (params->voxelSizeWorksForFastSF(1) == false)
     {
         //printf("using extended\n");
         if (params->voxelWidth < params->default_voxelWidth() || params->voxelHeight < params->default_voxelHeight())
@@ -1660,7 +1660,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
-    if (params->voxelSizeWorksForFastSF() == false)
+    if (params->voxelSizeWorksForFastSF(-1) == false)
     {
         //printf("using extended\n");
         if (params->voxelWidth > params->default_voxelWidth() || params->voxelHeight > params->default_voxelHeight())
