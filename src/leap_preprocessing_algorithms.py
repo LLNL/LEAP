@@ -148,7 +148,38 @@ def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     if isAttenuationData:
         leapct.negLog(g)
     return True
+
+def LowSignalCorrection(leapct, g, threshold=0.03, windowSize=3, signalThreshold=0.001, isAttenuationData=True):
+    r"""Corrects detector pixels that have very low transmission (phton starvation)
     
+    Assumes the input data is in attenuation space.
+    No LEAP parameters need to be set for this function to work 
+    and can be applied to any CT geometry type.
+    This algorithm processes each projection independently
+    and removes low signal errors by a double-thresholded median filter
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
+        threshold (float): A pixel will be replaced by the median of its neighbors if \|g - median(g)\|/median(g) > threshold
+        windowSize (int): The window size of the median filter applied is windowSize x windowSize
+        signalThreshold (float): threshold where only values less than this parameter will be corrected
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    
+    if g is None:
+        return False
+    
+    # This algorithm processes each transmission
+    if isAttenuationData:
+        leapct.expNeg(g)
+    leapct.LowSignalCorrection2D(g, threshold, windowSize, signalThreshold)
+    if isAttenuationData:
+        leapct.negLog(g)
+    return True    
 
 def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True):
     """Removes detector blur by fourier deconvolution

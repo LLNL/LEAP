@@ -742,10 +742,11 @@ public:
 	 * \param[in]   threshold original value is only replaced by the median value
 	 *              if the relative difference is greater than this value
 	 * \param[in]   w the window size in each dimension (must be 3 or 5)
+	 * \param[in]	signalThreshold: if greater than zero, only values less than this parameter are filtered
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool MedianFilter(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
+	bool MedianFilter(float* f, int, int, int, float threshold, int w, float signalThreshold, bool data_on_cpu);
 
 	/**
 	 * \fn          MeanOrVarianceFilter
@@ -771,10 +772,11 @@ public:
 	 * \param[in]   threshold original value is only replaced by the median value
 	 *              if the relative difference is greater than this value
 	 * \param[in]   w the window size in each dimension (must be 3, 5, or 7)
+	 * \param[in]	signalThreshold: if greater than zero, only values less than this parameter are filtered
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, bool data_on_cpu);
+	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, float signalThreshold, bool data_on_cpu);
 
 	/**
 	 * \fn          BilateralFilter

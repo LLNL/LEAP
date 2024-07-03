@@ -2145,7 +2145,7 @@ bool tomographicModels::HighPassFilter(float* f, int N_1, int N_2, int N_3, floa
 #endif
 }
 
-bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
+bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
@@ -2197,21 +2197,21 @@ bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, floa
 				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				medianFilter2D(f_chunk, sliceEnd - sliceStart+1, N_2, N_3, threshold, w, true, whichGPU);
+				medianFilter2D(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, threshold, w, signalThreshold, true, whichGPU);
 			}
 
 			return true;
 		}
 	}
 	else
-		return medianFilter2D(f, N_1, N_2, N_3, threshold, w, data_on_cpu, params.whichGPU);
+		return medianFilter2D(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
 #endif
 }
 
-bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
+bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
@@ -2275,7 +2275,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				medianFilter(f_in_chunk, numSlices_pad, N_2, N_3, threshold, w, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				medianFilter(f_in_chunk, numSlices_pad, N_2, N_3, threshold, w, signalThreshold, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
 			}
 			free(f_in);
 
@@ -2283,7 +2283,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 		}
 	}
 	else
-		return medianFilter(f, N_1, N_2, N_3, threshold, w, data_on_cpu, params.whichGPU);
+		return medianFilter(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;

@@ -4245,6 +4245,19 @@ class tomographicModels:
             self.libprojectors.MeanOrVarianceFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.MeanOrVarianceFilter(x, x.shape[0], x.shape[1], x.shape[2], windowRadius, 2, True)
     
+    def LowSignalCorrection(self, f, threshold=0.0, windowSize=3, signalThreshold=0.001):
+        r"""Same as MedianFilter, but only filters those values that are lower than the specified threshold
+        """
+        #bool MedianFilter(float* f, int, int, int, float threshold);
+        self.libprojectors.MedianFilter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.MedianFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, f.is_cuda == False)
+        else:
+            self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, True)
+    
     def MedianFilter(self, f, threshold=0.0, windowSize=3):
         r"""Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided array
         
@@ -4261,16 +4274,21 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
-        #bool MedianFilter(float* f, int, int, int, float threshold);
-        self.libprojectors.MedianFilter.restype = ctypes.c_bool
+        return self.LowSignalCorrection(f, threshold, windowSize, 0.0)
+    
+    def LowSignalCorrection2D(self, f, threshold=0.0, windowSize=3, signalThreshold=0.001):
+        r"""Same as MedianFilter2D, but only filters those values that are lower than the specified threshold
+        """
+        #bool MedianFilter2D(float* f, int, int, int, float threshold, int windowSize);
+        self.libprojectors.MedianFilter2D.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.MedianFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, f.is_cuda == False)
+            self.libprojectors.MedianFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.MedianFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, f.is_cuda == False)
         else:
-            self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
-            
+            self.libprojectors.MedianFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.MedianFilter2D(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, True)
+    
     def MedianFilter2D(self, f, threshold=0.0, windowSize=3):
         r"""Applies a thresholded 2D median filter (windowSize x windowSize) to the provided array
         
@@ -4287,15 +4305,7 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
-        #bool MedianFilter2D(float* f, int, int, int, float threshold, int windowSize);
-        self.libprojectors.MedianFilter2D.restype = ctypes.c_bool
-        self.set_model()
-        if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.MedianFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MedianFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, f.is_cuda == False)
-        else:
-            self.libprojectors.MedianFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MedianFilter2D(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, True)
+        return self.LowSignalCorrection2D(f, threshold, windowSize, 0.0)
     
     def PriorBilateralFilter(self, f, spatialFWHM, intensityFWHM, prior=None):
         """Performs 3D Bilateral Filter (BLF) denoising method where the intensity distance is measured against a prior image

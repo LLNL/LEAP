@@ -846,9 +846,9 @@ bool HighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_o
 	return tomo()->HighPassFilter(f, N_1, N_2, N_3, FWHM, data_on_cpu);
 }
 
-bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
+bool MedianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu)
 {
-	return tomo()->MedianFilter(f, N_1, N_2, N_3, threshold, w, data_on_cpu);
+	return tomo()->MedianFilter(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu);
 }
 
 bool MeanOrVarianceFilter(float* f, int N_1, int N_2, int N_3, int r, int order, bool data_on_cpu)
@@ -861,9 +861,9 @@ bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_
 	return tomo()->BlurFilter2D(f, N_1, N_2, N_3, FWHM, data_on_cpu);
 }
 
-bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu)
+bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu)
 {
-	return tomo()->MedianFilter2D(f, N_1, N_2, N_3, threshold, w, data_on_cpu);
+	return tomo()->MedianFilter2D(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu);
 }
 
 bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
