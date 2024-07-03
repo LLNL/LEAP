@@ -92,8 +92,8 @@ print('Filtering Elapsed Time: ' + str(time.time()-startTime))
 # Deconvolve Detector Blur
 # We implement two different methods to choose
 startTime = time.time()
-g = detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True)
-#g = detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True)
+detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True)
+#detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True)
 print('Deblur Elapsed Time: ' + str(time.time()-startTime))
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations

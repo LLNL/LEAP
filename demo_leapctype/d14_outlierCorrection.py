@@ -59,7 +59,7 @@ whichMethod = 1
 if whichMethod == 1:
     # Perform median filter based outlier correction
     # This is a very fast method which is good for isolated bad pixels
-    g = outlierCorrection(leapct,g)
+    outlierCorrection(leapct,g)
 
 
     # Reconstruct the data
