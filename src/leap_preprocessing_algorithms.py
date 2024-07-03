@@ -150,7 +150,7 @@ def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     return True
 
 def LowSignalCorrection(leapct, g, threshold=0.03, windowSize=3, signalThreshold=0.001, isAttenuationData=True):
-    r"""Corrects detector pixels that have very low transmission (phton starvation)
+    r"""Corrects detector pixels that have very low transmission (photon starvation)
     
     Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
@@ -271,7 +271,7 @@ def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
         maxChange (float): An upper limit on the maximum difference that can be applied to a detector pixels
     
     Returns:
-        The corrected data
+        True if successful, False otherwise
     """
     if has_torch == True and type(g) is torch.Tensor:
         g_sum = torch.zeros((1,g.shape[1],g.shape[2]), dtype=torch.float32)
@@ -316,7 +316,7 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
         numIter (int): Number of iterations
     
     Returns:
-        The corrected data
+        True if successful, False otherwise
     """
     
     Dg = leapct.copyData(g)
@@ -354,7 +354,7 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
         numIter (int): Number of iterations
     
     Returns:
-        The corrected data
+        True if successful, False otherwise
     """
     numNeighbors = leapct.get_numTVneighbors()
     leapct.set_numTVneighbors(6)
