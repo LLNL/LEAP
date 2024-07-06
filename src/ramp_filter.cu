@@ -793,6 +793,24 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
         return NULL;
     }
 
+    float theExponent = 1.0;
+    if (params->FBPlowpass >= 2.0)
+    {
+        theExponent = 1.0 / (1.0 - log2(1.0 + cos(PI / params->FBPlowpass)));
+        //printf("theExponent = %f\n", theExponent);
+        for (int i = 0; i < N_over2; i++)
+        {
+            //float omega = float(i)*PI / N_over2;
+            float omega = float(i) * PI / N;
+            float theWeight = pow(max(0.0, cos(omega)), 2.0 * theExponent);
+
+            H_Hilb[i].x *= theWeight;
+            H_Hilb[i].y *= theWeight;
+            //printf("H(%f) = %f (%d)\n", omega, theWeight, i);
+        }
+    }
+    
+
     // Clean up
     cufftDestroy(forward_plan);
     cudaFree(dev_h);
@@ -860,10 +878,26 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
         return NULL;
     }
 
+    float theExponent = 1.0;
+    if (params->FBPlowpass >= 2.0)
+    {
+        theExponent = 1.0 / (1.0 - log2(1.0 + cos(PI / params->FBPlowpass)));
+        //printf("theExponent = %f\n", theExponent);
+    }
+
     float* H_real = new float[N_over2];
     for (int i = 0; i < N_over2; i++)
     {
         H_real[i] = H_ramp[i].x / float(N);
+        if (params->FBPlowpass >= 2.0)
+        {
+            //float omega = float(i)*PI / N_over2;
+            float omega = float(i) * PI / N;
+            float theWeight = pow(max(0.0, cos(omega)), 2.0 * theExponent);
+
+            H_real[i] *= theWeight;
+            //printf("H(%f) = %f (%d)\n", omega, theWeight, i);
+        }
     }
 
     // Clean up

@@ -144,6 +144,7 @@ extern "C" PROJECTOR_API bool set_truncatedScan(bool);
 extern "C" PROJECTOR_API bool set_numTVneighbors(int);
 extern "C" PROJECTOR_API int get_numTVneighbors();
 extern "C" PROJECTOR_API bool set_rampID(int whichRampFilter);
+extern "C" PROJECTOR_API bool set_FBPlowpass(float W);
 extern "C" PROJECTOR_API bool set_tau(float tau);
 extern "C" PROJECTOR_API bool set_helicalPitch(float h);
 extern "C" PROJECTOR_API bool set_normalizedHelicalPitch(float h_normalized);

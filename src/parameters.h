@@ -377,6 +377,7 @@ public:
 	bool doExtrapolation;
 	float rFOVspecified;
 	int rampID;
+	float FBPlowpass;
 	float colShiftFromFilter;
 	float rowShiftFromFilter;
 	float axisOfSymmetry;

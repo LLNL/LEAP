@@ -530,6 +530,12 @@ bool set_rampID(int whichRampFilter)
 	return tomo()->set_rampID(whichRampFilter);
 }
 
+bool set_FBPlowpass(float W)
+{
+	tomo()->params.FBPlowpass = W;
+	return true;
+}
+
 bool set_tau(float tau)
 {
 	return tomo()->set_tau(tau);
@@ -1051,6 +1057,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("set_numTVneighbors", &set_numTVneighbors, "");
     m.def("get_numTVneighbors", &get_numTVneighbors, "");
     m.def("set_rampID", &set_rampID, "");
+	m.def("set_FBPlowpass", &set_FBPlowpass, "");
     m.def("set_tau", &set_tau, "");
     m.def("set_helicalPitch", &set_helicalPitch, "");
     m.def("set_normalizedHelicalPitch", &set_normalizedHelicalPitch, "");

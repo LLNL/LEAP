@@ -4719,7 +4719,18 @@ class tomographicModels:
         self.libprojectors.set_rampID.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_rampID(which)
+    
+    def set_FBPlowpass(self, W=1.0):
+        """Applies a low-pass filter of the specified FWHM to the ramp filter
         
+        Args:
+            W (float): the FWHM (in detector pixels) of a low pass filter applied to the ramp filter; must be >= 2.0
+        """
+        self.libprojectors.set_FBPlowpass.argtypes = [ctypes.c_float]
+        self.libprojectors.set_FBPlowpass.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_FBPlowpass(W)
+    
     def set_attenuationMap(self, mu):
         """Set the voxelized attenuation map for Attenuated Radon Transform calculations"""
         self.libprojectors.set_attenuationMap.restype = ctypes.c_bool

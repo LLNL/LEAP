@@ -10,6 +10,7 @@ Analytic Reconstruction (FBP)
 .. autofunction:: leapctype.tomographicModels.weightedBackproject
 .. autofunction:: leapctype.tomographicModels.rampFilterVolume
 .. autofunction:: leapctype.tomographicModels.set_rampFilter
+.. autofunction:: leapctype.tomographicModels.set_FBPlowpass
 .. autofunction:: leapctype.tomographicModels.get_FBPscalar
 .. autofunction:: leapctype.tomographicModels.set_truncatedScan
 .. autofunction:: leapctype.tomographicModels.set_offsetScan

@@ -203,10 +203,29 @@ float* rampFilterFrequencyResponseMagnitude_cpu(int N, parameters* params)
     // forward fft
     fft(data);
 
+    float theExponent = 1.0;
+    if (params->FBPlowpass >= 2.0)
+    {
+        theExponent = 1.0 / (1.0 - log2(1.0 + cos(PI / params->FBPlowpass)));
+        //printf("theExponent = %f\n", theExponent);
+    }
+
     float* H_real = new float[N];
     for (int i = 0; i < N; i++)
     {
         H_real[i] = real(data[i]) / float(N);
+        if (params->FBPlowpass >= 2.0)
+        {
+            //float omega = float(i)*PI / N_over2;
+            float omega = float(i) * PI / N;
+            if (i > N / 2)
+                omega = float(i - N) * PI / N;
+
+            float theWeight = pow(std::max(float(0.0), float(cos(omega))), 2.0 * theExponent);
+
+            H_real[i] *= theWeight;
+            //printf("H(%f) = %f (%d)\n", omega, theWeight, i);
+        }
     }
 
     // Clean up

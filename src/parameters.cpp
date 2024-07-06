@@ -55,6 +55,7 @@ void parameters::initialize()
 	doExtrapolation = false;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
+	FBPlowpass = 1.0;
 	chunkingMemorySizeThreshold = float(0.1);
 	colShiftFromFilter = 0.0;
 	rowShiftFromFilter = 0.0;
@@ -151,6 +152,7 @@ void parameters::assign(const parameters& other)
 	this->doWeightedBackprojection = other.doWeightedBackprojection;
 	this->doExtrapolation = other.doExtrapolation;
 	this->rampID = other.rampID;
+	this->FBPlowpass = other.FBPlowpass;
 	this->chunkingMemorySizeThreshold = other.chunkingMemorySizeThreshold;
 	this->colShiftFromFilter = other.colShiftFromFilter;
 	this->rowShiftFromFilter = other.rowShiftFromFilter;
