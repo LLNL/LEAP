@@ -265,7 +265,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		bool doWeightedBackprojection_save = params->doWeightedBackprojection;
 		params->doWeightedBackprojection = true;
 		bool doExtrapolation_save = params->doExtrapolation;
-		if (params->geometry != parameters::CONE || params->helicalPitch == 0.0)
+		if ((params->geometry != parameters::CONE && params->geometry != parameters::CONE_PARALLEL) || params->helicalPitch == 0.0)
 			params->doExtrapolation = true;
 		if (params->isSymmetric())
 		{

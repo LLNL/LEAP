@@ -31,6 +31,9 @@ bool backproject_eSF_fan(float*, float*&, parameters*, bool data_on_cpu);
 bool project_eSF_cone(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_eSF_cone(float*, float*&, parameters*, bool data_on_cpu);
 
+bool project_eSF_coneparallel(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_eSF_coneparallel(float*, float*&, parameters*, bool data_on_cpu);
+
 bool project_eSF_parallel(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_eSF_parallel(float*, float*&, parameters*, bool data_on_cpu);
 

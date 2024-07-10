@@ -137,7 +137,6 @@ class tomographicModels:
                 self.libprojectors = None
         
         elif _platform == "darwin":  # Darwin is the name for MacOS in Python's platform module
-            # there is current no support for LEAP on Mac, but maybe someone can figure this out
             from ctypes import cdll
             
             libname = glob.glob(os.path.join(current_dir, "*leapct*.dylib"))
@@ -378,6 +377,57 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
     ###################################################################################################################
     ###################################################################################################################
+    def set_coneparallel(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+        r"""Sets the parameters for a cone-parallel CT geometry
+        
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           Pf(s, \varphi, \nu) &=& \int_\mathbb{R} f\left(s\boldsymbol{\theta}^\perp(\varphi) + \sqrt{R^2-s^2}\boldsymbol{\theta}(\varphi) + \Delta\left(\varphi + \alpha(s) \right)\widehat{\boldsymbol{z}}  + \frac{l}{\sqrt{1+\nu^2}}\left[-\boldsymbol{\theta}^\perp(\varphi) + \nu\widehat{\boldsymbol{z}}\right]\right) \, dl \\
+           P^*g(\boldsymbol{x}) &=& \int \frac{\sqrt{R^2 + \nu^2(\boldsymbol{x},\varphi)}}{\sqrt{R^2-(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi))^2}  - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} g\left(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi), \varphi, \nu(\boldsymbol{x},\varphi) \right) \, d\varphi \\
+           \nu(\boldsymbol{x},\varphi) &:=& \frac{x_3 - \Delta\left(\varphi + \alpha(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi)) \right)}{\sqrt{R^2-(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi))^2}  - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \\
+           \alpha(s) &:=& \sin^{-1}\left(\frac{s}{R}\right) + \sin^{-1}\left(\frac{\tau}{R}\right)
+           \end{eqnarray*}
+           
+        Here, we have used :math:`R` for sod, :math:`\tau` for tau, :math:`\Delta` for helicalPitch, and v = t/sdd.
+        
+        Args:
+            numAngles (int): number of projection angles
+            numRows (int): number of rows in the x-ray detector
+            numCols (int): number of columns in the x-ray detector
+            pixelHeight (float): the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+            pixelWidth (float): the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
+            centerRow (float): the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
+            centerCol (float): the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
+            phis (float32 numpy array):  a numpy array for specifying the angles of each projection, measured in degrees
+            sod (float): source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
+            sdd (float): source to detector distance, measured in mm
+            tau (float): center of rotation offset
+            helicalPitch (float): the helical pitch (mm/radians)
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
+        
+        print('WARNING: cone-parallel geometry not fully implemented!')
+        #return False
+        
+        self.libprojectors.set_coneparallel.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_coneparallel.restype = ctypes.c_bool
+        if has_torch and type(phis) is torch.Tensor:
+            phis = phis.cpu().detach().numpy()
+        elif type(phis) is not np.ndarray:
+            angularRange = float(phis)
+            phis = self.setAngleArray(numAngles, angularRange)
+            
+        if phis.size != numAngles:
+            print('Error: phis.size != numAngles')
+            return False
+            
+        self.set_model()
+        return self.libprojectors.set_coneparallel(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
+    
     def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
         r"""Sets the parameters for a cone-beam CT geometry
         
@@ -4676,6 +4726,13 @@ class tomographicModels:
         self.libprojectors.set_offsetScan.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_offsetScan(aFlag)
+        
+    def get_offsetScan(self):
+        """Gets the offsetScan setting (True or False)"""
+        self.libprojectors.get_offsetScan.argtypes = []
+        self.libprojectors.get_offsetScan.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.get_offsetScan()
     
     def set_axisOfSymmetry(self,val):
         """Set the axisOfSymmetry parameter"""
@@ -4719,6 +4776,14 @@ class tomographicModels:
         self.libprojectors.set_rampID.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_rampID(which)
+        
+    def get_rampFilter(self):
+        """Gets the ramp filter type, i.e., 0, 2, 4, 6, 8, or 10
+        """
+        self.libprojectors.get_rampID.argtypes = []
+        self.libprojectors.get_rampID.restype = ctypes.c_int
+        self.set_model()
+        return self.libprojectors.get_rampID()
     
     def set_FBPlowpass(self, W=1.0):
         """Applies a low-pass filter of the specified FWHM to the ramp filter
@@ -4730,6 +4795,17 @@ class tomographicModels:
         self.libprojectors.set_FBPlowpass.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_FBPlowpass(W)
+        
+    def get_FBPlowpass(self, W=1.0):
+        """Get the parameter that applies a low-pass filter of the specified FWHM to the ramp filter
+        
+        Returns:
+            W (float): the FWHM (in detector pixels) of a low pass filter applied to the ramp filter
+        """
+        self.libprojectors.get_FBPlowpass.argtypes = []
+        self.libprojectors.get_FBPlowpass.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_FBPlowpass()
     
     def set_attenuationMap(self, mu):
         """Set the voxelized attenuation map for Attenuated Radon Transform calculations"""
@@ -4780,12 +4856,16 @@ class tomographicModels:
         
     def get_angles(self):
         """Get a numpy array of the projection angles"""
-        phis = np.ascontiguousarray(np.zeros(self.get_numAngles()).astype(np.float32), dtype=np.float32)
-        self.libprojectors.get_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-        self.libprojectors.get_angles.restype = ctypes.c_bool
-        self.set_model()
-        self.libprojectors.get_angles(phis)
-        return phis
+        if self.get_numAngles() > 0:
+            phis = np.ascontiguousarray(np.zeros(self.get_numAngles()).astype(np.float32), dtype=np.float32)
+            self.libprojectors.get_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.get_angles.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.get_angles(phis)
+            return phis
+        else:
+            return None
+
         
     def get_angularRange(self):
         """Get the angular range of the projection angles (degrees)"""

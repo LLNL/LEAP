@@ -30,6 +30,20 @@ rebin::~rebin()
     fanAngles = NULL;
 }
 
+bool rebin::rebin_cone_to_coneParallel(float* g, parameters* params_in, float* fanAngles_in, int order)
+{
+    params = params_in;
+    if (g == NULL || params == NULL || params->numCols <= 2)
+        return false;
+    if (params->geometry != parameters::CONE)
+    {
+        printf("Error: rebin_cone_to_coneParallel: input data must be specified as cone-beam\n");
+        return false;
+    }
+
+    return false;
+}
+
 double rebin::fanAngles_inv(double val)
 {
     int N = params->numCols;

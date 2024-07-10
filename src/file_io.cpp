@@ -135,6 +135,8 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 		param_file << geometry << " = " << "fan" << std::endl;
 	else if (params->geometry == parameters::MODULAR)
 		param_file << geometry << " = " << "modular" << std::endl;
+	else if (params->geometry == parameters::CONE_PARALLEL)
+		param_file << geometry << " = " << "cone_parallel" << std::endl;
 
 	if (params->geometry == parameters::CONE && params->detectorType == parameters::CURVED)
 		param_file << "detectorType = curved" << std::endl;
@@ -159,11 +161,11 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	}
 	param_file << sod << " = " << params->sod << std::endl;
 	param_file << sdd << " = " << params->sdd << std::endl;
-	if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
+	if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL || params->geometry == parameters::FAN)
 	{
 		param_file << tau << " = " << params->tau << std::endl;
 	}
-	if (params->geometry == parameters::CONE)
+	if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL)
 	{
 		if (fabs(params->helicalPitch) < 1.0e-16)
 		{

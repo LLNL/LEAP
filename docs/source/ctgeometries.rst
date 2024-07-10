@@ -26,6 +26,7 @@ Below is a sketch of the cone-beam geometry used in LEAP; :math:`i_c` and :math:
 
 .. autofunction:: leapctype.tomographicModels.setAngleArray
 .. autofunction:: leapctype.tomographicModels.set_conebeam
+.. autofunction:: leapctype.tomographicModels.set_coneparallel
 .. autofunction:: leapctype.tomographicModels.set_fanbeam
 .. autofunction:: leapctype.tomographicModels.set_parallelbeam
 .. autofunction:: leapctype.tomographicModels.set_modularbeam

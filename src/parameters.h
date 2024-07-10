@@ -239,9 +239,10 @@ public:
 	 * \fn          z_source
 	 * \brief       returns the z-coordinate of the source position at the i-th rotation angle
 	 * \param[in]   i the index of the i-th rotation angle
+	 * \param[in]	k: the index of the k-th detector column
 	 * \return      returns the z-coordinate of the source position at the i-th rotation angle
 	 */
-	float z_source(int i);
+	float z_source(int i, int k = 0);
 
 	/**
 	 * \fn          set_tau
@@ -561,7 +562,7 @@ public:
 	bool set_numTVneighbors(int N);
 
 	// Enums
-	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };
+	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3, CONE_PARALLEL = 4 };
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };
     enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2};

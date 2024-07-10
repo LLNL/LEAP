@@ -49,6 +49,7 @@ numRows = numCols
 #leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
 
 # Set the volume parameters.
@@ -129,7 +130,7 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the result with napari
-#leapct.display(f)
-import matplotlib.pyplot as plt
-plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')
-plt.show()
+leapct.display(f)
+#import matplotlib.pyplot as plt
+#plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')
+#plt.show()

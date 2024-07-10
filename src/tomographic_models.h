@@ -308,6 +308,25 @@ public:
 	bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors);
 
 	/**
+	 * \fn          set_coneparallel
+	 * \brief       sets the cone-parallel parameters
+	 * \param[in]   numAngles number of projection angles
+	 * \param[in]   numRows number of rows in the x-ray detector
+	 * \param[in]   numCols number of columns in the x-ray detector
+	 * \param[in]   pixelHeight the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+	 * \param[in]   pixelWidth the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
+	 * \param[in]   centerRow the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
+	 * \param[in]   centerCol the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
+	 * \param[in]   phis pointer to an array for specifying the angles of each projection, measured in degrees
+	 * \param[in]   sod source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
+	 * \param[in]   sdd source to detector distance, measured in mm
+	 * \param[in]   tau the center of rotation horizontal translation (mm)
+	 * \param[in]   helicalPitch the helical pitch (mm/radians)
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_coneparallel(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
+
+	/**
 	 * \fn          set_flatDetector
 	 * \brief       sets the detectorType to parameters::FLAT
 	 * \return      true if operation  was sucessful, false otherwise

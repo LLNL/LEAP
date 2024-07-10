@@ -75,7 +75,7 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
 
                 for (int k = 0; k < params->numCols; k++)
                 {
-                    if (params->geometry == parameters::PARALLEL)
+                    if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
                         setSourcePosition(i, j, k, sourcePos);
                     setTrajectory(i, j, k, r);
                     aLine[k] = float(aPhantom->lineIntegral(sourcePos, r));
@@ -125,7 +125,7 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
                         {
                             double du = k_os * T_u_os;
 
-                            if (params->geometry == parameters::PARALLEL)
+                            if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
                                 setSourcePosition(i, j, k, sourcePos, dv, du);
                             setTrajectory(i, j, k, r, dv, du);
                             accum += exp(-aPhantom->lineIntegral(sourcePos, r));
@@ -154,6 +154,8 @@ bool analyticRayTracing::setSourcePosition(int iProj, int iRow, int iCol, double
     double cos_phi = cos(phi);
     double sin_phi = sin(phi);
 
+    float s, sqrt_R2_minus_s2;
+
     switch (params->geometry)
     {
     case parameters::PARALLEL:
@@ -175,6 +177,13 @@ bool analyticRayTracing::setSourcePosition(int iProj, int iRow, int iCol, double
         sourcePos[0] = params->sourcePositions[iProj * 3 + 0];
         sourcePos[1] = params->sourcePositions[iProj * 3 + 1];
         sourcePos[2] = params->sourcePositions[iProj * 3 + 2];
+        break;
+    case parameters::CONE_PARALLEL:
+        s = params->u(iCol) + du;
+        sqrt_R2_minus_s2 = sqrt(params->sod * params->sod - s * s);
+        sourcePos[0] = -s * sin_phi + sqrt_R2_minus_s2 * cos_phi;
+        sourcePos[1] = s * cos_phi + sqrt_R2_minus_s2 * sin_phi;
+        sourcePos[2] = params->z_source(iProj, iCol);
         break;
     default:
         sourcePos[0] = 0.0;
@@ -237,6 +246,11 @@ bool analyticRayTracing::setTrajectory(int iProj, int iRow, int iCol, double* r,
         r[0] = c[0] + u * u_vec[0] + v*v_vec[0] - s[0];
         r[1] = c[1] + u * u_vec[1] + v * v_vec[1] - s[1];
         r[2] = c[2] + u * u_vec[2] + v * v_vec[2] - s[2];
+        break;
+    case parameters::CONE_PARALLEL:
+        r[0] = -cos_phi;
+        r[1] = -sin_phi;
+        r[2] = v;
         break;
     default:
         r[0] = 0.0;

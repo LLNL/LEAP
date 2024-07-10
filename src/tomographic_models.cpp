@@ -242,7 +242,7 @@ bool tomographicModels::weightedBackproject(float* g, float* f, bool data_on_cpu
 	params.doWeightedBackprojection = true;
 
 	bool doExtrapolation_save = params.doExtrapolation;
-	if (params.geometry != parameters::CONE || params.helicalPitch == 0.0)
+	if ((params.geometry != parameters::CONE && params.geometry != parameters::CONE_PARALLEL) || params.helicalPitch == 0.0)
 		params.doExtrapolation = true;
 
 	bool retVal = backproject(g, f, data_on_cpu);
@@ -407,7 +407,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 #ifndef __USE_CPU
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
-	if (params.geometry == parameters::CONE && params.helicalPitch != 0.0)
+	if ((params.geometry == parameters::CONE || params.geometry == parameters::CONE_PARALLEL) && params.helicalPitch != 0.0)
 		return project_multiGPU_splitViews(g, f);
 	if (params.geometry == parameters::MODULAR)
 	{
@@ -652,7 +652,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	//return false;
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
-	if (params.geometry == parameters::CONE && params.helicalPitch != 0.0)
+	if ((params.geometry == parameters::CONE || params.geometry == parameters::CONE_PARALLEL) && params.helicalPitch != 0.0)
 		return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
 	if (params.geometry == parameters::MODULAR)
 	{
@@ -1062,6 +1062,31 @@ float tomographicModels::get_FBPscalar()
 bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
 {
 	params.geometry = parameters::CONE;
+	params.detectorType = parameters::FLAT;
+	params.sod = sod;
+	params.sdd = sdd;
+	params.pixelWidth = pixelWidth;
+	params.pixelHeight = pixelHeight;
+	params.numCols = numCols;
+	params.numRows = numRows;
+	params.numAngles = numAngles;
+	params.centerCol = centerCol;
+	params.centerRow = centerRow;
+	params.tau = tau;
+	params.set_angles(phis, numAngles);
+	params.set_helicalPitch(helicalPitch);
+	if (params.geometryDefined())
+	{
+		params.set_offsetScan(params.offsetScan);
+		return true;
+	}
+	else
+		return false;
+}
+
+bool tomographicModels::set_coneparallel(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
+{
+	params.geometry = parameters::CONE_PARALLEL;
 	params.detectorType = parameters::FLAT;
 	params.sod = sod;
 	params.sdd = sdd;

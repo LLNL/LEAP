@@ -36,6 +36,7 @@ numRows = 1
 #leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
 #leapct.convert_to_modularbeam()
 
@@ -59,6 +60,7 @@ f = leapct.allocateVolume() # shape is numZ, numY, numX
 # Specify the FORBILD head phantom
 # For more information on how to specify phantoms, see https://leapct.readthedocs.io/en/latest/ctsimulation.html
 leapct.set_FORBILD()
+#leapct.addObject(None, 4, np.array([0.0, 0.0, 0.0]), 120.0*np.array([1.0, 1.0, 1.0]), 0.02, None, None, 1)
 
 
 # Simulate projection data using analytic ray tracing methods

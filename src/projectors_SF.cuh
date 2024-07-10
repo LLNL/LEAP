@@ -33,6 +33,9 @@ bool backproject_SF_fan(float*, float*&, parameters*, bool data_on_cpu);
 bool project_SF_cone(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_SF_cone(float*, float*&, parameters*, bool data_on_cpu);
 
+bool project_SF_coneParallel(float*&, float*, parameters*, bool data_on_cpu);
+bool backproject_SF_coneParallel(float*, float*&, parameters*, bool data_on_cpu);
+
 bool project_SF_parallel(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_SF_parallel(float*, float*&, parameters*, bool data_on_cpu);
 

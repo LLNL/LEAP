@@ -109,8 +109,13 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 				//return CPUproject_parallel(g, f, params);
 			}
 		}
-		else
+		else if (params->geometry == parameters::MODULAR)
 			return project_Joseph_modular_cpu(g, f, params);
+		else
+		{
+			printf("Error: CPU-based projector not yet implemented for this geometry.\n");
+			return false;
+		}
 	}
 }
 
@@ -187,8 +192,13 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 				//return CPUbackproject_parallel(g, f, params);
 			}
 		}
-		else
+		else if (params->geometry == parameters::MODULAR)
 			return backproject_Joseph_modular_cpu(g, f, params);
+		else
+		{
+			printf("Error: CPU-based backprojector not yet implemented for this geometry.\n");
+			return false;
+		}
 	}
 }
 

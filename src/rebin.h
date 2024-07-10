@@ -32,6 +32,8 @@ public:
     //rebin a collection of flat detector modules to a curved detector.
     bool rebin_curved(float* g, parameters* params_in, float* fanAngles_in, int order = 6);
 
+    bool rebin_cone_to_coneParallel(float* g, parameters* params_in, float* fanAngles_in, int order = 6);
+
 private:
     
     double fanAngles_inv(double);

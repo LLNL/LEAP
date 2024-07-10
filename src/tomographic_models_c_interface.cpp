@@ -279,6 +279,11 @@ bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight,
 	return tomo()->set_modularbeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in);
 }
 
+bool set_coneparallel(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
+{
+	return tomo()->set_coneparallel(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch);
+}
+
 bool rotate_detector(float alpha)
 {
 	return tomo()->params.rotateDetector(alpha);
@@ -510,6 +515,11 @@ bool set_offsetScan(bool aFlag)
 	return tomo()->params.set_offsetScan(aFlag);
 }
 
+bool get_offsetScan()
+{
+	return tomo()->params.offsetScan;
+}
+
 bool set_truncatedScan(bool aFlag)
 {
 	return tomo()->params.set_truncatedScan(aFlag);
@@ -530,10 +540,20 @@ bool set_rampID(int whichRampFilter)
 	return tomo()->set_rampID(whichRampFilter);
 }
 
+int get_rampID()
+{
+	return tomo()->params.rampID;
+}
+
 bool set_FBPlowpass(float W)
 {
 	tomo()->params.FBPlowpass = W;
 	return true;
+}
+
+float get_FBPlowpass()
+{
+	return tomo()->params.FBPlowpass;
 }
 
 bool set_tau(float tau)
@@ -1008,6 +1028,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("sensitivity", &sensitivity, "");
     m.def("windowFOV", &windowFOV, "");
     m.def("set_conebeam", &set_conebeam, "");
+	m.def("set_coneparallel", &set_coneparallel, "");
     m.def("set_fanbeam", &set_fanbeam, "");
     m.def("set_parallelbeam", &set_parallelbeam, "");
     m.def("set_modularbeam", &set_modularbeam, "");
@@ -1053,11 +1074,14 @@ PYBIND11_MODULE(leapct, m) {
     m.def("set_projector", &set_projector, "");
     m.def("set_rFOV", &set_rFOV, "");
     m.def("set_offsetScan", &set_offsetScan, "");
+	m.def("get_offsetScan", &get_offsetScan, "");
     m.def("set_truncatedScan", &set_truncatedScan, "");
     m.def("set_numTVneighbors", &set_numTVneighbors, "");
     m.def("get_numTVneighbors", &get_numTVneighbors, "");
     m.def("set_rampID", &set_rampID, "");
+	m.def("get_rampID", &get_rampID, "");
 	m.def("set_FBPlowpass", &set_FBPlowpass, "");
+	m.def("get_FBPlowpass", &get_FBPlowpass, "");
     m.def("set_tau", &set_tau, "");
     m.def("set_helicalPitch", &set_helicalPitch, "");
     m.def("set_normalizedHelicalPitch", &set_normalizedHelicalPitch, "");

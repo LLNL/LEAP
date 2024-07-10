@@ -1521,10 +1521,25 @@ bool backproject_eSF_cone(float* g, float*& f, parameters* params, bool data_on_
     return backproject_eSF(g, f, params, data_on_cpu);
 }
 
+bool project_eSF_coneparallel(float*& g, float* f, parameters* params, bool data_on_cpu)
+{
+    return project_eSF(g, f, params, data_on_cpu);
+}
+
+bool backproject_eSF_coneparallel(float* g, float*& f, parameters* params, bool data_on_cpu)
+{
+    return backproject_eSF(g, f, params, data_on_cpu);
+}
+
 bool project_eSF(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
+    if (params->geometry == parameters::CONE_PARALLEL)
+    {
+        printf("Error: cone-parallel projector not yet implemented for small voxels\n");
+        return false;
+    }
     //printf("project_eSF\n");
 
     cudaSetDevice(params->whichGPU);
@@ -1611,6 +1626,11 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
+    if (params->geometry == parameters::CONE_PARALLEL)
+    {
+        printf("Error: cone-parallel backprojector not yet implemented for large voxels\n");
+        return false;
+    }
     //printf("backproject_eSF\n");
 
     cudaSetDevice(params->whichGPU);

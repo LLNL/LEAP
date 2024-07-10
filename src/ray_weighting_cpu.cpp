@@ -25,6 +25,8 @@ float FBPscalar(parameters* params)
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight * magFactor / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
 	else if (params->geometry == parameters::FAN)
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
+	else if (params->geometry == parameters::CONE_PARALLEL)
+		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * params->pixelHeight * magFactor / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
 	else
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth / (params->voxelWidth * params->voxelWidth));
 }
@@ -246,7 +248,7 @@ float* setOffsetScanWeights(parameters* params)
 			params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
 			return retVal;
 		}
-		else if (params->geometry == parameters::PARALLEL)
+		else if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
 		{
 			float abs_minVal = fabs(params->u(0));
 			float abs_maxVal = fabs(params->u(params->numCols - 1));
@@ -344,7 +346,7 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 
 float* setInverseConeWeight(parameters* params)
 {
-	if (params->geometry == parameters::CONE || params->modularbeamIsAxiallyAligned())
+	if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL || params->modularbeamIsAxiallyAligned())
 	{
 		bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 		params->normalizeConeAndFanCoordinateFunctions = true;
@@ -356,7 +358,7 @@ float* setInverseConeWeight(parameters* params)
 			for (int iu = 0; iu < params->numCols; iu++)
 			{
 				float u = params->u(iu,0);
-				if (params->detectorType == parameters::FLAT)
+				if (params->detectorType == parameters::FLAT && params->geometry != parameters::CONE_PARALLEL)
 					retVal[iv * params->numCols + iu] = 1.0 / sqrt(1.0 + u * u + v * v);
 				else
 					retVal[iv * params->numCols + iu] = 1.0 / sqrt(1.0 + v * v);

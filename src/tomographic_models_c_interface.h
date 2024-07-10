@@ -82,6 +82,7 @@ extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCo
 extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
 extern "C" PROJECTOR_API bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
 extern "C" PROJECTOR_API bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float*, float*, float*, float*);
+extern "C" PROJECTOR_API bool set_coneparallel(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
 
 extern "C" PROJECTOR_API bool rotate_detector(float alpha);
 extern "C" PROJECTOR_API bool shift_detector(float r, float c);
@@ -140,11 +141,14 @@ extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool set_projector(int which);
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);
 extern "C" PROJECTOR_API bool set_offsetScan(bool);
+extern "C" PROJECTOR_API bool get_offsetScan();
 extern "C" PROJECTOR_API bool set_truncatedScan(bool);
 extern "C" PROJECTOR_API bool set_numTVneighbors(int);
 extern "C" PROJECTOR_API int get_numTVneighbors();
 extern "C" PROJECTOR_API bool set_rampID(int whichRampFilter);
+extern "C" PROJECTOR_API int get_rampID();
 extern "C" PROJECTOR_API bool set_FBPlowpass(float W);
+extern "C" PROJECTOR_API float get_FBPlowpass();
 extern "C" PROJECTOR_API bool set_tau(float tau);
 extern "C" PROJECTOR_API bool set_helicalPitch(float h);
 extern "C" PROJECTOR_API bool set_normalizedHelicalPitch(float h_normalized);
