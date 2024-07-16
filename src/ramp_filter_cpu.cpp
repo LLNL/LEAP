@@ -420,7 +420,7 @@ Complex* HilbertTransformFrequencyResponse_cpu(int N, parameters* params)
         {
             double s = timeSamples(i, N) * T / params->sod;
             double temp = s / sin(s);
-            h[i] *= temp * temp;
+            h[i] *= temp;// *temp;
         }
     }
     delete[] h_d;

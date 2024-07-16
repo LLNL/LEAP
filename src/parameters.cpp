@@ -1466,7 +1466,7 @@ bool parameters::set_helicalPitch(float h)
 float parameters::normalizedHelicalPitch()
 {
 	//helicalPitch = normalizedHelicalPitch*pzsize*nslices*(sod/sdd)/(2pi)
-	if (geometry != CONE)
+	if (geometry != CONE && geometry != CONE_PARALLEL)
 		return 0.0;
 	else
 		return 2.0 * PI * helicalPitch / (numRows * pixelHeight * sod / sdd);

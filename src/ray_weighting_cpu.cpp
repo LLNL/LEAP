@@ -319,7 +319,7 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 	}
 
 	// Now apply weights for cases where we have redundant measurements
-	if (params->angularRange >= 359.9999)
+	if (params->angularRange >= 359.9999 && params->helicalPitch == 0.0)
 	{
 		float c = 0.5;
 		//float c = 1.0;

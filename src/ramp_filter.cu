@@ -735,9 +735,18 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
         h_d = HilbertTransformImpulseResponse(N, -1);
         params->colShiftFromFilter += 0.5;
     }
+    float T = params->pixelWidth * params->sod / params->sdd;
     float* h = new float[N];
     for (int i = 0; i < N; i++)
+    {
         h[i] = float(h_d[i] * scalar / float(N));
+        if (i != 0 && params->geometry == parameters::CONE && params->detectorType == parameters::CURVED)
+        {
+            double s = timeSamples(i, N) * T / params->sod;
+            double temp = s / sin(s);
+            h[i] *= temp;// *temp;
+        }
+    }
     delete[] h_d;
 
     // Make cuFFT Plans

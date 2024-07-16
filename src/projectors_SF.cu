@@ -45,6 +45,139 @@ __device__ float helicalConeWeight(float v)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+__global__ void coneParallelWeightedHelicalBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+        return;
+
+    const float x = i * T_f.x + startVals_f.x;
+    const float y = j * T_f.y + startVals_f.y;
+    const float z = k * T_f.z + startVals_f.z;
+
+    uint64 ind;
+    if (volumeDimensionOrder == 0)
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
+    else
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
+
+    if (x * x + y * y > rFOVsq)
+    {
+        f[ind] = 0.0;
+        return;
+    }
+
+    const float maxWeight = T_f.x * T_f.y / T_g.z;
+    const float maxWeight_inv = 1.0f / maxWeight;
+
+    const float v0_over_Tv = startVals_g.y / T_g.y;
+    const float Tz_over_Tv = T_f.z / T_g.y;
+    const float v_phi_x_start_num = z / T_g.y;
+
+    const float T_u_inv = 1.0f / T_g.z;
+    const float T_v_inv = 1.0f / T_g.y;
+    const float C_num = 0.5f * T_u_inv * T_f.x;
+    const float C_num_T_x = T_f.x * C_num;
+    //const float x_mult = x * T_u_inv;
+    //const float y_mult = y * T_u_inv;
+    const float s_shift = -startVals_g.z * T_u_inv;
+
+    const float v_min = 1.0f / d_v_min_inv;
+    const float v_max = 1.0f / d_v_max_inv;
+    const float twoPI_inv = 1.0f / (2.0f * PI);
+    const float neg_twoPI_pitch = -2.0f * PI * T_g.w;
+    const float neg_twoPI_pitch_inv = 1.0f / neg_twoPI_pitch;
+
+    const float asin_tau_over_R = asin(tau / R);
+
+    float val = 0.0f;
+    for (int l = 0; l < N_g.x; l++)
+    {
+        const float L = float(l) + 0.5f;
+        const float phi_cur = phis[l];
+        const float sin_phi = sinf(phi_cur);
+        const float cos_phi = cosf(phi_cur);
+        const float C = C_num * max(fabs(cos_phi), fabs(sin_phi));
+
+        const float s = cos_phi * y - sin_phi * x;
+        const float x_dot_theta = cos_phi * x + sin_phi * y;
+
+        //float s_arg = s_shift - sin_phi * x_mult + cos_phi * y_mult;
+        float s_argInd = s_shift + s * T_u_inv;
+        const float ds = modf(s_argInd, &s_argInd);
+        const float s_ind_A = s_argInd - (C_num_T_x / C * max(0.0f, (min(0.5f, C + ds) + min(0.5f, C - ds)))) * maxWeight_inv + 1.5f;
+
+        const float v_denom = sqrtf(R * R - s * s) - x_dot_theta;
+        const float v_denom_inv = 1.0f / v_denom;
+
+        const float alpha = asin(s / R) + asin_tau_over_R;
+        const float z_source = (phis[l] + alpha) * T_g.w + startVals_g.w;
+
+        const float v_phi_x = (v_phi_x_start_num - z_source * T_v_inv) * v_denom_inv - v0_over_Tv;
+
+        const float v_arg = v_phi_x * T_g.y + startVals_g.y;
+        const float centralWeight = helicalConeWeight(v_arg);
+        if (centralWeight > 0.0f)
+        {
+            const float v_denom_conj = v_denom + 2.0f * x_dot_theta;
+            const float v_denom_conj_inv = 1.0f / v_denom_conj;
+            const float phi_cur_conj = phi_cur + PI;
+
+            float sumWeights = 0.0f;
+
+            const float v_arg_shift = neg_twoPI_pitch * v_denom_inv;
+
+            const float v_bound_A = (v_arg_shift > 0.0f) ? (v_min - v_arg) * v_denom * neg_twoPI_pitch_inv : (v_max - v_arg) * v_denom * neg_twoPI_pitch_inv;
+            const float v_bound_B = (v_arg_shift < 0.0f) ? (v_min - v_arg) * v_denom * neg_twoPI_pitch_inv : (v_max - v_arg) * v_denom * neg_twoPI_pitch_inv;
+
+            const int N_turns_below = max(int(ceil((d_phi_start - phi_cur) * twoPI_inv)), int(ceil(v_bound_A)));
+            const int N_turns_above = min(int(floor((d_phi_end - phi_cur) * twoPI_inv)), int(floor(v_bound_B)));
+            for (int iturn = N_turns_below; iturn <= N_turns_above; iturn++)
+            {
+                if (iturn != 0)
+                    sumWeights += helicalConeWeight(v_arg + iturn * v_arg_shift);
+            }
+
+            const float alpha_conj = asin(-s / R) + asin_tau_over_R;
+            const float v_arg_conj = (z - ((phi_cur_conj+alpha_conj) * T_g.w + startVals_g.w)) * v_denom_conj_inv;
+            const float v_arg_shift_conj = neg_twoPI_pitch * v_denom_conj_inv;
+
+            const float v_bound_A_conj = (v_arg_shift_conj > 0.0f) ? (v_min - v_arg_conj) * v_denom_conj * neg_twoPI_pitch_inv : (v_max - v_arg_conj) * v_denom_conj * neg_twoPI_pitch_inv;
+            const float v_bound_B_conj = (v_arg_shift_conj < 0.0f) ? (v_min - v_arg_conj) * v_denom_conj * neg_twoPI_pitch_inv : (v_max - v_arg_conj) * v_denom_conj * neg_twoPI_pitch_inv;
+
+            const int N_turns_below_conj = max(int(ceil((d_phi_start - phi_cur_conj) * twoPI_inv)), int(ceil(v_bound_A_conj)));
+            const int N_turns_above_conj = min(int(floor((d_phi_end - phi_cur_conj) * twoPI_inv)), int(floor(v_bound_B_conj)));
+            for (int iturn = N_turns_below_conj; iturn <= N_turns_above_conj; iturn++)
+                sumWeights += helicalConeWeight(v_arg_conj + iturn * v_arg_shift_conj);
+            //sumWeights = 0.0f;
+
+            const float v_phi_x_step = Tz_over_Tv * v_denom_inv;
+            const float bpWeight = v_denom * rsqrtf(R * R + v_arg * v_arg) * centralWeight / (centralWeight + sumWeights);
+
+            const float row_high = floor(v_phi_x - 0.5f * v_phi_x_step + 0.5f) + 0.5f;
+            const float z_high = v_phi_x + 0.5f * v_phi_x_step - row_high;
+
+            const float v_weight_one = min(v_phi_x_step, v_phi_x_step - z_high);
+            const float v_weight_two = max(0.0f, min(z_high, 1.0f));
+            const float v_oneAndTwo = v_weight_two / (v_weight_one + v_weight_two);
+            const float row_high_plus_two = row_high + 2.0f;
+
+            if (z_high > 1.0f)
+            {
+                val += (tex3D<float>(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two)
+                    + tex3D<float>(g, s_ind_A, row_high_plus_two, L) * (z_high - 1.0f)) * bpWeight;
+            }
+            else
+            {
+                val += tex3D<float>(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two) * bpWeight;
+            }
+        }
+    }
+    f[ind] = val * maxWeight;
+}
+
 __global__ void coneParallelBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -84,6 +217,8 @@ __global__ void coneParallelBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
     //const float y_mult = y * T_u_inv;
     const float s_shift = -startVals_g.z * T_u_inv;
 
+    const float asin_tau_over_R = asin(tau / R);
+
     float vals[NUM_SLICES_PER_THREAD];
     int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
     for (int k_offset = 0; k_offset < numZ; k_offset++)
@@ -109,7 +244,7 @@ __global__ void coneParallelBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
         float z_source = 0.0f;
         if (T_g.w != 0.0f)
         {
-            const float alpha = asin(s / R) + asin(tau / R);
+            const float alpha = asin(s / R) + asin_tau_over_R;
             z_source = (phis[l] + alpha) * T_g.w + startVals_g.w;
         }
         const float v_phi_x_step = Tz_over_Tv * v_denom_inv;
@@ -2076,7 +2211,34 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     }
     else if (params->geometry == parameters::CONE_PARALLEL)
     {
-        coneParallelBackprojectorKernel_SF <<< dimGrid_slab, dimBlock_slab >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, params->doWeightedBackprojection);
+        if (params->doWeightedBackprojection == true && params->helicalPitch != 0.0)
+        {
+            float q_helical = float(0.7);
+            //float q_helical = float(0.99);
+            float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
+            float weightFcnTransition = float((q_helical + 1.0) / 2.0);
+            float v_min_inv = float((params->v(0) - 0.5 * params->pixelHeight) / params->sdd);
+            v_min_inv = float(1.0 / v_min_inv);
+            float v_max_inv = float((params->v(params->numRows - 1) + 0.5 * params->pixelHeight) / params->sdd);
+            v_max_inv = float(1.0 / v_max_inv);
+            float phi_start = params->get_phi_start();
+            float phi_end = params->get_phi_end();
+
+            //printf("v_min/max = %f, %f\n", v_min, v_max);
+            //printf("weight params: %f, %f\n", weightFcnParameter, weightFcnTransition);
+
+            cudaMemcpyToSymbol(d_q_helical, &q_helical, sizeof(float));
+            cudaMemcpyToSymbol(d_v_min_inv, &v_min_inv, sizeof(float));
+            cudaMemcpyToSymbol(d_v_max_inv, &v_max_inv, sizeof(float));
+            cudaMemcpyToSymbol(d_weightFcnTransition, &weightFcnTransition, sizeof(float));
+            cudaMemcpyToSymbol(d_weightFcnParameter, &weightFcnParameter, sizeof(float));
+            cudaMemcpyToSymbol(d_phi_start, &phi_start, sizeof(float));
+            cudaMemcpyToSymbol(d_phi_end, &phi_end, sizeof(float));
+
+            coneParallelWeightedHelicalBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        }
+        else
+            coneParallelBackprojectorKernel_SF <<< dimGrid_slab, dimBlock_slab >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, params->doWeightedBackprojection);
     }
     else
         return false;
