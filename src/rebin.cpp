@@ -32,6 +32,7 @@ rebin::~rebin()
 
 bool rebin::rebin_cone_to_coneParallel(float* g, parameters* params_in, float* fanAngles_in, int order)
 {
+    /*
     params = params_in;
     if (g == NULL || params == NULL || params->numCols <= 2)
         return false;
@@ -40,6 +41,60 @@ bool rebin::rebin_cone_to_coneParallel(float* g, parameters* params_in, float* f
         printf("Error: rebin_cone_to_coneParallel: input data must be specified as cone-beam\n");
         return false;
     }
+
+    bool doWrapAround = true;
+    if (params->helicalPitch != 0.0)
+        doWrapAround = false;
+    else if (fabs(params->angularRange % 360.0) > params->T_phi()*180.0/PI)
+        doWrapAround = false;
+
+    double tau = params->tau;
+    double R_tau = params->sod;
+    double R = R_tau;
+    double atan_A = atan(2.0 * tau * R / (R * R - tau * tau));
+    double asin_tau_R_tau = asin(tau / R_tau);
+
+    bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+    params->normalizeConeAndFanCoordinateFunctions = true;
+
+    if (doWrapAround == false)
+    {
+        double fanAngle_low, fanAngle_high;
+        // Need to change N_phi and phi_0
+        if (params->detectorType == parameters::FLAT)
+        {
+            fanAngle_low = atan(params->u_0());
+            fanAngle_high = atan(params->u(params->numCols-1));
+        }
+        else
+        {
+            fanAngle_low = params->u_0();
+            fanAngle_high = params->u(params->numCols - 1);
+        }
+        // Shift parallel beam first angle
+        //double phi_0_save = g_CP->phi_0;
+        float phi_0 = g_CB->phi(int(ceil(g_CB->phi_inv(params->phis[0] - fanAngle_low))));
+        // g_CP->phi_0 + (g_CP->N_phi-1)*T_phi < g_CB->phi(g_CB->N_lateral-1) - fanAngle_high
+        int N_phi = int((g_CB->phi(g_CB->N_phi - 1) - fanAngle_high - params->phis[0]) / g_CP->T_phi) + 1;
+        //g_CP->startZ += (g_CP->phi_0-phi_0_save)*g_CP->pitch;
+
+        //printf("phi_0 = %f\n", g_CP->phi_0);
+        //printf("N_phi = %d\n", g_CP->N_phi);
+        //printf("T_phi = %f\n", g_CP->T_phi);
+        //printf("fan low, high = %f, %f\n", fanAngle_low, fanAngle_high); exit(1);
+    }
+    double beta_min = min(params->phis[0], params->phis[params->numAngles-1]);
+    double beta_max = max(params->phis[0], params->phis[params->numAngles - 1]);
+
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int iRow = 0; iRow < params->numRows; iRow++)
+    {
+
+    }
+
+    params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+    //*/
 
     return false;
 }

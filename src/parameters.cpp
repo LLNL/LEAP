@@ -427,14 +427,14 @@ bool parameters::voxelSizeWorksForFastSF(int whichDirection)
 		}
 		else if (whichDirection == 1) // forward projection
 		{
-			if (0.5 * largestDetectorWidth > voxelWidth || 0.5 * largestDetectorHeight > voxelHeight)
+			if (0.5 * sqrt(2.0) * largestDetectorWidth > voxelWidth || 0.5 * largestDetectorHeight > voxelHeight)
 				return false;
 			else
 				return true;
 		}
 		else //if (whichDirection == 0)
 		{
-			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
+			if (0.5 * sqrt(2.0) * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
 			{
 				//printf("using SF projector\n");
 				return true;
@@ -484,14 +484,14 @@ bool parameters::voxelSizeWorksForFastSF(int whichDirection)
 		}
 		else if (whichDirection == 1) // projection
 		{
-			if (0.5 * pixelWidth > voxelWidth)
+			if (0.5*sqrt(2.0) * pixelWidth > voxelWidth)
 				return false;
 			else
 				return true;
 		}
 		else
 		{
-			if (0.5 * pixelWidth <= voxelWidth && voxelWidth <= 2.0 * pixelWidth)
+			if (0.5 * sqrt(2.0) * pixelWidth <= voxelWidth && voxelWidth <= 2.0 * pixelWidth)
 				return true;
 			else
 				return false;

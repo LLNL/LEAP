@@ -1974,11 +1974,13 @@ bool project_eSF(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
+    /*
     if (params->geometry == parameters::CONE_PARALLEL)
     {
         printf("Error: cone-parallel projector not yet implemented for small voxels\n");
         return false;
     }
+    //*/
     //printf("project_eSF\n");
 
     cudaSetDevice(params->whichGPU);
@@ -2030,6 +2032,8 @@ bool project_eSF(float*& g, float* f, parameters* params, bool data_on_cpu)
         fanBeamProjectorKernel_eSF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
     else if (params->geometry == parameters::PARALLEL)
         parallelBeamProjectorKernel_eSF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
+    else if (params->geometry == parameters::CONE_PARALLEL)
+        coneParallelProjectorKernel_eSF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();

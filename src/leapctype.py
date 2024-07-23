@@ -384,7 +384,7 @@ class tomographicModels:
         
         .. math::
            \begin{eqnarray*}
-           Pf(s, \varphi, \nu) &=& \int_\mathbb{R} f\left(s\boldsymbol{\theta}^\perp(\varphi) + \sqrt{R^2-s^2}\boldsymbol{\theta}(\varphi) + \Delta\left(\varphi + \alpha(s) \right)\widehat{\boldsymbol{z}}  + \frac{l}{\sqrt{1+\nu^2}}\left[-\boldsymbol{\theta}^\perp(\varphi) + \nu\widehat{\boldsymbol{z}}\right]\right) \, dl \\
+           Pf(s, \varphi, \nu) &=& \int_\mathbb{R} f\left(s\boldsymbol{\theta}^\perp(\varphi) + \sqrt{R^2-s^2}\boldsymbol{\theta}(\varphi) + \Delta\left(\varphi + \alpha(s) \right)\widehat{\boldsymbol{z}}  + \frac{l}{\sqrt{1+\nu^2}}\left[-\boldsymbol{\theta} + \nu\widehat{\boldsymbol{z}}\right]\right) \, dl \\
            P^*g(\boldsymbol{x}) &=& \int \frac{\sqrt{R^2 + \nu^2(\boldsymbol{x},\varphi)}}{\sqrt{R^2-(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi))^2}  - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} g\left(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi), \varphi, \nu(\boldsymbol{x},\varphi) \right) \, d\varphi \\
            \nu(\boldsymbol{x},\varphi) &:=& \frac{x_3 - \Delta\left(\varphi + \alpha(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi)) \right)}{\sqrt{R^2-(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi))^2}  - \boldsymbol{x}\cdot\boldsymbol{\theta}(\varphi)} \\
            \alpha(s) &:=& \sin^{-1}\left(\frac{s}{R}\right) + \sin^{-1}\left(\frac{\tau}{R}\right)
@@ -409,9 +409,6 @@ class tomographicModels:
         Returns:
             True if the parameters were valid, false otherwise
         """
-        
-        print('WARNING: cone-parallel geometry not fully implemented!')
-        #return False
         
         self.libprojectors.set_coneparallel.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_coneparallel.restype = ctypes.c_bool
