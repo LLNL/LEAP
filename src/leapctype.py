@@ -993,8 +993,51 @@ class tomographicModels:
         """
         self.set_model()
         self.libprojectors.rebin_curved.restype = ctypes.c_bool
-        self.libprojectors.rebin_curved.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
-        return self.libprojectors.rebin_curved(g, fanAngles, order)
+        if has_torch == True and type(g) is torch.Tensor:
+        
+            if g.is_cuda == True:
+                print('Error: rebin_curved only implemented for data on CPU!')
+                print('If this feature is of interest please submit a feature request.')
+                return False
+                
+            if type(fanAngles) is torch.Tensor:
+                fanAngles = fanAngles.cpu().detach().numpy()
+        
+            self.libprojectors.rebin_curved.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            return self.libprojectors.rebin_curved(g.data_ptr(), fanAngles, order)
+        else:
+            self.libprojectors.rebin_curved.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            return self.libprojectors.rebin_curved(g, fanAngles, order)
+        
+    def rebin_parallel(self, g, order=6):
+        """ rebin data from fan-beam to parallel-beam or cone-beam to cone-parallel
+        
+        The CT geometry parameters must be defined before running this function.
+        After the completion of this algorithm, the CT geometry parameters will be
+        modified as necessary and the number of projections may reduce.  If the number
+        of projections does reduce most LEAP functions will work correctly, but we
+        recommend that users resize their arrays.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            order (int): the order of the interpolating polynomial
+        
+        """
+        self.set_model()
+        self.libprojectors.rebin_parallel.restype = ctypes.c_bool
+        
+        if has_torch == True and type(g) is torch.Tensor:
+        
+            if g.is_cuda == True:
+                print('Error: rebin_parallel only implemented for data on CPU!')
+                print('If this feature is of interest please submit a feature request.')
+                return False
+        
+            self.libprojectors.rebin_parallel.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            return self.libprojectors.rebin_parallel(g.data_ptr(), order)
+        else:
+            self.libprojectors.rebin_parallel.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            return self.libprojectors.rebin_parallel(g, order)
     
     def sinogram_replacement(self, g, priorSinogram, metalTrace, windowSize=None):
         """ replaces specified region in projection data with other projection data
@@ -1020,6 +1063,7 @@ class tomographicModels:
         
             if g.is_cuda == True:
                 print('Error: sinogram replacement only implemented for data on CPU!')
+                print('If this feature is of interest please submit a feature request.')
                 return False
                 
             if type(windowSize) is torch.Tensor:

@@ -141,7 +141,8 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 		else
 		{
 #ifndef __USE_CPU
-			applyPreRampFilterWeights(g, params, data_on_cpu);
+			if (params->geometry != parameters::CONE_PARALLEL || params->helicalPitch == 0.0)
+				applyPreRampFilterWeights(g, params, data_on_cpu);
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, data_on_cpu, false);
 			if (params->lambdaTomography)

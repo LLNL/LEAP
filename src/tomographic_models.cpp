@@ -2825,6 +2825,12 @@ bool tomographicModels::rebin_curved(float* g, float* fanAngles, int order)
 	return rebinningRoutines.rebin_curved(g, &params, fanAngles, order);
 }
 
+bool tomographicModels::rebin_parallel(float* g, int order)
+{
+	rebin rebinningRoutines;
+	return rebinningRoutines.rebin_parallel(g, &params, order);
+}
+
 bool tomographicModels::sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
 {
 	return sinogramReplacement(g, priorSinogram, metalTrace, &params, windowSize);

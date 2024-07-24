@@ -146,7 +146,7 @@ float* setParkerWeights(parameters* params)
 
 		return retVal;
 	}
-	else if (params->geometry == parameters::PARALLEL)
+	else if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
 	{
 		float T_phi = params->T_phi();
 		float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);

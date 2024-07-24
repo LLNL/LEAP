@@ -13,6 +13,7 @@ Projection Filters and Transforms
 .. autofunction:: leapctype.tomographicModels.crop_rows
 .. autofunction:: leapctype.tomographicModels.down_sample_projections
 .. autofunction:: leapctype.tomographicModels.up_sample_projections
+.. autofunction:: leapctype.tomographicModels.rebin_parallel
 .. autofunction:: leapctype.tomographicModels.rebin_curved
 .. autofunction:: leapctype.tomographicModels.expNeg
 .. autofunction:: leapctype.tomographicModels.negLog

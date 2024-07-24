@@ -32,15 +32,24 @@ public:
     //rebin a collection of flat detector modules to a curved detector.
     bool rebin_curved(float* g, parameters* params_in, float* fanAngles_in, int order = 6);
 
-    bool rebin_cone_to_coneParallel(float* g, parameters* params_in, float* fanAngles_in, int order = 6);
+    bool rebin_parallel(float* g, parameters* params_in, int order = 6);
 
 private:
     
     double fanAngles_inv(double);
 
+    float LagrangeInterpolation13(float* g, parameters* params, double x1, double x3, int j, bool doWrapAround = false, int order=6);
+    double* LagrangeCoefficients(double theShift, int N = 6, bool doFlip = false);
+
     float* fanAngles;
     double T_fanAngle;
     parameters* params;
+
+    double phi_0;
+    double phi_0_new;
+    double T_phi;
+    int N_phi;
+    int N_phi_new;
 };
 
 #endif

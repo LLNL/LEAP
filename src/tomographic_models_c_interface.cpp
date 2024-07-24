@@ -953,6 +953,11 @@ bool rebin_curved(float* g, float* fanAngles, int order)
 	return tomo()->rebin_curved(g, fanAngles, order);
 }
 
+bool rebin_parallel(float* g, int order)
+{
+	return tomo()->rebin_parallel(g, order);
+}
+
 bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
 {
 	return tomo()->sinogram_replacement(g, priorSinogram, metalTrace, windowSize);
@@ -1146,6 +1151,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("clearPhantom", &clearPhantom, "");
     m.def("rayTrace", &rayTrace, "");
     m.def("rebin_curved", &rebin_curved, "");
+	m.def("rebin_parallel", &rebin_parallel, "");
     m.def("sinogram_replacement", &sinogram_replacement, "");
     m.def("down_sample", &down_sample, "");
     m.def("up_sample", &up_sample, "");

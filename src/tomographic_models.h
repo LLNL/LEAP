@@ -943,6 +943,15 @@ public:
 	bool rebin_curved(float* g, float* fanAngles, int order = 6);
 
 	/**
+	 * \fn          rebin_parallel
+	 * \brief       rebin fan-beam to parallel-beam or cone-beam to cone-parallel
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]	order the order of the interpolation polynomial
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool rebin_parallel(float* g, int order = 6);
+
+	/**
 	 * \fn          sinogram_replacement
 	 * \brief       replaces specified region in projection data with other projection data
 	 * \param[in]   g, pointer to the projection data to alter
