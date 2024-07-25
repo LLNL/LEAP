@@ -656,7 +656,7 @@ class filterSequence:
     def gradient(self, f):
         """Calculates the accumulated gradient of all filters"""
         #if len(self.filters) == 0:
-        #    return None
+        #    return 0.0
         D = self.filters[0].leapct.copyData(f)
         D[:] = 0.0
         if self.beta > 0.0:
