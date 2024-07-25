@@ -3581,6 +3581,9 @@ class tomographicModels:
         elif isinstance(filters, (int, float)):
             print('Error: invalid inputs!  Note that algorithm syntax has changed, please see documentation.')
             return None
+        elif filters.count() == 0:
+            print('Warning: filterSequence given, but has no terms!')
+            filters.beta = 0.0
         
         if self.verify_inputs(g,f) == False:
             return None
@@ -3974,6 +3977,9 @@ class tomographicModels:
         elif isinstance(filters, (int, float)):
             print('Error: invalid inputs!  Note that algorithm syntax has changed, please see documentation.')
             return None
+        elif filters.count() == 0:
+            print('Warning: filterSequence given, but has no terms!')
+            filters.beta = 0.0
         
         numSubsets = max(1,numSubsets)
         filters.beta = max(0.0, filters.beta/float(numSubsets))

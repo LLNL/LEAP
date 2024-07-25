@@ -6,6 +6,11 @@ leapct = tomographicModels()
 This script demonstrates some applications of the so-called "filter sequence" in LEAP.  The filter sequence
 is an extensible feature for which to add multiple regularization filters or "priors" to LEAP iterative reconstruction algorithms.
 
+The types of filters used in this demo script are just to demonstrate the features in LEAP and are not necessarily recommended
+for any application.  In addition, there are many parameter included in these filters and these parameters must be tuned
+to your specific application.  The default values given here might actually result in very poor performance.  Don't judge
+the quality of a specific reconstruction algorithm until you have tuned its parameters for best performance.
+
 This feature has many applications and we will slowly add these to this demon script over time.
 '''
 
@@ -43,11 +48,13 @@ if whichMethod == 1:
     f = leapct.FBP(g)
     
     # Initialize the filter sequence and give it a strength of 2e2.  Larger strengths will enforce a stronger regularization.
+    # You will need to tune this regularization strength to your specific application
     filters = filterSequence(2e2)
     
     # Add a Total Variation (TV) term.  Typical TV uses an L1 norm, but LEAP allows
     # one to use any Lp norm.  Note that if p < 1, then it will be non-convex.  This is really effective in certain
     # situations, but if you are not careful you can get trapped in a non desirable local minimum
+    # The delta parameter must be tuned to your specific application
     filters.append(TV(leapct, delta=0.01/100.0, p=1.0))
     
     leapct.RWLS(g,f,200,filters,preconditioner='SQS')

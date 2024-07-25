@@ -71,8 +71,8 @@ leapct.print_parameters()
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
 # All you need is for the data to be C contiguous float32 arrays with the right dimensions
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
@@ -108,8 +108,8 @@ startTime = time.time()
 leapct.FBP(g,f)
 #leapct.inconsistencyReconstruction(g,f)
 #leapct.print_cost = True
-filters = filterSequence(1.0e0)
-filters.append(TV(leapct, delta=0.02/20.0))
+filters = filterSequence(1.0e0) # filter strength argument must be turned to your specific application
+filters.append(TV(leapct, delta=0.02/20.0)) # the delta argument must be turned to your specific application
 #leapct.ASDPOCS(g,f,10,10,1,filters)
 #leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
