@@ -42,7 +42,8 @@ centerCol = 0.5*(numCols-1)+100
 # Set the scanner geometry
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*11.0/14.0, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
 
 # Set the offsetScan flag to True

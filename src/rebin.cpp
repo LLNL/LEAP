@@ -91,17 +91,8 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
     double u_mid_ind = (u_mid-u_0)/T_u;// T_u* i + u_0
 
     double T_s = params->pixelWidth * R_tau / params->sdd;
-    double s_0 = -u_mid_ind * T_s;//u_mid_ind*T_s + s_0 = 0
-    //double s_0 = (R * u_0 - tau) / sqrt(1.0 + u_0 * u_0);
-    //if (params->detectorType == parameters::CURVED)
-    //    s_0 = R_tau * sin(u_0 - asin_tau_R_tau);
-    //printf("s: %f to %f\n", s_0, s_0+(params->numCols-1)*T_s);
-    //double s_0 = -T_s * double(params->numCols - 1) / 2.0;
-    //double s_0 = u_0 * R_tau;
-
-    //double alpha = asin(s / R_tau)
-
-    //printf("u_0 = %f, s_0 = %f\n", u_0, s_0);
+    //double s_0 = -u_mid_ind * T_s;//u_mid_ind*T_s + s_0 = 0
+    double s_0 = -params->centerCol * T_s;
 
     if (doWrapAround == false)
     {
@@ -117,10 +108,6 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
             fanAngle_low = params->u(0);
             fanAngle_high = params->u(params->numCols - 1);
         }
-        // Shift parallel beam first angle
-        //double phi_0_save = g_CP->phi_0;
-
-
         float phi_start = params->phis[0] - fanAngle_low;
         float phi_end = params->phis[params->numAngles - 1] - fanAngle_high;
 
@@ -146,7 +133,6 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
         #pragma omp parallel for
         for (int i = 0; i < params->numAngles; i++)
         {
-            //realnum** aProj = g_CB->data[i];
             float* vertLine = new float[params->numRows];
             float* aProj = &g[uint64(i) * uint64(params->numRows * params->numCols)];
             for (int k = 0; k < params->numCols; k++)
