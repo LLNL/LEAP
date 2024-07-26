@@ -53,6 +53,7 @@ For the next releases, we are working on the following:
 4) AMD GPU Support
 5) PyQt GUI
 6) beam hardening correction algorithms that account for variable takeoff angle and graded collimator/ bowtie filter
+7) ball phantom calibration routine
 
 ## Authors
 Kyle Champley (champley@gmail.com)
