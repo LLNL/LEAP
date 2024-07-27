@@ -33,6 +33,7 @@
 #include "guided_filter.cuh"
 #include "scatter_models.cuh"
 #include "geometric_calibration.cuh"
+#include "analytic_ray_tracing_gpu.cuh"
 #endif
 
 #include "log.h"
@@ -1339,7 +1340,7 @@ bool tomographicModels::set_rFOV(float rFOV_in)
 
 bool tomographicModels::set_rampID(int whichRampFilter)
 {
-	if (whichRampFilter < 0 || whichRampFilter > 10)
+	if (whichRampFilter < 0 || whichRampFilter > 12)
 		return false;
 	else
 	{
@@ -2813,10 +2814,36 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 #endif
 }
 
-bool tomographicModels::rayTrace(float* g, int oversampling)
+bool tomographicModels::rayTrace(float* g, int oversampling, bool data_on_cpu)
 {
 	analyticRayTracing simulator;
 	return simulator.rayTrace(g, &params, &geometricPhantom, oversampling);
+	/*
+#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		if (data_on_cpu == false)
+		{
+			LOG(logERROR, "", "") << "Error: GPU routines not included in this release!" << std::endl;
+			return false;
+		}
+		analyticRayTracing simulator;
+		return simulator.rayTrace(g, &params, &geometricPhantom, oversampling);
+	}
+	else
+	{
+		return rayTrace_gpu(g, &params, &geometricPhantom, data_on_cpu, oversampling);
+	}
+#else
+	if (data_on_cpu == false)
+	{
+		LOG(logERROR, "", "") << "Error: GPU routines not included in this release!" << std::endl;
+		return false;
+	}
+	analyticRayTracing simulator;
+	return simulator.rayTrace(g, &params, &geometricPhantom, oversampling);
+#endif
+	//*/
 }
 
 bool tomographicModels::rebin_curved(float* g, float* fanAngles, int order)

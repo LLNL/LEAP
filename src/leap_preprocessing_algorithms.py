@@ -503,7 +503,7 @@ def entropy(x):
     marg = list(filter(lambda p: p > 0, np.ravel(marg)))
     return -np.sum(np.multiply(marg, np.log2(marg)))
     
-def MTF(leapct, f, r, center=None):
+def MTF(leapct, f, r, center=None, getEdgeResponse=False, oversamplingRate=4):
     if leapct.ct_volume_defined() == False:
         return None
     x = leapct.x_samples()
@@ -528,7 +528,7 @@ def MTF(leapct, f, r, center=None):
     mus = f_slice[ind]
     distanceFromCenter = dist[ind]
     
-    M = 4 # the oversampling factor
+    M = oversamplingRate # the oversampling factor
     T_samples = leapct.get_voxelWidth() / float(M)
     N_samples = 2*M * int(r / (2*M * T_samples)) # N*T/2 <= r
     r_0 = r - float(N_samples) / 2.0 * T_samples
@@ -550,6 +550,9 @@ def MTF(leapct, f, r, center=None):
                 mus_equispaced[i] = mus_equispaced[i + 1]
             else:
                 mus_equispaced[i] = 0.0
+
+    if getEdgeResponse:
+        return mus_equispaced
 
     #LSF[i] = -1.0 * (mus_equispaced[i + 1] - mus_equispaced[i - 1]) / (2.0 * T_samples);
     LSF = (np.roll(mus_equispaced, -1) - np.roll(mus_equispaced, 1)) / (2.0 * T_samples)

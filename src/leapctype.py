@@ -4810,10 +4810,10 @@ class tomographicModels:
         return self.libprojectors.set_projector(which)
         
     def set_rampFilter(self,which):
-        """Set the ramp filter to use: 0, 2, 4, 6, 8, or 10
+        """Set the ramp filter to use: 0, 2, 4, 6, 8, 10, or 12
         
         Args:
-            which (int): the order of the finite difference used in the ramp filter, higher numbers produce a sharper reconstruction. Shepp-Logan filter is the default value (2).
+            which (int): the order of the finite difference used in the ramp filter, higher numbers produce a sharper reconstruction. Shepp-Logan filter is the default value (2) and Ram-Lak is 12.
             
         Returns:
             True is the input was valid.
@@ -5965,11 +5965,11 @@ class tomographicModels:
             g = self.allocate_projections()
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.rayTrace.argtypes = [ctypes.c_void_p, ctypes.c_int]
-            self.libprojectors.rayTrace(g.data_ptr(), int(oversampling))
+            self.libprojectors.rayTrace.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.rayTrace(g.data_ptr(), int(oversampling), g.is_cuda == False)
         else:
-            self.libprojectors.rayTrace.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
-            self.libprojectors.rayTrace(g, int(oversampling))
+            self.libprojectors.rayTrace.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.rayTrace(g, int(oversampling), True)
         return g
     
     def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None, oversampling=1):

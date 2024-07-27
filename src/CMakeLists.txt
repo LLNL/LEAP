@@ -64,6 +64,7 @@ set(HEADER
   cpu_utils.h
   phantom.h
   analytic_ray_tracing.h
+  analytic_ray_tracing_gpu.cuh
   rebin.h
   file_io.h
   leap_defines.h
@@ -112,6 +113,7 @@ set(SRC_CU
   geometric_calibration.cu
   ray_weighting.cu
   scatter_models.cu
+  analytic_ray_tracing_gpu.cu
   cuda_utils.cu
 )
 

@@ -943,9 +943,9 @@ bool clearPhantom()
 	return true;
 }
 
-bool rayTrace(float* g, int oversampling)
+bool rayTrace(float* g, int oversampling, bool data_on_cpu)
 {
-	return tomo()->rayTrace(g, oversampling);
+	return tomo()->rayTrace(g, oversampling, data_on_cpu);
 }
 
 bool rebin_curved(float* g, float* fanAngles, int order)

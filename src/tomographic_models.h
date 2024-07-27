@@ -928,9 +928,10 @@ public:
 	 * \brief       analytic ray tracing simulation
 	 * \param[in]   g pointer to the projection data
 	 * \param[in]   oversampling the detector oversampling factor
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool rayTrace(float* g, int oversampling = 1);
+	bool rayTrace(float* g, int oversampling, bool data_on_cpu);
 
 	/**
 	 * \fn          rebin_curved

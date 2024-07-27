@@ -28,7 +28,8 @@ cuda_files=['projectors_SF.cu', 'projectors_extendedSF.cu',
             'projectors_attenuated.cu', 'projectors_Siddon.cu', 
             'sensitivity.cu', 'ramp_filter.cu', 
             'noise_filters.cu', 'total_variation.cu', 
-            'ray_weighting.cu', 'cuda_utils.cu']
+            'ray_weighting.cu', 'cuda_utils.cu', 
+            'analytic_ray_tracing_gpu.cu']
 
 
 cuda = torch.cuda.is_available()

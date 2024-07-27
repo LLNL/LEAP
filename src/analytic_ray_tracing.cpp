@@ -53,9 +53,12 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
     return false;
     //*/
 
+    int num_threads = omp_get_num_procs();
+    aPhantom->makeTempData(num_threads);
+
     if (oversampling == 1)
     {
-        omp_set_num_threads(omp_get_num_procs());
+        omp_set_num_threads(num_threads);
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < params->numAngles; i++)
         {
@@ -90,7 +93,7 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
 
         int os_radius = (oversampling - 1) / 2;
 
-        omp_set_num_threads(omp_get_num_procs());
+        omp_set_num_threads(num_threads);
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < params->numAngles; i++)
         {

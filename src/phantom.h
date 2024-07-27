@@ -103,6 +103,8 @@ public:
 
     std::vector<geometricObject> objects;
 
+    bool makeTempData(int num_threads);
+
 private:
 
     /**
@@ -149,6 +151,9 @@ private:
      * \return      returns true the given (x,y,z) coordinates are inside the the shifted, rotated, and normalized 3D geometric shape
      */
     bool isInside(float x, float y, float z, int type, float* clip);
+
+    int* intData;
+    double* floatData;
 
     // local copy of the pointer to the parameters class that is passed by the addObject function
     parameters* params;

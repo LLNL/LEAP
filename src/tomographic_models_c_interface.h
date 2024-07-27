@@ -224,7 +224,7 @@ extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float
 
 extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling);
 extern "C" PROJECTOR_API bool clearPhantom();
-extern "C" PROJECTOR_API bool rayTrace(float* g, int oversampling);
+extern "C" PROJECTOR_API bool rayTrace(float* g, int oversampling, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool rebin_curved(float* g, float* fanAngles, int order);
 extern "C" PROJECTOR_API bool rebin_parallel(float* g, int order);
