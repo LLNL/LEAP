@@ -3181,7 +3181,7 @@ class tomographicModels:
         """
         return self.SART(g, f, numIter, 1, mask)
         
-    def SART(self, g, f, numIter, numSubsets=1, mask=None):
+    def SART(self, g, f, numIter, numSubsets=1, mask=None, nonnegativityConstraint=True):
         r"""Simultaneous Algebraic Reconstruction Technique reconstruction
         
         The SART algorithm is performed using two nested loops.  The inner loop is performed like
@@ -3200,6 +3200,7 @@ class tomographicModels:
             numIter (int): number of iterations
             numSubsets (int): number of subsets
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
+            nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
         
         Returns:
             f, the same as the input with the same name
@@ -3237,7 +3238,8 @@ class tomographicModels:
                     print('\tcost = ' + str(0.5*self.innerProd(Pd,Pd)))
                 self.backproject(Pd,d)
                 f += 0.9*d / Pstar1
-                f[f<0.0] = 0.0
+                if nonnegativityConstraint:
+                    f[f<0.0] = 0.0
             return f
         else:
             P1 = self.allocateData(g)
@@ -3280,11 +3282,12 @@ class tomographicModels:
                     #print('P1 range: ' + str(np.min(P1_subsets[m])) + ' to ' + str(np.max(P1_subsets[m])))
                     #print('d range: ' + str(np.min(d)) + ' to ' + str(np.max(d)))
                     f += 0.9*d / Pstar1
-                    f[f<0.0] = 0.0
+                    if nonnegativityConstraint:
+                        f[f<0.0] = 0.0
             subsetParams.setSubset(-1)
             return f
             
-    def ASDPOCS(self, g, f, numIter, numSubsets, numTV, filters=None, mask=None):
+    def ASDPOCS(self, g, f, numIter, numSubsets, numTV, filters=None, mask=None, nonnegativityConstraint=True):
         r"""Adaptive Steepest Descent-Projection onto Convex Subsets reconstruction
         
         This algorithm combines SART with regularization (e.g., TV; see \"filters\" argument).  See SART and SIRT documentation
@@ -3312,6 +3315,7 @@ class tomographicModels:
             numTV (int): number of TV diffusion steps, larger numbers perform stronger regularization/ smoothing
             filters (filterSequence object): list of regularization filters
             mask (C contiguous float32 numpy or torch array): projection data to mask out bad data, etc. (zero values indicate projection data pixels not to use)
+            nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
         
         Returns:
             f, the same as the input with the same name
@@ -3380,7 +3384,8 @@ class tomographicModels:
                     Pf_minus_g = Pf_minus_g / P1
                 self.backproject(Pf_minus_g,d)
                 f -= 0.9*d / Pstar1
-                f[f<0.0] = 0.0
+                if nonnegativityConstraint:
+                    f[f<0.0] = 0.0
             else:
                 for m in range(numSubsets):
                     #self.set_angles(phis_subsets[m])
@@ -3396,7 +3401,8 @@ class tomographicModels:
                         Pd = (g_subsets[m]-Pd) / P1_subsets[m]
                     self.backproject(Pd,d)
                     f += 0.9*d / Pstar1
-                    f[f<0.0] = 0.0
+                    if nonnegativityConstraint:
+                        f[f<0.0] = 0.0
                 subsetParams.setSubset(-1)
 
             # Calculate SART error sinogram and calculate cost            
@@ -3489,6 +3495,7 @@ class tomographicModels:
             f (C contiguous float32 numpy or torch array): volume data
             numIter (int): number of iterations
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
+            nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
         
         Returns:
             f, the same as the input with the same name
@@ -3516,6 +3523,7 @@ class tomographicModels:
             numIter (int): number of iterations
             W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
+            nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
         
         Returns:
             f, the same as the input with the same name
@@ -3543,6 +3551,7 @@ class tomographicModels:
             numIter (int): number of iterations
             filters (filterSequence object): list of differentiable regularization filters
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
+            nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
         
         Returns:
             f, the same as the input with the same name
@@ -3571,6 +3580,7 @@ class tomographicModels:
             filters (filterSequence object): list of differentiable regularization filters
             W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W:=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
+            nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
         
         Returns:
             f, the same as the input with the same name

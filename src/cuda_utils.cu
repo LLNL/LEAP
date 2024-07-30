@@ -435,6 +435,76 @@ __global__ void weightedInnerProductKernel(const float* x, const float* w, const
     }
 }
 
+void printGPUproperties(int whichGPU)
+{
+    if (whichGPU >= 0)
+    {
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, whichGPU);
+        printf("maxThreadsPerMultiProcessor = %d\n", prop.maxThreadsPerMultiProcessor);
+        printf("multiProcessorCount = %d\n", prop.multiProcessorCount);
+        printf("maxThreadsPerBlock = %d\n", prop.maxThreadsPerBlock);
+        /*
+        const int num_gpus = numberOfGPUs();
+        std::vector<cudaDeviceProp> res(num_gpus);
+        for (int g_idx = 0; g_idx < num_gpus; g_idx++)
+        {
+            CUDA_CHECK(cudaGetDeviceProperties(&(res[g_idx]), g_idx));
+        }
+        return res;
+        //*/
+    }
+}
+
+int getSPcores(int whichGPU)
+{
+    if (whichGPU >= 0)
+    {
+        cudaDeviceProp devProp;
+        cudaGetDeviceProperties(&devProp, whichGPU);
+
+        int cores = 0;
+        int mp = devProp.multiProcessorCount;
+        switch (devProp.major) {
+        case 2: // Fermi
+            if (devProp.minor == 1) cores = mp * 48;
+            else cores = mp * 32;
+            break;
+        case 3: // Kepler
+            cores = mp * 192;
+            break;
+        case 5: // Maxwell
+            cores = mp * 128;
+            break;
+        case 6: // Pascal
+            if ((devProp.minor == 1) || (devProp.minor == 2)) cores = mp * 128;
+            else if (devProp.minor == 0) cores = mp * 64;
+            else printf("Unknown device type\n");
+            break;
+        case 7: // Volta and Turing
+            if ((devProp.minor == 0) || (devProp.minor == 5)) cores = mp * 64;
+            else printf("Unknown device type\n");
+            break;
+        case 8: // Ampere
+            if (devProp.minor == 0) cores = mp * 64;
+            else if (devProp.minor == 6) cores = mp * 128;
+            else if (devProp.minor == 9) cores = mp * 128; // ada lovelace
+            else printf("Unknown device type\n");
+            break;
+        case 9: // Hopper
+            if (devProp.minor == 0) cores = mp * 128;
+            else printf("Unknown device type\n");
+            break;
+        default:
+            printf("Unknown device type\n");
+            break;
+        }
+        return cores;
+    }
+    else
+        return 0;
+}
+
 int numberOfGPUs()
 {
     int num_gpus = 0;

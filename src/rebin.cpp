@@ -56,7 +56,7 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
     bool doWrapAround = true;
     if (params->helicalPitch != 0.0)
         doWrapAround = false;
-    else if (angularRange_mod_360 > params->T_phi()*180.0/PI)
+    else if (angularRange_mod_360 > fabs(params->T_phi())*180.0/PI)
         doWrapAround = false;
 
     if (doWrapAround)
@@ -78,6 +78,10 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
     T_phi = params->T_phi();
     phi_0 = params->phis[0];
     N_phi = params->numAngles;
+
+    float rotationDirection = 1.0;
+    if (T_phi < 0.0)
+        rotationDirection = -1.0;
 
     N_phi_new = N_phi;
     phi_0_new = phi_0;
@@ -108,14 +112,14 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
             fanAngle_low = params->u(0);
             fanAngle_high = params->u(params->numCols - 1);
         }
-        float phi_start = params->phis[0] - fanAngle_low;
-        float phi_end = params->phis[params->numAngles - 1] - fanAngle_high;
+        float phi_start = params->phis[0] - fanAngle_low * rotationDirection;
+        float phi_end = params->phis[params->numAngles - 1] - fanAngle_high * rotationDirection;
 
         //phi_start = T_phi*? + phi_0
-        int phi_0_new_ind = int(ceil((phi_start - phi_0) / T_phi));
-        int phi_end_new_ind = int(floor((phi_end - phi_0) / T_phi));
+        int phi_0_new_ind = int(ceil((phi_start - phi_0) / (T_phi)));
+        int phi_end_new_ind = int(floor((phi_end - phi_0) / (T_phi)));
 
-        phi_0_new = phi_0_new_ind *T_phi + phi_0;
+        phi_0_new = phi_0_new_ind * T_phi + phi_0;
         N_phi_new = phi_end_new_ind - phi_0_new_ind + 1;
     }
     double beta_min = min(phi_0_new, T_phi * N_phi_new + phi_0_new);

@@ -26,6 +26,8 @@
 #define CUDA_CHECK(expr) cudaSafeCall((expr), __FILE__, __LINE__, #expr)
 #define CHECK_LAST_ERROR() cudaCall(cudaGetLastError(), NULL, __FILE__, __LINE__)
 
+int getSPcores(int whichGPU = 0);
+void printGPUproperties(int whichGPU = 0);
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
 extern float getAvailableGPUmemory(std::vector<int> whichGPUs);

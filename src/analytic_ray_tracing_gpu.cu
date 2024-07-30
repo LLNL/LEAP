@@ -54,76 +54,22 @@ __constant__ float4 d_startVal_g;
 __device__ float u(const int i)
 {
     return float(i) * d_T_g.z + d_startVal_g.z;
-    /*
-    if (d_geometry == d_PARALLEL)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_FAN)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_CONE)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_CONE_PARALLEL)
-    {
-        return 0.0f;
-    }
-    else
-        return 0.0f;
-    //*/
 }
 
 __device__ float v(const int i)
 {
     return float(i) * d_T_g.y + d_startVal_g.y;
-    /*
-    if (d_geometry == d_PARALLEL)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_FAN)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_CONE)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_CONE_PARALLEL)
-    {
-        return 0.0f;
-    }
-    else
-        return 0.0f;
-    //*/
 }
 
-__device__ float z_source(const int i, const int k)
+__device__ float z_source(const float phi, const int k)
 {
-    return float(i) * d_T_g.w + d_startVal_g.w;
-    /*
-    if (d_geometry == d_PARALLEL)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_FAN)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_CONE)
-    {
-        return 0.0f;
-    }
-    else if (d_geometry == d_CONE_PARALLEL)
-    {
-        return 0.0f;
-    }
-    else
-        return 0.0f;
-    //*/
+	if (d_geometry == d_CONE_PARALLEL)
+	{
+		//const float alpha = asin(u(k) / d_sod) + asin(d_tau / d_sod);
+		return (phi + asin(u(k) / d_sod) + asin(d_tau / d_sod)) * d_T_g.w + d_startVal_g.w;
+	}
+	else
+	    return phi * d_T_g.w + d_startVal_g.w;
 }
 
 __device__ float3 setSourcePosition(const float phi, const int iProj, const int iRow, const int iCol, const float dv, const float du)
@@ -147,7 +93,7 @@ __device__ float3 setSourcePosition(const float phi, const int iProj, const int 
     {
         return make_float3(d_sod * cos_phi + d_tau * sin_phi,
             d_sod * sin_phi - d_tau * cos_phi,
-            z_source(iProj, 0));
+            z_source(phi, 0));
     }
     else if (d_geometry == d_CONE_PARALLEL)
     {
@@ -155,7 +101,7 @@ __device__ float3 setSourcePosition(const float phi, const int iProj, const int 
         const float sqrt_R2_minus_s2 = sqrtf(d_sod * d_sod - s * s);
         return make_float3(-s * sin_phi + sqrt_R2_minus_s2 * cos_phi,
             s * cos_phi + sqrt_R2_minus_s2 * sin_phi,
-            z_source(iProj, iCol));
+            z_source(phi, iCol));
     }
     else
         return make_float3(0.0f, 0.0f, 0.0f);
@@ -169,38 +115,41 @@ __device__ float3 setTrajectory(const float phi, const int iProj, const int iRow
     const float cos_phi = cos(phi);
     const float sin_phi = sin(phi);
 
-    /*
-    float* s = NULL;
-    float* c = NULL;
-    float* u_vec = NULL;
-    float* v_vec = NULL;
-    //*/
-
     if (d_geometry == d_PARALLEL)
     {
-        return make_float3(-cos_phi, -sin_phi, 0.0f);
+        const float3 r = make_float3(-cos_phi, -sin_phi, 0.0f);
+		const float r_mag_inv = rsqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
+		return make_float3(r.x * r_mag_inv, r.y * r_mag_inv, r.z * r_mag_inv);
     }
     else if (d_geometry == d_FAN)
     {
-        return make_float3(-(cos_phi + u_val * sin_phi), -(sin_phi - u_val * cos_phi), 0.0f);
+		const float3 r = make_float3(-(cos_phi + u_val * sin_phi), -(sin_phi - u_val * cos_phi), 0.0f);
+		const float r_mag_inv = rsqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
+		return make_float3(r.x * r_mag_inv, r.y * r_mag_inv, r.z * r_mag_inv);
     }
     else if (d_geometry == d_CONE)
     {
         if (d_detectorType == d_CURVED)
         {
-            return make_float3(-cos(phi - u_val), -sin(phi - u_val), v_val);
+			const float3 r = make_float3(-cos(phi - u_val), -sin(phi - u_val), v_val);
+			const float r_mag_inv = rsqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
+			return make_float3(r.x * r_mag_inv, r.y * r_mag_inv, r.z * r_mag_inv);
         }
         else
         {
-            return make_float3(-(cos_phi + u_val * sin_phi), -(sin_phi - u_val * cos_phi), v_val);
+			const float3 r = make_float3(-(cos_phi + u_val * sin_phi), -(sin_phi - u_val * cos_phi), v_val);
+			const float r_mag_inv = rsqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
+			return make_float3(r.x * r_mag_inv, r.y * r_mag_inv, r.z * r_mag_inv);
         }
     }
     else if (d_geometry == d_CONE_PARALLEL)
     {
-        return make_float3(-cos_phi, -sin_phi, v_val);
+		const float3 r = make_float3(-cos_phi, -sin_phi, v_val);
+		const float r_mag_inv = rsqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
+		return make_float3(r.x * r_mag_inv, r.y * r_mag_inv, r.z * r_mag_inv);
     }
     else
-        return make_float3(0.0f, 0.0f, 0.0f);
+		return make_float3(0.0f, 0.0f, 0.0f);
 }
 
 __device__ bool parametersOfIntersection_1D(float2& ts, float p, float r)
@@ -239,8 +188,8 @@ __device__ bool parametersOfClippingPlaneIntersections(float2& ts, float3 p, flo
 {
 	for (int i = 0; i < solid->numClippingPlanes; i++)
 	{
-		float p_dot_n = solid->clippingPlanes[i][0] * p.x + solid->clippingPlanes[i][1] * p.y + solid->clippingPlanes[i][2] * p.z;
-		float r_dot_n = solid->clippingPlanes[i][0] * r.x + solid->clippingPlanes[i][1] * r.y + solid->clippingPlanes[i][2] * r.z;
+		const float p_dot_n = solid->clippingPlanes[i][0] * p.x + solid->clippingPlanes[i][1] * p.y + solid->clippingPlanes[i][2] * p.z;
+		const float r_dot_n = solid->clippingPlanes[i][0] * r.x + solid->clippingPlanes[i][1] * r.y + solid->clippingPlanes[i][2] * r.z;
 		if (fabs(r_dot_n) < 1.0e-12f)
 		{
 			if (p_dot_n < solid->clippingPlanes[i][3])
@@ -248,7 +197,7 @@ __device__ bool parametersOfClippingPlaneIntersections(float2& ts, float3 p, flo
 		}
 		else if (r_dot_n > 0.0f)
 		{
-			float temp = (solid->clippingPlanes[i][3] - p_dot_n) / r_dot_n;
+			const float temp = (solid->clippingPlanes[i][3] - p_dot_n) / r_dot_n;
 			// restriction: t > temp
 			if (ts.y < temp)
 				return false;
@@ -258,7 +207,7 @@ __device__ bool parametersOfClippingPlaneIntersections(float2& ts, float3 p, flo
 		else
 		{
 			// restriction: t < temp
-			float temp = (solid->clippingPlanes[i][3] - p_dot_n) / r_dot_n;
+			const float temp = (solid->clippingPlanes[i][3] - p_dot_n) / r_dot_n;
 			if (ts.x > temp)
 				return false;
 			if (ts.y > temp)
@@ -275,8 +224,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	ts.y = ts.x;
 
 	// r != (0,0,1)
-	float r_dot_r = r.x * r.x + r.y * r.y + r.z * r.z;
-	float p_dot_r = r.x * p.x + r.y * p.y + r.z * p.z;
+	const float r_dot_r = r.x * r.x + r.y * r.y + r.z * r.z;
+	const float p_dot_r = r.x * p.x + r.y * p.y + r.z * p.z;
 
 	if (solid->type == d_ELLIPSOID)
 	{
@@ -316,14 +265,14 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	else if (solid->type == d_CYLINDER_Z)
 	{
 		//double r_dot_r_2D = r.x * r.x + r.y * r.y; // 3
-		float r_dot_r_2D = r_dot_r - r.z * r.z; // 2
-		float p_dor_r_2D = p_dot_r - p.z * r.z; // 2
+		const float r_dot_r_2D = r_dot_r - r.z * r.z; // 2
+		const float p_dor_r_2D = p_dot_r - p.z * r.z; // 2
 		float disc = p_dor_r_2D * p_dor_r_2D - r_dot_r_2D * (p.x * p.x + p.y * p.y - 1.0f); // 7
 		if (disc > 0.0f)
 		{
 			disc = sqrtf(disc);
-			float tmin = (-p_dor_r_2D - disc) / r_dot_r_2D; // 2
-			float tmax = (-p_dor_r_2D + disc) / r_dot_r_2D; // 2
+			const float tmin = (-p_dor_r_2D - disc) / r_dot_r_2D; // 2
+			const float tmax = (-p_dor_r_2D + disc) / r_dot_r_2D; // 2
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, p.z, r.z) == true)
@@ -343,13 +292,13 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	}
 	else if (solid->type == d_CYLINDER_X) // ellipsoidal cross sections parallel to x-y axis
 	{
-		float r_dot_r_2D = r_dot_r - r.x * r.x;
+		const float r_dot_r_2D = r_dot_r - r.x * r.x;
 		float disc = (p.z * r.z + p.y * r.y) * (p.z * r.z + p.y * r.y) - r_dot_r_2D * (p.z * p.z + p.y * p.y - 1.0f);
 		if (disc > 0.0f)
 		{
 			disc = sqrtf(disc);
-			float tmin = (-(p.z * r.z + r.y * p.y) - disc) / r_dot_r_2D;
-			float tmax = (-(p.z * r.z + r.y * p.y) + disc) / r_dot_r_2D;
+			const float tmin = (-(p.z * r.z + r.y * p.y) - disc) / r_dot_r_2D;
+			const float tmax = (-(p.z * r.z + r.y * p.y) + disc) / r_dot_r_2D;
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, p.x, r.x) == true)
@@ -369,13 +318,13 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	}
 	else if (solid->type == d_CYLINDER_Y) // ellipsoidal cross sections parallel to x-y axis
 	{
-		float r_dot_r_2D = r_dot_r - r.y * r.y;
+		const float r_dot_r_2D = r_dot_r - r.y * r.y;
 		float disc = (p.x * r.x + p.z * r.z) * (p.x * r.x + p.z * r.z) - r_dot_r_2D * (p.x * p.x + p.z * p.z - 1.0f);
 		if (disc > 0.0f)
 		{
 			disc = sqrtf(disc);
-			float tmin = (-(p.x * r.x + r.z * p.z) - disc) / r_dot_r_2D;
-			float tmax = (-(p.x * r.x + r.z * p.z) + disc) / r_dot_r_2D;
+			const float tmin = (-(p.x * r.x + r.z * p.z) - disc) / r_dot_r_2D;
+			const float tmax = (-(p.x * r.x + r.z * p.z) + disc) / r_dot_r_2D;
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, p.y, r.y) == true)
@@ -396,8 +345,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	else if (solid->type == d_CONE_Z)
 	{
 		float a = r.x * r.x + r.y * r.y - r.z * r.z;
-		float b_half = p.x * r.x + p.y * r.y - p.z * r.z;
-		float c = p.x * p.x + p.y * p.y - p.z * p.z;
+		const float b_half = p.x * r.x + p.y * r.y - p.z * r.z;
+		const float c = p.x * p.x + p.y * p.y - p.z * p.z;
 		float disc = b_half * b_half - a * c;
 
 		if (disc > 0.0f)
@@ -412,8 +361,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 				tmax = a;
 			}
 
-			float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
-			float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
+			const float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
+			const float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, (p.z - theShift) / theScale, r.z / theScale) == true)
@@ -430,8 +379,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	else if (solid->type == d_CONE_X)
 	{
 		float a = r.z * r.z + r.y * r.y - r.x * r.x;
-		float b_half = p.z * r.z + p.y * r.y - p.x * r.x;
-		float c = p.z * p.z + p.y * p.y - p.x * p.x;
+		const float b_half = p.z * r.z + p.y * r.y - p.x * r.x;
+		const float c = p.z * p.z + p.y * p.y - p.x * p.x;
 		float disc = b_half * b_half - a * c;
 
 		if (disc > 0.0f)
@@ -446,8 +395,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 				tmax = a;
 			}
 
-			float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
-			float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
+			const float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
+			const float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, (p.x - theShift) / theScale, r.x / theScale) == true)
@@ -464,8 +413,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	else if (solid->type == d_CONE_Y)
 	{
 		float a = r.x * r.x + r.z * r.z - r.y * r.y;
-		float b_half = p.x * r.x + p.z * r.z - p.y * r.y;
-		float c = p.x * p.x + p.z * p.z - p.y * p.y;
+		const float b_half = p.x * r.x + p.z * r.z - p.y * r.y;
+		const float c = p.x * p.x + p.z * p.z - p.y * p.y;
 		float disc = b_half * b_half - a * c;
 
 		if (disc > 0.0f)
@@ -480,13 +429,13 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 				tmax = a;
 			}
 
-			float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
-			float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
+			const float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
+			const float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, (p.y - theShift) / theScale, r.y / theScale) == true)
 			{
-				if (fabs(r.y) > 1.0e-12)
+				if (fabs(r.y) > 1.0e-12f)
 				{
 					bool isInside_0 = false;
 					float x_val, y_val, z_val;
@@ -701,14 +650,14 @@ __device__ float lineIntegral_geometricSolids(float3 p, float3 r, geometricSolid
 	{
 		sort(endPoints, 2 * count);
 		//sort(endPoints.begin(), endPoints.end());
-		for (int i = 0; i < numObjects - 1; i++)
+		for (int i = 0; i < 2*count - 1; i++)
 		{
 			// Consider the interval (allPoints[i], allPoints[i+1])
-			float midPoint = (endPoints[i + 1] + endPoints[i]) * 0.5f;
+			const float midPoint = (endPoints[i + 1] + endPoints[i]) * 0.5f;
 			//for (int j = int(objects.size())-1; j >= 0; j--)
-			for (int ind = numObjects - 1; ind >= 0; ind--)
+			for (int ind = count - 1; ind >= 0; ind--)
 			{
-				int j = objectIndices[ind];
+				const int j = objectIndices[ind];
 				//if (objects[j].val != 0.0)
 				{
 					// Find which object this interval belongs to
@@ -731,24 +680,130 @@ __device__ float lineIntegral_geometricSolids(float3 p, float3 r, geometricSolid
 	//*/
 }
 
-__global__ void rayTracingKernel(float* g, const float* phis, geometricSolid* solids, const int numObjects, float* floatData, int* intData, const int i, const int j)
+__global__ void rayTracingKernel_modular(float* g, const float* phis, geometricSolid* solids, const int numObjects, float* floatData, int* intData, const uint64 ichunk, const int chunkSize, const float* sourcePositions, const float* moduleCenters, const float* rowVectors, const float* colVectors)
+{
+	//const int i = threadIdx.x + blockIdx.x * blockDim.x;
+	//const int j = threadIdx.y + blockIdx.y * blockDim.y;
+	//const int k = threadIdx.z + blockIdx.z * blockDim.z;
+	const int iprocess = threadIdx.x + blockIdx.x * blockDim.x;
+
+	uint64 ind = ichunk * chunkSize + iprocess;
+	int k = ind % d_N_g.z;
+	ind = (ind - k) / d_N_g.z;
+	int j = ind % d_N_g.y;
+	int i = (ind - j) / d_N_g.y;
+
+	//const int k = threadIdx.x + blockIdx.x * blockDim.x;
+	if (i >= d_N_g.x || j >= d_N_g.y || k >= d_N_g.z)
+		return;
+
+	const float* sourcePosition = &sourcePositions[3 * i];
+	const float* moduleCenter = &moduleCenters[3 * i];
+	const float* v_vec = &rowVectors[3 * i];
+	const float* u_vec = &colVectors[3 * i];
+
+	const float v_val = v(j);
+	const float u_val = u(k);
+
+	const float3 sourcePos = make_float3(sourcePosition[0], sourcePosition[1], sourcePosition[2]);
+	const float3 detPos = make_float3(moduleCenter[0] + u_val * u_vec[0] + v_val * v_vec[0], moduleCenter[1] + u_val * u_vec[1] + v_val * v_vec[1], moduleCenter[2] + u_val * u_vec[2] + v_val * v_vec[2]);
+
+	const float phi = phis[i];
+	if (d_oversampling <= 1)
+	{
+		const float dv = 0.0f;
+		const float du = 0.0f;
+
+		const float r_mag_inv = rsqrtf((detPos.x - sourcePos.x) * (detPos.x - sourcePos.x) + (detPos.y - sourcePos.y) * (detPos.y - sourcePos.y) + (detPos.z - sourcePos.z) * (detPos.z - sourcePos.z));
+		const float3 r = make_float3((detPos.x - sourcePos.x) * r_mag_inv, (detPos.y - sourcePos.y) * r_mag_inv, (detPos.z - sourcePos.z) * r_mag_inv);
+
+		//const float val = lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &allIntersections[k*2*numObjects]);
+		const float val = lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &floatData[iprocess * 4 * numObjects], &intData[iprocess * numObjects]);
+		g[uint64(i) * uint64(d_N_g.z * d_N_g.y) + uint64(j * d_N_g.z + k)] = val;
+	}
+	else
+	{
+		const float T_v_os = d_T_g.y / float(d_oversampling + 1);
+		const float T_u_os = d_T_g.z / float(d_oversampling + 1);
+
+		const int os_radius = (d_oversampling - 1) / 2;
+
+		float accum = 0.0;
+		for (int j_os = -os_radius; j_os <= os_radius; j_os++)
+		{
+			const float dv = j_os * T_v_os;
+
+			for (int k_os = -os_radius; k_os <= os_radius; k_os++)
+			{
+				const float du = k_os * T_u_os;
+
+				const float3 detPos_mod = make_float3(detPos.x + du * u_vec[0] + dv * v_vec[0], detPos.y + du * u_vec[1] + dv * v_vec[1], detPos.z + du * u_vec[2] + dv * v_vec[2]);
+				const float r_mag_inv = rsqrtf((detPos_mod.x - sourcePos.x) * (detPos_mod.x - sourcePos.x) + (detPos_mod.y - sourcePos.y) * (detPos_mod.y - sourcePos.y) + (detPos_mod.z - sourcePos.z) * (detPos_mod.z - sourcePos.z));
+				const float3 r = make_float3((detPos_mod.x - sourcePos.x) * r_mag_inv, (detPos_mod.y - sourcePos.y) * r_mag_inv, (detPos_mod.z - sourcePos.z) * r_mag_inv);
+
+				accum += expf(-lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &floatData[iprocess * 4 * numObjects], &intData[iprocess * numObjects]));
+			}
+		}
+
+		g[uint64(i) * uint64(d_N_g.z * d_N_g.y) + uint64(j * d_N_g.z + k)] = -log(accum / float(d_oversampling * d_oversampling));
+	}
+}
+
+__global__ void rayTracingKernel(float* g, const float* phis, geometricSolid* solids, const int numObjects, float* floatData, int* intData, const uint64 ichunk, const int chunkSize)
 {
     //const int i = threadIdx.x + blockIdx.x * blockDim.x;
     //const int j = threadIdx.y + blockIdx.y * blockDim.y;
     //const int k = threadIdx.z + blockIdx.z * blockDim.z;
-	const int k = threadIdx.x + blockIdx.x * blockDim.x;
+	const int iprocess = threadIdx.x + blockIdx.x * blockDim.x;
+
+	uint64 ind = ichunk * chunkSize + iprocess;
+	int k = ind % d_N_g.z;
+	ind = (ind - k) / d_N_g.z;
+	int j = ind % d_N_g.y;
+	int i = (ind - j) / d_N_g.y;
+
+	//const int k = threadIdx.x + blockIdx.x * blockDim.x;
     if (i >= d_N_g.x || j >= d_N_g.y || k >= d_N_g.z)
         return;
 
-    const float dv = 0.0f;
-    const float du = 0.0f;
-    const float phi = phis[i];
-    const float3 sourcePos = setSourcePosition(phi, i, j, k, dv, du);
-    const float3 r = setTrajectory(phi, i, j, k, dv, du);
+	const float phi = phis[i];
+	if (d_oversampling <= 1)
+	{
+		const float dv = 0.0f;
+		const float du = 0.0f;
 
-    //const float val = lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &allIntersections[k*2*numObjects]);
-	const float val = lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &floatData[k*4*numObjects], &intData[k * numObjects]);
-	g[uint64(i) * uint64(d_N_g.z * d_N_g.y) + uint64(j * d_N_g.z + k)] = val;
+		const float3 sourcePos = setSourcePosition(phi, i, j, k, dv, du);
+		const float3 r = setTrajectory(phi, i, j, k, dv, du);
+
+		//const float val = lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &allIntersections[k*2*numObjects]);
+		const float val = lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &floatData[iprocess * 4 * numObjects], &intData[iprocess * numObjects]);
+		g[uint64(i) * uint64(d_N_g.z * d_N_g.y) + uint64(j * d_N_g.z + k)] = val;
+	}
+	else
+	{
+		const float T_v_os = d_T_g.y / float(d_oversampling + 1);
+		const float T_u_os = d_T_g.z / float(d_oversampling + 1);
+
+		const int os_radius = (d_oversampling - 1) / 2;
+
+		float accum = 0.0;
+		for (int j_os = -os_radius; j_os <= os_radius; j_os++)
+		{
+			const float dv = j_os * T_v_os;
+
+			for (int k_os = -os_radius; k_os <= os_radius; k_os++)
+			{
+				const float du = k_os * T_u_os;
+
+				const float3 sourcePos = setSourcePosition(phi, i, j, k, dv, du);
+				const float3 r = setTrajectory(phi, i, j, k, dv, du);
+
+				accum += expf(-lineIntegral_geometricSolids(sourcePos, r, solids, numObjects, &floatData[iprocess * 4 * numObjects], &intData[iprocess * numObjects]));
+			}
+		}
+
+		g[uint64(i) * uint64(d_N_g.z * d_N_g.y) + uint64(j * d_N_g.z + k)] = -log(accum / float(d_oversampling * d_oversampling));
+	}
 }
 
 void setConstantMemoryGeometryParameters(parameters* params, int oversampling)
@@ -795,7 +850,10 @@ bool rayTrace_gpu(float* g, parameters* params, phantom* aPhantom, bool data_on_
 {
     if (g == NULL || params == NULL || params->geometryDefined() == false)
         return false;
-	oversampling = max(1, min(oversampling, 9));
+	oversampling = max(1, min(oversampling, 11));
+	if (oversampling % 2 == 0)
+		oversampling += 1;
+	oversampling = max(1, min(oversampling, 11));
 
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -817,6 +875,33 @@ bool rayTrace_gpu(float* g, parameters* params, phantom* aPhantom, bool data_on_
         dev_g = g;
 
     float* dev_phis = copyAngleArrayToGPU(params);
+
+	float* dev_sourcePositions = 0;
+	float* dev_moduleCenters = 0;
+	float* dev_rowVectors = 0;
+	float* dev_colVectors = 0;
+	if (params->geometry == parameters::MODULAR)
+	{
+		if (cudaSuccess != cudaMalloc((void**)&dev_sourcePositions, 3 * params->numAngles * sizeof(float)))
+			fprintf(stderr, "cudaMalloc failed!\n");
+		if (cudaMemcpy(dev_sourcePositions, params->sourcePositions, 3 * params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+			fprintf(stderr, "cudaMemcpy(sourcePositions) failed!\n");
+
+		if (cudaSuccess != cudaMalloc((void**)&dev_moduleCenters, 3 * params->numAngles * sizeof(float)))
+			fprintf(stderr, "cudaMalloc failed!\n");
+		if (cudaMemcpy(dev_moduleCenters, params->moduleCenters, 3 * params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+			fprintf(stderr, "cudaMemcpy(moduleCenters) failed!\n");
+
+		if (cudaSuccess != cudaMalloc((void**)&dev_rowVectors, 3 * params->numAngles * sizeof(float)))
+			fprintf(stderr, "cudaMalloc failed!\n");
+		if (cudaMemcpy(dev_rowVectors, params->rowVectors, 3 * params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+			fprintf(stderr, "cudaMemcpy(rowVectors) failed!\n");
+
+		if (cudaSuccess != cudaMalloc((void**)&dev_colVectors, 3 * params->numAngles * sizeof(float)))
+			fprintf(stderr, "cudaMalloc failed!\n");
+		if (cudaMemcpy(dev_colVectors, params->colVectors, 3 * params->numAngles * sizeof(float), cudaMemcpyHostToDevice))
+			fprintf(stderr, "cudaMemcpy(colVectors) failed!\n");
+	}
 
 	int numObjects = int(aPhantom->objects.size());
 	geometricSolid* dev_solids = 0;
@@ -852,27 +937,39 @@ bool rayTrace_gpu(float* g, parameters* params, phantom* aPhantom, bool data_on_
 	}
 	delete[] solids;
 
+	int num_gpu_cores = max(1024, getSPcores(params->whichGPU));
+	if (params->projectionData_numberOfElements() < uint64(num_gpu_cores))
+		num_gpu_cores = int(params->projectionData_numberOfElements());
+	uint64 numChunks = uint64(ceil(double(params->projectionData_numberOfElements()) / double(num_gpu_cores)));
+	//printf("number of cores = %d, number of chunks = %d\n", num_gpu_cores, int(numChunks));
+
+	int blockSize = 8;
+	int numBlocks = int(ceil(double(num_gpu_cores) / double(blockSize)));
+	int numDataCopies = numBlocks * blockSize;
+
 	float* dev_floatData = 0;
-	if ((cudaStatus = cudaMalloc((void**)&dev_floatData, N_g.z*4*numObjects * sizeof(float))) != cudaSuccess)
+	if ((cudaStatus = cudaMalloc((void**)&dev_floatData, numDataCopies * 4 * numObjects * sizeof(float))) != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMalloc(phantom data) failed!\n");
 	}
 	int* dev_intData = 0;
-	if ((cudaStatus = cudaMalloc((void**)&dev_intData, N_g.z*numObjects * sizeof(int))) != cudaSuccess)
+	if ((cudaStatus = cudaMalloc((void**)&dev_intData, numDataCopies * numObjects * sizeof(int))) != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMalloc(phantom data) failed!\n");
 	}
 
-    //dim3 dimBlock = setBlockSize(N_g);
-    //dim3 dimGrid = setGridSize(N_g, dimBlock);
-
-	int blockSize = 8;
-	int numBlocks = int(ceil(double(N_g.z) / double(blockSize)));
-
-	for (int i = 0; i < N_g.x; i++)
+	for (uint64 ichunk = 0; ichunk < numChunks; ichunk++)
 	{
-		for (int j = 0; j < N_g.y; j++)
-			rayTracingKernel <<< numBlocks, blockSize >>> (dev_g, dev_phis, dev_solids, numObjects, dev_floatData, dev_intData, i, j);
+		if (params->geometry == parameters::MODULAR)
+		{
+			rayTracingKernel_modular <<< numBlocks, blockSize >>> (dev_g, dev_phis, dev_solids, numObjects, dev_floatData, dev_intData, ichunk, num_gpu_cores, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors);
+		}
+		else
+		{
+			rayTracingKernel <<< numBlocks, blockSize >>> (dev_g, dev_phis, dev_solids, numObjects, dev_floatData, dev_intData, ichunk, num_gpu_cores);
+		}
+		//for (int j = 0; j < N_g.y; j++)
+		//	rayTracingKernel <<< numBlocks, blockSize >>> (dev_g, dev_phis, dev_solids, numObjects, dev_floatData, dev_intData, i, j);
 		//float* g, const float* phis, geometricSolid* solids, const int numObjects, float* allIntersections
 	}
 
@@ -895,6 +992,14 @@ bool rayTrace_gpu(float* g, parameters* params, phantom* aPhantom, bool data_on_
 	cudaFree(dev_solids);
 	cudaFree(dev_floatData);
 	cudaFree(dev_intData);
+	if (dev_sourcePositions != 0)
+		cudaFree(dev_sourcePositions);
+	if (dev_moduleCenters != 0)
+		cudaFree(dev_moduleCenters);
+	if (dev_rowVectors != 0)
+		cudaFree(dev_rowVectors);
+	if (dev_colVectors != 0)
+		cudaFree(dev_colVectors);
     if (data_on_cpu)
     {
         if (dev_g != 0)

@@ -2816,9 +2816,11 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 
 bool tomographicModels::rayTrace(float* g, int oversampling, bool data_on_cpu)
 {
+	/*
 	analyticRayTracing simulator;
 	return simulator.rayTrace(g, &params, &geometricPhantom, oversampling);
-	/*
+	//*/
+	//*
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
@@ -2832,7 +2834,52 @@ bool tomographicModels::rayTrace(float* g, int oversampling, bool data_on_cpu)
 	}
 	else
 	{
-		return rayTrace_gpu(g, &params, &geometricPhantom, data_on_cpu, oversampling);
+		int N_1 = params.numAngles;
+
+		uint64 numElements = uint64(params.numAngles) * uint64(params.numRows) * uint64(params.numCols);
+		//uint64 numElements_filter = uint64(N_H1) * uint64(N_H2);
+		double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+		//uint64 maxElements = 2147483646;
+
+		if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize || params.whichGPUs.size() > 1))
+		{
+			// do chunking
+			//int numSlices = std::min(N_1, maxSlicesForChunking);
+			int numSlices = int(ceil(double(N_1) / double(int(params.whichGPUs.size()))));
+			while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* g_chunk = &g[uint64(sliceStart) * uint64(params.numRows * params.numCols)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				parameters params_chunk = params;
+				params_chunk.removeProjections(sliceStart, sliceEnd);
+				//params_chunk.numAngles = sliceEnd - sliceStart + 1;
+				params_chunk.whichGPU = whichGPU;
+
+				rayTrace_gpu(g_chunk, &params_chunk, &geometricPhantom, data_on_cpu, oversampling);
+			}
+			return true;
+		}
+		else
+			return rayTrace_gpu(g, &params, &geometricPhantom, data_on_cpu, oversampling);
 	}
 #else
 	if (data_on_cpu == false)

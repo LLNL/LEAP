@@ -29,15 +29,16 @@ numAngles = 2*2*int(360*numCols/1024)
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
-numRows = 1
+numRows = numCols
 
 # Set the scanner geometry
 # This script can be run for any of the LEAP CT geometries
-#leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
-#leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize*1100.0/1400.0, pixelWidth=pixelSize*1100.0/1400.0, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
+#leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize*1100.0/1400.0, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
+#leapct.set_normalizedHelicalPitch(0.5)
 #leapct.convert_to_modularbeam()
 
 # Set the volume parameters.
@@ -85,6 +86,6 @@ leapct.FBP(g,f)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the central slice of the result
-#leapct.display(f)
-plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap=plt.get_cmap('gray'))
-plt.show()
+leapct.display(f)
+#plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap=plt.get_cmap('gray'))
+#plt.show()
