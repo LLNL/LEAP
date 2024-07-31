@@ -40,6 +40,8 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, f
 
 bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu, int whichGPU = 0);
 
+bool badPixelCorrection_gpu(float* g, parameters* params, float* badPixelMap, int w, bool data_on_cpu);
+
 bool azimuthalBlur(float* f, parameters* params, float filterWidth, bool data_on_cpu, float* f_out = NULL);
 
 #endif

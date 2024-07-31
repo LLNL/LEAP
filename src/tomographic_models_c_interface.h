@@ -211,6 +211,7 @@ extern "C" PROJECTOR_API bool MeanOrVarianceFilter(float* f, int, int, int, int 
 extern "C" PROJECTOR_API bool BlurFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool HighPassFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter2D(float* f, int, int, int, float threshold, int w, float signalThreshold, bool data_on_cpu);
+extern "C" PROJECTOR_API bool badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu);
 extern "C" PROJECTOR_API bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* prior, bool data_on_cpu);
 extern "C" PROJECTOR_API bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu);

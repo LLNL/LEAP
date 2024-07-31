@@ -31,6 +31,177 @@ rebin::~rebin()
     fanAngles = NULL;
 }
 
+float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, int order, int iProj)
+{
+    params = params_in;
+    if (g == NULL || params == NULL || params->numCols <= 2)
+        return NULL;
+    if (params->geometry != parameters::CONE && params->geometry != parameters::FAN)
+    {
+        printf("Error: rebin_parallel: input data must be specified as fan-beam or cone-beam\n");
+        return NULL;
+    }
+    if (params->anglesAreEquispaced() == false)
+    {
+        LOG(logERROR, "rebin", "rebin_parallel") << "Error: current implementation requires angles to be equi-spaced.  If this feature is of interest please submit a feature request." << std::endl;
+        return NULL;
+    }
+    float* outProj = new float[params->numRows * params->numCols];
+
+    order = order + (order % 2);
+    order = max(2, min(order, 6));
+
+    float angularRange_mod_360 = fabs(params->angularRange) - floor(fabs(params->angularRange) / 360.0) * 360.0;
+
+    bool doWrapAround = true;
+    if (params->helicalPitch != 0.0)
+        doWrapAround = false;
+    else if (angularRange_mod_360 > fabs(params->T_phi()) * 180.0 / PI)
+        doWrapAround = false;
+
+    if (doWrapAround)
+    {
+        LOG(logDEBUG, "rebin", "rebin_parallel") << "doWrapAround = TRUE" << std::endl;
+    }
+    else
+        LOG(logDEBUG, "rebin", "rebin_parallel") << "doWrapAround = FALSE" << std::endl;
+
+    bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+    params->normalizeConeAndFanCoordinateFunctions = true;
+
+    double tau = params->tau;
+    double R = params->sod;
+    double R_tau = sqrt(R * R + tau * tau);
+    double atan_A = atan(2.0 * tau * R / (R * R - tau * tau));
+    double asin_tau_R_tau = asin(tau / R_tau);
+
+    T_phi = params->T_phi();
+    phi_0 = params->phis[0];
+    N_phi = params->numAngles;
+
+    float rotationDirection = 1.0;
+    if (T_phi < 0.0)
+        rotationDirection = -1.0;
+
+    N_phi_new = N_phi;
+    phi_0_new = phi_0;
+
+    //double T_u = params->pixelWidth * params->sod / params->sdd;
+    double T_u = params->u(1) - params->u(0);
+    double u_0 = params->u(0);
+    double u_end = params->u(params->numCols - 1);
+
+    double u_mid = 0.5 * (u_end + u_0);
+    double u_mid_ind = (u_mid - u_0) / T_u;// T_u* i + u_0
+
+    double T_s = params->pixelWidth * R_tau / params->sdd;
+    //double s_0 = -u_mid_ind * T_s;//u_mid_ind*T_s + s_0 = 0
+    double s_0 = -params->centerCol * T_s;
+
+    if (doWrapAround == false)
+    {
+        double fanAngle_low, fanAngle_high;
+        // Need to change N_phi and phi_0
+        if (params->detectorType == parameters::FLAT)
+        {
+            fanAngle_low = atan(params->u(0));
+            fanAngle_high = atan(params->u(params->numCols - 1));
+        }
+        else
+        {
+            fanAngle_low = params->u(0);
+            fanAngle_high = params->u(params->numCols - 1);
+        }
+        //float phi_start = params->phis[0] - fanAngle_low * rotationDirection;
+        //float phi_end = params->phis[params->numAngles - 1] - fanAngle_high * rotationDirection;
+        float phi_start, phi_end;
+        if (T_phi >= 0.0)
+        {
+            phi_start = params->phis[0] - fanAngle_low;
+            phi_end = params->phis[params->numAngles - 1] - fanAngle_high;
+        }
+        else
+        {
+            phi_start = params->phis[0] - fanAngle_high;
+            phi_end = params->phis[params->numAngles - 1] - fanAngle_low;
+        }
+
+        //phi_start = T_phi*? + phi_0
+        int phi_0_new_ind = int(ceil((phi_start - phi_0) / (T_phi)));
+        int phi_end_new_ind = int(floor((phi_end - phi_0) / (T_phi)));
+
+        phi_0_new = phi_0_new_ind * T_phi + phi_0;
+        N_phi_new = phi_end_new_ind - phi_0_new_ind + 1;
+    }
+    //double beta_min = min(phi_0_new, T_phi * (N_phi_new-1) + phi_0_new);
+    //double beta_max = max(phi_0_new, T_phi * (N_phi_new-1) + phi_0_new);
+    double beta_min = min(phi_0, T_phi * (N_phi - 1) + phi_0);
+    double beta_max = max(phi_0, T_phi * (N_phi - 1) + phi_0);
+
+    // Perform fan to parallel rebinning
+    LOG(logDEBUG, "rebin", "rebin_parallel") << "performing fan to parallel rebinning..." << std::endl;
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int iRow = 0; iRow < params->numRows; iRow++)
+    {
+        // Make a copy of the sinogram
+        float* sino = new float[params->numCols * params->numAngles];
+        for (int iAngle = 0; iAngle < params->numAngles; iAngle++)
+        {
+            uint64 ind_offset = uint64(iAngle) * uint64(params->numRows * params->numCols) + uint64(iRow) * uint64(params->numCols);
+            float* g_offset = &g[ind_offset];
+
+            for (int iCol = 0; iCol < params->numCols; iCol++)
+                sino[iAngle * params->numCols + iCol] = g_offset[iCol];
+        }
+
+        int iAngle = iProj;
+        uint64 ind_offset = uint64(iAngle) * uint64(params->numRows * params->numCols) + uint64(iRow) * uint64(params->numCols);
+        double phi = iAngle * T_phi + phi_0_new;
+        for (int iCol = 0; iCol < params->numCols; iCol++)
+        {
+            double s = iCol * T_s + s_0;
+            double alpha = asin(s / R_tau) + asin_tau_R_tau;
+            double beta = phi + alpha;
+
+            if (doWrapAround)
+            {
+                if (beta < beta_min)
+                    beta = beta + 2.0 * PI;
+                else if (beta > beta_max)
+                    beta = beta - 2.0 * PI;
+            }
+            else
+            {
+                if (beta < beta_min)
+                {
+                    double alpha_new = -alpha + atan_A;
+                    beta = beta - (alpha - alpha_new) + PI;
+                    alpha = alpha_new;
+                }
+                else if (beta > beta_max)
+                {
+                    double alpha_new = -alpha + atan_A;
+                    beta = beta - (alpha - alpha_new) - PI;
+                    alpha = alpha_new;
+                }
+            }
+
+            double lateral = alpha;
+            if (params->detectorType == parameters::FLAT)
+                lateral = tan(alpha);
+
+            outProj[uint64(iRow)*uint64(params->numCols) + uint64(iCol)] = LagrangeInterpolation13(sino, params, (beta - phi_0) / T_phi, (lateral - u_0) / T_u, iRow, doWrapAround, order);
+        }
+
+        delete[] sino;
+    }
+
+    params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+
+    return outProj;
+}
+
 bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
 {
     //*
@@ -112,8 +283,19 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
             fanAngle_low = params->u(0);
             fanAngle_high = params->u(params->numCols - 1);
         }
-        float phi_start = params->phis[0] - fanAngle_low * rotationDirection;
-        float phi_end = params->phis[params->numAngles - 1] - fanAngle_high * rotationDirection;
+        //float phi_start = params->phis[0] - fanAngle_low * rotationDirection;
+        //float phi_end = params->phis[params->numAngles - 1] - fanAngle_high * rotationDirection;
+        float phi_start, phi_end;
+        if (T_phi >= 0.0)
+        {
+            phi_start = params->phis[0] - fanAngle_low;
+            phi_end = params->phis[params->numAngles - 1] - fanAngle_high;
+        }
+        else
+        {
+            phi_start = params->phis[0] - fanAngle_high;
+            phi_end = params->phis[params->numAngles - 1] - fanAngle_low;
+        }
 
         //phi_start = T_phi*? + phi_0
         int phi_0_new_ind = int(ceil((phi_start - phi_0) / (T_phi)));
@@ -122,8 +304,10 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
         phi_0_new = phi_0_new_ind * T_phi + phi_0;
         N_phi_new = phi_end_new_ind - phi_0_new_ind + 1;
     }
-    double beta_min = min(phi_0_new, T_phi * N_phi_new + phi_0_new);
-    double beta_max = max(phi_0_new, T_phi * N_phi_new + phi_0_new);
+    //double beta_min = min(phi_0_new, T_phi * (N_phi_new-1) + phi_0_new);
+    //double beta_max = max(phi_0_new, T_phi * (N_phi_new-1) + phi_0_new);
+    double beta_min = min(phi_0, T_phi * (N_phi-1) + phi_0);
+    double beta_max = max(phi_0, T_phi * (N_phi-1) + phi_0);
     //printf("beta_max = %f, beta_min = %f\n", beta_max, beta_min);
 
     if (params->geometry == parameters::CONE && params->detectorType == parameters::FLAT && params->numRows > 1)
@@ -245,6 +429,8 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
                 }
                 else
                 {
+                    //if (iRow == params->numRows / 2 && (beta < beta_min || beta > beta_max))
+                    //    printf("using conjugate ray: phi = %f, beta = %f, alpha = %f\n", phi, beta, alpha);
                     if (beta < beta_min)
                     {
                         double alpha_new = -alpha + atan_A;

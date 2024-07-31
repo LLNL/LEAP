@@ -101,6 +101,74 @@ __global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, c
     f_filtered[uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i)] = val / ((float)N_phi);
 }
 
+__global__ void badPixelCorrectionKernel(float* g, float* badPixelMap, const int3 N, const int windowRadius)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+
+    if (badPixelMap[j*N.z+k] != 1.0f) // pixel is good; do nothing
+        return;
+
+    uint64 iProj = uint64(i) * uint64(N.y) * uint64(N.z);
+    float* aProj = &g[iProj];
+
+    float v[49];
+    int ind = 0;
+    for (int dj = -windowRadius; dj <= windowRadius; dj++)
+    {
+        const int j_shift = max(0, min(j + dj, N.y - 1));
+        for (int dk = -windowRadius; dk <= windowRadius; dk++)
+        {
+            const int k_shift = max(0, min(k + dk, N.z - 1));
+            if (badPixelMap[j_shift * N.z + k_shift] != 1.0f) // pixel is good, store it
+            {
+                v[ind] = aProj[j_shift * N.z + k_shift];
+                ind += 1;
+            }
+        }
+    }
+
+    if (ind == 1)
+    {
+        aProj[j * N.z + k] = v[0];
+    }
+    else if (ind == 2)
+    {
+        aProj[j * N.z + k] = 0.5f * (v[0] + v[1]);
+    }
+    else if (ind > 2)
+    {
+        // 3 ==> 2
+        // 4 ==> 3
+        // 5 ==> 3
+        // 6 ==> 4 (need 2 and 3)
+        // 7 ==> 4
+        // 8 ==> 5
+        // 9 ==> 5
+        const int ind_mid = (ind - (ind % 2)) / 2 + 1;
+
+        // bubble-sort for first half of samples
+        for (int i = 0; i < ind_mid; i++)
+        {
+            for (int j = i + 1; j < ind; j++)
+            {
+                if (v[i] > v[j])
+                {  // swap?
+                    const float tmp = v[i];
+                    v[i] = v[j];
+                    v[j] = tmp;
+                }
+            }
+        }
+        if (ind % 2 == 0)
+            aProj[j * N.z + k] = 0.5f * (v[ind_mid - 1] + v[ind_mid - 2]);
+        else
+            aProj[j * N.z + k] = v[ind_mid-1];
+    }
+}
+
 __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, const float threshold, const int windowRadius, const float signalThreshold)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -1159,6 +1227,54 @@ bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
     if (dev_Df != 0)
     {
         cudaFree(dev_Df);
+    }
+
+    return true;
+}
+
+bool badPixelCorrection_gpu(float* g, parameters* params, float* badPixelMap, int w, bool data_on_cpu)
+{
+    if (g  == NULL || params == NULL || badPixelMap == NULL) return false;
+
+    cudaSetDevice(params->whichGPU);
+    //cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
+    float* dev_g = 0;
+    float* dev_badPixelMap = 0;
+    if (data_on_cpu)
+    {
+        dev_g = copy3DdataToGPU(g, N, params->whichGPU);
+        dev_badPixelMap = copy3DdataToGPU(badPixelMap, make_int3(1, params->numRows, params->numCols), params->whichGPU);
+    }
+    else
+    {
+        dev_g = g;
+        dev_badPixelMap = badPixelMap;
+    }
+
+    int windowRadius = max(1, min(3, (w - 1) / 2));
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    badPixelCorrectionKernel <<< dimGrid, dimBlock >>> (dev_g, dev_badPixelMap, N, windowRadius);
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        pull3DdataFromGPU(g, N, dev_g, params->whichGPU);
+
+        if (dev_g != 0)
+            cudaFree(dev_g);
+        if (dev_badPixelMap != 0)
+            cudaFree(dev_badPixelMap);
     }
 
     return true;

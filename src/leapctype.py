@@ -4407,12 +4407,51 @@ class tomographicModels:
         Args:
             f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
             threshold (float): the threshold of whether to use the filtered value or not
-            windowSize (int): the window size; can be 3 or 5
+            windowSize (int): the window size; can be 3, 5, or 7
         
         Returns:
-            f, the same as the input
+            True is successful, False otherwise
         """
         return self.LowSignalCorrection2D(f, threshold, windowSize, 0.0)
+    
+    def badPixelCorrection(self, g, badPixelMap, windowSize=3):
+        r"""Bad Pixel Correction
+        
+        The provided input must be projection data and the CT geometry parameters must be set.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): 3D projection data array
+            badPixelMap (C contiguous float32 numpy array or torch tensor): 2D bad pixel map
+            windowSize (int): the window size; can be 3, 5, or 7
+        
+        Returns:
+            True is successful, False otherwise
+        """
+        
+        if len(g.shape) != 3 or g.shape[0] != self.get_numAngles() or g.shape[1] != self.get_numRows() or g.shape[2] != self.get_numCols():
+            print('Error: input data dimensions do not match CT data dimensions')
+            return False
+        if len(badPixelMap.shape) != 2 or g.shape[1] != badPixelMap.shape[0] or g.shape[2] != badPixelMap.shape[1]:
+            print('Error: bad pixel map dimensions do not match CT data dimensions')
+            return False
+        if type(g) != type(badPixelMap):
+            print('Error: projection data and bad pixel map must be the same type')
+            return False
+        
+        #bool MedianFilter2D(float* f, int, int, int, float threshold, int windowSize);
+        self.libprojectors.badPixelCorrection.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+        
+            if g.is_cuda != badPixelMap.is_cuda:
+                print('Error: projection data and bad pixel map must both be on the cpu or both be on the same gpu')
+                return False
+        
+            self.libprojectors.badPixelCorrection.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.badPixelCorrection(g.data_ptr(), badPixelMap.data_ptr(), windowSize, g.is_cuda == False)
+        else:
+            self.libprojectors.badPixelCorrection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.badPixelCorrection(g, badPixelMap, windowSize, True)
     
     def PriorBilateralFilter(self, f, spatialFWHM, intensityFWHM, prior=None):
         """Performs 3D Bilateral Filter (BLF) denoising method where the intensity distance is measured against a prior image

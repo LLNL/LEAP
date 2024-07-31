@@ -33,6 +33,7 @@ public:
     bool rebin_curved(float* g, parameters* params_in, float* fanAngles_in, int order = 6);
 
     bool rebin_parallel(float* g, parameters* params_in, int order = 6);
+    float* rebin_parallel_singleProjection(float* g, parameters* params_in, int order, int iProj);
 
 private:
     

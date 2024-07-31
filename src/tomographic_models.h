@@ -798,6 +798,17 @@ public:
 	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, float signalThreshold, bool data_on_cpu);
 
 	/**
+	 * \fn          badPixelCorrection
+	 * \brief       applies a 2D median filter to the second two dimensions of a 3D array to a specified list of pixels only
+	 * \param[in]   g: pointer to the 3D projection data (input and output)
+	 * \param[in]   badPixelMap: pointer to a 2D array of the bad pixels which are label as 1.0
+	 * \param[in]   w: the window size in each dimension (must be 3, 5, or 7)
+	 * \param[in]   data_on_cpu: true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu);
+
+	/**
 	 * \fn          BilateralFilter
 	 * \brief       applies a (scaled) 3D bilateral filter (BLF) to a 3D array
 	 * \param[in]   f pointer to the 3D data (input and output)
