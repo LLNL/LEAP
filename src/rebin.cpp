@@ -31,7 +31,7 @@ rebin::~rebin()
     fanAngles = NULL;
 }
 
-float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, int order, int iProj)
+float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, int order, float desiredAngle)
 {
     params = params_in;
     if (g == NULL || params == NULL || params->numCols <= 2)
@@ -41,22 +41,30 @@ float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, i
         printf("Error: rebin_parallel: input data must be specified as fan-beam or cone-beam\n");
         return NULL;
     }
-    if (params->anglesAreEquispaced() == false)
+    if (params->anglesAreEquispaced() == false && order > 2)
     {
-        LOG(logERROR, "rebin", "rebin_parallel") << "Error: current implementation requires angles to be equi-spaced.  If this feature is of interest please submit a feature request." << std::endl;
-        return NULL;
+        order = 2;
+        LOG(logWARNING, "rebin", "rebin_parallel") << "Warning: non-equi-spaced angles can only be rebinned with bilinear interpolation" << std::endl;
+        //LOG(logERROR, "rebin", "rebin_parallel") << "Error: current implementation requires angles to be equi-spaced.  If this feature is of interest please submit a feature request." << std::endl;
+        //return NULL;
     }
     float* outProj = new float[params->numRows * params->numCols];
 
     order = order + (order % 2);
     order = max(2, min(order, 6));
 
-    float angularRange_mod_360 = fabs(params->angularRange) - floor(fabs(params->angularRange) / 360.0) * 360.0;
+    T_phi = params->T_phi();
+    phi_0 = params->phis[0];
+    N_phi = params->numAngles;
+
+    float angularRange_mod_360 = fabs(params->angularRange) - floor(0.5 + fabs(params->angularRange) / 360.0) * 360.0;
+    //printf("angularRange_mod_360 = %f\n", angularRange_mod_360);
+    //printf("fabs(params->T_phi())*180.0/PI = %f\n", fabs(params->T_phi()) * 180.0 / PI);
 
     bool doWrapAround = true;
     if (params->helicalPitch != 0.0)
         doWrapAround = false;
-    else if (angularRange_mod_360 > fabs(params->T_phi()) * 180.0 / PI)
+    else if (fabs(params->angularRange) < min(359.0, 360.0 - fabs(T_phi) * 180.0 / PI)) //if (angularRange_mod_360 > fabs(params->T_phi())*180.0/PI)
         doWrapAround = false;
 
     if (doWrapAround)
@@ -74,10 +82,6 @@ float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, i
     double R_tau = sqrt(R * R + tau * tau);
     double atan_A = atan(2.0 * tau * R / (R * R - tau * tau));
     double asin_tau_R_tau = asin(tau / R_tau);
-
-    T_phi = params->T_phi();
-    phi_0 = params->phis[0];
-    N_phi = params->numAngles;
 
     float rotationDirection = 1.0;
     if (T_phi < 0.0)
@@ -155,9 +159,7 @@ float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, i
                 sino[iAngle * params->numCols + iCol] = g_offset[iCol];
         }
 
-        int iAngle = iProj;
-        uint64 ind_offset = uint64(iAngle) * uint64(params->numRows * params->numCols) + uint64(iRow) * uint64(params->numCols);
-        double phi = iAngle * T_phi + phi_0_new;
+        double phi = desiredAngle;
         for (int iCol = 0; iCol < params->numCols; iCol++)
         {
             double s = iCol * T_s + s_0;
@@ -191,7 +193,8 @@ float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, i
             if (params->detectorType == parameters::FLAT)
                 lateral = tan(alpha);
 
-            outProj[uint64(iRow)*uint64(params->numCols) + uint64(iCol)] = LagrangeInterpolation13(sino, params, (beta - phi_0) / T_phi, (lateral - u_0) / T_u, iRow, doWrapAround, order);
+            float beta_ind = params->phi_inv(beta);
+            outProj[uint64(iRow)*uint64(params->numCols) + uint64(iCol)] = LagrangeInterpolation13(sino, params, beta_ind, (lateral - u_0) / T_u, iRow, doWrapAround, order);
         }
 
         delete[] sino;
@@ -213,21 +216,29 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
         printf("Error: rebin_parallel: input data must be specified as fan-beam or cone-beam\n");
         return false;
     }
-    if (params->anglesAreEquispaced() == false)
+    if (params->anglesAreEquispaced() == false && order > 2)
     {
-        LOG(logERROR, "rebin", "rebin_parallel") << "Error: current implementation requires angles to be equi-spaced.  If this feature is of interest please submit a feature request." << std::endl;
-        return false;
+        order = 2;
+        LOG(logWARNING, "rebin", "rebin_parallel") << "Warning: non-equi-spaced angles can only be rebinned with bilinear interpolation" << std::endl;
+        //LOG(logERROR, "rebin", "rebin_parallel") << "Error: current implementation requires angles to be equi-spaced.  If this feature is of interest please submit a feature request." << std::endl;
+        //return NULL;
     }
 
     order = order + (order % 2);
     order = max(2, min(order, 6));
 
-    float angularRange_mod_360 = fabs(params->angularRange) - floor(fabs(params->angularRange) / 360.0) * 360.0;
+    T_phi = params->T_phi();
+    phi_0 = params->phis[0];
+    N_phi = params->numAngles;
+
+    float angularRange_mod_360 = fabs(params->angularRange) - floor(0.5 + fabs(params->angularRange) / 360.0) * 360.0;
+    //printf("angularRange_mod_360 = %f\n", angularRange_mod_360);
+    //printf("fabs(params->T_phi())*180.0/PI = %f\n", fabs(params->T_phi()) * 180.0 / PI);
 
     bool doWrapAround = true;
     if (params->helicalPitch != 0.0)
         doWrapAround = false;
-    else if (angularRange_mod_360 > fabs(params->T_phi())*180.0/PI)
+    else if (fabs(params->angularRange) < min(359.0, 360.0 - fabs(T_phi) * 180.0 / PI)) //if (angularRange_mod_360 > fabs(params->T_phi())*180.0/PI)
         doWrapAround = false;
 
     if (doWrapAround)
@@ -245,10 +256,6 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
     double R_tau = sqrt(R * R + tau * tau);
     double atan_A = atan(2.0 * tau * R / (R * R - tau * tau));
     double asin_tau_R_tau = asin(tau / R_tau);
-
-    T_phi = params->T_phi();
-    phi_0 = params->phis[0];
-    N_phi = params->numAngles;
 
     float rotationDirection = 1.0;
     if (T_phi < 0.0)
@@ -449,7 +456,8 @@ bool rebin::rebin_parallel(float* g, parameters* params_in, int order)
                 if (params->detectorType == parameters::FLAT)
                     lateral = tan(alpha);
 
-                g[ind_offset + uint64(iCol)] = LagrangeInterpolation13(sino, params, (beta-phi_0)/T_phi, (lateral-u_0)/T_u, iRow, doWrapAround, order);
+                float beta_ind = params->phi_inv(beta);
+                g[ind_offset + uint64(iCol)] = LagrangeInterpolation13(sino, params, beta_ind, (lateral-u_0)/T_u, iRow, doWrapAround, order);
             }
         }
 

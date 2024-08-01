@@ -242,44 +242,83 @@ float parameters::phi_inv(float angle)
 		if (phis[numAngles - 1] < phis[0])
 			return float(numAngles - 1);
 		else
-			return 0;
+			return 0.0;
 	}
 	else if (angle >= max(phis[numAngles - 1], phis[0]))
 	{
 		if (phis[numAngles - 1] > phis[0])
 			return float(numAngles - 1);
 		else
-			return 0;
+			return 0.0;
 	}
 	else
 	{
-		if (T_phi() > 0.0)
+		float angularStep = T_phi();
+		float firstGuess = max(float(0.0), min(float(numAngles - 1), (angle - phis[0]) / angularStep));
+		int ind_low = int(firstGuess);
+		float phi_a = phis[ind_low];
+		float phi_b = phis[ind_low + 1];
+		if ((phi_a <= angle && angle <= phi_b) || (phi_b <= angle && angle <= phi_a))
+			return (angle - phi_a) / (phi_b - phi_a) + float(ind_low);
+
+		//int firstGuess = max(0, min(numAngles - 1, int(floor(0.5 + (angle - phis[0]) / angularStep))));
+		if (angularStep > 0.0)
 		{
-			//phis[0] < angle
-			for (int i = 1; i < numAngles; i++)
+			int ind = int(firstGuess);
+			if (phis[ind] == angle)
+				return float(ind);
+			else if (phis[ind] < angle)
 			{
-				if (angle <= phis[i])
+				while (phis[ind] < angle)
 				{
-					// phis[i-1] < angle <= phis[i]
-					float d = (angle - phis[i - 1]) / (phis[i] - phis[i - 1]);
-					return float(i - 1) + d;
+					if (ind + 1 > numAngles - 1)
+						return float(numAngles - 1);
+					ind++;
 				}
+				// now phis[ind-1] < angle <= phis[ind]
+				return (angle - phis[ind - 1]) / (phis[ind] - phis[ind - 1]) + float(ind - 1);
 			}
-			return float(numAngles);
+			else //if (phis[ind] > angle)
+			{
+				while (phis[ind] > angle)
+				{
+					if (ind - 1 < 0)
+						return 0.0;
+					ind--;
+				}
+				// now phis[ind] <= angle < phis[ind+1]
+				return (angle - phis[ind]) / (phis[ind + 1] - phis[ind]) + double(ind);
+			}
 		}
 		else
 		{
-			//phis[numAngles-1] < angle
-			for (int i = numAngles-2; i >= 0; i--)
+			int ind = int(firstGuess);
+			if (phis[ind] == angle)
+				return float(ind);
+			else if (phis[ind] < angle)
 			{
-				if (angle <= phis[i])
+				while (phis[ind] < angle)
 				{
-					// phis[i+1] < angle <= phis[i]
-					float d = (angle - phis[i + 1]) / (phis[i] - phis[i + 1]);
-					return float(i+1) - d;
+					if (ind - 1 < 0)
+						return 0.0;
+					ind--;
 				}
+				// now phis[ind+1] < angle <= phis[ind]
+				//return (angle - phis[ind + 1]) / (phis[ind] - phis[ind + 1]) + float(ind);
+				return (angle - phis[ind]) / (phis[ind + 1] - phis[ind]) + double(ind);
 			}
-			return 0.0;
+			else //if (phis[ind] > angle)
+			{
+				while (phis[ind] > angle)
+				{
+					if (ind + 1 > numAngles - 1)
+						return float(numAngles - 1);
+					ind++;
+				}
+				// now phis[ind] <= angle < phis[ind-1]
+				//return (angle - phis[ind]) / (phis[ind - 1] - phis[ind]) + float(ind-1);
+				return (angle - phis[ind - 1]) / (phis[ind] - phis[ind - 1]) + float(ind - 1);
+			}
 		}
 	}
 }

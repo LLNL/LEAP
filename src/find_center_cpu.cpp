@@ -16,8 +16,22 @@
 using namespace std;
 #define USE_MEAN_DIFFERENCE_METRIC
 
+float estimateTilt(float* g, parameters* params, int iRow)
+{
+	if (findCenter_cpu(g, params, iRow) == false)
+		return 0.0;
+	// Now get two projections separated by 180 degrees
+	// for loop over [centerCol-?, centerCol+?] in 1 pixel steps
+	//	for loop over [tiltAngle-4.9, tiltAngle+4.9] in 0.1 degree steps
+	// free temporary memory
+
+	return 0.0;
+}
+
 bool findCenter_cpu(float* g, parameters* params, int iRow)
 {
+	if (g == NULL || params == NULL)
+		return false;
 	if (params->offsetScan == true)
 		printf("Warning: findCenter may not work for offsetScan\n");
     if (params->geometry == parameters::PARALLEL)
