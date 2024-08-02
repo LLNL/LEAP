@@ -48,11 +48,15 @@ As a simple demonstration of the accuracy of our projectors we show below the re
 
 For the next releases, we are working on the following:
 1) Fixes of bugs reported by our users
-2) Feature requests from our users
-3) More noise reduction filters
 4) AMD GPU Support
-5) PyQt GUI
-6) beam hardening correction algorithms that account for variable takeoff angle and graded collimator/ bowtie filter
+5) [PyQt GUI](https://github.com/kylechampley/LEAPCT-UI-GUI)
+6) multi-material beam hardening correction algorithms for more than two materials and that account for variable takeoff angle and graded collimator/ bowtie filter
+7) bad pixel correction algorithm
+8) automatic estimation of detector position and tilt angle
+9) triple energy decomposition
+10) ball phantom calibration routine
+
+If you are interested in requesting a new feature in LEAP, please make a post in the [Feature Request](https://github.com/LLNL/LEAP/discussions/88) discussion.
 
 ## Authors
 Kyle Champley (champley@gmail.com)
