@@ -105,6 +105,19 @@ public:
 	bool project(float* g, float* f, bool data_on_cpu);
 
 	/**
+	 * \fn          project_with_mask
+	 * \brief       performs a forward projection
+	 * \param[in]   g pointer to the projection data (output)
+	 * \param[in]   f pointer to the volume data (input)
+	 * \param[in]   mask: pointer to the mask data
+	 * \param[in]   data_on_cpu true if data (f and g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool project_with_mask(float* g, float* f, float* mask, bool data_on_cpu);
+	bool project_with_mask_cpu(float* g, float* f, float* mask);
+	bool project_with_mask_gpu(float* g, float* f, float* mask);
+
+	/**
 	 * \fn          backproject
 	 * \brief       performs a backprojection
 	 * \param[in]   g pointer to the projection data (input)
@@ -615,6 +628,27 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool find_centerCol(float* g, int iRow, bool data_on_cpu);
+
+	/**
+	 * \fn          estimate_tilt
+	 * \brief       finds the tilt angle (around the optical axis) of parallel-, fan-, or cone-beam data using conjugate rays
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      the estimated detector tilt (degrees)
+	 */
+	float estimate_tilt(float* g, bool data_on_cpu);
+
+	/**
+	 * \fn          conjugate_difference
+	 * \brief       calculates the difference of two conjugate projections with optional rotation
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   alpha: detector rotation in degrees
+	 * \param[in]	centerCol: detector center column index
+	 * \param[in]   diff: pointer to data numRows*numCols where the difference is stored
+	 * \param[in]   data_on_cpu: true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      the estimated detector tilt (degrees)
+	 */
+	bool conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu);
 
 	/**
 	 * \fn          consistency_cost
@@ -1161,6 +1195,8 @@ private:
 	 * \return      the number of GB of memory required
 	 */
 	float backproject_memoryRequired_splitViews(int numSlicesPerChunk);
+
+	bool copy_volume_data_to_mask(float* f, float* mask, bool data_on_cpu, bool do_forward);
 
 	int maxSlicesForChunking;
 

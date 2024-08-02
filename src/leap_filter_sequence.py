@@ -496,10 +496,12 @@ class histogramSparsity(denoisingFilter):
                 else:
                     curTerm *= self.Geman0(f-self.mus[l_2])
             Sp += curTerm
-            Sp *= self.weight
+        Sp *= self.weight
         return Sp
         
     def quadForm(self, f, d):
+        # This function uses an approximate second derivative
+        # Future releases should correct this
         minDiff = self.leapct.copyData(f)
         minDiff[:] = self.leapct.abs(minDiff[:] - self.mus[0])
         for l in range(1,self.mus.size):

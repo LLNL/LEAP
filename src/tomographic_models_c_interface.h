@@ -50,15 +50,18 @@ extern "C" PROJECTOR_API bool ct_volume_defined();
 extern "C" PROJECTOR_API bool verify_input_sizes(int, int, int, int, int, int);
 
 extern "C" PROJECTOR_API bool project_gpu(float* g, float* f);
+extern "C" PROJECTOR_API bool project_with_mask_gpu(float* g, float* f, float* mask);
 extern "C" PROJECTOR_API bool backproject_gpu(float* g, float* f);
 
 extern "C" PROJECTOR_API bool project_cpu(float* g, float* f);
+extern "C" PROJECTOR_API bool project_with_mask_cpu(float* g, float* f, float* mask);
 extern "C" PROJECTOR_API bool backproject_cpu(float* g, float* f);
 
 extern "C" PROJECTOR_API bool FBP_cpu(float* g, float* f);
 extern "C" PROJECTOR_API bool FBP_gpu(float* g, float* f);
 
 extern "C" PROJECTOR_API bool project(float* g, float* f, bool data_on_cpu);
+extern "C" PROJECTOR_API bool project_with_mask(float* g, float* f, float* mask, bool data_on_cpu);
 extern "C" PROJECTOR_API bool backproject(float* g, float* f, bool data_on_cpu);
 extern "C" PROJECTOR_API bool weightedBackproject(float* g, float* f, bool data_on_cpu);
 
@@ -196,6 +199,8 @@ extern "C" PROJECTOR_API float get_z0();
 
 extern "C" PROJECTOR_API bool find_centerCol(float* g, int iRow, bool data_on_cpu);
 extern "C" PROJECTOR_API float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu);
+extern "C" PROJECTOR_API float estimate_tilt(float* g, bool data_on_cpu);
+extern "C" PROJECTOR_API float conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu);
 extern "C" PROJECTOR_API bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu);

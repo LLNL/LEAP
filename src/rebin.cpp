@@ -142,6 +142,56 @@ float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, i
     double beta_min = min(phi_0, T_phi * (N_phi - 1) + phi_0);
     double beta_max = max(phi_0, T_phi * (N_phi - 1) + phi_0);
 
+    int iAngle_min, iAngle_max;
+    double phi = desiredAngle;
+    for (int iCol = 0; iCol < params->numCols; iCol++)
+    {
+        double s = iCol * T_s + s_0;
+        double alpha = asin(s / R_tau) + asin_tau_R_tau;
+        double beta = phi + alpha;
+
+        if (doWrapAround)
+        {
+            if (beta < beta_min)
+                beta = beta + 2.0 * PI;
+            else if (beta > beta_max)
+                beta = beta - 2.0 * PI;
+        }
+        else
+        {
+            if (beta < beta_min)
+            {
+                double alpha_new = -alpha + atan_A;
+                beta = beta - (alpha - alpha_new) + PI;
+                alpha = alpha_new;
+            }
+            else if (beta > beta_max)
+            {
+                double alpha_new = -alpha + atan_A;
+                beta = beta - (alpha - alpha_new) - PI;
+                alpha = alpha_new;
+            }
+        }
+
+        double lateral = alpha;
+        if (params->detectorType == parameters::FLAT)
+            lateral = tan(alpha);
+
+        float beta_ind = params->phi_inv(beta);
+        if (iCol == 0)
+        {
+            iAngle_min = int(floor(beta_ind));
+            iAngle_max = int(ceil(beta_ind));
+        }
+        else
+        {
+            iAngle_min = min(iAngle_min, int(floor(beta_ind)));
+            iAngle_max = max(iAngle_max, int(ceil(beta_ind)));
+        }
+    }
+    iAngle_min = max(0, min(params->numAngles - 1, iAngle_min - order));
+    iAngle_max = max(0, min(params->numAngles - 1, iAngle_max + order));
+
     // Perform fan to parallel rebinning
     LOG(logDEBUG, "rebin", "rebin_parallel") << "performing fan to parallel rebinning..." << std::endl;
     omp_set_num_threads(omp_get_num_procs());
@@ -150,7 +200,7 @@ float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, i
     {
         // Make a copy of the sinogram
         float* sino = new float[params->numCols * params->numAngles];
-        for (int iAngle = 0; iAngle < params->numAngles; iAngle++)
+        for (int iAngle = iAngle_min; iAngle <= iAngle_max; iAngle++)
         {
             uint64 ind_offset = uint64(iAngle) * uint64(params->numRows * params->numCols) + uint64(iRow) * uint64(params->numCols);
             float* g_offset = &g[ind_offset];

@@ -53,7 +53,6 @@ leapct.space_carving(proj_mask, vol_mask)
 # Now we dilate this mask so that we don't clip the edges of the objects
 leapct.BlurFilter(vol_mask, 3.0)
 vol_mask[vol_mask>0.0] = 1.0
-leapct.BlurFilter(vol_mask, 2.0)
 
 # Now set the parameter that tracks this mask.  This mask will be applied before every
 # forward projection and after every backprojection.

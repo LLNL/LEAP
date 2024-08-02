@@ -179,6 +179,32 @@ bool tomographicModels::project_cpu(float* g, float* f)
 	return retVal;
 }
 
+bool tomographicModels::project_with_mask_cpu(float* g, float* f, float* mask)
+{
+	bool data_on_cpu = true;
+	int whichGPU_save = params.whichGPU;
+	params.whichGPU = -1;
+	bool retVal = project_with_mask(g, f, mask, true);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
+bool tomographicModels::project_with_mask_gpu(float* g, float* f, float* mask)
+{
+#ifndef __USE_CPU
+	bool data_on_cpu = false;
+	int whichGPU_save = params.whichGPU;
+	if (params.whichGPU < 0)
+		params.whichGPU = 0;
+	bool retVal = project_with_mask(g, f, mask, false);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
 bool tomographicModels::backproject_cpu(float* g, float* f)
 {
 	int whichGPU_save = params.whichGPU;
@@ -227,6 +253,99 @@ bool tomographicModels::project(float* g, float* f, bool data_on_cpu)
 		return true;
 	else
 		return proj.project(g, f, &params, data_on_cpu);
+}
+
+bool tomographicModels::project_with_mask(float* g, float* f, float* mask, bool data_on_cpu)
+{
+	bool retVal = copy_volume_data_to_mask(f, mask, data_on_cpu, true);
+	if (retVal == false)
+		return false;
+	if (data_on_cpu == true && project_multiGPU(g, f) == true)
+		retVal = true;
+	else
+		retVal = proj.project(g, f, &params, data_on_cpu);
+	copy_volume_data_to_mask(f, mask, data_on_cpu, false);
+	return retVal;
+}
+
+bool tomographicModels::copy_volume_data_to_mask(float* f, float* mask, bool data_on_cpu, bool do_forward)
+{
+	if (f == NULL || mask == NULL)
+		return false;
+
+	if (data_on_cpu)
+	{
+		int N_1 = params.numZ;
+		int N_2 = params.numY;
+		int N_3 = params.numX;
+		if (params.volumeDimensionOrder == parameters::XYZ)
+		{
+			N_1 = params.numX;
+			N_2 = params.numY;
+			N_3 = params.numZ;
+		}
+
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
+		for (int i = 0; i < N_1; i++)
+		{
+			uint64 ind_offs = uint64(i) * uint64(N_2) * uint64(N_3);
+			for (int j = 0; j < N_2; j++)
+			{
+				for (int k = 0; k < N_3; k++)
+				{
+					uint64 ind = ind_offs + uint64(j * N_3 + k);
+					if (do_forward)
+					{
+						if (mask[ind] == 0.0)
+						{
+							if (f[ind] == 0.0)
+								mask[ind] = NAN;
+							else
+							{
+								mask[ind] = f[ind];
+								f[ind] = 0.0;
+							}
+						}
+						else
+						{
+							if (f[ind] == 0.0)
+								mask[ind] = -1.0;
+							//else
+							//	mask[ind] = 1.0;
+						}
+					}
+					else
+					{
+						if (f[ind] == 0.0)
+						{
+							if (isnan(mask[ind]))
+								mask[ind] = 0.0;
+							else if (mask[ind] == -1.0)
+								mask[ind] = 1.0;
+							else
+							{
+								f[ind] = mask[ind];
+								mask[ind] = 0.0;
+							}
+						}
+						else
+							mask[ind] = 1.0;
+					}
+				}
+			}
+		}
+		return true;
+	}
+	else
+	{
+#ifndef __USE_CPU
+		return copy_volume_data_to_mask_gpu(f, mask, &params, do_forward);
+#else
+		LOG(logERROR, "", "") << "Error: GPU routines not included in this release!" << std::endl;
+		return false;
+#endif
+	}
 }
 
 bool tomographicModels::backproject(float* g, float* f, bool data_on_cpu)
@@ -3059,6 +3178,28 @@ bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
 	else
 	{
 		printf("Error: find_centerCol not yet implemented for data on the GPU\n");
+		return false;
+	}
+}
+
+float tomographicModels::estimate_tilt(float* g, bool data_on_cpu)
+{
+	if (data_on_cpu)
+		return estimateTilt(g, &params);
+	else
+	{
+		printf("Error: estimate_tilt not yet implemented for data on the GPU\n");
+		return false;
+	}
+}
+
+bool tomographicModels::conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu)
+{
+	if (data_on_cpu)
+		return getConjugateDifference(g, &params, alpha, centerCol, diff);
+	else
+	{
+		printf("Error: conjugate_difference not yet implemented for data on the GPU\n");
 		return false;
 	}
 }

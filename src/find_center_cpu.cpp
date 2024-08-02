@@ -12,20 +12,308 @@
 #include <math.h>
 #include <stdio.h>
 #include "find_center_cpu.h"
+#include "log.h"
+#include "rebin.h"
 
 using namespace std;
 #define USE_MEAN_DIFFERENCE_METRIC
 
-float estimateTilt(float* g, parameters* params, int iRow)
+bool getConjugateProjections(float* g, parameters* params, float*& proj_A, float*& proj_B)
 {
-	if (findCenter_cpu(g, params, iRow) == false)
-		return 0.0;
+	proj_A = NULL;
+	proj_B = NULL;
+	if (g == NULL || params == NULL)
+		return false;
+	if (params->geometry == parameters::MODULAR)
+	{
+		LOG(logERROR, "", "estimateTilt") << "Error: this algorithm does not work with modular-beam geometry\n" << endl;
+		return false;
+	}
+	if (params->angularRange < min(179.0, 180.0 - fabs(params->T_phi()) * 180.0 / PI))
+	{
+		LOG(logERROR, "", "estimateTilt") << "Error: this algorithm requires an angular range of at least 180 degrees\n" << endl;
+		return false;
+	}
+
 	// Now get two projections separated by 180 degrees
+	float leastAngle = min(params->phis[params->numAngles - 1], params->phis[0]);
+	float maxAngle = max(params->phis[params->numAngles - 1], params->phis[0]);
+	float midAngle = 0.5 * (params->phis[params->numAngles - 1] + params->phis[0]);
+	float angle_A = midAngle - 0.5 * PI;
+	float angle_B = midAngle + 0.5 * PI;
+
+	if (angle_A < leastAngle)
+	{
+		angle_A = leastAngle;
+		angle_B = angle_A + PI;
+	}
+	else if (angle_B > maxAngle)
+	{
+		angle_B = maxAngle;
+		angle_A = angle_B - PI;
+	}
+	//printf("angles = %f, %f\n", angle_A, angle_B);
+
+	if (params->geometry == parameters::FAN || params->geometry == parameters::CONE)
+	{
+		rebin rebinRoutines;
+		proj_A = rebinRoutines.rebin_parallel_singleProjection(g, params, 6, angle_A);
+		proj_B = rebinRoutines.rebin_parallel_singleProjection(g, params, 6, angle_B);
+	}
+	else
+	{
+		proj_A = new float[params->numRows * params->numCols];
+		proj_B = new float[params->numRows * params->numCols];
+
+		float ind_A = params->phi_inv(angle_A);
+		int ind_A_low = int(floor(ind_A));
+		int ind_A_high = int(ceil(ind_A));
+		float d_A = ind_A - float(ind_A_low);
+		float* proj_A_low = &g[uint64(ind_A_low) * uint64(params->numRows * params->numCols)];
+		float* proj_A_high = &g[uint64(ind_A_high) * uint64(params->numRows * params->numCols)];
+
+		float ind_B = params->phi_inv(angle_B);
+		int ind_B_low = int(floor(ind_B));
+		int ind_B_high = int(ceil(ind_B));
+		float d_B = ind_B - float(ind_B_low);
+		float* proj_B_low = &g[uint64(ind_B_low) * uint64(params->numRows * params->numCols)];
+		float* proj_B_high = &g[uint64(ind_B_high) * uint64(params->numRows * params->numCols)];
+
+		//printf("inds = %f, %f\n", ind_A, ind_B);
+
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
+		for (int iRow = 0; iRow < params->numRows; iRow++)
+		{
+			for (int iCol = 0; iCol < params->numCols; iCol++)
+			{
+				int ind = iRow * params->numCols + iCol;
+				proj_A[ind] = (1.0 - d_A) * proj_A_low[ind] + d_A * proj_A_high[ind];
+				proj_B[ind] = (1.0 - d_B) * proj_B_low[ind] + d_B * proj_B_high[ind];
+			}
+		}
+	}
+	if (proj_A != NULL && proj_B != NULL)
+		return true;
+	else
+		return false;
+}
+
+bool getConjugateDifference(float* g, parameters* params, float alpha, float centerCol, float* diff)
+{
+	if (g == NULL || params == NULL || diff == NULL)
+		return false;
+	float* proj_A = NULL;
+	float* proj_B = NULL;
+	float centerCol_save = params->centerCol;
+	params->centerCol = centerCol;
+	if (getConjugateProjections(g, params, proj_A, proj_B) == false)
+	{
+		params->centerCol = centerCol_save;
+		return false;
+	}
+	params->centerCol = centerCol_save;
+
+	float row_0_centered = -0.5 * float(params->numRows - 1) * params->pixelHeight;
+	float col_0_centered = -0.5 * float(params->numCols - 1) * params->pixelWidth;
+
+	float row_0 = -params->centerRow * params->pixelHeight;
+	float col_0 = -centerCol * params->pixelWidth;
+
+	float cos_alpha = cos(PI / 180.0 * alpha);
+	float sin_alpha = sin(PI / 180.0 * alpha);
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int iRow = 0; iRow < params->numRows; iRow++)
+	{
+		float* diff_line = &diff[iRow * params->numCols];
+		//float row = iRow * params->pixelHeight + row_0;
+		float row = iRow * params->pixelHeight + row_0_centered;
+		for (int iCol = 0; iCol < params->numCols; iCol++)
+		{
+			//float col = iCol * params->pixelWidth + col_0;
+			float col = iCol * params->pixelWidth + col_0_centered;
+
+			float col_A = cos_alpha * col + sin_alpha * row - col_0 + col_0_centered;
+			float row_A = -sin_alpha * col + cos_alpha * row;
+			float col_A_ind = (col_A - col_0) / params->pixelWidth;
+			float row_A_ind = (row_A - row_0_centered) / params->pixelHeight;
+
+			float col_B = -(cos_alpha * col - sin_alpha * row - col_0 + col_0_centered);
+			float row_B = sin_alpha * col + cos_alpha * row;
+			float col_B_ind = (col_B - col_0) / params->pixelWidth;
+			float row_B_ind = (row_B - row_0_centered) / params->pixelHeight;
+
+			float proj_A_cur = interpolate2D(proj_A, row_A_ind, col_A_ind, params->numRows, params->numCols);
+			float proj_B_cur = interpolate2D(proj_B, row_B_ind, col_B_ind, params->numRows, params->numCols);
+
+			if (0.0 <= row_A_ind && row_A_ind <= float(params->numRows - 1) && 0.0 <= row_B_ind && row_B_ind <= float(params->numRows - 1) &&
+				0.0 <= col_A_ind && col_A_ind <= float(params->numCols - 1) && 0.0 <= col_B_ind && col_B_ind <= float(params->numCols - 1))
+			{
+				diff_line[iCol] = proj_A_cur - proj_B_cur;
+			}
+			else
+			{
+				diff_line[iCol] = 0.0;
+			}
+		}
+	}
+
+	delete[] proj_A;
+	delete[] proj_B;
+
+	return true;
+}
+
+float estimateTilt(float* g, parameters* params)
+{
+	if (g == NULL || params == NULL)
+		return 0.0;
+	//if (findCenter_cpu(g, params) == false)
+	//	return 0.0;
+
+	float* proj_A = NULL;
+	float* proj_B = NULL;
+	if (getConjugateProjections(g, params, proj_A, proj_B) == false)
+		return 0.0;
+
+	float tilt_max = 4.9;
+	float tilt_0 = -1.0 * tilt_max;
+	float T_tilt = 0.1;
+	int N_tilt = 2 * int(floor(0.5 + tilt_max / T_tilt)) + 1;
+	double* errors = new double[N_tilt];
+
+	float row_0_centered = -0.5 * float(params->numRows - 1) * params->pixelHeight;
+	float col_0_centered = -0.5 * float(params->numCols - 1) * params->pixelWidth;
+
+	float row_0 = -params->centerRow * params->pixelHeight;
+	float col_0 = -params->centerCol * params->pixelWidth;
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int itilt = 0; itilt < N_tilt; itilt++)
+	{
+		float alpha = itilt * T_tilt + tilt_0;
+		//printf("alpha[%d] = %f\n", itilt, alpha);
+		float cos_alpha = cos(PI / 180.0 * alpha);
+		float sin_alpha = sin(PI / 180.0 * alpha);
+		int count = 0;
+		double curError = 0.0;
+		for (int iRow = 0; iRow < params->numRows; iRow++)
+		{
+			//float row = iRow * params->pixelHeight + row_0;
+			float row = iRow * params->pixelHeight + row_0_centered;
+			for (int iCol = 0; iCol < params->numCols; iCol++)
+			{
+				//float col = iCol * params->pixelWidth + col_0;
+				float col = iCol * params->pixelWidth + col_0_centered;
+
+				float col_A = cos_alpha * col + sin_alpha * row - col_0 + col_0_centered;
+				float row_A = -sin_alpha * col + cos_alpha * row;
+				float col_A_ind = (col_A - col_0) / params->pixelWidth;
+				float row_A_ind = (row_A - row_0_centered) / params->pixelHeight;
+
+				float col_B = -(cos_alpha * col - sin_alpha * row - col_0 + col_0_centered);
+				float row_B = sin_alpha * col + cos_alpha * row;
+				float col_B_ind = (col_B - col_0) / params->pixelWidth;
+				float row_B_ind = (row_B - row_0_centered) / params->pixelHeight;
+
+				float proj_A_cur = interpolate2D(proj_A, row_A_ind, col_A_ind, params->numRows, params->numCols);
+				float proj_B_cur = interpolate2D(proj_B, row_B_ind, col_B_ind, params->numRows, params->numCols);
+
+				//g[itilt * params->numRows * params->numCols + iRow * params->numCols + iCol] = proj_A_cur - proj_B_cur;
+
+				if (0.0 <= row_A_ind && row_A_ind <= float(params->numRows - 1) && 0.0 <= row_B_ind && row_B_ind <= float(params->numRows - 1) &&
+					0.0 <= col_A_ind && col_A_ind <= float(params->numCols - 1) && 0.0 <= col_B_ind && col_B_ind <= float(params->numCols - 1))
+				{
+					count += 1;
+					double diff = proj_A_cur - proj_B_cur;
+					curError += diff * diff;
+				}
+			}
+		}
+		if (count > 0)
+			errors[itilt] = curError / float(count);
+		else
+			errors[itilt] = 1.0e30;
+	}
+
+	/*
+	float minError = errors[0];
+	int ind_min = 0;
+	for (int itilt = 1; itilt < N_tilt; itilt++)
+	{
+		if (errors[itilt] < minError)
+		{
+			minError = errors[itilt];
+			ind_min = itilt;
+		}
+		printf("error[%f] = %f\n", itilt * T_tilt + tilt_0, errors[itilt]);
+	}
+	float retVal = ind_min * T_tilt + tilt_0;
+	//*/
+	//for (int itilt = 0; itilt < N_tilt; itilt++)
+	//	printf("error[%f] = %f\n", itilt * T_tilt + tilt_0, errors[itilt]);
+	float retVal = T_tilt*findMinimum(errors, 0, N_tilt) + tilt_0;
+
 	// for loop over [centerCol-?, centerCol+?] in 1 pixel steps
 	//	for loop over [tiltAngle-4.9, tiltAngle+4.9] in 0.1 degree steps
 	// free temporary memory
 
-	return 0.0;
+	delete[] errors;
+	delete[] proj_A;
+	delete[] proj_B;
+
+	return retVal;
+}
+
+float interpolate2D(float* data, float ind_1, float ind_2, int N_1, int N_2)
+{
+	int ind_1_lo, ind_1_hi;
+	float d_1;
+	if (ind_1 <= 0.0)
+	{
+		ind_1_lo = 0;
+		ind_1_hi = 0;
+		d_1 = 0.0;
+	}
+	else if (ind_1 >= float(N_1 - 1))
+	{
+		ind_1_lo = N_1-1;
+		ind_1_hi = N_1-1;
+		d_1 = 0.0;
+	}
+	else
+	{
+		ind_1_lo = int(ind_1);
+		ind_1_hi = ind_1_lo + 1;
+		d_1 = ind_1 - float(ind_1_lo);
+	}
+
+	int ind_2_lo, ind_2_hi;
+	float d_2;
+	if (ind_2 <= 0.0)
+	{
+		ind_2_lo = 0;
+		ind_2_hi = 0;
+		d_2 = 0.0;
+	}
+	else if (ind_2 >= float(N_2 - 1))
+	{
+		ind_2_lo = N_2 - 1;
+		ind_2_hi = N_2 - 1;
+		d_2 = 0.0;
+	}
+	else
+	{
+		ind_2_lo = int(ind_2);
+		ind_2_hi = ind_2_lo + 1;
+		d_2 = ind_2 - float(ind_2_lo);
+	}
+
+	return (1.0 - d_1)* ((1.0 - d_2) * data[ind_1_lo * N_2 + ind_2_lo] + d_2 * data[ind_1_lo * N_2 + ind_2_hi]) +
+		d_1 * ((1.0 - d_2) * data[ind_1_hi * N_2 + ind_2_lo] + d_2 * data[ind_1_hi * N_2 + ind_2_hi]);
 }
 
 bool findCenter_cpu(float* g, parameters* params, int iRow)

@@ -115,6 +115,55 @@ __global__ void TransferFunctionKernel(float* f, const float* LUT, const int3 N,
     }
 }
 
+__global__ void copyVolumeDataToMaskKernel(float* f, float* mask, const int4 N, const bool do_forward)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= N.x || iy >= N.y || iz >= N.z)
+        return;
+
+    const uint64 ind = uint64(iz) * uint64(N.y * N.x) + uint64(iy * N.x + ix);
+    if (do_forward)
+    {
+        if (mask[ind] == 0.0f)
+        {
+            if (f[ind] == 0.0f)
+                mask[ind] = NAN;
+            else
+            {
+                mask[ind] = f[ind];
+                f[ind] = 0.0f;
+            }
+        }
+        else
+        {
+            if (f[ind] == 0.0f)
+                mask[ind] = -1.0f;
+            //else
+            //	mask[ind] = 1.0;
+        }
+    }
+    else
+    {
+        if (f[ind] == 0.0f)
+        {
+            if (isnan(mask[ind]))
+                mask[ind] = 0.0f;
+            else if (mask[ind] == -1.0f)
+                mask[ind] = 1.0f;
+            else
+            {
+                f[ind] = mask[ind];
+                mask[ind] = 0.0f;
+            }
+        }
+        else
+            mask[ind] = 1.0f;
+    }
+}
+
 __global__ void windowFOVKernel(float* f, const int4 N, const float4 T, const float4 startVal, const float rFOVsq, const int volumeDimensionOrder)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
@@ -1339,7 +1388,7 @@ bool windowFOV_gpu(float* f, parameters* params)
     if (params == NULL)
     {
         printf("Error: windowFOV_gpu: invalid argument!\n");
-        return NULL;
+        return false;
     }
 
     cudaError_t cudaStatus;
@@ -1358,6 +1407,33 @@ bool windowFOV_gpu(float* f, parameters* params)
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid = setGridSize(N, dimBlock);
     windowFOVKernel <<< dimGrid, dimBlock >>> (f, N, T, startVal, rFOVsq, params->volumeDimensionOrder);
+    cudaStatus = cudaDeviceSynchronize();
+
+    return true;
+}
+
+bool copy_volume_data_to_mask_gpu(float* f, float* mask, parameters* params, bool do_forward)
+{
+    if (f ==NULL || mask == NULL || params == NULL)
+    {
+        printf("Error: copy_volume_data_to_mask_gpu: invalid argument!\n");
+        return false;
+    }
+
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(params->whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return false;
+    }
+
+    int4 N; float4 T; float4 startVal;
+    if (setVolumeGPUparams(params, N, T, startVal) == false)
+        return false;
+
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid = setGridSize(N, dimBlock);
+    copyVolumeDataToMaskKernel <<< dimGrid, dimBlock >>> (f, mask, N, do_forward);
     cudaStatus = cudaDeviceSynchronize();
 
     return true;

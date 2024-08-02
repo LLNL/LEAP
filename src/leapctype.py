@@ -775,6 +775,91 @@ class tomographicModels:
             self.libprojectors.find_centerCol(g, iRow, True)
         return g
         
+    def estimate_tilt(self, g):
+        """Estimates the tilt angle (around the optical axis) of the detector
+
+        This algorithm works by minimizing the difference between conjugate projections (those projections separated by 180 degrees).
+        If the input data is fan-beam or cone-beam it first rebins the data to parallel-beam or cone-parallel coordinates first
+        and then calculates the difference of conjugate projections.  This algorithm works best if centerCol is properly specified
+        before running this algorithm.
+        
+        Note that this function does not update any CT geometry parameters.
+        See also the conjugate_difference function.
+        
+        Example Usage:
+        alpha = leapct.estimate_tilt(g)
+        leapct.convert_to_modularbeam()
+        leapct.rotate_detector(alpha)
+
+        Note that it only works for parallel-beam, fan-beam, cone-beam, and cone-parallel CT geometry types (i.e., everything but modular-beam)
+        and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
+        If you have any bad edge detectors, these must be cropped out before running this algorithm.
+        If this function does not return a good estimate, try using the
+        inconsistencyReconstruction function is this class.
+        
+        See d12_geometric_calibration.py for a working example that uses this function.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            
+        Returns:
+            the tilt angle (in degrees)
+        
+        """
+        self.libprojectors.estimate_tilt.restype = ctypes.c_float
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.estimate_tilt.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            return self.libprojectors.estimate_tilt(g.data_ptr(), g.is_cuda == False)
+        else:
+            self.libprojectors.estimate_tilt.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            return self.libprojectors.estimate_tilt(g, True)
+            
+    def conjugate_difference(self, g, alpha=0.0, centerCol=None):
+        """Calculates the difference of conjugate projections with optional detector rotation and detector shift
+
+        This algorithm calculates the difference between conjugate projections (those projections separated by 180 degrees).
+        If the input data is fan-beam or cone-beam it first rebins the data to parallel-beam or cone-parallel coordinates first
+        and then calculates the difference of conjugate projections.  The purpose of this function is to provide a metric
+        for estimating detector tilt (rotation around the optical axis) and horizonal detector shifts (centerCol).
+
+        Note that it only works for parallel-beam, fan-beam, cone-beam, and cone-parallel CT geometry types (i.e., everything but modular-beam)
+        and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
+        If you have any bad edge detectors, these must be cropped out before running this algorithm.
+        If this function does not return a good estimate, try using the
+        inconsistencyReconstruction function is this class.
+        
+        See d12_geometric_calibration.py for a working example that uses this function.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            alpha (float): detector rotation (around the optical axis) in degrees
+            centerCol (float): the centerCol parameter to use (if unspecified uses the current value of centerCol)
+            
+        Returns:
+            2D numpy array of the difference of two conjugate projections
+        
+        """
+        numRows = self.get_numRows()
+        numCols = self.get_numCols()
+        if numRows <= 0 and numCols <= 0:
+            print('Error: must get CT geometry parameters before using this function!')
+            return None
+        if centerCol is None:
+            centerCol = self.get_centerCol()
+        
+        self.libprojectors.conjugate_difference.restype = ctypes.c_float
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            diff = torch.zeros((numRows, numCols), dtype=torch.float32)
+            self.libprojectors.conjugate_difference.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.conjugate_difference(g.data_ptr(), alpha, centerCol, diff.data_ptr(), g.is_cuda == False)
+        else:
+            diff = np.zeros((numRows, numCols), dtype=np.float32)
+            self.libprojectors.conjugate_difference.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.conjugate_difference(g, alpha, centerCol, diff, True)
+        return diff
+        
     def consistency_cost(self, g, Delta_centerRow=0.0, Delta_centerCol=0.0, Delta_tau=0.0, Delta_tilt=0.0):
         r"""Calculates a cost metric for the given CT geometry perturbations
 
@@ -1646,16 +1731,27 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
-        self.apply_volume_mask(f)
-        self.libprojectors.project.restype = ctypes.c_bool
-        self.set_model(param_id)
-        if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.project.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.project(g.data_ptr(), f.data_ptr(), g.is_cuda == False)
+        #self.apply_volume_mask(f)
+        if self.volume_mask_is_valid(f):
+            self.libprojectors.project_with_mask.restype = ctypes.c_bool
+            self.set_model(param_id)
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.project_with_mask.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+                self.libprojectors.project_with_mask(g.data_ptr(), f.data_ptr(), self.volume_mask.data_ptr(), g.is_cuda == False)
+            else:
+                self.libprojectors.project_with_mask.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+                self.libprojectors.project_with_mask(g, f, self.volume_mask, True)
+            return g
         else:
-            self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.project(g, f, True)
-        return g
+            self.libprojectors.project.restype = ctypes.c_bool
+            self.set_model(param_id)
+            if has_torch == True and type(g) is torch.Tensor:
+                self.libprojectors.project.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+                self.libprojectors.project(g.data_ptr(), f.data_ptr(), g.is_cuda == False)
+            else:
+                self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+                self.libprojectors.project(g, f, True)
+            return g
         
     def project_cpu(self, g, f, param_id=None):
         """Calculate the forward projection of f and stores the result in g
@@ -1672,20 +1768,32 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
-        self.libprojectors.project_cpu.restype = ctypes.c_bool
-        self.set_model(param_id)
-        if has_torch == True and type(g) is torch.Tensor:
-            if g.is_cuda:
-                print('Error: project_cpu requires that the data be on the CPU')
+        if self.volume_mask_is_valid(f):
+            self.libprojectors.project_with_mask_cpu.restype = ctypes.c_bool
+            self.set_model(param_id)
+            if has_torch == True and type(g) is torch.Tensor:
+                if g.is_cuda:
+                    print('Error: project_cpu requires that the data be on the CPU')
+                else:
+                    self.libprojectors.project_with_mask_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+                    self.libprojectors.project_with_mask_cpu(g.data_ptr(), f.data_ptr(), self.volume_mask.data_ptr())
             else:
-                self.apply_volume_mask(f)
-                self.libprojectors.project_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                self.libprojectors.project_cpu(g.data_ptr(), f.data_ptr())
+                self.libprojectors.project_with_mask_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                self.libprojectors.project_with_mask_cpu(g, f, self.volume_mask)
+            return g
         else:
-            self.apply_volume_mask(f)
-            self.libprojectors.project_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-            self.libprojectors.project_cpu(g, f)
-        return g
+            self.libprojectors.project_cpu.restype = ctypes.c_bool
+            self.set_model(param_id)
+            if has_torch == True and type(g) is torch.Tensor:
+                if g.is_cuda:
+                    print('Error: project_cpu requires that the data be on the CPU')
+                else:
+                    self.libprojectors.project_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                    self.libprojectors.project_cpu(g.data_ptr(), f.data_ptr())
+            else:
+                self.libprojectors.project_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                self.libprojectors.project_cpu(g, f)
+            return g
         
     def project_gpu(self, g, f, param_id=None):
         """Calculate the forward projection of f and stores the result in g
@@ -1702,18 +1810,30 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
-        self.libprojectors.project_gpu.restype = ctypes.c_bool
-        self.set_model(param_id)
-        if has_torch == True and type(g) is torch.Tensor:
-            if g.is_cuda == False:
-                print('Error: project_gpu requires that the data be on the GPU')
+        if self.volume_mask_is_valid(f):
+            self.libprojectors.project_with_mask_gpu.restype = ctypes.c_bool
+            self.set_model(param_id)
+            if has_torch == True and type(g) is torch.Tensor:
+                if g.is_cuda == False:
+                    print('Error: project_gpu requires that the data be on the GPU')
+                else:
+                    self.libprojectors.project_with_mask_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+                    self.libprojectors.project_with_mask_gpu(g.data_ptr(), f.data_ptr(), self.volume_mask.data_ptr())
             else:
-                self.apply_volume_mask(f)
-                self.libprojectors.project_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-                self.libprojectors.project_gpu(g.data_ptr(), f.data_ptr())
+                print('Error: project_gpu requires that the data be pytorch tensors on the GPU')
+            return g
         else:
-            print('Error: project_gpu requires that the data be pytorch tensors on the GPU')
-        return g
+            self.libprojectors.project_gpu.restype = ctypes.c_bool
+            self.set_model(param_id)
+            if has_torch == True and type(g) is torch.Tensor:
+                if g.is_cuda == False:
+                    print('Error: project_gpu requires that the data be on the GPU')
+                else:
+                    self.libprojectors.project_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+                    self.libprojectors.project_gpu(g.data_ptr(), f.data_ptr())
+            else:
+                print('Error: project_gpu requires that the data be pytorch tensors on the GPU')
+            return g
             
     def backproject(self, g, f, param_id=None):
         """Calculate the backprojection (adjoint of the forward projection) of g and stores the result in f
@@ -2805,11 +2925,10 @@ class tomographicModels:
     def set_volume_mask(self, vol_mask):
         r"""Sets the tomographicModels member variable called volume_mask
         
-        The purpose of the volume mask is to remove user-specified regions from the reconstruction.
-        This mask must by a 3D numpy or torch tensor of the same size as the reconstruction volume.
-        Ideally this array should have just ones and zeros, where the zeros mark the voxels in the
-        reconstruction that should be assumed to have zero value and the ones mark the voxels in the
-        reconstruction that can be any value.
+        The purpose of the volume mask is to provide user-specified regions of which voxels to include in
+        forward and back projection algorithms.  This mask must by a 3D numpy or torch tensor of the same
+        size as the reconstruction volume. This array must have just ones and zeros, where the zeros mark
+        the voxels that should not be considered in the forward or backprojection algorithms.
         This masking can remove unwanted regions from the reconstruction or potentially improve the quality of
         iterative reconstruction algorithms by removing unknowns from the reconstruction problem.
         Using this mask does not improve the speed of forward or backprojection algorithms.
@@ -2834,6 +2953,12 @@ class tomographicModels:
         """
         self.volume_mask = None
         
+    def volume_mask_is_valid(self, f):
+        if self.volume_mask is not None and f is not None and type(f) == type(self.volume_mask) and f.shape == self.volume_mask.shape:
+            return True
+        else:
+            return False
+        
     def apply_volume_mask(self, f):
         r"""Multiplies the given input by the tomographicModels member variable called volume_mask
 
@@ -2846,7 +2971,7 @@ class tomographicModels:
         Returns:
             no return value
         """
-        if self.volume_mask is not None and f is not None and type(f) == type(self.volume_mask) and f.shape == self.volume_mask.shape:
+        if self.volume_mask_is_valid(f):
             f[:,:,:] = f[:,:,:] * self.volume_mask[:,:,:]
     
     ###################################################################################################################

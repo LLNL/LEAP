@@ -150,6 +150,11 @@ bool project_gpu(float* g, float* f)
 	return tomo()->project_gpu(g, f);
 }
 
+bool project_with_mask_gpu(float* g, float* f, float* mask)
+{
+	return tomo()->project_with_mask_gpu(g, f, mask);
+}
+
 bool backproject_gpu(float* g, float* f)
 {
 	return tomo()->backproject_gpu(g, f);
@@ -160,6 +165,11 @@ bool project_cpu(float* g, float* f)
 	return tomo()->project_cpu(g, f);
 }
 
+bool project_with_mask_cpu(float* g, float* f, float* mask)
+{
+	return tomo()->project_with_mask_cpu(g, f, mask);
+}
+
 bool backproject_cpu(float* g, float* f)
 {
 	return tomo()->backproject_cpu(g, f);
@@ -168,6 +178,11 @@ bool backproject_cpu(float* g, float* f)
 bool project(float* g, float* f, bool data_on_cpu)
 {
 	return tomo()->project(g, f, data_on_cpu);
+}
+
+bool project_with_mask(float* g, float* f, float* mask, bool data_on_cpu)
+{
+	return tomo()->project_with_mask(g, f, mask, data_on_cpu);
 }
 
 bool backproject(float* g, float* f, bool data_on_cpu)
@@ -837,6 +852,16 @@ float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, f
 	return tomo()->consistency_cost(g, Delta_centerRow, Delta_centerCol, Delta_tau, Delta_tilt, data_on_cpu);
 }
 
+float estimate_tilt(float* g, bool data_on_cpu)
+{
+	return tomo()->estimate_tilt(g, data_on_cpu);
+}
+
+float conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu)
+{
+	return tomo()->conjugate_difference(g, alpha, centerCol, diff, data_on_cpu);
+}
+
 bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu)
 {
 	return tomo()->Laplacian(g, numDims, smooth, data_on_cpu);
@@ -1019,6 +1044,9 @@ PYBIND11_MODULE(leapct, m) {
     m.def("project_gpu", &project_gpu, "");
     m.def("backproject_gpu", &backproject_gpu, "");
     m.def("project_cpu", &project_cpu, "");
+	m.def("project_with_mask", &project_with_mask, "");
+	m.def("project_with_mask_gpu", &project_with_mask_gpu, "");
+	m.def("project_with_mask_cpu", &project_with_mask_cpu, "");
     m.def("backproject_cpu", &backproject_cpu, "");
     m.def("FBP_cpu", &FBP_cpu, "");
     m.def("FBP_gpu", &FBP_gpu, "");
@@ -1133,6 +1161,8 @@ PYBIND11_MODULE(leapct, m) {
     m.def("get_offsetZ", &get_offsetZ, "");
     m.def("get_z0", &get_z0, "");
     m.def("find_centerCol", &find_centerCol, "");
+	m.def("estimate_tilt", &estimate_tilt, "");
+	m.def("conjugate_difference", &conjugate_difference, "");
     m.def("Laplacian", &Laplacian, "");
     m.def("transmissionFilter", &transmissionFilter, "");
     m.def("applyTransferFunction", &applyTransferFunction, "");

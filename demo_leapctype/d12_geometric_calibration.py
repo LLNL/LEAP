@@ -14,6 +14,7 @@ which in LEAP is called "centerCol".  The third example shows a robust method to
 or "clocking rotation" of the detector.
 '''
 
+whichDemo = 4
 
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
@@ -60,7 +61,15 @@ leapct.set_FORBILD(f,True)
 
 # "Simulate" projection data
 startTime = time.time()
-leapct.project(g,f)
+if whichDemo == 4:
+    # demo 4 uses data with a rotated detector
+    leapct_rot = tomographicModels()
+    leapct_rot.copy_parameters(leapct)
+    leapct_rot.convert_to_modularbeam()
+    leapct_rot.rotate_detector(2.34)
+    leapct_rot.project(g,f)
+else:
+    leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 
 
@@ -70,7 +79,6 @@ print('Adding noise to data...')
 g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
 
-whichDemo = 4
 if whichDemo == 1:
     # In this first demo, we show how LEAP can estimate the centerCol parameter
     # by minimizing the differences of conjugate rays.
@@ -132,8 +140,54 @@ elif whichDemo == 3:
     #f_stack = parameter_sweep(leapct, g, tiltAnglesInDegrees, 'tilt', iz=None, algorithmName='FBP')
     f_stack = parameter_sweep(leapct, g, tiltAnglesInDegrees, 'tilt', iz=None, algorithmName='inconsistencyReconstruction')
     leapct.display(f_stack)
-    
+
 elif whichDemo == 4:
+    
+    """
+    The data here was simulated with a 2.34 degree detector tilt.
+    
+    This part of the script demonstrates the usage of conjugate rays to determine detector tilt
+    (rotation of the detector around the optical axis) and horizontal detector shifts.
+    
+    Conjugate rays are pairs of rays whose azimuthal angle differ by 180 degrees.  In parallel-
+    and fan-beam, these rays are identical other than they travel in opposite directions and thus
+    these measurements are assumed to be essentially identical.  In cone-beam these rays are similar
+    but no identical.  Regardless, the similarity of conjugate rays can be leveraged to estimate some
+    CT geometry parameters.
+    
+    We shall demonstrate two functions: estimate_tilt and conjugate_difference.
+    The estimate_tilt function estimates the detector tilt (rotation of the detector around the optical
+    axis).  This function does not change any CT geometry parameters; it just returns the estimated
+    angle of rotation.  Below we show how to update the geometry.
+    The conjugate_difference function returns a 2D array of the difference of two conjugate projections.
+    You may provide a detector rotation angle and/or a new centerCol parameter to test the accuracy of
+    these particular parameters.  A good estimate should show mostly noise in the difference.  This function
+    can be used to tune these parameters by hand (by observing the difference) or can be put into a cost
+    function by summing the squares of the conjugate difference.  Just like the estimate_tilt function,
+    this function does not update the geometry.  The user must do this themselves.
+    """
+    
+    # First let's view the conjugate projection difference without modeling the detector tilt (rotation)
+    diff_0 = leapct.conjugate_difference(g, 0.0)
+    leapct.display(diff_0)
+    
+    # Now let's estimate the detector tilt
+    # This function only estimates the tilt.  To update the LEAP CT geometry parameters do the following:
+    #leapct.convert_to_modularbeam()
+    #leapct.rotate_detector(alpha)
+    alpha = leapct.estimate_tilt(g)
+    print('estimated detector tilt: ' + str(alpha) + ' degrees')
+    
+    # Now we display the conjugate projection difference using the estimated rotation angle
+    # Here you should see an image with fewer features (should look more just like noise)
+    diff_alpha = leapct.conjugate_difference(g, alpha)
+    leapct.display(diff_alpha)
+    
+    # Next we calculate the error metrics for these two cases
+    print('conjugate projection error metric with no detector rotation: ' + str(np.sum(diff_0**2)))
+    print('conjugate projection error metric with estimated detector rotation: ' + str(np.sum(diff_alpha**2)))    
+    
+elif whichDemo == 5:
 
     """
     This demo demonstrates the use of the automated geometric calibration procedure in LEAP.
