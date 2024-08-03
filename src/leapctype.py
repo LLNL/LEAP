@@ -1919,6 +1919,63 @@ class tomographicModels:
             print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
         
+    def system_matrix(self, iAngle, iRow=0, onGPU=True):
+        r"""Calculates several rows of the system matrix
+        
+        The CT geometry and CT volume parameters must be set prior to running this function.
+        If PyTorch exists, the system matrix will be stored in a torch tensor, otherwise in numpy arrays
+        
+        Args:
+            iAngle (int): projection angle index
+            iRow (int): detector row index
+            onGPU (bool): whether to allocate the system matrix on the GPU or not
+            
+        Returns:
+            sparse representation of the system matrix values
+        """
+        #bool system_matrix(float* A, short* indices, int iAngle, int iRow, bool data_on_cpu);
+        
+        if self.all_defined() == False:
+            print('Error: CT geometry and CT volume parameters not defined!')
+            return None, None
+        if self.get_geometry() != 'PARALLEL':
+            print('Error: current implementation only works for parallel-beam geometries')
+            return None, None
+        if iAngle < 0 or iAngle >= self.get_numAngles():
+            return None, None
+        
+        phi = np.pi/180.0*self.get_angles()[iAngle]
+        width = 1.0 / max(np.abs(np.cos(phi)), np.abs(np.sin(phi)))
+
+        # These calculation only work for parallel-beam            
+        # the width in the denominator is the extreme case where the pixel is intersected like a diamond
+        footprint_row = 1
+        footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
+        N = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
+        
+        if has_torch:
+            
+            if onGPU:
+                A = torch.zeros((self.get_numCols(), N), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                indices = torch.zeros((self.get_numCols(), N, 2), dtype=torch.int16, device=torch.device('cuda:'+str(self.get_gpu())))
+            else:
+                A = torch.zeros((self.get_numCols(), N), dtype=torch.float32)
+                indices = torch.zeros((self.get_numCols(), N, 2), dtype=torch.int16)
+            
+            self.libprojectors.system_matrix.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.system_matrix.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix(A.data_ptr(), indices.data_ptr(), N, iAngle, iRow, A.is_cuda == False)
+        else:
+            A = np.zeros((self.get_numCols(), N), dtype=np.float32)
+            indices = np.zeros((self.get_numCols(), N, 2), dtype=np.int16)
+            
+            self.libprojectors.system_matrix.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.system_matrix.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix(A, indices, N, iAngle, iRow, True)
+        return A, indices
+        
     def filterProjections(self, g):
         r"""Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction.
         

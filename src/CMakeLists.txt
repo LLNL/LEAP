@@ -56,6 +56,7 @@ set(HEADER
   bilateral_filter.cuh
   guided_filter.cuh
   geometric_calibration.cuh
+  system_matrix.cuh
   find_center_cpu.h
   sinogram_replacement.h
   resample_cpu.h
@@ -111,6 +112,7 @@ set(SRC_CU
   bilateral_filter.cu
   guided_filter.cu
   geometric_calibration.cu
+  system_matrix.cu
   ray_weighting.cu
   scatter_models.cu
   analytic_ray_tracing_gpu.cu

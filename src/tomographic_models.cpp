@@ -34,6 +34,7 @@
 #include "scatter_models.cuh"
 #include "geometric_calibration.cuh"
 #include "analytic_ray_tracing_gpu.cuh"
+#include "system_matrix.cuh"
 #endif
 
 #include "log.h"
@@ -463,6 +464,16 @@ bool tomographicModels::windowFOV(float* f, bool data_on_cpu)
 		return windowFOV_cpu(f, &params);
 #else
 	return windowFOV_cpu(f, &params);
+#endif
+}
+
+bool tomographicModels::system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	return systemMatrix(A, indices, N_max, &params, iAngle, iRow, data_on_cpu);
+#else
+	LOG(logERROR, "tomographicModels", "system_matrix") << "Error: operation only implemented for GPU" << endl;
+	return false;
 #endif
 }
 

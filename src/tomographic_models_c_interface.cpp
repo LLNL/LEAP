@@ -269,6 +269,11 @@ bool windowFOV(float* f, bool data_on_cpu)
 	return tomo()->windowFOV(f, data_on_cpu);
 }
 
+bool system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, bool data_on_cpu)
+{
+	return tomo()->system_matrix(A, indices, N_max, iAngle, iRow, data_on_cpu);
+}
+
 float get_FBPscalar()
 {
 	return tomo()->get_FBPscalar();
@@ -1065,6 +1070,7 @@ PYBIND11_MODULE(leapct, m) {
 	m.def("lambdaTomography", &lambdaTomography, "");
     m.def("sensitivity", &sensitivity, "");
     m.def("windowFOV", &windowFOV, "");
+	m.def("system_matrix", &system_matrix, "");
     m.def("set_conebeam", &set_conebeam, "");
 	m.def("set_coneparallel", &set_coneparallel, "");
     m.def("set_fanbeam", &set_fanbeam, "");

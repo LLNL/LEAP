@@ -65,6 +65,7 @@ cuda_files=[
     'total_variation.cu',
     'geometric_calibration.cu',
     'analytic_ray_tracing_gpu.cu',
+    'system_matrix.cu',
 ]
 
 cuda = torch.cuda.is_available()
