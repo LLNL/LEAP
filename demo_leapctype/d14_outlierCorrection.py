@@ -7,7 +7,7 @@ leapct = tomographicModels()
 from leap_preprocessing_algorithms import *
 
 '''
-The script demonstrates two different methods to handle outliers (zingers) in your projection data
+The script demonstrates two different methods to handle outliers (zingers) and bad pixels in your projection data
 '''
 
 # Specify the number of detector columns which is used below
@@ -48,24 +48,44 @@ leapct.project(g,f_true)
 I_0 = 50000.0
 g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 
-# Make some of the detector pixels have zero value
-ind = np.abs(np.random.normal(0,1,g.shape)) > 3.0
-g[ind] = 0.0
-
 # Choose which method you'd like to test
-whichMethod = 1
-#whichMethod = 2
+#whichMethod = 1
+whichMethod = 2
+#whichMethod = 3
 
 if whichMethod == 1:
+
+    # Make some of the detector pixels have zero value
+    ind = np.abs(np.random.normal(0,1,g.shape)) > 3.0
+    g[ind] = 0.0
+
     # Perform median filter based outlier correction
     # This is a very fast method which is good for isolated bad pixels
     outlierCorrection(leapct,g)
 
+    # Reconstruct the data
+    f = leapct.allocateVolume()
+    leapct.FBP(g,f)
+elif whichMethod == 2:
 
+    # Make some detector pixels dead for all projections
+    ind = np.abs(np.random.normal(0,1,(g.shape[1], g.shape[2]))) > 3.0
+    g[:,ind] = 0.0
+    
+    # Correct for bad pixels
+    badPixelMap = np.zeros((g.shape[1], g.shape[2]), dtype=np.float32)
+    badPixelMap[ind] = 1.0
+    badPixelCorrection(leapct, g, badPixelMap)
+    
     # Reconstruct the data
     f = leapct.allocateVolume()
     leapct.FBP(g,f)
 else:
+    
+    # Make some of the detector pixels have zero value
+    ind = np.abs(np.random.normal(0,1,g.shape)) > 3.0
+    g[ind] = 0.0
+
     # Perform RWLS reconstruction where we set the weights to be zero where there are bad pixels
     # This method is computationally expensive, but is good when you have large regions of bad pixels
     # or want to perform so-called Metal Artifact Reduction (MAR)

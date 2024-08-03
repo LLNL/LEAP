@@ -2,6 +2,7 @@ Preprocessing Algorithms
 ========================
 
 .. autofunction:: leap_preprocessing_algorithms.makeAttenuationRadiographs
+.. autofunction:: leap_preprocessing_algorithms.badPixelCorrection
 .. autofunction:: leap_preprocessing_algorithms.outlierCorrection
 .. autofunction:: leap_preprocessing_algorithms.outlierCorrection_highEnergy
 .. autofunction:: leap_preprocessing_algorithms.detectorDeblur_FourierDeconv

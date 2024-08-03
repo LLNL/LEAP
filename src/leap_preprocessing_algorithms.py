@@ -87,10 +87,39 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
     
     return True
 
+def badPixelCorrection(leapct, g, badPixelMap, windowSize=3, isAttenuationData=True):
+    r"""Removes bad pixels from CT projections
+    
+    LEAP CT geometry parameters must be set prior to running this function 
+    and can be applied to any CT geometry type.
+    This algorithm processes each projection independently
+    and removes bad pixels specified by the user using a median filter
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation or transmission projection data
+        badPixelMap (C contiguous float32 numpy array or torch tensor): 2D bad pixel map (numRows x numCols) where a value of 1.0 marks a pixel as bad
+        windowSize (int): the window size; can be 3, 5, or 7
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    
+    if g is None or badPixelMap is None:
+        return False
+    
+    # This algorithm processes each transmission
+    if isAttenuationData:
+        leapct.expNeg(g)
+    leapct.badPixelCorrection(g, badPixelMap, windowSize)
+    if isAttenuationData:
+        leapct.negLog(g)
+    return True
+
 def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData=True):
     r"""Removes outliers (zingers) from CT projections
     
-    Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
     and can be applied to any CT geometry type.
     This algorithm processes each projection independently
@@ -121,7 +150,6 @@ def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData
 def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     """Removes outliers (zingers) from CT projections
     
-    Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
     and can be applied to any CT geometry type.
     This algorithm processes each projection independently
@@ -152,7 +180,6 @@ def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
 def LowSignalCorrection(leapct, g, threshold=0.03, windowSize=3, signalThreshold=0.001, isAttenuationData=True):
     r"""Corrects detector pixels that have very low transmission (photon starvation)
     
-    Assumes the input data is in attenuation space.
     No LEAP parameters need to be set for this function to work 
     and can be applied to any CT geometry type.
     This algorithm processes each projection independently

@@ -4543,10 +4543,12 @@ class tomographicModels:
         r"""Bad Pixel Correction
         
         The provided input must be projection data and the CT geometry parameters must be set.
+        This algorithm processes each projection independently
+        and removes bad pixels specified by the user using a median filter.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): 3D projection data array
-            badPixelMap (C contiguous float32 numpy array or torch tensor): 2D bad pixel map
+            badPixelMap (C contiguous float32 numpy array or torch tensor): 2D bad pixel map (numRows x numCols)
             windowSize (int): the window size; can be 3, 5, or 7
         
         Returns:
