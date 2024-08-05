@@ -43,6 +43,7 @@ set(HEADER
   projectors_attenuated.cuh
   projectors_Siddon.cuh
   projectors_Siddon_cpu.h
+  backprojectors_VD.cuh
   sensitivity_cpu.h
   sensitivity.cuh
   ramp_filter.cuh
@@ -102,6 +103,7 @@ set(SRC_CU
   projectors_symmetric.cu
   projectors_attenuated.cu
   projectors_Siddon.cu
+  backprojectors_VD.cu
   sensitivity.cu
   ramp_filter.cu
   resample.cu

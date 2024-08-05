@@ -114,6 +114,8 @@ extern "C" PROJECTOR_API bool set_default_volume(float scale);
 extern "C" PROJECTOR_API bool set_numZ(int numZ);
 extern "C" PROJECTOR_API bool set_numY(int numY);
 extern "C" PROJECTOR_API bool set_numX(int numX);
+extern "C" PROJECTOR_API bool set_offsetX(float offsetX);
+extern "C" PROJECTOR_API bool set_offsetY(float offsetY);
 extern "C" PROJECTOR_API bool set_offsetZ(float offsetZ);
 
 extern "C" PROJECTOR_API bool set_voxelWidth(float W);

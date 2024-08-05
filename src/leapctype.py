@@ -1450,6 +1450,20 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_numX(numX)
         
+    def set_offsetX(self, offsetX):
+        """Set offsetX parameter which defines the central z-slice location (mm) of the volume"""
+        self.libprojectors.set_offsetX.argtypes = [ctypes.c_float]
+        self.libprojectors.set_offsetX.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_offsetX(offsetX)
+        
+    def set_offsetY(self, offsetY):
+        """Set offsetY parameter which defines the central z-slice location (mm) of the volume"""
+        self.libprojectors.set_offsetY.argtypes = [ctypes.c_float]
+        self.libprojectors.set_offsetY.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_offsetY(offsetY)
+        
     def set_offsetZ(self, offsetZ):
         """Set offsetZ parameter which defines the central z-slice location (mm) of the volume"""
         self.libprojectors.set_offsetZ.argtypes = [ctypes.c_float]
@@ -4978,11 +4992,32 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.clear_axisOfSymmetry()
         
-    def set_projector(self,which):
-        """Set which projector model to use (deprecated)"""
+    def set_projector(self, which='SF'):
+        r"""Set which projector model to use
+
+        Note that all forward projectors use the modified separable footprint model,
+        this function only changes the backprojection model.  Voxel-driven backprojection
+        is faster, but less accurate
+
+        Args:
+            which (string): 'SF' for modified Separable Footprint, 'VD' for Voxel-Driven
+        
+        Returns:
+            True is the input was valid, False otherwise
+        """
+        
+        if isinstance(which, str):
+            if which == 'SF':
+                which = 2
+            elif which == 'VD':
+                which = 3
+            else:
+                return False
+        
         self.libprojectors.set_projector.argtypes = [ctypes.c_int]
         self.libprojectors.set_projector.restype = ctypes.c_bool
         self.set_model()
+        
         return self.libprojectors.set_projector(which)
         
     def set_rampFilter(self,which):
@@ -6180,6 +6215,11 @@ class tomographicModels:
             A[2,2] = 1.0
         if clip is None:
             clip = np.zeros(3,dtype=np.float32)
+        
+        if isinstance(c, int) or isinstance(c, float):
+            c = [c, c, c]
+        if isinstance(r, int) or isinstance(r, float):
+            r = [r, r, r]
         
         c = np.ascontiguousarray(c, dtype=np.float32)
         r = np.ascontiguousarray(r, dtype=np.float32)

@@ -447,6 +447,18 @@ bool set_numX(int numX)
 		return false;
 }
 
+bool set_offsetX(float offsetX)
+{
+	tomo()->params.offsetX = offsetX;
+	return true;
+}
+
+bool set_offsetY(float offsetY)
+{
+	tomo()->params.offsetY = offsetY;
+	return true;
+}
+
 bool set_offsetZ(float offsetZ)
 {
 	tomo()->params.offsetZ = offsetZ;
@@ -1089,6 +1101,8 @@ PYBIND11_MODULE(leapct, m) {
     m.def("set_numZ", &set_numZ, "");
     m.def("set_numY", &set_numY, "");
     m.def("set_numX", &set_numX, "");
+	m.def("set_offsetX", &set_offsetX, "");
+	m.def("set_offsetY", &set_offsetY, "");
     m.def("set_offsetZ", &set_offsetZ, "");
     m.def("set_voxelWidth", &set_voxelWidth, "");
     m.def("set_voxelHeight", &set_voxelHeight, "");

@@ -1430,9 +1430,11 @@ bool tomographicModels::set_projector(int which)
 {
 	if (which == parameters::SEPARABLE_FOOTPRINT)
 		params.whichProjector = parameters::SEPARABLE_FOOTPRINT;
+	else if (which == parameters::VOXEL_DRIVEN)
+		params.whichProjector = parameters::VOXEL_DRIVEN;
 	else
 	{
-		printf("Error: currently only SF projectors are implemented!\n");
+		printf("Error: currently only SF and VD projectors are implemented!\n");
 		return false;
 		//params.whichProjector = 0;
 	}
