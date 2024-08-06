@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <algorithm>
+#include "log.h"
 #include "cuda_runtime.h"
 //#include "device_launch_parameters.h"
 #include "backprojectors_VD.cuh"
@@ -75,22 +76,29 @@ __global__ void modularBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N
         const float p_minus_c_dot_n = p_minus_c.x * detNormal.x + p_minus_c.y * detNormal.y + p_minus_c.z * detNormal.z;
         const float D = -p_minus_c_dot_n / (r.x * detNormal.x + r.y * detNormal.y + r.z * detNormal.z);
 
-        //const float sod = sqrtf(sourcePosition[0] * sourcePosition[0] + sourcePosition[1] * sourcePosition[1] + sourcePosition[2] * sourcePosition[2]);
-        //const float backprojectionWeight = sod * sod / (R * R);
-        const float sdd = sqrtf(p_minus_c.x * p_minus_c.x + p_minus_c.y * p_minus_c.y + p_minus_c.z * p_minus_c.z);
-        const float backprojectionWeight = sdd * sdd / (R*R);
-
         //<p_minus_c + lineLength*r, u>
         //<p_minus_c + lineLength*r, v>
         const float u_val = (p_minus_c.x + D * r.x) * u_vec[0] + (p_minus_c.y + D * r.y) * u_vec[1] + (p_minus_c.z + D * r.z) * u_vec[2];
         const float v_val = (p_minus_c.x + D * r.x) * v_vec[0] + (p_minus_c.y + D * r.y) * v_vec[1] + (p_minus_c.z + D * r.z) * v_vec[2];
+
+        //const float sod = sqrtf(sourcePosition[0] * sourcePosition[0] + sourcePosition[1] * sourcePosition[1] + sourcePosition[2] * sourcePosition[2]);
+        //const float backprojectionWeight = sod * sod / (R * R);
+        const float sdd = sqrtf(p_minus_c.x * p_minus_c.x + p_minus_c.y * p_minus_c.y + p_minus_c.z * p_minus_c.z);
+        //const float backprojectionWeight = sdd * sdd / (R * R);
+        //const float backprojectionWeight = sqrtf(1.0f + u_val * u_val + v_val * v_val) * sdd * sdd / (R * R);
+        //const float backprojectionWeight = sqrtf(R*R + u_val * u_val + v_val * v_val) * sdd * sdd / (R * R);
+        //const float backprojectionWeight = sod * sod / (R * R); // *sdd*sdd/sod*sod
+
+        const float r_dot_d = r.x * detNormal.x + r.y * detNormal.y + r.z * detNormal.z;
+        //const float backprojectionWeight = sod * sod / (r_dot_d * r_dot_d); // *sdd*sdd/sod*sod
+        const float backprojectionWeight = sdd * sdd / (r_dot_d * r_dot_d);
 
         const float u_arg = (u_val - startVals_g.z) * T_u_inv + 0.5f;
         const float v_arg = (v_val - startVals_g.y) * T_v_inv + 0.5f;
 
         val += tex3D<float>(g, u_arg, v_arg, L) * backprojectionWeight;
     }
-    f[ind] = val * T_f.x * T_f.y * T_f.z / (T_g.y * T_g.z);
+    f[ind] = val * T_f.x * T_f.y * T_f.z / (T_g.y * T_g.z);// *14.0f * 14.0f / (11.0f * 11.0f);
 }
 
 __global__ void coneParallelBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight)
@@ -150,10 +158,11 @@ __global__ void coneParallelBackprojectorKernel_vox(cudaTextureObject_t g, int4 
         }
 
         const float v_denom = sqrtf(R * R - s * s) - (cos_phi * x + sin_phi * y);
-        const float backprojectionWeight = doWeight ? v_denom : R;
+        const float v_denom_inv = 1.0f / v_denom;
+        const float backprojectionWeight = doWeight ? R : R*R * v_denom_inv;
 
-        const float v_phi_x_step_A = Tz_over_Tv / v_denom;
-        const float v_phi_x_first = (v_phi_x_start_num - z_source_over_T_v) / v_denom - v0_over_Tv + 0.5f;
+        const float v_phi_x_step_A = Tz_over_Tv * v_denom_inv;
+        const float v_phi_x_first = (v_phi_x_start_num - z_source_over_T_v) * v_denom_inv - v0_over_Tv + 0.5f;
         for (int k_offset = 0; k_offset < numZ; k_offset++)
             vals[k_offset] += tex3D<float>(g, s_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight;
     }
@@ -212,19 +221,20 @@ __global__ void fanBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, 
         const float cos_phi = cos(phi);
 
         const float R_minus_x_dot_theta_inv = 1.0f / (R - x * cos_phi - y * sin_phi);
+        const float u_val = (cos_phi * y - sin_phi * x + tau) * R_minus_x_dot_theta_inv;
+        const float u_arg = (u_val - startVals_g.z) * Tu_inv + 0.5f;
 
         //const float backprojectionWeight = R_minus_x_dot_theta_inv * R_minus_x_dot_theta_inv;
         //const float bpWeight = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
-        const float backprojectionWeight = doWeight ? R_minus_x_dot_theta_inv * R_minus_x_dot_theta_inv : R_minus_x_dot_theta_inv;
-
-        const float u_arg = ((cos_phi * y - sin_phi * x + tau) * R_minus_x_dot_theta_inv - startVals_g.z) * Tu_inv + 0.5f;
+        const float backprojectionWeight = doWeight ? sqrtf(1.0f + u_val * u_val)*R_minus_x_dot_theta_inv * R_minus_x_dot_theta_inv : sqrtf(1.0f + u_val * u_val)*R_minus_x_dot_theta_inv;
 
         for (int k_offset = 0; k_offset < numZ; k_offset++)
             vals[k_offset] += tex3D<float>(g, u_arg, iv + float(k_offset), L) * backprojectionWeight;
     }
 
     //const float scalar = doWeight ? T_f.x * R * R : T_f.x * R;
-    const float scalar = T_f.x * T_f.y / (T_g.z);
+    //const float scalar = T_f.x * T_f.y / (T_g.z);
+    const float scalar = doWeight ? R*T_f.x * T_f.y / (T_g.z) : T_f.x * T_f.y / (T_g.z);
     if (volumeDimensionOrder == 0)
     {
         for (int k_offset = 0; k_offset < numZ; k_offset++)
@@ -408,9 +418,10 @@ __global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int
 
         const float R_minus_x_dot_theta_inv = 1.0f / (R - x * cos_phi - y * sin_phi);
 
-        const float backprojectionWeight = R_minus_x_dot_theta_inv * R_minus_x_dot_theta_inv;
+        const float u_val = (cos_phi * y - sin_phi * x + tau) * R_minus_x_dot_theta_inv;
+        const float u_arg = (u_val - startVals_g.z) * Tu_inv + 0.5f;
 
-        const float u_arg = ((cos_phi * y - sin_phi * x + tau) * R_minus_x_dot_theta_inv - startVals_g.z) * Tu_inv + 0.5f;
+        const float backprojectionWeight = sqrtf(1.0f + u_val * u_val) * R_minus_x_dot_theta_inv * R_minus_x_dot_theta_inv;
 
         const float v_phi_x_step_A = Tz_over_Tv * R_minus_x_dot_theta_inv;
         const float v_phi_x_first = (v_phi_x_start_num - z_source_over_T_v) * R_minus_x_dot_theta_inv - v0_over_Tv + 0.5f;
@@ -441,7 +452,7 @@ __global__ void applyPolarWeight_vox(float* g, int4 N_g, float4 T_g, float4 star
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrt(1.0f + v * v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrtf(1.0f + v * v);
 }
 
 __global__ void applyInversePolarWeight_vox(float* g, int4 N_g, float4 T_g, float4 startVals_g)
@@ -453,7 +464,7 @@ __global__ void applyInversePolarWeight_vox(float* g, int4 N_g, float4 T_g, floa
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrt(1.0f + v * v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrtf(1.0f + v * v);
 }
 
 
@@ -494,6 +505,8 @@ bool backproject_VD(float *g, float *&f, parameters* params, bool data_on_cpu)
     if (params->geometry == parameters::MODULAR)
         return backproject_VD_modular(g, f, params, data_on_cpu);
 
+    LOG(logDEBUG, "backprojectors_VD", "backproject_VD") << "Performing voxel-based backprojection..." << std::endl;
+
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
 
@@ -532,7 +545,7 @@ bool backproject_VD(float *g, float *&f, parameters* params, bool data_on_cpu)
     bool applyInverseWeight = false;
     if (params->geometry == parameters::CONE)
         applyInverseWeight = true;
-    else if (params->geometry == parameters::CONE_PARALLEL && params->doWeightedBackprojection == false)
+    else if (params->geometry == parameters::CONE_PARALLEL && params->doWeightedBackprojection == true)
         applyInverseWeight = true;
 
     if (applyInverseWeight)
@@ -611,6 +624,11 @@ bool backproject_VD_modular(float* g, float*& f, parameters* params, bool data_o
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
+
+    LOG(logDEBUG, "backprojectors_VD", "backproject_VD_modular") << "Performing voxel-based backprojection..." << std::endl;
+
+    //printf("source = %f, %f, %f\n", params->sourcePositions[0], params->sourcePositions[1], params->sourcePositions[2]);
+    //printf("detector = %f, %f, %f\n", params->moduleCenters[0], params->moduleCenters[1], params->moduleCenters[2]);
 
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;

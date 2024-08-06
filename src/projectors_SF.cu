@@ -972,7 +972,7 @@ __global__ void applyPolarWeight(float* g, int4 N_g, float4 T_g, float4 startVal
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrt(1.0f + v*v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrtf(1.0f + v*v);
 }
 
 __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 startVals_g)
@@ -984,7 +984,7 @@ __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 s
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrt(1.0f + v * v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrtf(1.0f + v * v);
 }
 
 __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder)

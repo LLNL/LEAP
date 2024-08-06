@@ -2047,7 +2047,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 		return false;
 	}
 
-	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + u_0();
+	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + u_0() - tau;
 	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + v_0();
 	//printf("horizontalDetectorShift = %f\n", horizontalDetectorShift);
 

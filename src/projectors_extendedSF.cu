@@ -587,7 +587,7 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
     f[ind] = val;
 }
 
-__global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder)
+__global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -640,6 +640,8 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
 
         const int iu_c = (u_c - startVals_g.z) / T_g.z;
 
+        const float bpWeight = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
+
         if (x_denom > y_denom)
         {
             const float u_A = ((x_dot_theta_perp + sin_phi * vox_half) / (R_minus_x_dot_theta + vox_half * cos_phi) - startVals_g.z) * Tu_inv;
@@ -656,7 +658,7 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
                 if (uWeight + uWeight_2 > 0.0f)
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
-                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2);
+                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
                 }
             }
         }
@@ -676,7 +678,7 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
                 if (uWeight + uWeight_2 > 0.0f)
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
-                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2);
+                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
                 }
             }
         }
@@ -2199,7 +2201,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
         }
     }
     else if (params->geometry == parameters::FAN)
-        fanBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        fanBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, params->doWeightedBackprojection);
     else if (params->geometry == parameters::PARALLEL)
         parallelBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
     else if (params->geometry == parameters::CONE_PARALLEL)
