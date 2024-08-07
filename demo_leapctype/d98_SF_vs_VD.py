@@ -23,19 +23,22 @@ Most other reconstruction packages (e.g., ASTRA, TIGRE, etc.) use VD-based backp
 
 dataPath = os.path.dirname(os.path.realpath(__file__))
 saveFigures = False
+saveFigures = True
 
 # Set scanner geometry
-numCols = 512
-numAngles = 2*2*int(360*numCols/1024)
-pixelSize = 0.65*512/numCols
-numRows = 1
 sod = 1100.0
 sdd = 1400.0
+numCols = 512
+numAngles = 1440
+#pixelSize = 0.65*512/numCols
+pixelSize = 0.5*sdd/sod
+numRows = 1
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), sod, sdd)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), sod, sdd)
 
 # Simulate projection data with ray tracing
-leapct.addObject(None, 4, 0.0, 120.0, val=0.02)
+objectRadius = 110.0
+leapct.addObject(None, 4, 0.0, objectRadius, val=0.02)
 #leapct.set_FORBILD()
 g = leapct.allocate_projections()
 leapct.rayTrace(g,3)
@@ -64,9 +67,11 @@ for n in range(0,3):
     else:
         leapct.set_default_volume(2.0) # make the voxels double the size (mm) of the nominal size
 
+    leapct.print_parameters()
+
     # Specify the region where SNR is calculated
     x,y,z = leapct.voxelSamples()
-    ind = x**2 + y**2 < 100.0**2
+    ind = x**2 + y**2 < (objectRadius-20.0)**2
 
     # Reconstruct using Voxel-Driven Backprojection
     leapct.set_projector('VD')
@@ -94,33 +99,43 @@ for n in range(0,3):
     vmin = 1000-150
     vmax = 1000+150
     
-    """ Display Noiseless Images
+    #""" Display Noiseless Images
+    plt.clf()
     #plt.figure(figsize=(10,5))
     fig, axs = plt.subplots(2, 1)
+    axs[0].set_axis_off()
+    axs[1].set_axis_off()
     fig.suptitle('Noiselss Reconstructions')
     plt.subplot(1, 2, 1)
     plt.title('VD')
     plt.imshow(np.squeeze(f_VD), cmap='gray', vmin=vmin, vmax=vmax)
+    plt.axis('off')
     plt.subplot(1, 2, 2)
     plt.title('SF')
     plt.imshow(np.squeeze(f_SF), cmap='gray', vmin=vmin, vmax=vmax)
     fig.set_figheight(3.5)
+    plt.axis('off')
     if saveFigures:
         fig.savefig(os.path.join(dataPath,'noiseless_'+str(n)+'.png'))
     else:
         plt.show()
-    quit()
+    #quit()
     #"""
     
-    """ Display Noisey Images
+    #""" Display Noisey Images
+    plt.clf()
     fig, axs = plt.subplots(2, 1)
+    axs[0].set_axis_off()
+    axs[1].set_axis_off()
     fig.suptitle('Noisey Reconstructions')
     plt.subplot(1, 2, 1)
     plt.title('VD')
     plt.imshow(np.squeeze(f_VD_noisey), cmap='gray', vmin=vmin, vmax=vmax)
+    plt.axis('off')
     plt.subplot(1, 2, 2)
     plt.title('SF')
     plt.imshow(np.squeeze(f_SF_noisey), cmap='gray', vmin=vmin, vmax=vmax)
+    plt.axis('off')
     fig.set_figheight(3.5)
     if saveFigures:
         fig.savefig(os.path.join(dataPath,'noisey_'+str(n)+'.png'))
@@ -130,6 +145,7 @@ for n in range(0,3):
     #"""
 
     #""" Display MTF plot
+    plt.clf()
     # Here we use the Robust ISO MTF Procedure, which done as follows:
     #1) Reconstruct Cylinder
     #2) Take central slice
@@ -139,20 +155,22 @@ for n in range(0,3):
     #6) Calculate FFT and multiply by 1/sinc to account for frequency response of finite difference 
 
     #useage: MTF(leapct, f, r, center=None, getEdgeResponse=False, oversamplingRate=4)
-    MTF_VD = MTF(leapct, f_VD, 120.0)
-    MTF_SF = MTF(leapct, f_SF, 120.0)
-    x = np.array(range(MTF_VD.size))/float(MTF_VD.size)
+    MTF_VD = MTF(leapct, f_VD, objectRadius)
+    MTF_SF = MTF(leapct, f_SF, objectRadius)
+    x = np.array(range(MTF_VD.size))/(float(2*MTF_VD.size)*leapct.get_voxelWidth())
+    x_max = 1.0 / (2.0*leapct.get_voxelWidth())
     plt.plot(x,MTF_VD,'k-',x,MTF_SF,'r-')
-    plt.legend(['VD','SF'])
+    plt.legend(['Voxel-Driven (VD)','Modified Separable-Footprint (SF)'])
     plt.title('Resolution (MTF)')
     plt.ylabel('MTF (unitless)')
-    plt.xlim((0.0, 1.0))
+    plt.xlabel('spatial frequency (lp/mm)')
+    plt.xlim((0.0, x_max))
     plt.ylim((0.0, 1.1))
     if saveFigures:
         plt.savefig(os.path.join(dataPath,'MTF_'+str(n)+'.png'))
     else:
         plt.show()
-    quit()
+    #quit()
     #"""
     
     
