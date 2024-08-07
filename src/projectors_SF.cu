@@ -1180,7 +1180,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
     const float v_min = 1.0f / d_v_min_inv;
     const float v_max = 1.0f / d_v_max_inv;
 
-    float val = 0.0;
+    float val = 0.0f;
 
     const float atan_term = atan(2.0f * tau * R / (R * R - tau * tau));
     
@@ -2148,7 +2148,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     {
         if (params->doWeightedBackprojection && params->helicalPitch != 0.0)
         {
-            float q_helical = float(0.7);
+            float q_helical = float(params->helicalFBPWeight);
             //float q_helical = float(0.99);
             float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
             float weightFcnTransition = float((q_helical + 1.0) / 2.0);
@@ -2213,7 +2213,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     {
         if (params->doWeightedBackprojection == true && params->helicalPitch != 0.0)
         {
-            float q_helical = float(0.7);
+            float q_helical = float(params->helicalFBPWeight);
             //float q_helical = float(0.99);
             float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
             float weightFcnTransition = float((q_helical + 1.0) / 2.0);

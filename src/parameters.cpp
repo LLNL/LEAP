@@ -81,6 +81,7 @@ void parameters::initialize()
 	helicalPitch = 0.0;
 	z_source_offset = 0.0;
 	rFOVspecified = 0.0;
+	helicalFBPWeight = 0.7;
 
 	muCoeff = 0.0;
 	muRadius = 0.0;
@@ -182,6 +183,7 @@ void parameters::assign(const parameters& other)
     this->rFOVspecified = other.rFOVspecified;
     this->axisOfSymmetry = other.axisOfSymmetry;
     this->volumeDimensionOrder = other.volumeDimensionOrder;
+	this->helicalFBPWeight = other.helicalFBPWeight;
     this->numX = other.numX;
     this->numY = other.numY;
     this->numZ = other.numZ;
@@ -1477,7 +1479,12 @@ bool parameters::set_normalizedHelicalPitch(float h_normalized)
 
 bool parameters::set_helicalPitch(float h)
 {
-	if (phis == NULL)
+	if (h == 0.0)
+	{
+		helicalPitch = 0.0;
+		z_source_offset = 0.0;
+	}
+	else if (phis == NULL)
 	{
 		printf("Error: must set CT geometry before setting helicalPitch\n");
 		return false;
@@ -2096,6 +2103,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 	//for (int i = 0; i < numAngles; i++)
 	//	printf("%f\n", phis[i]*180.0/PI);
 
+	set_helicalPitch(0.0);
 	set_offsetScan(offsetScan);
 
 	return true;
@@ -2176,6 +2184,7 @@ bool parameters::convert_parallelbeam_to_modularbeam()
 	delete[] v_vec;
 	delete[] u_vec;
 
+	set_helicalPitch(0.0);
 	set_offsetScan(offsetScan);
 
 	return true;

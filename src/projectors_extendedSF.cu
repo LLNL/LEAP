@@ -2140,7 +2140,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
     {
         if (params->doWeightedBackprojection && params->helicalPitch != 0.0)
         {
-            float q_helical = float(0.7);
+            float q_helical = float(params->helicalFBPWeight);
             float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
             float weightFcnTransition = float((q_helical + 1.0) / 2.0);
             float v_min_inv = float((params->v(0) - 0.5 * params->pixelHeight) / params->sdd);
@@ -2208,7 +2208,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu)
     {
         if (params->doWeightedBackprojection && params->helicalPitch != 0.0)
         {
-            float q_helical = float(0.7);
+            float q_helical = float(params->helicalFBPWeight);
             float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
             float weightFcnTransition = float((q_helical + 1.0) / 2.0);
             float v_min_inv = float((params->v(0) - 0.5 * params->pixelHeight) / params->sdd);

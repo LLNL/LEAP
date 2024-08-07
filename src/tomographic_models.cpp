@@ -1248,6 +1248,7 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 	params.set_angles(phis, numAngles);
 	if (params.geometryDefined())
 	{
+		params.set_helicalPitch(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1270,6 +1271,7 @@ bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols
 	params.set_angles(phis, numAngles);
 	if (params.geometryDefined())
 	{
+		params.set_helicalPitch(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1294,6 +1296,7 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 	params.set_sourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
 	if (params.geometryDefined())
 	{
+		params.set_helicalPitch(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}

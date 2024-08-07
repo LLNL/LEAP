@@ -31,7 +31,7 @@ leapct.set_conebeam(numAngles, M, N, pixelSize, pixelSize, 0.5*(M-1), 0.5*(N-1),
 leapct.set_default_volume()
 leapct.print_parameters()
 
-# Set the backprojector model, 'SF', the default setting, is more accurate, but 'VD' is faster
+# Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
 #leapct.set_projector('VD')
 
 # Allocate space for the projections and the volume

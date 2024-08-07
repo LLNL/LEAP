@@ -305,6 +305,7 @@ public:
 	float tau;
 	float helicalPitch;
 	float z_source_offset;
+	float helicalFBPWeight;
 
 	// Volume Parameters
 	int volumeDimensionOrder;

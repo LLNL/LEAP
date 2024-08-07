@@ -358,7 +358,7 @@ float* setInverseConeWeight(parameters* params)
 			for (int iu = 0; iu < params->numCols; iu++)
 			{
 				float u = params->u(iu,0);
-				if (params->detectorType == parameters::FLAT && params->geometry != parameters::CONE_PARALLEL)
+				if (params->geometry == parameters::MODULAR || (params->detectorType == parameters::FLAT && params->geometry != parameters::CONE_PARALLEL))
 					retVal[iv * params->numCols + iu] = 1.0 / sqrt(1.0 + u * u + v * v);
 				else
 					retVal[iv * params->numCols + iu] = 1.0 / sqrt(1.0 + v * v);
