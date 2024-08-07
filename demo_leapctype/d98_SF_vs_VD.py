@@ -23,7 +23,7 @@ Most other reconstruction packages (e.g., ASTRA, TIGRE, etc.) use VD-based backp
 
 dataPath = os.path.dirname(os.path.realpath(__file__))
 saveFigures = False
-saveFigures = True
+#saveFigures = True
 
 # Set scanner geometry
 sod = 1100.0
@@ -32,7 +32,7 @@ numCols = 512
 numAngles = 1440
 #pixelSize = 0.65*512/numCols
 pixelSize = 0.5*sdd/sod
-numRows = 1
+numRows = 8
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), sod, sdd)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), sod, sdd)
 
@@ -99,53 +99,56 @@ for n in range(0,3):
     vmin = 1000-150
     vmax = 1000+150
     
-    #""" Display Noiseless Images
-    plt.clf()
+    """ Display Noiseless Images
+    if saveFigures:
+        plt.clf()
     #plt.figure(figsize=(10,5))
     fig, axs = plt.subplots(2, 1)
     axs[0].set_axis_off()
     axs[1].set_axis_off()
-    fig.suptitle('Noiselss Reconstructions')
+    #fig.suptitle('Noiselss Reconstructions')
     plt.subplot(1, 2, 1)
     plt.title('VD')
-    plt.imshow(np.squeeze(f_VD), cmap='gray', vmin=vmin, vmax=vmax)
+    plt.imshow(np.squeeze(f_VD[f_VD.shape[0]//2,:,:]), cmap='gray', vmin=vmin, vmax=vmax)
     plt.axis('off')
     plt.subplot(1, 2, 2)
     plt.title('SF')
-    plt.imshow(np.squeeze(f_SF), cmap='gray', vmin=vmin, vmax=vmax)
-    fig.set_figheight(3.5)
+    plt.imshow(np.squeeze(f_SF[f_VD.shape[0]//2,:,:]), cmap='gray', vmin=vmin, vmax=vmax)
+    fig.set_figheight(3.0)
     plt.axis('off')
     if saveFigures:
-        fig.savefig(os.path.join(dataPath,'noiseless_'+str(n)+'.png'))
+        fig.savefig(os.path.join(dataPath,'noiseless_'+str(n)+'.png'), bbox_inches='tight')
     else:
         plt.show()
     #quit()
     #"""
     
     #""" Display Noisey Images
-    plt.clf()
+    if saveFigures:
+        plt.clf()
     fig, axs = plt.subplots(2, 1)
     axs[0].set_axis_off()
     axs[1].set_axis_off()
-    fig.suptitle('Noisey Reconstructions')
+    #fig.suptitle('Noisey Reconstructions')
     plt.subplot(1, 2, 1)
     plt.title('VD')
-    plt.imshow(np.squeeze(f_VD_noisey), cmap='gray', vmin=vmin, vmax=vmax)
+    plt.imshow(np.squeeze(f_VD_noisey[f_VD.shape[0]//2,:,:]), cmap='gray', vmin=vmin, vmax=vmax)
     plt.axis('off')
     plt.subplot(1, 2, 2)
     plt.title('SF')
-    plt.imshow(np.squeeze(f_SF_noisey), cmap='gray', vmin=vmin, vmax=vmax)
+    plt.imshow(np.squeeze(f_SF_noisey[f_VD.shape[0]//2,:,:]), cmap='gray', vmin=vmin, vmax=vmax)
     plt.axis('off')
-    fig.set_figheight(3.5)
+    fig.set_figheight(3.0)
     if saveFigures:
-        fig.savefig(os.path.join(dataPath,'noisey_'+str(n)+'.png'))
+        fig.savefig(os.path.join(dataPath,'noisey_'+str(n)+'.png'), bbox_inches='tight')
     else:
         plt.show()
     #quit()
     #"""
 
     #""" Display MTF plot
-    plt.clf()
+    if saveFigures:
+        plt.clf()
     # Here we use the Robust ISO MTF Procedure, which done as follows:
     #1) Reconstruct Cylinder
     #2) Take central slice
@@ -167,7 +170,7 @@ for n in range(0,3):
     plt.xlim((0.0, x_max))
     plt.ylim((0.0, 1.1))
     if saveFigures:
-        plt.savefig(os.path.join(dataPath,'MTF_'+str(n)+'.png'))
+        plt.savefig(os.path.join(dataPath,'MTF_'+str(n)+'.png'), bbox_inches='tight')
     else:
         plt.show()
     #quit()
