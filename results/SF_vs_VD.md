@@ -8,7 +8,7 @@ leapct.set_projector('SF') # this is the default setting
 leapct.set_projector('VD')
 ```
 
-Briefly, SF projectors are more accurate, but VD backprojection is faster.  For example, VD backprojection of cone-beam data is about twice as fast as SF-based backprojection in LEAP.  Here we shall estimate the noise and resolution properties of these two methods.  The results of these tests can be re-generated using the [d98_SF_vs_VD.py](https://github.com/LLNL/LEAP/blob/champley_dev/demo_leapctype/d98_SF_vs_VD.py) script.
+Briefly, SF projectors are more accurate, but VD backprojection is faster.  For example, VD backprojection of cone-beam data is about twice as fast as SF-based backprojection in LEAP.  Here we shall estimate the noise and resolution properties of these two methods.  The results of these tests can be re-generated using the [d98_SF_vs_VD.py](https://github.com/LLNL/LEAP/blob/main/demo_leapctype/d98_SF_vs_VD.py) script.
 
 Resolution of CT systems is largely determined by the detector pixel sizes.  For cone-beam systems, one can get high image resolution by taking advantage of geometric magnification.  Geometric magnification increases (and thus resolution improves) as the sample is placed closer to the x-ray source.  One must be careful not to place the object too close to the x-ray source where either the object extends past the field of view of the system or one incurs resolution loss from the size of the x-ray source.  Assuming the the x-ray source spot size does not play a factor in resolution, then one may approximate the system resolution as 
 ```
@@ -34,7 +34,7 @@ Here we used a voxel size equal to
 ```
 and performed an FBP reconstruction using VD- and SF-based backprojection.  The modulation transfer function (MTF) of these reconstructions is plotted below.
 <p align="center">
-  <img src=https://github.com/LLNL/LEAP/blob/champley_dev/results/MTF_0.png>
+  <img src=https://github.com/LLNL/LEAP/blob/main/results/MTF_0.png>
 </p>
 Indeed, just as predicted, the SF result has high resolution.
 
@@ -46,7 +46,7 @@ sod / sdd * pixelWidth
 ```
 and performed an FBP reconstruction using VD- and SF-based backprojection.  The modulation transfer function (MTF) of these reconstructions is plotted below.
 <p align="center">
-  <img src=https://github.com/LLNL/LEAP/blob/champley_dev/results/MTF_1.png>
+  <img src=https://github.com/LLNL/LEAP/blob/main/results/MTF_1.png>
 </p>
 Indeed, just as predicted, the SF and VD backprojectors produce nearly equivalent resolution.
 
@@ -58,10 +58,10 @@ Here we used a voxel size equal to
 ```
 and performed an FBP reconstruction using VD- and SF-based backprojection.  The modulation transfer function (MTF) of these reconstructions is plotted below.
 <p align="center">
-  <img src=https://github.com/LLNL/LEAP/blob/champley_dev/results/MTF_2.png>
+  <img src=https://github.com/LLNL/LEAP/blob/main/results/MTF_2.png>
 </p>
 And here are the reconstructed slices when noise was added to the projection data
 <p align="center">
-  <img src=https://github.com/LLNL/LEAP/blob/champley_dev/results/noisey_2.png>
+  <img src=https://github.com/LLNL/LEAP/blob/main/results/noisey_2.png>
 </p>
 Indeed, just as predicted, the VD result has high resolution, but the SF result has higher SNR.  The SNR for the VD result is 25.7 and the SNR for the SF result is 43.6.
