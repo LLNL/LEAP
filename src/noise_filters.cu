@@ -582,7 +582,7 @@ __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
-__global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FWHM)
+__global__ void BlurFilter2DKernel(float* f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -628,7 +628,7 @@ __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FW
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
-__global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FWHM)
+__global__ void BlurFilter1DKernel(float* f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -642,20 +642,57 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
     const int pixelRadius = int(floor(FWHM));
     const float denom = 1.0f / FWHM;
 
-    float val = 0.0;
-    float sum = 0.0;
-    for (int di = -pixelRadius; di <= pixelRadius; di++)
+    float val = 0.0f;
+    float sum = 0.0f;
+    if (axis == 0)
     {
-        const int i_shift = max(0, min(i + di, N.x - 1));
-
-        //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
-        const float theWeight = 0.5f +
-            0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
-
-        if (theWeight > 0.0001f)
+        for (int di = -pixelRadius; di <= pixelRadius; di++)
         {
-            val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-            sum += theWeight;
+            const int i_shift = max(0, min(i + di, N.x - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                sum += theWeight;
+            }
+        }
+    }
+    else if (axis == 1)
+    {
+        for (int dj = -pixelRadius; dj <= pixelRadius; dj++)
+        {
+            const int j_shift = max(0, min(j + dj, N.y - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dj) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                val += theWeight * f[uint64(i) * uint64(N.y * N.z) + uint64(j_shift * N.z + k)];
+                sum += theWeight;
+            }
+        }
+    }
+    else //if (axis == 2)
+    {
+        for (int dk = -pixelRadius; dk <= pixelRadius; dk++)
+        {
+            const int k_shift = max(0, min(k + dk, N.z - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dk) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                val += theWeight * f[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k_shift)];
+                sum += theWeight;
+            }
         }
     }
 
@@ -721,7 +758,7 @@ __global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, i
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
-__global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM)
+__global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -768,7 +805,7 @@ __global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered,
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
-__global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM)
+__global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -782,21 +819,60 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
     const int pixelRadius = int(floor(FWHM));
     const float denom = 1.0f / FWHM;
 
-    float val = 0.0;
-    float sum = 0.0;
-    for (int di = -pixelRadius; di <= pixelRadius; di++)
+    float val = 0.0f;
+    float sum = 0.0f;
+    if (axis == 0)
     {
-        const int i_shift = max(0, min(i + di, N.x - 1));
-
-        //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
-        const float theWeight = 0.5f +
-            0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
-
-        if (theWeight > 0.0001f)
+        for (int di = -pixelRadius; di <= pixelRadius; di++)
         {
-            //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-            val += theWeight * tex3D<float>(f, k, j, i_shift);
-            sum += theWeight;
+            const int i_shift = max(0, min(i + di, N.x - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                val += theWeight * tex3D<float>(f, k, j, i_shift);
+                sum += theWeight;
+            }
+        }
+    }
+    else if (axis == 1)
+    {
+        for (int dj = -pixelRadius; dj <= pixelRadius; dj++)
+        {
+            const int j_shift = max(0, min(j + dj, N.y - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dj) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                val += theWeight * tex3D<float>(f, k, j_shift, i);
+                sum += theWeight;
+            }
+        }
+    }
+    else //if (axis == 2)
+    {
+        for (int dk = -pixelRadius; dk <= pixelRadius; dk++)
+        {
+            const int k_shift = max(0, min(k + dk, N.z - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dk) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                val += theWeight * tex3D<float>(f, k_shift, j, i);
+                sum += theWeight;
+            }
         }
     }
 
@@ -812,37 +888,37 @@ void setConstantMemoryParameters(const bool doHighPass)
     cudaMemcpyToSymbol(d_DO_HIGH_PASS, &doHighPass, sizeof(bool));
 }
 
-bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(false);
-    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(false);
-    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool highPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool highPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(true);
-    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool highPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool highPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(true);
-    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
-    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
     if (f == NULL) return false;
 
     if (sliceStart < 0)
@@ -885,9 +961,9 @@ bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int nu
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
                  int(ceil(double(N.z) / double(dimBlock.z))));
     if (numDims == 1)
-        BlurFilter1DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM);
+        BlurFilter1DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM, axis);
     else if (numDims == 2)
-        BlurFilter2DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM);
+        BlurFilter2DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM, axis);
     else
         BlurFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM, sliceStart, sliceEnd);
 
@@ -927,7 +1003,7 @@ bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int nu
     return true;
 }
 
-bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
 
@@ -974,9 +1050,9 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
     if (numDims == 1)
-        BlurFilter1DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM);
+        BlurFilter1DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM, axis);
     else if (numDims == 2)
-        BlurFilter2DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM);
+        BlurFilter2DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM, axis);
     else
         BlurFilterKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM, sliceStart, sliceEnd);
 

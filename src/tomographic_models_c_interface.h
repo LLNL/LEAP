@@ -215,6 +215,7 @@ extern "C" PROJECTOR_API bool convertToRhoeZe(float* f_L, float* f_H, int N_1, i
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, int w, float signalThreshold, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MeanOrVarianceFilter(float* f, int, int, int, int r, int order, bool data_on_cpu);
+extern "C" PROJECTOR_API bool HighPassFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BlurFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool HighPassFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter2D(float* f, int, int, int, float threshold, int w, float signalThreshold, bool data_on_cpu);
@@ -229,6 +230,7 @@ extern "C" PROJECTOR_API float TVcost(float* f, int N_1, int N_2, int N_3, float
 extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
 extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
 extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu);
+extern "C" PROJECTOR_API bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling);
 extern "C" PROJECTOR_API bool clearPhantom();

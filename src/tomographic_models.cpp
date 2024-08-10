@@ -2071,6 +2071,72 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 	return true;
 }
 
+bool tomographicModels::HighPassFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	//uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	{
+		if (data_on_cpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				highPassFilter(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, FWHM, 2, 0, true, whichGPU);
+			}
+
+			return true;
+		}
+	}
+	else
+		return highPassFilter(f, N_1, N_2, N_3, FWHM, 2, 0, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
 bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
 #ifndef __USE_CPU
@@ -2123,14 +2189,14 @@ bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float 
 				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				blurFilter(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, FWHM, 2, true, whichGPU);
+				blurFilter(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, FWHM, 2, 0, true, whichGPU);
 			}
 
 			return true;
 		}
 	}
 	else
-		return blurFilter(f, N_1, N_2, N_3, FWHM, 2, data_on_cpu, params.whichGPU);
+		return blurFilter(f, N_1, N_2, N_3, FWHM, 2, 0, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2201,7 +2267,7 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				blurFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				blurFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
 			}
 			free(f_in);
 
@@ -2209,7 +2275,7 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 		}
 	}
 	else
-		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, data_on_cpu, params.whichGPU);
+		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, 0, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2280,7 +2346,7 @@ bool tomographicModels::HighPassFilter(float* f, int N_1, int N_2, int N_3, floa
 				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				highPassFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				highPassFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
 			}
 			free(f_in);
 
@@ -2288,7 +2354,7 @@ bool tomographicModels::HighPassFilter(float* f, int N_1, int N_2, int N_3, floa
 		}
 	}
 	else
-		return highPassFilter(f, N_1, N_2, N_3, FWHM, 3, data_on_cpu, params.whichGPU);
+		return highPassFilter(f, N_1, N_2, N_3, FWHM, 3, 0, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2950,7 +3016,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 #endif
 }
 
-bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
+bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
@@ -2961,6 +3027,63 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	float numVol = 1.0;
 	if (data_on_cpu)
 		numVol = 3.0;
+	else
+		numVol = 2.0;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	//uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	{
+		if (data_on_cpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			//printf("diffuse: processing in chunks...\n");
+			// will process in chunks
+			float* f_0 = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
+			equal_cpu(f_0, f, N_1, N_2, N_3);
+			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
+			for (int iter = 0; iter < numIter; iter++)
+			{
+				TVgradient(f, d, N_1, N_2, N_3, delta, beta, p, true);
+				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
+				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, beta, p, true);
+				if (denom <= 1.0e-16)
+					break;
+				float stepSize = num / denom;
+				scale_cpu(f, 1.0 - stepSize, N_1, N_2, N_3);
+				sub_cpu(d, f_0, N_1, N_2, N_3);
+				scalarAdd_cpu(f, -stepSize, d, N_1, N_2, N_3);
+			}
+			free(f_0);
+			free(d);
+			return true;
+		}
+	}
+	else
+		return TVdenoise(f, N_1, N_2, N_3, delta, beta, p, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
 	else
 		numVol = 1.0;
 	

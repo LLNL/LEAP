@@ -786,6 +786,19 @@ public:
 	bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
 
 	/**
+	 * \fn          HighPassFilter2D
+	 * \brief       applies a 2D high pass filter to the second two dimensions of a 3D array
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   FWHM full width at half maximum of the filter (measured in number of voxels)
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool HighPassFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
+
+	/**
 	 * \fn          MedianFilter
 	 * \brief       applies a thresholded 3D median filter
 	 * \param[in]   f pointer to the 3D data (input and output)
@@ -967,6 +980,23 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu);
+
+	/**
+	 * \fn          TV_denoise
+	 * \brief       anisotropic Total Variation denoising
+	 * \param[in]   f pointer to the input/output 3D data
+	 * \param[in]   Df pointer to the output 3D data
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   delta transition value of the Huber-like loss function
+	 * \param[in]	beta: the regularization strength
+	 * \param[in]	p the exponent on the Huber-like loss function
+	 * \param[in]   numIter the number of iterations
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu);
 
 	/**
 	 * \fn          rayTrace

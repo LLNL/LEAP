@@ -485,7 +485,7 @@ bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWH
         fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
         return false;
     }
-    blurFilter(dev_f, N_1, N_2, N_3, scale, 3, false, whichGPU, -1, -1, dev_Bf);
+    blurFilter(dev_f, N_1, N_2, N_3, scale, 3, 0, false, whichGPU, -1, -1, dev_Bf);
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;

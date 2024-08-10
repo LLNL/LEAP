@@ -772,3 +772,70 @@ bool diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numI
     }
     return true;
 }
+
+bool TVdenoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu, int whichGPU, int numNeighbors)
+{
+    if (f == NULL) return false;
+    if (delta < 1.0e-8)
+        delta = float(1.0e-8);
+
+    cudaSetDevice(whichGPU);
+    //cudaError_t cudaStatus;
+
+    //setConstantMemoryParameters(delta, p);
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    if (data_on_cpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
+
+    float* dev_f_0 = 0;
+    if (cudaMalloc((void**)&dev_f_0, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc failed!\n");
+        return false;
+    }
+    equal(dev_f_0, dev_f, N, whichGPU);
+
+    float* dev_d = 0;
+    if (cudaMalloc((void**)&dev_d, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc failed!\n");
+        return false;
+    }
+
+    for (int n = 0; n < numIter; n++)
+    {
+        anisotropicTotalVariation_gradient(dev_f, dev_d, N_1, N_2, N_3, delta, beta, p, false, whichGPU, -1, -1, numNeighbors);
+        float num = innerProduct(dev_d, dev_d, N, whichGPU);
+        float denom = anisotropicTotalVariation_quadraticForm(dev_f, dev_d, N_1, N_2, N_3, delta, beta, p, false, whichGPU, -1, -1, numNeighbors);
+        if (denom <= 1.0e-16)
+            break;
+        float stepSize = num / denom;
+        scale(dev_f, 1.0 - stepSize, N, whichGPU);
+        sub(dev_d, dev_f_0, N, whichGPU);
+        scalarAdd(dev_f, -stepSize, dev_d, N, whichGPU);
+        //scalarAdd(dev_f, -stepSize, dev_d, N, whichGPU);
+
+        //printf("cost = %f\n", anisotropicTotalVariation_cost(dev_f, N_1, N_2, N_3, delta, beta, false, whichGPU, numNeighbors));
+    }
+
+    // pull result off GPU
+    if (data_on_cpu)
+        pull3DdataFromGPU(f, N, dev_f, whichGPU);
+
+    // Clean up
+    if (data_on_cpu && dev_f != 0)
+    {
+        cudaFree(dev_f);
+    }
+
+    if (dev_d != 0)
+        cudaFree(dev_d);
+    if (dev_f_0 != 0)
+        cudaFree(dev_f_0);
+    return true;
+}

@@ -8,3 +8,4 @@ File I/O
 .. autofunction:: leapctype.tomographicModels.save_parameters
 .. autofunction:: leapctype.tomographicModels.save_projections
 .. autofunction:: leapctype.tomographicModels.save_volume
+.. autofunction:: leapctype.tomographicModels.set_fileIO_parameters

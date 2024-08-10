@@ -172,6 +172,10 @@ class tomographicModels:
         self.print_cost = False
         self.print_warnings = True
         self.volume_mask = None
+        
+        self.file_dtype = np.float32
+        self.wmin = 0.0
+        self.wmax = None
 
     def set_model(self, i=None):
         self.libprojectors.set_model.restype = ctypes.c_bool
@@ -219,6 +223,28 @@ class tomographicModels:
         self.print_cost = True
         self.print_warnings = True
             
+    def set_fileIO_parameters(self, dtype=np.float32, wmin=0.0, wmax=None):
+        r""" This function sets parameters dealing with how tiff stacks are saved
+        
+        If dtype is np.float32, the data is not clipped
+        
+        Args:
+            dtype: the data type to use, can be: np.float32, np.uint8, or np.uint16
+            wmin (float): the low value for clipping the data (default is 0.0)
+            wmax (float): the high value for clipping the data (default is the max of the 3D data)
+        
+        Returns:
+            True if the dtype is valid, False otherwise
+        
+        """
+        if dtype == np.float32 or dtype == np.uint8 or dtype == np.uint16:
+            self.file_dtype = dtype
+            self.wmin = wmin
+            self.wmax = wmax
+        else:
+            print('Error: invalid dtype; must be np.float32, np.uint8, or np.uint16')
+            return False
+    
     def set_maxSlicesForChunking(self, N):
         """This function effects how forward and backprojection jobs are divided into multiple processing jobs on the GPU
 
@@ -4447,6 +4473,30 @@ class tomographicModels:
             self.libprojectors.BlurFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BlurFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
             
+    def HighPassFilter2D(self, f, FWHM=2.0):
+        """Applies a 2D high pass filter to the provided numpy array or torch tensor
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array or torch tensor of any size
+        The filter is given by delta[i] - cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
+        This filter is very simular to a Gaussian filter, but is a FIR
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            FWHM (float): the full width at half maximum (in number of pixels) of the filter
+        
+        Returns:
+            f, the same as the input
+        """
+        #bool HighPassFilter2D(float* f, int, int, int, float FWHM);
+        self.libprojectors.HighPassFilter2D.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.HighPassFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.HighPassFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+        else:
+            self.libprojectors.HighPassFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            return self.libprojectors.HighPassFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+            
     def MeanFilter(self, x, windowRadius=1):
         r"""Applies a 3D mean filter to the provided numpy array
         
@@ -4866,6 +4916,33 @@ class tomographicModels:
             f -= stepSize * d
         return f
         '''
+        
+    def TV_denoise(self, f, delta, beta, numIter, p=1.2):
+        r"""Performs anisotropic Total Variation (TV) denoising to the provided 3D numpy array
+        
+        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size.
+        This function performs a specifies number of iterations of minimizing the sum of an L2 loss and aTV functional using gradient descent.
+        The step size calculation uses the method of Separable Quadratic Surrogate (see also TVquadForm).
+        
+        Args:
+            f (C contiguous float32 numpy array): 3D numpy array
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+            numIter (int): number of iterations
+            p (float): the exponent for the Huber-like loss function used in TV
+        
+        Returns:
+            f, the same array as the input denoised
+        """
+        self.libprojectors.TV_denoise.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.TV_denoise.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.TV_denoise(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, numIter, f.is_cuda == False)
+        else:
+            self.libprojectors.TV_denoise.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.TV_denoise(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, numIter, True)
+        return f
 
     ###################################################################################################################
     ###################################################################################################################
@@ -5940,18 +6017,41 @@ class tomographicModels:
                 import imageio
                 
                 baseName, fileExtension = os.path.splitext(fileName)
+                if self.file_dtype != np.uint8 and self.file_dtype != np.uint16 and self.file_dtype != np.float32:
+                    print('Can only save as uint8, uint16, or float32!')
+                    return False
+                
+                if self.file_dtype != x.dtype:
+                    wmin = self.wmin
+                    if self.wmax is None:
+                        wmax = np.max(x)
+                    else:
+                        wmax = self.wmax
+                    if wmax <= wmin:
+                        wmax = wmin + 1.0
+                    if self.file_dtype == np.uint8:
+                        max_dtype = 255.0
+                    else:
+                        max_dtype = 65535.0
                 
                 if len(x.shape) <= 2:
                     im = x
                     #im.save(baseName + '_' + str(int(i)) + fileExtension)
                     imageio.imwrite(baseName + fileExtension, im)
                 else:
-                    for i in range(x.shape[0]):
-                        im = x[i,:,:]
-                        #im.save(baseName + '_' + str(int(i)) + fileExtension)
-                        imageio.imwrite(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+                    if self.file_dtype == x.dtype:
+                        for i in range(x.shape[0]):
+                            im = x[i,:,:]
+                            imageio.imwrite(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+                    else:
+                        for i in range(x.shape[0]):
+                            im = x[i,:,:]
+                            np.clip(im, wmin, wmax, out=im)
+                            im = np.array((im - wmin) / (wmax - wmin) * max_dtype, dtype=self.file_dtype)
+                            imageio.imwrite(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+                        
                 return True
-                
+             
             except:
                 #print('Error: Failed to load PIL library!')
                 #print('To install this package do: pip install Pillow')
@@ -6051,6 +6151,11 @@ class tomographicModels:
                 return None
         elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
             
+            if fileName.endswith('.tif'):
+                fileExt = '.tif'
+            else:
+                fileExt = '.tiff'
+            
             try:
                 #from PIL import Image
                 import imageio
@@ -6079,14 +6184,14 @@ class tomographicModels:
                     # prune fileList
                     fileList_pruned = []
                     for i in range(len(fileList)):
-                        digit = int(fileList[i].replace(baseFileName+'_','').replace('.tif',''))
+                        digit = int(fileList[i].replace(baseFileName+'_','').replace(fileExt,''))
                         if fileRange[0] <= digit and digit <= fileRange[1]:
                             fileList_pruned.append(fileList[i])
                     fileList = fileList_pruned
                     
                 justDigits = []
                 for i in range(len(fileList)):
-                    digitStr = fileList[i].replace(baseFileName+'_','').replace('.tif','')
+                    digitStr = fileList[i].replace(baseFileName+'_','').replace(fileExt,'')
                     justDigits.append(int(digitStr))
                 ind = np.argsort(justDigits)
 

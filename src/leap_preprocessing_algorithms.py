@@ -65,12 +65,12 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
     # Perform Flat Fielding
     if dark_scan is not None:
         if air_scan is not None:
-            g[:,:,:] = (g[:,:,:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
+            g[:] = (g[:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
         else:
-            g[:,:,:] = g[:,:,:] - dark_scan[None,:,:]
+            g[:] = g[:] - dark_scan[None,:,:]
     else:
         if air_scan is not None:
-            g[:,:,:] = g[:,:,:] / air_scan[None,:,:]
+            g[:] = g[:] / air_scan[None,:,:]
     
     # Perform Flux Correction
     if ROI is not None:
@@ -79,8 +79,9 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         else:
             postageStamp = np.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
         print('ROI mean: ' + str(np.mean(postageStamp)) + ', standard deviation: ' + str(np.std(postageStamp)))
-        g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
-
+        #g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
+        g[:] = g[:] / postageStamp[:,None,None]
+        
     # Convert to attenuation
     g[g<=0.0] = 2.0**-16
     leapct.negLog(g)
@@ -318,7 +319,7 @@ def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
     
     gainMap[gainMap>maxChange] = maxChange
     gainMap[gainMap<-maxChange] = -maxChange
-    g[:,:,:] = g[:,:,:] + gainMap[None,:,:]
+    g[:] = g[:] + gainMap[None,:,:]
     return True
 
 def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
@@ -357,7 +358,7 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
         else:
             Dg_sum = np.mean(Dg,axis=0)
 
-        g[:,:,:] = g[:,:,:] - Dg_sum[None,:,:]
+        g[:] = g[:] - Dg_sum[None,:,:]
     return True
 
 def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):

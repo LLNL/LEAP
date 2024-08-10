@@ -924,6 +924,11 @@ bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_
 	return tomo()->BlurFilter2D(f, N_1, N_2, N_3, FWHM, data_on_cpu);
 }
 
+bool HighPassFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
+{
+	return tomo()->HighPassFilter2D(f, N_1, N_2, N_3, FWHM, data_on_cpu);
+}
+
 bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu)
 {
 	return tomo()->MedianFilter2D(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu);
@@ -972,6 +977,11 @@ float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, flo
 bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
 {
 	return tomo()->Diffuse(f, N_1, N_2, N_3, delta, p, numIter, data_on_cpu);
+}
+
+bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu)
+{
+	return tomo()->TV_denoise(f, N_1, N_2, N_3, delta, beta, p, numIter, data_on_cpu);
 }
 
 bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
@@ -1187,6 +1197,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("MedianFilter", &MedianFilter, "");
 	m.def("MeanOrVarianceFilter", &MeanOrVarianceFilter, "");
     m.def("BlurFilter2D", &BlurFilter2D, "");
+	m.def("HighPassFilter2D", &HighPassFilter2D, "");
     m.def("MedianFilter2D", &MedianFilter2D, "");
 	m.def("badPixelCorrection", &badPixelCorrection, "");
     m.def("BilateralFilter", &BilateralFilter, "");
@@ -1197,6 +1208,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("TVgradient", &TVgradient, "");
     m.def("TVquadForm", &TVquadForm, "");
     m.def("Diffuse", &Diffuse, "");
+	m.def("TV_denoise", &TV_denoise, "");
     m.def("addObject", &addObject, "");
     m.def("clearPhantom", &clearPhantom, "");
     m.def("rayTrace", &rayTrace, "");
