@@ -2230,6 +2230,38 @@ class tomographicModels:
         """Alias for FBP"""
         return self.FBP(g, f, inplace)
 
+    def FBP_slice(self, g, iz=None):
+        r""" Performs FBP on a single slice
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            iz (int): the z-slice index to reconstruct
+            
+        Returns:
+            reconstructed slice of the same type as the projection data
+        """
+        if g is None:
+            print('Error: must provide projection data!')
+            return None
+        if iz is None or iz < 0 or iz >= self.get_numZ():
+            iz = self.get_numZ()//2
+        offsetZ_save = self.get_offsetZ()
+        numZ_save = self.get_numZ()
+        
+        self.set_offsetZ(self.z_samples()[iz])
+        self.set_numZ(1)
+        
+        rowRange = self.rowRangeNeededForBackprojection()
+        g_chunk = self.cropProjections(rowRange, None, g)
+
+        f = self.FBP(g_chunk, None, True)
+        del g_chunk
+        
+        self.set_offsetZ(offsetZ_save)
+        self.set_numZ(numZ_save)
+        
+        return f
+
     def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
         

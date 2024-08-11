@@ -2,6 +2,7 @@ Analytic Reconstruction (FBP)
 =============================
 
 .. autofunction:: leapctype.tomographicModels.FBP
+.. autofunction:: leapctype.tomographicModels.FBP_slice
 .. autofunction:: leapctype.tomographicModels.FBP_adjoint
 .. autofunction:: leapctype.tomographicModels.BPF
 .. autofunction:: leapctype.tomographicModels.filterProjections
