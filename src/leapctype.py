@@ -1919,15 +1919,17 @@ class tomographicModels:
             print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
         
-    def system_matrix(self, iAngle, iRow=0, onGPU=True):
+    def system_matrix(self, iAngle, iRow=0, iCols=None, onGPU=True):
         r"""Calculates several rows of the system matrix
         
         The CT geometry and CT volume parameters must be set prior to running this function.
-        If PyTorch exists, the system matrix will be stored in a torch tensor, otherwise in numpy arrays
+        If PyTorch exists, the system matrix will be stored in a torch tensor, otherwise in numpy arrays.
+        Currently only works for parallel-beam data.
         
         Args:
             iAngle (int): projection angle index
             iRow (int): detector row index
+            iCols (list/ array): list of detector column indices for which to calculate the system matrix, if this argument is not given, all are calculated
             onGPU (bool): whether to allocate the system matrix on the GPU or not
             
         Returns:
@@ -1953,27 +1955,45 @@ class tomographicModels:
         footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
         N = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
         
+        if iCols is None:
+            iCols = np.array(range(self.get_numCols()), dtype=np.int32)
+            if has_torch and onGPU == True:
+                iCols = self.copy_to_device(iCols)
+        elif isinstance(iCols, int):
+            iCols = max(0, min(self.get_numCols()-1, iCols))
+            iCols = np.array([iCols])
+        elif type(iCols) is np.ndarray:
+            pass
+        elif has_torch == True and type(iCols) is torch.Tensor:
+            if onGPU:
+                iCols = self.copy_to_device(iCols)
+        else:
+            print('Error: invalid format for iCols!')
+            return None, None
+        
+        iCols_size = iCols.shape[0]
+        
         if has_torch:
             
             if onGPU:
-                A = torch.zeros((self.get_numCols(), N), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
-                indices = torch.zeros((self.get_numCols(), N, 2), dtype=torch.int16, device=torch.device('cuda:'+str(self.get_gpu())))
+                A = torch.zeros((iCols_size, N), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                indices = torch.zeros((iCols_size, N, 2), dtype=torch.int16, device=torch.device('cuda:'+str(self.get_gpu())))
             else:
-                A = torch.zeros((self.get_numCols(), N), dtype=torch.float32)
-                indices = torch.zeros((self.get_numCols(), N, 2), dtype=torch.int16)
+                A = torch.zeros((iCols_size, N), dtype=torch.float32)
+                indices = torch.zeros((iCols_size, N, 2), dtype=torch.int16)
             
             self.libprojectors.system_matrix.restype = ctypes.c_bool
             self.set_model()
-            self.libprojectors.system_matrix.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.system_matrix(A.data_ptr(), indices.data_ptr(), N, iAngle, iRow, A.is_cuda == False)
+            self.libprojectors.system_matrix.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix(A.data_ptr(), indices.data_ptr(), N, iAngle, iRow, iCols.data_ptr(), iCols_size, A.is_cuda == False)
         else:
-            A = np.zeros((self.get_numCols(), N), dtype=np.float32)
-            indices = np.zeros((self.get_numCols(), N, 2), dtype=np.int16)
+            A = np.zeros((iCols_size, N), dtype=np.float32)
+            indices = np.zeros((iCols_size, N, 2), dtype=np.int16)
             
             self.libprojectors.system_matrix.restype = ctypes.c_bool
             self.set_model()
-            self.libprojectors.system_matrix.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.system_matrix(A, indices, N, iAngle, iRow, True)
+            self.libprojectors.system_matrix.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix(A, indices, N, iAngle, iRow, iCols, iCols_size, True)
         return A, indices
         
     def filterProjections(self, g):

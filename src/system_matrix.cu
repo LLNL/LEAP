@@ -16,13 +16,15 @@
 #include "system_matrix.cuh"
 #include "log.h"
 
-__global__ void systemMatrixKernel_parallel(float* A, short* indices, const float cos_phi, const float sin_phi, const int4 N_g, const float4 T_g, const float4 startVals_g, const int4 N_f, const float4 T_f, const float4 startVals_f, const int N_max, const int iAngle)
+__global__ void systemMatrixKernel_parallel(float* A, short* indices, const int* iCols, const int numCols, const float cos_phi, const float sin_phi, const int4 N_g, const float4 T_g, const float4 startVals_g, const int4 N_f, const float4 T_f, const float4 startVals_f, const int N_max, const int iAngle)
 {
     const int N_xy = max(N_f.x, N_f.y);
-    const int iCol = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iCol_thread = threadIdx.x + blockIdx.x * blockDim.x;
     const int ivox = threadIdx.y + blockIdx.y * blockDim.y;
-    if (iCol >= N_g.z || ivox >= N_xy)
+    if (iCol_thread >= numCols || ivox >= N_xy)
         return;
+
+    const int iCol = iCols[iCol_thread];
 
     const float T_x_inv = 1.0f / T_f.x;
     const float T_u_inv = 1.0f / T_g.z;
@@ -107,7 +109,7 @@ __global__ void systemMatrixKernel_parallel(float* A, short* indices, const floa
     }
 }
 
-bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int iAngle, int iRow, bool data_on_cpu)
+bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu)
 {
     if (A == NULL || indices == NULL || params == NULL)
         return false;
@@ -119,6 +121,7 @@ bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int
 
     float* dev_A = 0;
     short* dev_ind = 0;
+    int* dev_iCols = 0;
 
     uint64 N_A = params->numAngles * uint64(N_max);
     uint64 N_ind = N_A * uint64(3);
@@ -137,21 +140,41 @@ bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int
         if ((cudaStatus = cudaMalloc((void**)&dev_A, N_A * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(system matrix) failed!\n");
+            return false;
         }
         if ((cudaStatus = cudaMalloc((void**)&dev_ind, N_ind * sizeof(short))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(system matrix) failed!\n");
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            return false;
         }
-        if (dev_A != 0)
-            cudaFree(dev_A);
-        if (dev_ind != 0)
-            cudaFree(dev_ind);
-        return false;
+        if ((cudaStatus = cudaMalloc((void**)&dev_iCols, numCols * sizeof(short))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(system matrix) failed!\n");
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            if (dev_ind != 0)
+                cudaFree(dev_ind);
+            return false;
+        }
+        if ((cudaStatus = cudaMemcpy(dev_iCols, iCols, numCols * sizeof(int), cudaMemcpyHostToDevice)) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+            printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            if (dev_ind != 0)
+                cudaFree(dev_ind);
+            cudaFree(dev_iCols);
+            return false;
+        }
     }
     else
     {
         dev_A = A;
         dev_ind = indices;
+        dev_iCols = iCols;
     }
 
     float phi = params->phis[iAngle];
@@ -167,8 +190,8 @@ bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int
     int N_xy = max(params->numX, params->numY);
     //dim3 dimBlock = setBlockSize(N_g);
     //dim3 dimGrid = setGridSize(N_g, dimBlock);
-    dim3 dimBlock(min(8, params->numCols), min(8, N_xy));
-    dim3 dimGrid(int(ceil(double(params->numCols) / double(dimBlock.x))), int(ceil(double(N_xy) / double(dimBlock.y))));
+    dim3 dimBlock(min(8, numCols), min(8, N_xy));
+    dim3 dimGrid(int(ceil(double(numCols) / double(dimBlock.x))), int(ceil(double(N_xy) / double(dimBlock.y))));
     if (params->geometry == parameters::CONE)
     {
         LOG(logERROR, "system_matrix", "") << "Error: the function not yet implemented for cone-beam data" << std::endl;
@@ -181,7 +204,7 @@ bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int
     }
     else if (params->geometry == parameters::PARALLEL)
     {
-        systemMatrixKernel_parallel <<< dimGrid, dimBlock >>> (dev_A, dev_ind, cos_phi, sin_phi, N_g, T_g, startVal_g, N_f, T_f, startVal_f, N_max, iAngle);
+        systemMatrixKernel_parallel <<< dimGrid, dimBlock >>> (dev_A, dev_ind, dev_iCols, numCols, cos_phi, sin_phi, N_g, T_g, startVal_g, N_f, T_f, startVal_f, N_max, iAngle);
     }
     else if (params->geometry == parameters::CONE_PARALLEL)
     {
@@ -231,6 +254,8 @@ bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int
             cudaFree(dev_A);
         if (dev_ind != 0)
             cudaFree(dev_ind);
+        if (dev_iCols != 0)
+            cudaFree(dev_iCols);
     }
 
     return retVal;

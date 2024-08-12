@@ -81,7 +81,7 @@ extern "C" PROJECTOR_API bool sensitivity(float* f, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool windowFOV(float* f, bool data_on_cpu);
 
-extern "C" PROJECTOR_API bool system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, bool data_on_cpu);
+extern "C" PROJECTOR_API bool system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
 extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);

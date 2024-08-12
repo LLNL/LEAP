@@ -21,6 +21,6 @@
  * system matrix elements  for parallel-, fan-, and cone-beam geometries.
  */
 
-bool systemMatrix(float*&, short*&, int N_max, parameters*, int iAngle, int iRow, bool data_on_cpu);
+bool systemMatrix(float*&, short*&, int N_max, parameters*, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu);
 
 #endif

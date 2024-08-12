@@ -269,9 +269,9 @@ bool windowFOV(float* f, bool data_on_cpu)
 	return tomo()->windowFOV(f, data_on_cpu);
 }
 
-bool system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, bool data_on_cpu)
+bool system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu)
 {
-	return tomo()->system_matrix(A, indices, N_max, iAngle, iRow, data_on_cpu);
+	return tomo()->system_matrix(A, indices, N_max, iAngle, iRow, iCols, numCols, data_on_cpu);
 }
 
 float get_FBPscalar()
