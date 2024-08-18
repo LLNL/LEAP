@@ -1488,6 +1488,7 @@ bool parameters::set_helicalPitch(float h)
 	{
 		helicalPitch = 0.0;
 		z_source_offset = 0.0;
+		return true;
 	}
 	else if (phis == NULL)
 	{
