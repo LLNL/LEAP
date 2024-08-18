@@ -19,6 +19,153 @@ import time
 import numpy as np
 from leapctype import *
 
+def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=None, badPixelMap=None, flux_response=None):
+    r""" Performs gain correction
+    
+    This function processes raw radiographs by subtracting off the dark current and
+    correcting for the pixel-to-pixel gain variations which reduces ring artifacts
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (C contiguous float32 numpy array or torch tensor): radiograph data
+        air_scan (C contiguous float32 numpy array or torch tensor): air scan radiograph data; if not given, assumes that the input data is transmission data
+        dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data; if not given assumes the inputs have already been dark subtracted
+        calibrartion_scans (C contiguous 3D float32 numpy array or torch tensor): calibration scan data
+        ROI (4-element integer array): specifies a bounding box ([first row, last row, first column, last column]) for which to estimate a mean value for flux correction
+        badPixelMap (C contiguous float32 numpy array or torch tensor): 2D bad pixel map (numRows x numCols) where a value of 1.0 marks a pixel as bad
+        flux_response (C contiguous 1D float32 numpy array or torch tensor): transfer function of dark subtracted raw data
+    """
+    if dark_scan is None or air_scan is None:
+        print('Error: must specify air_scan and dark_scan')
+        return False
+    if calibration_scans is not None and len(calibration_scans.shape) != 3:
+        print('Error: calibration_scans should be a 3D array')
+        return False
+        
+    # Check Inputs
+    if g is None:
+        print('Error: no data given')
+        return False
+    if len(g.shape) != 3:
+        print('Error: input data must by 3D')
+        return False
+    if dark_scan is not None:
+        if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+            pass
+        elif len(dark_scan.shape) != 2 or  g.shape[1] != dark_scan.shape[0] or g.shape[2] != dark_scan.shape[1]:
+            print('Error: dark scan image size is invalid')
+            return False
+    if air_scan is not None:
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            pass
+        elif len(air_scan.shape) != 2 or g.shape[1] != air_scan.shape[0] or g.shape[2] != air_scan.shape[1]:
+            print('Error: air scan image size is invalid')
+            return False
+    if ROI is not None:
+        if ROI[0] < 0 or ROI[2] < 0 or ROI[1] < ROI[0] or ROI[3] < ROI[2] or ROI[1] >= g.shape[1] or ROI[3] >= g.shape[2]:
+            print('Error: invalid ROI')
+            return False
+    
+    # Subtract off dark
+    if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+        g[:] = g[:] - dark_scan
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            air_scan = air_scan - dark_scan
+        else:
+            air_scan[:] = air_scan[:] - dark_scan
+    else:
+        g[:] = g[:] - dark_scan[None,:,:]
+        air_scan[:] = air_scan[:] - dark_scan[:]
+
+    if isinstance(air_scan, int) or isinstance(air_scan, float):
+        pass
+    else:
+        leapct.MedianFilter2D(air_scan, threshold=0.03, windowSize=5)
+    
+    if calibration_scans is None or calibration_scans.shape[0] < 3:
+        pass
+    else:
+        # do actual calibration
+        if calibration_scans.shape[0] == 3:
+            M = calibration_scans[1,:,:] - calibration_scans[0,:,:]
+            L = calibration_scans[2,:,:] - calibration_scans[0,:,:]
+
+            leapct.MedianFilter2D(M, threshold=0.1, windowSize=5)
+            leapct.MedianFilter2D(L, threshold=0.1, windowSize=5)
+            
+            if has_torch == True and type(L) is torch.Tensor:
+                minL = torch.min(L[L>0.0])
+                minM = torch.min(M[M>0.0])
+            else:
+                minL = np.min(L[L>0.0])
+                minM = np.min(M[M>0.0])
+            M[M<=0.0] = minM
+            L[L<=0.0] = minL
+            
+            #leapct.MedianFilter2D(M)
+            #leapct.MedianFilter2D(L)
+            medM = np.median(M)
+            medL = np.median(L)
+            
+            gainM = medM/M
+            gainL = (medL - medM) / (L - M)
+            
+            """
+            Although this does not work in python, here is the basic math
+            
+            For g <= M:
+                g = gainM * g
+            For g > M:
+                g = gainL * (g-M) + medM
+            
+            This is basically the way Jerel was doing it
+            g[:] = g[:] * gainM[None,:,:]
+            air_scan[:] = air_scan[:] * gainM[:]
+            gainL[:] = gainL[:] / gainM[:]
+            
+            g[:] = leapct.minimum(g[:], medM) + gainL[None,:,:] * (leapct.maximum(g[:], medM) - medM)
+            """
+
+            if has_torch == True and type(g) is torch.Tensor:
+                g[:] = torch.heaviside(M[None,:,:]-g[:], 0.0) * ((gainM[None,:,:]-gainL[None,:,:])*g[:] + gainL[None,:,:]*M[None,:,:] - medM) + (gainL[None,:,:]*(g[:]-M[None,:,:]) + medM)
+            else:
+                g[:] = np.heaviside(M[None,:,:]-g[:], 0.0) * ((gainM[None,:,:]-gainL[None,:,:])*g[:] + gainL[None,:,:]*M[None,:,:] - medM) + (gainL[None,:,:]*(g[:]-M[None,:,:]) + medM)
+            
+            if isinstance(air_scan, int) or isinstance(air_scan, float):
+                pass
+            else:
+                air_scan[air_scan<=M] = gainM[air_scan<=M]*air_scan[air_scan<=M]
+                air_scan[air_scan>M] = gainL[air_scan>M]*(air_scan[air_scan>M] - M[air_scan>M]) + medM
+            
+            #return True
+            
+        else:
+            print('Error: current implementation only works for 3 calibration scans!')
+            return False
+            
+    # Perform Flux Correction
+    if ROI is not None:
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            postageStamp_air = float(air_scan)
+        elif has_torch == True and type(air_scan) is torch.Tensor:
+            postageStamp_air = torch.mean(air_scan[ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1])
+        else:
+            postageStamp_air = np.mean(air_scan[ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1])
+    
+        if has_torch == True and type(g) is torch.Tensor:
+            postageStamp = torch.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
+        else:
+            postageStamp = np.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
+            
+        postageStamp = postageStamp / postageStamp_air
+        print('ROI mean: ' + str(np.mean(postageStamp)) + ', standard deviation: ' + str(np.std(postageStamp)))
+        #g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
+        g[:] = g[:] / postageStamp[:,None,None]
+        
+    badPixelCorrection(leapct, g, badPixelMap, 5, isAttenuationData=False)
+        
+    return True
+
 def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=None):
     r"""Converts data to attenuation radiographs (flat fielding and negative log)
 
@@ -50,11 +197,17 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         print('Error: input data must by 3D')
         return False
     if dark_scan is not None:
-        if g.shape[1] != dark_scan.shape[0] or g.shape[2] != dark_scan.shape[1]:
+        if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+            #print('dark is constant')
+            pass
+        elif len(dark_scan.shape) != 2 or g.shape[1] != dark_scan.shape[0] or g.shape[2] != dark_scan.shape[1]:
             print('Error: dark scan image size is invalid')
             return False
     if air_scan is not None:
-        if g.shape[1] != air_scan.shape[0] or g.shape[2] != air_scan.shape[1]:
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            #print('air is constant')
+            pass
+        elif len(air_scan.shape) != 2 or g.shape[1] != air_scan.shape[0] or g.shape[2] != air_scan.shape[1]:
             print('Error: air scan image size is invalid')
             return False
     if ROI is not None:
@@ -62,14 +215,36 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
             print('Error: invalid ROI')
             return False
     
+    #"""
+    if has_torch == True and type(air_scan) is torch.Tensor:
+        minAir = torch.min(air_scan[air_scan>0.0])
+        air_scan[air_scan<=0.0] = minAir
+    elif type(air_scan) is np.ndarray:
+        minAir = np.min(air_scan[air_scan>0.0])
+        air_scan[air_scan<=0.0] = minAir
+    #"""
+    
     # Perform Flat Fielding
+    
     if dark_scan is not None:
         if air_scan is not None:
-            g[:] = (g[:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
+            if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+                air_scan = air_scan - dark_scan
+                if isinstance(air_scan, int) or isinstance(air_scan, float):
+                    g[:] = (g[:] - dark_scan) / air_scan
+                else:
+                    g[:] = (g[:] - dark_scan) / air_scan[None,:,:]
+            else:
+                g[:] = (g[:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
         else:
-            g[:] = g[:] - dark_scan[None,:,:]
+            if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+                g[:] = g[:] - dark_scan
+            else:
+                g[:] = g[:] - dark_scan[None,:,:]
     else:
-        if air_scan is not None:
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            g[:] = g[:] / air_scan
+        elif air_scan is not None:
             g[:] = g[:] / air_scan[None,:,:]
     
     # Perform Flux Correction
@@ -83,18 +258,22 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         g[:] = g[:] / postageStamp[:,None,None]
         
     # Convert to attenuation
+    if np.isnan(g).any():
+        print('some nans exist')
     g[g<=0.0] = 2.0**-16
     leapct.negLog(g)
     
     return True
 
-def badPixelCorrection(leapct, g, badPixelMap, windowSize=3, isAttenuationData=True):
+def badPixelCorrection(leapct, g, badPixelMap=None, windowSize=3, isAttenuationData=True):
     r"""Removes bad pixels from CT projections
     
     LEAP CT geometry parameters must be set prior to running this function 
     and can be applied to any CT geometry type.
     This algorithm processes each projection independently
     and removes bad pixels specified by the user using a median filter
+    
+    If no bad pixel map is provided, this routine will estimate it from the average of all projections.
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
@@ -107,12 +286,27 @@ def badPixelCorrection(leapct, g, badPixelMap, windowSize=3, isAttenuationData=T
         True if successful, False otherwise
     """
     
-    if g is None or badPixelMap is None:
+    if g is None:
         return False
     
     # This algorithm processes each transmission
     if isAttenuationData:
         leapct.expNeg(g)
+        
+    if badPixelMap is None:
+        if has_torch == True and type(g) is torch.Tensor:
+            g_mean = torch.mean(g, axis=0)
+        else:
+            g_mean = np.mean(g, axis=0)
+        g_mean_filtered = leapct.copyData(g_mean)
+        #leapct.MedianFilter2D(g_mean_filtered, threshold=0.03, windowSize=3)
+        leapct.MedianFilter2D(g_mean_filtered, threshold=0.1, windowSize=5)
+        ind = g_mean != g_mean_filtered
+        g_mean[ind] = 1.0
+        g_mean[~ind] = 0.0
+        badPixelMap = g_mean
+        #print('Estimated ' + str(np.sum(badPixelMap)) + ' bad pixels')
+        
     leapct.badPixelCorrection(g, badPixelMap, windowSize)
     if isAttenuationData:
         leapct.negLog(g)
@@ -412,6 +606,30 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
     #'''
     leapct.set_numTVneighbors(numNeighbors)
     
+    return True
+
+def transmission_shift(leapct, g, shift, isAttenuationData=True):
+    r""" Subtracts constant from transmission data which is a simple method for scatter correction
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        shift (float): the amount to subtract from the transmission data
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
+    
+    Returns:
+        True is successful, False otherwise
+    
+    """
+    if not isinstance(shift, float):
+        raise TypeError
+    minTransmission = 2.0**-16
+    if isAttenuationData:
+        leapct.expNeg(g)
+    g -= shift
+    g[g<minTransmission] = minTransmission
+    if isAttenuationData:
+        leapct.negLog(t)
     return True
     
 def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP'):

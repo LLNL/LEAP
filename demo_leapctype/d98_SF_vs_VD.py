@@ -158,6 +158,8 @@ for n in range(0,3):
     #6) Calculate FFT and multiply by 1/sinc to account for frequency response of finite difference 
 
     #useage: MTF(leapct, f, r, center=None, getEdgeResponse=False, oversamplingRate=4)
+    #f_VD[f_VD<0.0] = 0.0
+    #f_SF[f_SF<0.0] = 0.0
     MTF_VD = MTF(leapct, f_VD, objectRadius)
     MTF_SF = MTF(leapct, f_SF, objectRadius)
     x = np.array(range(MTF_VD.size))/(float(2*MTF_VD.size)*leapct.get_voxelWidth())

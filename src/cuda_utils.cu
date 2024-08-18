@@ -456,14 +456,54 @@ __global__ void innerProductKernel_2D(const float* x, const float* y, float* sum
     sum_x[i] = accum;
 }
 
+__global__ void innerProductKernel_partial(const float* x, const float* y, float* partial_sum, const uint64 N, const int numberOfChunks, const uint64 maxNumItemsPerCore)
+{
+    const int iprocess = threadIdx.x + blockIdx.x * blockDim.x;
+    if (iprocess >= numberOfChunks)
+        return;
+    uint64 ind_offset = uint64(iprocess) * uint64(maxNumItemsPerCore);
+    const uint64 i_max = min(maxNumItemsPerCore, N - ind_offset);
+    float accum = 0.0f;
+    for (int i = 0; i < i_max; i++)
+        accum += x[ind_offset + i] * y[ind_offset + i];
+    partial_sum[iprocess] = accum;
+}
+
+__global__ void sum_partial(const float* x, float* partial_sum, const uint64 N, const int numberOfChunks, const uint64 maxNumItemsPerCore)
+{
+    const int iprocess = threadIdx.x + blockIdx.x * blockDim.x;
+    if (iprocess >= numberOfChunks)
+        return;
+    uint64 ind_offset = uint64(iprocess) * uint64(maxNumItemsPerCore);
+    const uint64 i_max = min(maxNumItemsPerCore, N - ind_offset);
+    float accum = 0.0f;
+    for (int i = 0; i < i_max; i++)
+        accum += x[ind_offset + i];
+    partial_sum[iprocess] = accum;
+}
+
 __global__ void sum_1D(const float* x, float* sum_x, int N)
 {
     if (threadIdx.x > 0)
         return;
 
+    /*
     *sum_x = 0.0f;
     for (int i = 0; i < N; i++)
         *sum_x += x[i];
+    //*/
+    //*
+    float accum = 0.0f;
+    for (int i = 0; i < N; i++)
+        accum += x[i];
+    *sum_x = accum;
+    //*/
+    /*
+    double accum = 0.0;
+    for (int i = 0; i < N; i++)
+        accum += double(x[i]);
+    *sum_x = float(accum);
+    //*/
 }
 
 __global__ void weightedInnerProductKernel(const float* x, const float* w, const float* y, float* sum_x, const int3 N)
@@ -755,7 +795,29 @@ float sum(const float* dev_lhs, const int3 N, int whichGPU)
     }
     //sumKernel<<<1,1>>>(dev_lhs, dev_sum, N);
 
-    //*
+    uint64 numberOfElements = uint64(N.x) * uint64(N.y) * uint64(N.z);
+    //* Newest method which makes sure all cores are busy
+    int num_gpu_cores = max(1024, getSPcores(whichGPU));
+    if (numberOfElements < uint64(num_gpu_cores))
+        num_gpu_cores = int(numberOfElements);
+    uint64 maxNumItemsPerCore = uint64(ceil(double(numberOfElements) / double(num_gpu_cores)));
+    //printf("number of cores = %d, number of chunks = %d\n", num_gpu_cores, int(numChunks));
+
+    int blockSize = 8;
+    int numBlocks = int(ceil(double(num_gpu_cores) / double(blockSize)));
+    int numDataCopies = numBlocks * blockSize; // about equal to num_gpu_cores (rounded up)
+    float* dev_partial_sum = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_partial_sum, numDataCopies * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc failed!\n");
+        return 0.0;
+    }
+    sum_partial <<< numBlocks, blockSize >>> (dev_lhs, dev_partial_sum, numberOfElements, num_gpu_cores, maxNumItemsPerCore);
+    sum_1D <<< 1, 1 >>> (dev_partial_sum, dev_sum, num_gpu_cores);
+    cudaFree(dev_partial_sum);
+    //*/
+
+    /* Old method
     float* dev_sum_1D = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_sum_1D, N.x * sizeof(float))) != cudaSuccess)
     {
@@ -768,6 +830,9 @@ float sum(const float* dev_lhs, const int3 N, int whichGPU)
     sum_1D <<< 1, 1 >>> (dev_sum_1D, dev_sum, N.x);
     cudaFree(dev_sum_1D);
     //*/
+
+    // Slowest method
+    //sum_1D <<< 1, 1 >>> (dev_lhs, dev_sum, int(numberOfElements));
 
     float retVal = 0.0;
     cudaMemcpy(&retVal, dev_sum, sizeof(float), cudaMemcpyDeviceToHost);
@@ -791,7 +856,29 @@ float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int
     }
     //innerProductKernel <<<1, 1 >>> (dev_lhs, dev_rhs, dev_sum, N);
 
-    //*
+    uint64 numberOfElements = uint64(N.x) * uint64(N.y) * uint64(N.z);
+    //* Newest method which makes sure all cores are busy
+    int num_gpu_cores = max(1024, getSPcores(whichGPU));
+    if (numberOfElements < uint64(num_gpu_cores))
+        num_gpu_cores = int(numberOfElements);
+    uint64 maxNumItemsPerCore = uint64(ceil(double(numberOfElements) / double(num_gpu_cores)));
+    //printf("number of cores = %d, number of chunks = %d\n", num_gpu_cores, int(numChunks));
+
+    int blockSize = 8;
+    int numBlocks = int(ceil(double(num_gpu_cores) / double(blockSize)));
+    int numDataCopies = numBlocks * blockSize; // about equal to num_gpu_cores (rounded up)
+    float* dev_partial_sum = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_partial_sum, numDataCopies * sizeof(float))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc failed!\n");
+        return 0.0;
+    }
+    innerProductKernel_partial <<< numBlocks, blockSize >>> (dev_lhs, dev_rhs, dev_partial_sum, numberOfElements, num_gpu_cores, maxNumItemsPerCore);
+    sum_1D <<< 1, 1 >>> (dev_partial_sum, dev_sum, num_gpu_cores);
+    cudaFree(dev_partial_sum);
+    //*/
+
+    /*
     float* dev_sum_1D = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_sum_1D, N.x * sizeof(float))) != cudaSuccess)
     {

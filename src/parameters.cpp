@@ -716,19 +716,24 @@ bool parameters::set_default_volume(float scale)
 	offsetY = 0.0;
 	offsetZ = 0.0;
 
+	//printf("source range: %f to %f\n", z_source(0), z_source(numAngles-1));
+
 	if ((geometry == CONE || geometry == CONE_PARALLEL) && helicalPitch != 0.0)
 	{
-		int minSlices = int(sod / sdd * float(numRows) * pixelHeight / voxelHeight + 0.5);
+		float detectorHeightAtIso = sod / sdd * float(numRows) * pixelHeight;
+		int minSlices = int(detectorHeightAtIso / voxelHeight + 0.5);
 		if (fabs(angularRange) <= 180.0)
 			numZ = minSlices;
 		else if (fabs(angularRange) <= 360.0)
 		{
-			numZ = int(ceil((sod / sdd * (numRows - 1) * pixelHeight + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight));
-			numZ = max(minSlices, numZ);
+			//numZ = int(ceil((detectorHeightAtIso + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight));
+			//numZ = max(minSlices, numZ);
+			numZ = minSlices;
 		}
 		else
 		{
-			numZ = int(ceil(fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight));
+			//numZ = int(ceil(fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight));
+			numZ = int(ceil((detectorHeightAtIso + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - 2.0*PI)) / voxelHeight));
 			numZ = max(minSlices, numZ);
 		}
 	}

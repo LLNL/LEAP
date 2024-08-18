@@ -683,13 +683,13 @@ class tomographicModels:
             return self.set_geometry(which)
         elif isinstance(which, str):
             if which == 'CONE':
-                return self.set_geometry(0)
+                return self.libprojectors.set_geometry(0)
             elif which == 'PARALLEL':
-                return self.set_geometry(1)
+                return self.libprojectors.set_geometry(1)
             elif which == 'FAN':
-                return self.set_geometry(2)
+                return self.libprojectors.set_geometry(2)
             elif which == 'MODULAR':
-                return self.set_geometry(3)
+                return self.libprojectors.set_geometry(3)
             else:
                 return False
         else:
@@ -2230,12 +2230,17 @@ class tomographicModels:
         """Alias for FBP"""
         return self.FBP(g, f, inplace)
 
-    def FBP_slice(self, g, iz=None):
+    def FBP_slice(self, g, islice=None, coord='z'):
         r""" Performs FBP on a single slice
+        
+        The CT geometry and CT volume parameters must be set prior to running this function.
+        This slice index is the index within the current volume specification.
+        This function does not change any LEAP parameters.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
-            iz (int): the z-slice index to reconstruct
+            islice (int): the index of the slice to reconstruct
+            coord (string): specifies which axis to reconstruct: can be 'x', 'y', or 'z'; 'z' is the default
             
         Returns:
             reconstructed slice of the same type as the projection data
@@ -2243,24 +2248,64 @@ class tomographicModels:
         if g is None:
             print('Error: must provide projection data!')
             return None
-        if iz is None or iz < 0 or iz >= self.get_numZ():
-            iz = self.get_numZ()//2
-        offsetZ_save = self.get_offsetZ()
-        numZ_save = self.get_numZ()
         
-        self.set_offsetZ(self.z_samples()[iz])
-        self.set_numZ(1)
-        
-        rowRange = self.rowRangeNeededForBackprojection()
-        g_chunk = self.cropProjections(rowRange, None, g)
+        if coord == 'x':
+            ix = islice
+            if ix is None or ix < 0 or ix >= self.get_numX():
+                ix = self.get_numX()//2
+            offsetX_save = self.get_offsetX()
+            numX_save = self.get_numX()
+            
+            self.set_offsetX(self.x_samples()[ix])
+            self.set_numX(1)
+            
+            f = self.FBP(g)
+            
+            self.set_offsetX(offsetX_save)
+            self.set_numX(numX_save)
+            
+            return f
+            
+        elif coord == 'y':
+            iy = islice
+            if iy is None or iy < 0 or iy >= self.get_numY():
+                iy = self.get_numY()//2
+            offsetY_save = self.get_offsetY()
+            numY_save = self.get_numY()
+            
+            self.set_offsetY(self.y_samples()[iy])
+            self.set_numY(1)
+            
+            f = self.FBP(g)
+            
+            self.set_offsetY(offsetY_save)
+            self.set_numY(numY_save)
+            
+            return f
+            
+        else:
+            iz = islice
+            if iz is None or iz < 0 or iz >= self.get_numZ():
+                iz = self.get_numZ()//2
+            offsetZ_save = self.get_offsetZ()
+            numZ_save = self.get_numZ()
+            
+            if self.get_geometry() == 'PARALLEL' or self.get_geometry() == 'FAN':
+                g_chunk = self.cropProjections([iz, iz], None, g)
+            else:
+                rowRange = self.rowRangeNeededForBackprojection()
+                g_chunk = self.cropProjections(rowRange, None, g)
 
-        f = self.FBP(g_chunk, None, True)
-        del g_chunk
-        
-        self.set_offsetZ(offsetZ_save)
-        self.set_numZ(numZ_save)
-        
-        return f
+            self.set_offsetZ(self.z_samples()[iz])
+            self.set_numZ(1)
+
+            f = self.FBP(g_chunk, None, True)
+            del g_chunk
+            
+            self.set_offsetZ(offsetZ_save)
+            self.set_numZ(numZ_save)
+            
+            return f
 
     def FBP(self, g, f=None, inplace=False):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
@@ -4610,12 +4655,22 @@ class tomographicModels:
         #bool MedianFilter2D(float* f, int, int, int, float threshold, int windowSize);
         self.libprojectors.MedianFilter2D.restype = ctypes.c_bool
         self.set_model()
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.MedianFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, f.is_cuda == False)
+            return self.libprojectors.MedianFilter2D(f.data_ptr(), N_1, N_2, N_3, threshold, windowSize, signalThreshold, f.is_cuda == False)
         else:
             self.libprojectors.MedianFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter2D(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, True)
+            return self.libprojectors.MedianFilter2D(f, N_1, N_2, N_3, threshold, windowSize, signalThreshold, True)
     
     def MedianFilter2D(self, f, threshold=0.0, windowSize=3):
         r"""Applies a thresholded 2D median filter (windowSize x windowSize) to the provided array
@@ -6231,7 +6286,7 @@ class tomographicModels:
                 #print('found ' + str(len(fileList)) + ' images')
                 #print('reading first image: ' + str(fileList[0]))
                 #firstImg = np.array(Image.open(fileList[0]))
-                firstImg = np.array(imageio.imread(fileList[0]))
+                firstImg = np.array(imageio.imread(fileList[0]), dtype=np.float32)
                 
                 numRows = firstImg.shape[0]
                 numCols = firstImg.shape[1]
@@ -6256,7 +6311,7 @@ class tomographicModels:
                 for i in range(len(fileList)):
                     #anImage = np.array(Image.open(fileList[ind[i]]))
                     #anImage = np.array(Image.open(fileList[ind[i]]).rotate(-0.5))
-                    anImage = np.array(imageio.imread(fileList[ind[i]]))
+                    anImage = np.array(imageio.imread(fileList[ind[i]]), dtype=np.float32)
                     if rowRange is not None:
                         if colRange is not None:
                             x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,colRange[0]:colRange[1]+1]
