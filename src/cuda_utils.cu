@@ -798,8 +798,10 @@ float sum(const float* dev_lhs, const int3 N, int whichGPU)
     uint64 numberOfElements = uint64(N.x) * uint64(N.y) * uint64(N.z);
     //* Newest method which makes sure all cores are busy
     int num_gpu_cores = max(1024, getSPcores(whichGPU));
-    if (numberOfElements < uint64(num_gpu_cores))
-        num_gpu_cores = int(numberOfElements);
+    if (uint64(sqrt(double(numberOfElements))) < uint64(num_gpu_cores))
+        num_gpu_cores = int(sqrt(double(numberOfElements)));
+    //if (numberOfElements < uint64(num_gpu_cores))
+    //    num_gpu_cores = int(numberOfElements);
     uint64 maxNumItemsPerCore = uint64(ceil(double(numberOfElements) / double(num_gpu_cores)));
     //printf("number of cores = %d, number of chunks = %d\n", num_gpu_cores, int(numChunks));
 
@@ -859,8 +861,10 @@ float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int
     uint64 numberOfElements = uint64(N.x) * uint64(N.y) * uint64(N.z);
     //* Newest method which makes sure all cores are busy
     int num_gpu_cores = max(1024, getSPcores(whichGPU));
-    if (numberOfElements < uint64(num_gpu_cores))
-        num_gpu_cores = int(numberOfElements);
+    if (uint64(sqrt(double(numberOfElements))) < uint64(num_gpu_cores))
+        num_gpu_cores = int(sqrt(double(numberOfElements)));
+    //if (numberOfElements < uint64(num_gpu_cores))
+    //    num_gpu_cores = int(numberOfElements);
     uint64 maxNumItemsPerCore = uint64(ceil(double(numberOfElements) / double(num_gpu_cores)));
     //printf("number of cores = %d, number of chunks = %d\n", num_gpu_cores, int(numChunks));
 

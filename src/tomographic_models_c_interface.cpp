@@ -84,17 +84,17 @@ bool reset()
 
 bool all_defined()
 {
-	return tomo()->params.allDefined();
+	return tomo()->params.allDefined(false);
 }
 
 bool ct_geometry_defined()
 {
-	return tomo()->params.geometryDefined();
+	return tomo()->params.geometryDefined(false);
 }
 
 bool ct_volume_defined()
 {
-	return tomo()->params.volumeDefined();
+	return tomo()->params.volumeDefined(false);
 }
 
 void set_log_error()
@@ -497,6 +497,16 @@ int get_volumeDimensionOrder()
 	return tomo()->get_volumeDimensionOrder();
 }
 
+int number_of_gpus()
+{
+	return tomo()->number_of_gpus();
+}
+
+int get_gpus(int* list_of_gpus)
+{
+	return tomo()->get_gpus(list_of_gpus);
+}
+
 bool set_GPU(int whichGPU)
 {
 	return tomo()->set_GPU(whichGPU);
@@ -535,6 +545,11 @@ bool clear_axisOfSymmetry()
 bool set_rFOV(float rFOV_in)
 {
 	return tomo()->set_rFOV(rFOV_in);
+}
+
+float get_rFOV()
+{
+	return tomo()->params.rFOV();
 }
 
 bool set_offsetScan(bool aFlag)
@@ -633,14 +648,26 @@ bool flipAttenuationMapSign(bool data_on_cpu)
 	return tomo()->flipAttenuationMapSign(data_on_cpu);
 }
 
+bool angles_are_defined()
+{
+	return tomo()->params.angles_are_defined();
+}
+
+bool angles_are_equispaced()
+{
+	return tomo()->params.anglesAreEquispaced();
+}
+
 bool set_geometry(int which)
 {
 	//CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3
-	if (which < parameters::CONE || which > parameters::MODULAR)
+	if (which < parameters::CONE || which > parameters::CONE_PARALLEL)
 		return false;
 	else
 	{
 		tomo()->params.geometry = which;
+		if (which != parameters::CONE)
+			tomo()->params.detectorType = parameters::FLAT;
 		return true;
 	}
 }
@@ -934,9 +961,9 @@ bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
 	return tomo()->MedianFilter2D(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu);
 }
 
-bool badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu)
+bool badPixelCorrection(float* g, int N_1, int N_2, int N_3, float* badPixelMap, int w, bool data_on_cpu)
 {
-	return tomo()->badPixelCorrection(g, badPixelMap, w, data_on_cpu);
+	return tomo()->badPixelCorrection(g, N_1, N_2, N_3, badPixelMap, w, data_on_cpu);
 }
 
 bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
@@ -1117,6 +1144,8 @@ PYBIND11_MODULE(leapct, m) {
     m.def("set_voxelWidth", &set_voxelWidth, "");
     m.def("set_voxelHeight", &set_voxelHeight, "");
 	m.def("set_geometry", &set_geometry, "");
+	m.def("angles_are_defined", &angles_are_defined, "");
+	m.def("angles_are_equispaced", &angles_are_equispaced, "");
     m.def("projectConeBeam", &projectConeBeam, "");
     m.def("backprojectConeBeam", &backprojectConeBeam, "");
     m.def("projectFanBeam", &projectFanBeam, "");
@@ -1127,7 +1156,9 @@ PYBIND11_MODULE(leapct, m) {
 	m.def("viewRangeNeededForBackprojection", &viewRangeNeededForBackprojection, "");
 	m.def("sliceRangeNeededForProjection", &sliceRangeNeededForProjection, "");
 	m.def("numRowsRequiredForBackprojectingSlab", &numRowsRequiredForBackprojectingSlab, "");
-    m.def("set_GPU", &set_GPU, "");
+    m.def("number_of_gpus", &number_of_gpus, "");
+	m.def("get_gpus", &get_gpus, "");
+	m.def("set_GPU", &set_GPU, "");
     m.def("set_GPUs", &set_GPUs, "");
     m.def("get_GPU", &get_GPU, "");
     m.def("set_axisOfSymmetry", &set_axisOfSymmetry, "");
@@ -1135,6 +1166,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("clear_axisOfSymmetry", &clear_axisOfSymmetry, "");
     m.def("set_projector", &set_projector, "");
     m.def("set_rFOV", &set_rFOV, "");
+	m.def("get_rFOV", &get_rFOV, "");
     m.def("set_offsetScan", &set_offsetScan, "");
 	m.def("get_offsetScan", &get_offsetScan, "");
     m.def("set_truncatedScan", &set_truncatedScan, "");

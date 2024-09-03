@@ -162,7 +162,7 @@ def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=
         #g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
         g[:] = g[:] / postageStamp[:,None,None]
         
-    badPixelCorrection(leapct, g, badPixelMap, 5, isAttenuationData=False)
+    badPixelCorrection(leapct, g, None, None, badPixelMap, 5, isAttenuationData=False)
         
     return True
 
@@ -265,7 +265,7 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
     
     return True
 
-def badPixelCorrection(leapct, g, badPixelMap=None, windowSize=3, isAttenuationData=True):
+def badPixelCorrection(leapct, g, air_scan=None, dark_scan=None, badPixelMap=None, windowSize=3, isAttenuationData=True):
     r"""Removes bad pixels from CT projections
     
     LEAP CT geometry parameters must be set prior to running this function 
@@ -308,6 +308,10 @@ def badPixelCorrection(leapct, g, badPixelMap=None, windowSize=3, isAttenuationD
         #print('Estimated ' + str(np.sum(badPixelMap)) + ' bad pixels')
         
     leapct.badPixelCorrection(g, badPixelMap, windowSize)
+    if air_scan is not None:
+        leapct.badPixelCorrection(air_scan, badPixelMap, windowSize)
+    if dark_scan is not None:
+        leapct.badPixelCorrection(dark_scan, badPixelMap, windowSize)
     if isAttenuationData:
         leapct.negLog(g)
     return True
@@ -503,10 +507,13 @@ def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
         g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
         g_sum[0,:] = np.mean(g,axis=0)
     g_sum_save = leapct.copyData(g_sum)
+    minValue = np.min(g_sum_save)
+    minValue = min(minValue, 0.0)
     
     numNeighbors = leapct.get_numTVneighbors()
     leapct.set_numTVneighbors(6)
     leapct.diffuse(g_sum,delta,numIter)
+    g_sum[g_sum<minValue] = minValue
     leapct.set_numTVneighbors(numNeighbors)
     
     gainMap = g_sum - g_sum_save
@@ -675,6 +682,10 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     if param == 'tau' and leapct.get_geometry() == 'PARALLEL':
         print('Error: tau does not apply to parallel-beam data.')
         return None
+    if leapct.get_geometry() == 'MODULAR':
+        if param == 'tau' or param == 'centerCol' or param == 'centerRow':
+            print('Error: centerCol, centerRow, and tau do not apply to modular-beam data.')
+            return None
         
     if has_torch == True and type(g) is torch.Tensor:
         f_stack = torch.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=torch.float32)
@@ -710,11 +721,15 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     for n in range(len(values)):
         print(str(n) + ': ' + str(param) + ' = ' + str(values[n]))
         if param == 'centerCol':
+            #col_shift = (leapct_sweep.get_centerCol() - values[n])*leapct_sweep.get_pixelWidth()
+            #leapct_sweep.shift_detector(0.0, col_shift)
             leapct_sweep.set_centerCol(values[n])
         elif param == 'centerRow':
-            if leapct_sweep.get_geometry() == 'CONE':
+            if leapct_sweep.get_geometry() == 'CONE' or leapct_sweep.get_geometry() == 'CONE-PARALLEL':
                 z_shift = (leapct_sweep.get_centerRow() - values[n])*leapct_sweep.get_pixelHeight()*leapct_sweep.get_sod()/leapct_sweep.get_sdd()
                 leapct_sweep.set_offsetZ(leapct_sweep.get_offsetZ() + z_shift)
+            #row_shift = (leapct_sweep.get_centerRow() - values[n])*leapct_sweep.get_pixelHeight()
+            #leapct_sweep.shift_detector(row_shift, 0.0)
             leapct_sweep.set_centerRow(values[n])
         elif param == 'tau':
             delta_tau = values[n] - leapct_sweep.get_tau()

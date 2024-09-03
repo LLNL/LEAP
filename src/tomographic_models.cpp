@@ -1234,7 +1234,6 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 	params.detectorType = parameters::FLAT;
 
 	params.geometry = parameters::FAN;
-	params.detectorType = parameters::FLAT;
 	params.sod = sod;
 	params.sdd = sdd;
 	params.pixelWidth = pixelWidth;
@@ -1392,6 +1391,30 @@ bool tomographicModels::set_volumeDimensionOrder(int which)
 int tomographicModels::get_volumeDimensionOrder()
 {
 	return params.volumeDimensionOrder;
+}
+
+int tomographicModels::number_of_gpus()
+{
+#ifndef __USE_CPU
+	return numberOfGPUs();
+#else
+	return 0;
+#endif
+}
+
+int tomographicModels::get_gpus(int* list_of_gpus)
+{
+#ifndef __USE_CPU
+	int retVal = params.whichGPUs.size();
+	if (list_of_gpus != NULL)
+	{
+		for (int i = 0; i < retVal; i++)
+			list_of_gpus[i] = params.whichGPUs[i];
+	}
+	return retVal;
+#else
+	return 0;
+#endif
 }
 
 bool tomographicModels::set_GPU(int whichGPU)
@@ -2361,8 +2384,10 @@ bool tomographicModels::HighPassFilter(float* f, int N_1, int N_2, int N_3, floa
 #endif
 }
 
-bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu)
+bool tomographicModels::badPixelCorrection(float* g, int N_1, int N_2, int N_3, float* badPixelMap, int w, bool data_on_cpu)
 {
+	if (N_1 <= 0 || N_2 <= 0 || N_3 <= 0)
+		return false;
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
@@ -2375,14 +2400,13 @@ bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, 
 	else
 		numProj = 0.0;
 
-	uint64 numElements = params.projectionData_numberOfElements();
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	//uint64 maxElements = 2147483646;
 
 	if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize || params.whichGPUs.size() > 1))
 	{
 		// do chunking
-		int N_1 = params.numAngles;
 		//int numSlices = std::min(N_1, maxSlicesForChunking);
 		int numSlices = int(ceil(double(N_1) / double(int(params.whichGPUs.size()))));
 		while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
@@ -2405,11 +2429,14 @@ bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, 
 			int sliceStart = ichunk * numSlices;
 			int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
 
-			float* g_chunk = &g[uint64(sliceStart) * uint64(params.numRows * params.numCols)];
+			float* g_chunk = &g[uint64(sliceStart) * uint64(N_2 * N_3)];
 			int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
 			parameters params_chunk = params;
-			params_chunk.removeProjections(sliceStart, sliceEnd);
+			params_chunk.numAngles = sliceEnd - sliceStart + 1;
+			params_chunk.numRows = N_2;
+			params_chunk.numCols = N_3;
+			//params_chunk.removeProjections(sliceStart, sliceEnd);
 			//params_chunk.numAngles = sliceEnd - sliceStart + 1;
 			params_chunk.whichGPU = whichGPU;
 
@@ -2418,7 +2445,16 @@ bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, 
 		return true;
 	}
 	else
-		return badPixelCorrection_gpu(g, &params, badPixelMap, w, data_on_cpu);
+	{
+		parameters params_chunk = params;
+		params_chunk.numAngles = N_1;
+		params_chunk.numRows = N_2;
+		params_chunk.numCols = N_3;
+		//params_chunk.removeProjections(sliceStart, sliceEnd);
+		//params_chunk.numAngles = sliceEnd - sliceStart + 1;
+
+		return badPixelCorrection_gpu(g, &params_chunk, badPixelMap, w, data_on_cpu);
+	}
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;

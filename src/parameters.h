@@ -63,21 +63,21 @@ public:
 	 * \brief       returns whether all CT geometry and CT volume parameter values are defined and valid
 	 * \return      returns true if all CT geometry and CT volume parameter values are defined and valid, false otherwise
 	 */
-	bool allDefined();
+	bool allDefined(bool doPrint = true);
 
 	/**
-	 * \fn          allDefined
+	 * \fn          geometryDefined
 	 * \brief       returns whether all CT geometry parameter values are defined and valid
 	 * \return      returns true if all CT geometry parameter values are defined and valid, false otherwise
 	 */
-	bool geometryDefined();
+	bool geometryDefined(bool doPrint = true);
 
 	/**
-	 * \fn          allDefined
+	 * \fn          volumeDefined
 	 * \brief       returns whether all CT volume parameter values are defined and valid
 	 * \return      returns true if all CT volume parameter values are defined and valid, false otherwise
 	 */
-	bool volumeDefined();
+	bool volumeDefined(bool doPrint = true);
 
 	/**
 	 * \fn          offsetScan_has_adequate_angular_range
@@ -107,6 +107,12 @@ public:
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
 	bool set_default_volume(float scale = 1.0);
+
+	/**
+	 * \fn          angles_are_defined
+	 * \return      returns true if the angles are defined, false otherwise
+	 */
+	bool angles_are_defined();
 
 	/**
 	 * \fn          set_angles

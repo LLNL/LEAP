@@ -690,6 +690,8 @@ class tomographicModels:
                 return self.libprojectors.set_geometry(2)
             elif which == 'MODULAR':
                 return self.libprojectors.set_geometry(3)
+            elif which == 'CONE-PARALLEL':
+                return self.libprojectors.set_geometry(4)
             else:
                 return False
         else:
@@ -791,6 +793,8 @@ class tomographicModels:
             g, the same as the input
         
         """
+        if iRow is None:
+            iRow = -1
         self.libprojectors.find_centerCol.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
@@ -957,6 +961,8 @@ class tomographicModels:
         
     def convert_to_modularbeam(self):
         """Converts parallel- or cone-beam data to a modular-beam format for extra customization of the scanning geometry"""
+        dFOV = self.get_diameterFOV()
+        self.set_diameterFOV(dFOV)
         if self.get_geometry() == 'PARALLEL':
             return self.convert_parallelbeam_to_modularbeam()
         elif self.get_geometry() == 'CONE':
@@ -2287,23 +2293,37 @@ class tomographicModels:
             iz = islice
             if iz is None or iz < 0 or iz >= self.get_numZ():
                 iz = self.get_numZ()//2
+            
             offsetZ_save = self.get_offsetZ()
             numZ_save = self.get_numZ()
+            numRows_save = self.get_numRows()
+            centerRow_save = self.get_centerRow()
             
             if self.get_geometry() == 'PARALLEL' or self.get_geometry() == 'FAN':
                 g_chunk = self.cropProjections([iz, iz], None, g)
+                
+                #self.set_numRows(rowRange[1]-rowRange[0]+1)
+                #self.shift_detector(self.get_pixelHeight()*rowRange[0], 0.0)
+                detectorShift = self.get_pixelHeight()*iz
+                
             else:
-                rowRange = self.rowRangeNeededForBackprojection()
+                rowRange = self.rowRangeNeededForBackprojection(iz)
                 g_chunk = self.cropProjections(rowRange, None, g)
-
-            self.set_offsetZ(self.z_samples()[iz])
-            self.set_numZ(1)
+                self.set_offsetZ(self.z_samples()[iz])
+                self.set_numZ(1)
+                
+                #self.set_numRows(rowRange[1]-rowRange[0]+1)
+                #self.shift_detector(self.get_pixelHeight()*rowRange[0], 0.0)
+                detectorShift = self.get_pixelHeight()*rowRange[0]
 
             f = self.FBP(g_chunk, None, True)
             del g_chunk
             
             self.set_offsetZ(offsetZ_save)
             self.set_numZ(numZ_save)
+            self.set_numRows(numRows_save)
+            self.shift_detector(-detectorShift, 0.0)
+            #self.set_centerRow(centerRow_save)
             
             return f
 
@@ -2653,7 +2673,7 @@ class tomographicModels:
             self.libprojectors.windowFOV(f, True)
         return f
     
-    def rowRangeNeededForBackprojection(self):
+    def rowRangeNeededForBackprojection(self, iz=None):
         r"""Calculates the detector rows necessary to reconstruct the current volume specification
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2666,13 +2686,40 @@ class tomographicModels:
             rowsNeeded, a 2X1 numpy array where the values are the first and last detector row index needed to reconstruct the volume.
         
         """
+        
         rowsNeeded = np.zeros(2,dtype=np.int32)
         rowsNeeded[1] = self.get_numRows()-1
+        
+        if self.get_geometry() == 'PARALLEL' or self.get_geometry() == 'FAN':
+            if iz is not None:
+                if iz < 0 or iz >= self.get_numZ():
+                    iz = self.get_numZ()//2
+                rowsNeeded[0] = iz
+                rowsNeeded[1] = iz
+            return rowsNeeded
+                
         self.libprojectors.rowRangeNeededForBackprojection.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
         self.libprojectors.rowRangeNeededForBackprojection.restype = ctypes.c_bool
-        self.set_model()
-        self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
-        return rowsNeeded
+        if iz is None:
+            self.set_model()
+            self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
+            return rowsNeeded
+        else:
+            if iz < 0 or iz >= self.get_numZ():
+                iz = self.get_numZ()//2
+            offsetZ_save = self.get_offsetZ()
+            numZ_save = self.get_numZ()
+            
+            self.set_offsetZ(self.z_samples()[iz])
+            self.set_numZ(1)
+            
+            self.set_model()
+            self.libprojectors.rowRangeNeededForBackprojection(rowsNeeded)
+            
+            self.set_offsetZ(offsetZ_save)
+            self.set_numZ(numZ_save)
+            
+            return rowsNeeded
         
     def viewRangeNeededForBackprojection(self):
         r"""Calculates the detector projections necessary to reconstruct the current volume specification
@@ -2803,6 +2850,9 @@ class tomographicModels:
         numRows = self.get_numRows()
         self.set_numRows(rowRange[1]-rowRange[0]+1)
         self.shift_detector(self.get_pixelHeight()*rowRange[0], 0.0)
+        if self.get_geometry() == 'PARALLEL' or self.get_geometry() == 'FAN':
+            self.set_numZ(self.get_numRows())
+            self.set_offsetZ(0.0)
         if g is not None:
         
             if has_torch == True and type(g) is torch.Tensor:
@@ -4706,10 +4756,19 @@ class tomographicModels:
             True is successful, False otherwise
         """
         
-        if len(g.shape) != 3 or g.shape[0] != self.get_numAngles() or g.shape[1] != self.get_numRows() or g.shape[2] != self.get_numCols():
-            print('Error: input data dimensions do not match CT data dimensions')
-            return False
-        if len(badPixelMap.shape) != 2 or g.shape[1] != badPixelMap.shape[0] or g.shape[2] != badPixelMap.shape[1]:
+        if len(g.shape) == 3:
+            numAngles = g.shape[0]
+            numRows = g.shape[1]
+            numCols = g.shape[2]
+        elif len(g.shape) == 2:
+            numAngles = 1
+            numRows = g.shape[0]
+            numCols = g.shape[1]
+        
+        #if len(g.shape) != 3 or g.shape[0] != self.get_numAngles() or g.shape[1] != self.get_numRows() or g.shape[2] != self.get_numCols():
+        #    print('Error: input data dimensions do not match CT data dimensions')
+        #    return False
+        if len(badPixelMap.shape) != 2 or numRows != badPixelMap.shape[0] or numCols != badPixelMap.shape[1]:
             print('Error: bad pixel map dimensions do not match CT data dimensions')
             return False
         if type(g) != type(badPixelMap):
@@ -4725,11 +4784,11 @@ class tomographicModels:
                 print('Error: projection data and bad pixel map must both be on the cpu or both be on the same gpu')
                 return False
         
-            self.libprojectors.badPixelCorrection.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.badPixelCorrection(g.data_ptr(), badPixelMap.data_ptr(), windowSize, g.is_cuda == False)
+            self.libprojectors.badPixelCorrection.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.badPixelCorrection(g.data_ptr(), numAngles, numRows, numCols, badPixelMap.data_ptr(), windowSize, g.is_cuda == False)
         else:
-            self.libprojectors.badPixelCorrection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.badPixelCorrection(g, badPixelMap, windowSize, True)
+            self.libprojectors.badPixelCorrection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.badPixelCorrection(g, numAngles, numRows, numCols, badPixelMap, windowSize, True)
     
     def PriorBilateralFilter(self, f, spatialFWHM, intensityFWHM, prior=None):
         """Performs 3D Bilateral Filter (BLF) denoising method where the intensity distance is measured against a prior image
@@ -5036,6 +5095,10 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS SET AND GET VARIOUS PARAMETERS, INCLUDING THOSE THAT SET HOW LEAP IS TO BE RUN
     ###################################################################################################################
     ###################################################################################################################
+    def number_of_gpus(self):
+        self.libprojectors.number_of_gpus.restype = ctypes.c_int
+        return self.libprojectors.number_of_gpus()
+    
     def set_gpu(self, which):
         """Set which GPU to use, use -1 to do CPU calculations"""
         return self.set_GPU(which)
@@ -5058,7 +5121,23 @@ class tomographicModels:
         listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
         self.set_model()
         return self.libprojectors.set_GPUs(listOfGPUs, int(listOfGPUs.size))
+    
+    def get_gpus(self):
+        """Get the index of all of the GPUs being used"""
         
+        self.libprojectors.get_gpus.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
+        self.libprojectors.get_gpus.restype = ctypes.c_int
+        self.set_model()
+        
+        if self.number_of_gpus() <= 0:
+            return []
+        
+        possible_gpu_list = -1*np.ones(self.number_of_gpus(), dtype=np.int32)
+        N = self.libprojectors.get_gpus(possible_gpu_list)
+        gpu_list = np.zeros(N, dtype=np.int32)
+        gpu_list[:] = possible_gpu_list[0:N]
+        return gpu_list
+    
     def get_gpu(self):
         """Get the index of the primary GPU that is being used"""
         return self.get_GPU()
@@ -5088,6 +5167,15 @@ class tomographicModels:
         self.libprojectors.set_rFOV.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_rFOV(0.5*d)
+        
+    def get_diameterFOV(self):
+        """Gets the diameterFOV parameter
+
+        """
+        #self.libprojectors.get_rFOV.argtypes = [ctypes.c_float]
+        self.libprojectors.get_rFOV.restype = ctypes.c_float
+        self.set_model()
+        return 2.0*self.libprojectors.get_rFOV()
         
     def set_truncatedScan(self, aFlag):
         """Set the truncatedScan parameter
@@ -5275,7 +5363,19 @@ class tomographicModels:
         self.libprojectors.clear_attenuationMap.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.clear_attenuationMap()
+    
+    def angles_are_defined(self):
+        #self.libprojectors.angles_are_defined.argtypes = []
+        self.libprojectors.angles_are_defined.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.angles_are_defined()
         
+    def angles_are_equispaced(self):
+        #self.libprojectors.angles_are_equispaced.argtypes = []
+        self.libprojectors.angles_are_equispaced.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.angles_are_equispaced()
+    
     def get_angles(self):
         """Get a numpy array of the projection angles"""
         if self.get_numAngles() > 0:
@@ -5360,6 +5460,8 @@ class tomographicModels:
             return 'FAN'
         elif geometryType == 3:
             return 'MODULAR'
+        elif geometryType == 4:
+            return 'CONE-PARALLEL'
         else:
             return 'UNKNOWN'
             
@@ -6255,37 +6357,50 @@ class tomographicModels:
                 print('To install PIL do: pip install imageio')
                 return None
             if hasPIL == True:
-                currentWorkingDirectory = os.getcwd()
-                dataFolder, baseFileName = os.path.split(fileName)
-                if len(dataFolder) > 0:
-                    os.chdir(dataFolder)
-                baseFileName, fileExtension = os.path.splitext(os.path.basename(baseFileName))
-                templateFile = baseFileName + '_*' + fileExtension
-                fileList = glob.glob(os.path.split(templateFile)[1])
-                if len(fileList) == 0:
-                    os.chdir(currentWorkingDirectory)
-                    print('file sequence does not exist')
-                    return None
-                    
-                if fileRange is not None:
-                    # prune fileList
-                    fileList_pruned = []
+                
+                if fileName.find('*') != -1:
+                    import imageio
+                    fileList = glob.glob(fileName)
+                    if fileRange is not None:
+                        fileList = fileList[fileRange[0]:fileRange[1]+1]
+                    ind = None
+                    currentWorkingDirectory = None
+                else:
+                    currentWorkingDirectory = os.getcwd()
+                    dataFolder, baseFileName = os.path.split(fileName)
+                
+                    if len(dataFolder) > 0:
+                        os.chdir(dataFolder)
+                
+                    sequence_separator = "_"
+                
+                    baseFileName, fileExtension = os.path.splitext(os.path.basename(baseFileName))
+                    templateFile = baseFileName + '_*' + fileExtension
+                    fileList = glob.glob(os.path.split(templateFile)[1])
+                    if len(fileList) == 0:
+                        sequence_separator = ""
+                        templateFile = baseFileName + '*' + fileExtension
+                        fileList = glob.glob(os.path.split(templateFile)[1])
+                        if len(fileList) == 0:
+                            os.chdir(currentWorkingDirectory)
+                            print('file sequence does not exist')
+                            return None
+                        
+                    if fileRange is not None:
+                        # prune fileList
+                        fileList_pruned = []
+                        for i in range(len(fileList)):
+                            digit = int(fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,''))
+                            if fileRange[0] <= digit and digit <= fileRange[1]:
+                                fileList_pruned.append(fileList[i])
+                        fileList = fileList_pruned
+                        
+                    justDigits = []
                     for i in range(len(fileList)):
-                        digit = int(fileList[i].replace(baseFileName+'_','').replace(fileExt,''))
-                        if fileRange[0] <= digit and digit <= fileRange[1]:
-                            fileList_pruned.append(fileList[i])
-                    fileList = fileList_pruned
-                    
-                justDigits = []
-                for i in range(len(fileList)):
-                    digitStr = fileList[i].replace(baseFileName+'_','').replace(fileExt,'')
-                    justDigits.append(int(digitStr))
-                ind = np.argsort(justDigits)
+                        digitStr = fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,'')
+                        justDigits.append(int(digitStr))
+                    ind = np.argsort(justDigits)
 
-
-                #print('found ' + str(len(fileList)) + ' images')
-                #print('reading first image: ' + str(fileList[0]))
-                #firstImg = np.array(Image.open(fileList[0]))
                 firstImg = np.array(imageio.imread(fileList[0]), dtype=np.float32)
                 
                 numRows = firstImg.shape[0]
@@ -6309,9 +6424,10 @@ class tomographicModels:
                     x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
                 print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
                 for i in range(len(fileList)):
-                    #anImage = np.array(Image.open(fileList[ind[i]]))
-                    #anImage = np.array(Image.open(fileList[ind[i]]).rotate(-0.5))
-                    anImage = np.array(imageio.imread(fileList[ind[i]]), dtype=np.float32)
+                    if ind is None:
+                        anImage = np.array(imageio.imread(fileList[i]), dtype=np.float32)
+                    else:
+                        anImage = np.array(imageio.imread(fileList[ind[i]]), dtype=np.float32)
                     if rowRange is not None:
                         if colRange is not None:
                             x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,colRange[0]:colRange[1]+1]
@@ -6322,7 +6438,8 @@ class tomographicModels:
                             x[i,:,:] = anImage[:,colRange[0]:colRange[1]+1]
                         else:
                             x[i,:,:] = anImage[:,:]
-                os.chdir(currentWorkingDirectory)
+                if currentWorkingDirectory is not None:
+                    os.chdir(currentWorkingDirectory)
                 return x
             '''
             try:
