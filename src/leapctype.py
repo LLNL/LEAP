@@ -1918,8 +1918,70 @@ class tomographicModels:
         else:
             print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
-        
-    def system_matrix(self, iAngle, iRow=0, iCols=None, onGPU=True):
+
+    def system_matrix_maxsize(self):
+        phi = 0.785398 # 45 deg
+        width = 1.0 / max(np.abs(np.cos(phi)), np.abs(np.sin(phi)))
+        footprint_row = 1
+        footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
+        max_size = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
+        return max_size
+
+    def system_matrix_single(self, nangle, nrow, ncol, max_size, onGPU=True):
+        if self.all_defined() == False:
+            print('Error: CT geometry and CT volume parameters not defined!')
+            return None, None, None
+        if self.get_geometry() != 'PARALLEL':
+            print('Error: current implementation only works for parallel-beam geometries')
+            return None, None, None
+        if nangle < 0 or nangle >= self.get_numAngles():
+            return None, None, None
+
+        if has_torch:
+            if onGPU:
+                weights = torch.zeros((max_size), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                inds = torch.zeros((max_size, 2), dtype=torch.int16, device=torch.device('cuda:'+str(self.get_gpu())))
+                nx = torch.zeros((max_size), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                ny = torch.zeros((max_size), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+            else:
+                weights = torch.zeros((max_size), dtype=torch.float32)
+                inds = torch.zeros((max_size, 2), dtype=torch.int16)
+                nx = torch.zeros((max_size), dtype=torch.float32)
+                ny = torch.zeros((max_size), dtype=torch.float32)
+            
+            self.libprojectors.system_matrix.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.system_matrix.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix(weights.data_ptr(), inds.data_ptr(), max_size, iAngle, iRow, iCols.data_ptr(), iCols_size, weights.is_cuda == False)
+        else:
+            weights = np.zeros((max_size), dtype=np.float32)
+            inds = np.zeros((max_size, 2), dtype=np.int16)
+            nx = np.zeros((max_size), dtype=np.float32)
+            ny = np.zeros((max_size), dtype=np.float32)
+            
+            self.libprojectors.system_matrix.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.system_matrix.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix(weights, inds, max_size, iAngle, iRow, iCols, iCols_size, True)
+
+        '''
+        inds[:,0] / dim_x
+
+        self.get_numX()
+
+        # index -> coordinates
+        (ind + 0.5) / dim_x
+        x_sample
+
+        inds = [x1,, y1, z1, x2, y2, z2...]
+        ws = [w1, w2.,]
+
+        ec = Encoder(inds)
+        y = NN(ec)
+        ray_sum = y * ws
+        '''
+
+    def system_matrix(self, iAngle, iRow=0, iCols=None, max_size=None, onGPU=True):
         r"""Calculates several rows of the system matrix
         
         The CT geometry and CT volume parameters must be set prior to running this function.
@@ -1944,6 +2006,7 @@ class tomographicModels:
             print('Error: current implementation only works for parallel-beam geometries')
             return None, None
         if iAngle < 0 or iAngle >= self.get_numAngles():
+            print("Error: iAngle is out of range")
             return None, None
         
         phi = np.pi/180.0*self.get_angles()[iAngle]
@@ -1951,9 +2014,12 @@ class tomographicModels:
 
         # These calculation only work for parallel-beam            
         # the width in the denominator is the extreme case where the pixel is intersected like a diamond
-        footprint_row = 1
-        footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
-        N = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
+        if max_size is None:
+            footprint_row = 1
+            footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
+            N = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
+        else:
+            N = max_size
         
         if iCols is None:
             iCols = np.array(range(self.get_numCols()), dtype=np.int32)
@@ -1962,6 +2028,8 @@ class tomographicModels:
         elif isinstance(iCols, int):
             iCols = max(0, min(self.get_numCols()-1, iCols))
             iCols = np.array([iCols])
+            if has_torch == True:
+                iCols = self.copy_to_device(iCols)
         elif type(iCols) is np.ndarray:
             pass
         elif has_torch == True and type(iCols) is torch.Tensor:
@@ -1974,7 +2042,6 @@ class tomographicModels:
         iCols_size = iCols.shape[0]
         
         if has_torch:
-            
             if onGPU:
                 A = torch.zeros((iCols_size, N), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
                 indices = torch.zeros((iCols_size, N, 2), dtype=torch.int16, device=torch.device('cuda:'+str(self.get_gpu())))

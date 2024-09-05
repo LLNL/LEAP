@@ -385,7 +385,18 @@ class BaseProjector(torch.nn.Module):
         self.proj_data = torch.from_numpy(proj_np)
         if self.use_gpu:
             self.proj_data = self.proj_data.float().to(self.gpu_device)
-        
+    
+    def get_system_maxsize(self):
+        return self.leapct.system_matrix_maxsize()
+
+    def get_system_matrix(self, nAngle, nRow, nCol, max_size, onGPU):
+        weights, indices = self.leapct.system_matrix(nAngle, nRow, nCol, max_size, onGPU)
+        return weights, indices
+
+    def get_system_matrix_single(self, nAngle, nRow, nCol, max_size, onGPU):
+        weights, indices = self.leapct.system_matrix_single(nAngle, nRow, nCol, max_size, onGPU)
+        return weights, indices
+
     def get_volume_dim(self):
         """Returns the shape of the CT volume dimensions"""
         return self.leapct.get_volume_dim()
