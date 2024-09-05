@@ -26,7 +26,8 @@ indices will be of size (numCols, index of elements, 3)
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 64
-numAngles = 2*int(360*numCols/1024)*0+1 # just using one projection angle because this takes forever
+#numAngles = 2*int(360*numCols/1024)*0+1 # just using one projection angle because this takes forever
+numAngles = 90
 pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
@@ -83,16 +84,28 @@ f = torch.from_numpy(f).to(device)
 Pf = leapct.copyData(g)
 Pf[:] = 0.0
 
-for iAngle in range(leapct.get_numAngles()):
+'''
+for iAngle in range(40, leapct.get_numAngles()):
     print(str(iAngle) + ' of ' + str(leapct.get_numAngles()))
     A, indices = leapct.system_matrix(iAngle)
+    print(A.shape)
+    print(indices.shape)
+    A = A.cpu().numpy()
+    indices = indices.cpu().numpy()
+    for i in range(A.shape[1]):
+        print("[%d] %f, (%d, %d)" % (i, A[32, i], indices[32, i, 0], indices[32, i, 1]))
     for iCol in range(A.shape[0]):
         for ind in range(A.shape[1]):
             a = A[iCol,ind]
             if a > 0.0: # some elements are zero, so check first
                 for iRow in range(numRows):
                     Pf[iAngle,iRow,iCol] += a*f[iRow,indices[iCol,ind,0],indices[iCol,ind,1]]
+'''
 
+A, indices = leapct.system_matrix(40, 0, 32, max_size=None, onGPU=True)
+print(A)
+print(indices)
+    
 leapct.display(g)
 leapct.display(Pf)
 leapct.display(Pf-g)
