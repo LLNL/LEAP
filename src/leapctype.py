@@ -5116,11 +5116,15 @@ class tomographicModels:
         
     def set_GPUs(self, listOfGPUs):
         """Set which GPUs to use when doing multi-GPU calculations"""
-        self.libprojectors.set_GPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
-        self.libprojectors.set_GPUs.restype = ctypes.c_bool
-        listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
-        self.set_model()
-        return self.libprojectors.set_GPUs(listOfGPUs, int(listOfGPUs.size))
+        if len(listOfGPUs) == 0:
+            self.set_model()
+            return self.libprojectors.set_gpu(-1)
+        else:
+            self.libprojectors.set_GPUs.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+            self.libprojectors.set_GPUs.restype = ctypes.c_bool
+            listOfGPUs = np.ascontiguousarray(listOfGPUs, dtype=np.int32)
+            self.set_model()
+            return self.libprojectors.set_GPUs(listOfGPUs, int(listOfGPUs.size))
     
     def get_gpus(self):
         """Get the index of all of the GPUs being used"""
