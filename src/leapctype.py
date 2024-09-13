@@ -374,9 +374,15 @@ class tomographicModels:
             if g.dtype != torch.float32 or f.dtype != torch.float32:
                 print('Error: projection and volume data must be float32 data type')
                 return False
+            if g.is_contiguous() == False or f.is_contiguous() == False:
+                print('Error: projection and volume data must be contiguous')
+                return False
         else:
             if g.dtype != np.float32 or f.dtype != np.float32:
                 print('Error: projection and volume data must be float32 data type')
+                return False
+            if g.data.c_contiguous == False or f.data.c_contiguous == False:
+                print('Error: projection and volume data must be contiguous')
                 return False
         
         # check are they 3D arrays

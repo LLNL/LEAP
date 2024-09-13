@@ -665,7 +665,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     Returns:
         stack of single-slice reconstructions (i.e., 3D numpy array or torch tensor) for all parameter values
     """
-    valid_params = ['centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt']
+    valid_params = ['centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt', 'vertical_shift', 'horizontal_shift']
     if param == None:
         param = 'centerCol'
     if any(name in param for name in valid_params) == False:
@@ -742,6 +742,10 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             leapct_sweep.set_sod(values[n])
         elif param == 'sdd':
             leapct_sweep.set_sdd(values[n])
+        elif param == 'vertical_shift':
+            leapct_sweep.shift_detector(values[n]-last_value, 0.0)
+        elif param == 'horizontal_shift':
+            leapct_sweep.shift_detector(0.0, values[n]-last_value)
         if param == 'tilt':
             leapct_sweep.rotate_detector(values[n]-last_value)
         
