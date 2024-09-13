@@ -1920,8 +1920,9 @@ class tomographicModels:
         return f
 
     def system_matrix_maxsize(self):
-        phi = 0.785398 # 45 deg
-        width = 1.0 / max(np.abs(np.cos(phi)), np.abs(np.sin(phi)))
+        #phi = 0.785398 # 45 deg
+        #width = 1.0 / max(np.abs(np.cos(phi)), np.abs(np.sin(phi)))
+        width = np.sqrt(2.0)
         footprint_row = 1
         footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
         max_size = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
@@ -1963,6 +1964,8 @@ class tomographicModels:
             self.set_model()
             self.libprojectors.system_matrix.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
             self.libprojectors.system_matrix(weights, inds, max_size, iAngle, iRow, iCols, iCols_size, True)
+            
+        return weights, inds
 
         '''
         inds[:,0] / dim_x
@@ -2028,7 +2031,7 @@ class tomographicModels:
         elif isinstance(iCols, int):
             iCols = max(0, min(self.get_numCols()-1, iCols))
             iCols = np.array([iCols])
-            if has_torch == True:
+            if has_torch == True and onGPU == True:
                 iCols = self.copy_to_device(iCols)
         elif type(iCols) is np.ndarray:
             pass
