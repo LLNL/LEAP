@@ -17,6 +17,9 @@ import sys
 import os
 import time
 import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import least_squares
+from scipy.spatial.transform import Rotation as R
 from leapctype import *
 
 def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=None, badPixelMap=None, flux_response=None):
@@ -838,3 +841,172 @@ def MTF(leapct, f, r, center=None, getEdgeResponse=False, oversamplingRate=4):
     
     return MTF
     
+    
+class ball_phantom_calibration:
+    def __init__(self, leapct, ballSpacing, g):
+        if leapct.ct_geometry_defined() == False:
+            print('Must define initial guess of CT geometry!')
+            return
+        if g is None:
+            print('Must define ball phantom scan data!')
+            return
+        if ballSpacing is None or ballSpacing <= 0.0:
+            return('Must define spacing (mm) between balls')
+            return
+            
+        self.T_u = leapct.get_pixelWidth()
+        self.T_v = leapct.get_pixelHeight()
+        self.numCols = leapct.get_numCols()
+        self.numRows = leapct.get_numRows()
+        
+        us = self.T_u*(np.array(range(self.numCols)) - 0.5*(self.numCols-1.0))
+        vs = self.T_v*(np.array(range(self.numRows)) - 0.5*(self.numRows-1.0))
+        
+        ### PERFORM CONNECTED COMPONENTS SEGMENTATION
+        # ball_projection_locations is numAngles x numBalls x 2 numpy array
+        # which gives the COM of each projection of each ball on the detector
+        us, vs = np.meshgrid(us, vs)
+        g_labeled = self.connected_components(g)
+        numBalls = np.max(g_labeled)
+        self.ball_projection_locations = np.zeros((g.shape[0], numBalls, 2), dtype=np.float32)
+        for i in range(g.shape[0]):
+            aProj = np.squeeze(g[i,:,:])
+            aProj_labeled = np.squeeze(g_labeled[i,:,:])
+            for k in range(numBalls):
+                ind = aProj_labeled == k+1
+                self.ball_projection_locations[i,k,0] = np.sum(us[ind]*aProj[ind]) / np.sum(aProj[ind])
+                self.ball_projection_locations[i,k,1] = np.sum(vs[ind]*aProj[ind]) / np.sum(aProj[ind])
+        del g_labeled
+        
+        self.numAngles = g.shape[0]
+        self.T_z = ballSpacing
+        self.N_z = numBalls
+        self.projectionAngles = leapct.get_angles()
+        self.leapct = leapct
+        
+    def initial_guess(self, g=None):
+        sod = self.leapct.get_sod()
+        sdd = self.leapct.get_sdd()
+        odd = sdd - sod
+        
+        if self.N_z >= 3:
+            spread = np.zeros(self.N_z, dtype=np.float32)
+            for k in range(self.N_z):
+                spread[k] = np.max(self.ball_projection_locations[:, k, 1]) - np.min(self.ball_projection_locations[:, k, 1])
+            k_arg = np.argmin(spread)
+            v_c = np.mean(self.ball_projection_locations[:, k_arg, 1])
+            #v_c = self.T_v * (x[3] - 0.5*(self.numRows-1.0))
+            centerRow = v_c / self.T_v + 0.5*(self.numRows-1.0)
+            self.leapct.set_centerRow(centerRow)
+        
+        r = 0.5*(np.max(self.ball_projection_locations[:, :, 0]) - np.min(self.ball_projection_locations[:, :, 0])) * sod / sdd
+        phase = 0.0
+        
+        #mean_z = 0.5*T_z*(N_z-1) + z_0
+        #mean_z = np.mean(self.ball_projection_locations[:, :, 1])
+        #z_0 = 0.0*mean_z - 0.5*self.T_z*(self.N_z-1)
+        z_0 = -self.T_z*0.5*(self.N_z-1.0)
+        
+        if g is not None:
+            g_sum = np.sum(g,axis=1)
+            g_copy = g.copy()
+            g_copy[:,:,:] = g_sum[:,None,:]
+            self.leapct.find_centerCol(g_copy)
+            del g_copy
+            del g_sum
+        x = [self.leapct.get_centerRow(), self.leapct.get_centerCol(), self.leapct.get_sod(), self.leapct.get_sdd()-self.leapct.get_sod(), 0.0, 0.0, 0.0, r, z_0, 0.0]
+        return x
+    
+    def estimate_locations(self, x):
+        deg_to_rad = np.pi/180.0
+        #x = [centerRow, centerCol, sod, odd, psi, theta, phi, r, z_0, phase]
+        
+        v_c = self.T_v * (x[0] - 0.5*(self.numRows-1.0))
+        u_c = self.T_u * (x[1] - 0.5*(self.numCols-1.0))
+        
+        sod = x[2]
+        odd = x[3]
+        psi = x[4]
+        theta = x[5]
+        phi = x[6]
+        A = R.from_euler('xyz', [psi, theta, phi], degrees=True).as_matrix()
+        detNormal = A[:,1]
+        u_vec = A[:,0]
+        v_vec = A[:,2]
+        
+        sourcePos = np.array([0.0, sod, 0.0])
+        detectorCenter = np.array([u_c, -odd, v_c])
+        c_minus_s_dot_n = np.dot(detectorCenter - sourcePos, detNormal)
+        
+        r = x[7]
+        z_0 = x[8]
+        phase = x[9]
+        
+        retVal = np.zeros((self.numAngles, self.N_z, 2), dtype=np.float32)
+        for k in range(self.N_z):
+            u_est = np.zeros(self.numAngles)
+            v_est = np.zeros(self.numAngles)
+            for i in range(self.numAngles):
+                ball = np.array([r*np.cos((self.projectionAngles[i]-phase)*deg_to_rad), r*np.sin((self.projectionAngles[i]-phase)*deg_to_rad), self.T_z*k+z_0])
+                traj = ball - sourcePos
+                
+                t = c_minus_s_dot_n / np.dot(traj, detNormal)
+                
+                hitPosition = sourcePos + t * traj
+                
+                u_coord = np.dot(hitPosition, u_vec) + u_c
+                v_coord = np.dot(hitPosition, v_vec) + v_c
+                
+                retVal[i,k,0] = u_coord
+                retVal[i,k,1] = v_coord
+        
+        return retVal
+        
+    def do_plot(self, x):
+        estimated = self.estimate_locations(x)
+        plt.plot(self.ball_projection_locations[:, :, 0], self.ball_projection_locations[:, :, 1], 'ko')
+        plt.plot(estimated[:,:,0], estimated[:,:,1], 'ro')
+        plt.title('Ball Center Locations (black from data, red are estimated)')
+        plt.xlabel('detector column dimension (mm)')
+        plt.ylabel('detector row dimension (mm)')
+        plt.show()
+        
+    def residuals(self, x):
+        estimated = self.estimate_locations(x)
+        return (estimated - self.ball_projection_locations).flatten()
+        
+    def cost(self, x):
+        estimated = self.estimate_locations(x)
+        return np.sum((estimated - self.ball_projection_locations)**2)
+        
+    def optimize(self, x=None, set_parameters=False):
+        if x is None:
+            x = self.initial_guess()
+        res = least_squares(self.residuals, x)
+        if set_parameters:
+            self.leapct.set_centerRow(res.x[0])
+            self.leapct.set_centerCol(res.x[1])
+            self.leapct.set_sod(res.x[2])
+            self.leapct.set_sdd(res.x[2]+res.x[3])
+            if np.abs(res.x[5]) > 0.05:
+                A = R.from_euler('xyz', [res.x[4], res.x[5], res.x[6]], degrees=True).as_matrix()
+                self.leapct.convert_to_modularbeam()
+                #self.leapct.rotate_detector(-res.x[5])
+                self.leapct.rotate_detector(A.T)
+        return res
+
+    def connected_components(self, g, threshold=None, FWHM=0.0, connectivity=2):
+        if threshold is None:
+            threshold = np.max(g)/10.0
+        g_labeled = np.zeros((g.shape[0], g.shape[1], g.shape[2]), dtype=np.int8)
+        import skimage as ski
+        for i in range(g.shape[0]):
+            I = np.squeeze(g[i,:,:])
+            if FWHM > 1.0:
+                self.BlurFilter2D(I, FWHM)
+            binary_mask = I > threshold
+            
+            # perform connected component analysis, connectivity=2 includes diagonals
+            labeled_image, count = ski.measure.label(binary_mask, connectivity=connectivity, return_num=True)
+            g_labeled[i,:,:] = labeled_image[:,:]
+        return g_labeled

@@ -47,4 +47,15 @@ bool windowFOV_cpu(float* f, parameters* params);
 
 float* rotateAroundAxis(float* theAxis, float phi, float* aVec);
 
+char swapEndian(char);
+short swapEndian(short);
+unsigned short swapEndian(unsigned short);
+int swapEndian(int);
+float swapEndian(float);
+double swapEndian(double);
+unsigned int swapEndian(unsigned int);
+
+template <typename T>
+T bswap(T val);
+
 #endif

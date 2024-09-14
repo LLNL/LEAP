@@ -455,3 +455,70 @@ float* rotateAroundAxis(float* theAxis, float phi, float* aVec)
 
     return aVec;
 }
+
+char swapEndian(char x)
+{
+    x = bswap(x);
+    return x;
+}
+
+short swapEndian(short x)
+{
+    /*
+    x = bswap(x);
+    return x;
+    */
+    return (x << 8) | ((x >> 8) & 0xFF);
+}
+
+unsigned short swapEndian(unsigned short x)
+{
+    return (x << 8) | (x >> 8);
+}
+
+int swapEndian(int x)
+{
+    /*
+    x = bswap(x);
+    return x;
+    */
+    x = ((x << 8) & 0xFF00FF00) | ((x >> 8) & 0xFF00FF);
+    return (x << 16) | ((x >> 16) & 0xFFFF);
+}
+
+unsigned int swapEndian(unsigned int x)
+{
+    /*
+    x = bswap(x);
+    return x;
+    */
+    x = ((x << 8) & 0xFF00FF00) | ((x >> 8) & 0xFF00FF);
+    return (x << 16) | (x >> 16);
+}
+
+float swapEndian(float x)
+{
+    x = bswap(x);
+    return x;
+}
+
+double swapEndian(double x)
+{
+    x = bswap(x);
+    return x;
+}
+
+template <typename T>
+T bswap(T val)
+{
+    T retVal;
+    char* pVal = (char*)&val;
+    char* pRetVal = (char*)&retVal;
+    int size = sizeof(T);
+    for (int i = 0; i < size; i++)
+    {
+        pRetVal[size - 1 - i] = pVal[i];
+    }
+
+    return retVal;
+}

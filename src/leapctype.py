@@ -4544,15 +4544,25 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #bool BlurFilter(float* f, int, int, int, float FWHM);
         self.libprojectors.BlurFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.BlurFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BlurFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+            return self.libprojectors.BlurFilter(f.data_ptr(), N_1, N_2, N_3, FWHM, f.is_cuda == False)
         else:
             self.libprojectors.BlurFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BlurFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+            return self.libprojectors.BlurFilter(f, N_1, N_2, N_3, FWHM, True)
 
     def HighPassFilter(self, f, FWHM=2.0):
         """Applies a high pass filter to the provided numpy array or torch tensor
@@ -4568,15 +4578,25 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #bool HighPassFilter(float* f, int, int, int, float FWHM);
         self.libprojectors.HighPassFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.HighPassFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.HighPassFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+            return self.libprojectors.HighPassFilter(f.data_ptr(), N_1, N_2, N_3, FWHM, f.is_cuda == False)
         else:
             self.libprojectors.HighPassFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.HighPassFilter(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+            return self.libprojectors.HighPassFilter(f, N_1, N_2, N_3, FWHM, True)
 
     def LowPassFilter2D(self, f, FWHM=2.0):
         """Alias for BlurFilter2D"""
@@ -4596,15 +4616,25 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #bool BlurFilter2D(float* f, int, int, int, float FWHM);
         self.libprojectors.BlurFilter2D.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.BlurFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BlurFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+            return self.libprojectors.BlurFilter2D(f.data_ptr(), N_1, N_2, N_3, FWHM, f.is_cuda == False)
         else:
             self.libprojectors.BlurFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BlurFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+            return self.libprojectors.BlurFilter2D(f, N_1, N_2, N_3, FWHM, True)
             
     def HighPassFilter2D(self, f, FWHM=2.0):
         """Applies a 2D high pass filter to the provided numpy array or torch tensor
@@ -4620,15 +4650,25 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #bool HighPassFilter2D(float* f, int, int, int, float FWHM);
         self.libprojectors.HighPassFilter2D.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.HighPassFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.HighPassFilter2D(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], FWHM, f.is_cuda == False)
+            return self.libprojectors.HighPassFilter2D(f.data_ptr(), N_1, N_2, N_3, FWHM, f.is_cuda == False)
         else:
             self.libprojectors.HighPassFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.HighPassFilter2D(f, f.shape[0], f.shape[1], f.shape[2], FWHM, True)
+            return self.libprojectors.HighPassFilter2D(f, N_1, N_2, N_3, FWHM, True)
             
     def MeanFilter(self, x, windowRadius=1):
         r"""Applies a 3D mean filter to the provided numpy array
@@ -4643,14 +4683,24 @@ class tomographicModels:
         Returns:
             x, the same as the input
         """
+        
+        if len(x.shape) == 3:
+            N_1 = x.shape[0]
+            N_2 = x.shape[1]
+            N_3 = x.shape[2]
+        elif len(x.shape) == 2:
+            N_1 = 1
+            N_2 = x.shape[0]
+            N_3 = x.shape[1]
+        
         self.libprojectors.MeanOrVarianceFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(x) is torch.Tensor:
             self.libprojectors.MeanOrVarianceFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MeanOrVarianceFilter(x.data_ptr(), x.shape[0], x.shape[1], x.shape[2], windowRadius, 1, x.is_cuda == False)
+            return self.libprojectors.MeanOrVarianceFilter(x.data_ptr(), N_1, N_2, N_3, windowRadius, 1, x.is_cuda == False)
         else:
             self.libprojectors.MeanOrVarianceFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MeanOrVarianceFilter(x, x.shape[0], x.shape[1], x.shape[2], windowRadius, 1, True)
+            return self.libprojectors.MeanOrVarianceFilter(x, N_1, N_2, N_3, windowRadius, 1, True)
             
     def VarianceFilter(self, x, windowRadius=1):
         r"""Applies a 3D variance filter to the provided numpy array
@@ -4665,27 +4715,47 @@ class tomographicModels:
         Returns:
             x, the same as the input
         """
+        
+        if len(x.shape) == 3:
+            N_1 = x.shape[0]
+            N_2 = x.shape[1]
+            N_3 = x.shape[2]
+        elif len(x.shape) == 2:
+            N_1 = 1
+            N_2 = x.shape[0]
+            N_3 = x.shape[1]
+        
         self.libprojectors.MeanOrVarianceFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(x) is torch.Tensor:
             self.libprojectors.MeanOrVarianceFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MeanOrVarianceFilter(x.data_ptr(), x.shape[0], x.shape[1], x.shape[2], windowRadius, 2, x.is_cuda == False)
+            return self.libprojectors.MeanOrVarianceFilter(x.data_ptr(), N_1, N_2, N_3, windowRadius, 2, x.is_cuda == False)
         else:
             self.libprojectors.MeanOrVarianceFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.MeanOrVarianceFilter(x, x.shape[0], x.shape[1], x.shape[2], windowRadius, 2, True)
+            return self.libprojectors.MeanOrVarianceFilter(x, N_1, N_2, N_3, windowRadius, 2, True)
     
     def LowSignalCorrection(self, f, threshold=0.0, windowSize=3, signalThreshold=0.001):
         r"""Same as MedianFilter, but only filters those values that are lower than the specified threshold
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #bool MedianFilter(float* f, int, int, int, float threshold);
         self.libprojectors.MedianFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.MedianFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, f.is_cuda == False)
+            return self.libprojectors.MedianFilter(f.data_ptr(), N_1, N_2, N_3, threshold, windowSize, signalThreshold, f.is_cuda == False)
         else:
             self.libprojectors.MedianFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.MedianFilter(f, f.shape[0], f.shape[1], f.shape[2], threshold, windowSize, signalThreshold, True)
+            return self.libprojectors.MedianFilter(f, N_1, N_2, N_3, threshold, windowSize, signalThreshold, True)
     
     def MedianFilter(self, f, threshold=0.0, windowSize=3):
         r"""Applies a thresholded 3D median filter (3x3x3 or 3x5x5) to the provided array
