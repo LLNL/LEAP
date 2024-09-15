@@ -388,7 +388,7 @@ FILE* read_header_leave_open(ImageHeader* h)
 			fread(cdata, sizeof(char), (size_t)ft_num_vals[i], fptr);
 			//this is something like: slope = 2.3346E-005 '\13' offset = 0.00000E000
 			sscanf(cdata, "%s %s %f %s %s %f", cslope, cequals, &h->slope, coffset, cequals, &h->offset);
-			if (strcmpi(cslope, "slope") != 0)
+			if (strcmp(cslope, "slope") != 0)
 				h->slope = 0.0;
 
 			if (h->bigEndian)

@@ -988,12 +988,14 @@ class ball_phantom_calibration:
             self.leapct.set_centerCol(res.x[1])
             self.leapct.set_sod(res.x[2])
             self.leapct.set_sdd(res.x[2]+res.x[3])
+            """
             if np.abs(res.x[4]) < 0.1:
                 res.x[4] = 0.0
             if np.abs(res.x[6]) < 0.1:
                 res.x[6] = 0.0
             if np.abs(res.x[5]) < 0.05:
                 res.x[5] = 0.0
+            #"""
             if res.x[4] != 0.0 or res.x[5] != 0.0 or res.x[6] != 0.0:
                 A = R.from_euler('xyz', [res.x[4], res.x[5], res.x[6]], degrees=True).as_matrix()
                 self.leapct.convert_to_modularbeam()
