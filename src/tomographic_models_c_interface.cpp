@@ -1072,6 +1072,48 @@ bool saveParamsToFile(const char* param_fn)
 	return saveParametersToFile(param_fn, &(tomo()->params));
 }
 
+bool save_tif(char* fileName, float* data, int numRows, int numCols, float pixelHeight, float pixelWidth, int dtype, float wmin, float wmax)
+{
+	return write_tif(fileName, data, numRows, numCols, pixelHeight, pixelWidth, dtype, wmin, wmax);
+}
+
+bool read_tif_header(char* fileName, int* shape, float* size, float* slope_and_offset)
+{
+	return read_header(fileName, shape, size, slope_and_offset);
+}
+
+bool read_tif(char* fileName, float* data)
+{
+	if (load_tif(fileName, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
+bool read_tif_rows(char* fileName, int firstRow, int lastRow, float* data)
+{
+	if (load_tif_rows(fileName, firstRow, lastRow, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
+bool read_tif_cols(char* fileName, int firstCol, int lastCol, float* data)
+{
+	if (load_tif_cols(fileName, firstCol, lastCol, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
+bool read_tif_roi(char* fileName, int firstRow, int lastRow, int firstCol, int lastCol, float* data)
+{
+	if (load_tif_roi(fileName, firstRow, lastRow, firstCol, lastCol, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
 /*
 //PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 PYBIND11_MODULE(leapct, m) {
@@ -1253,5 +1295,10 @@ PYBIND11_MODULE(leapct, m) {
     m.def("synthesize_symmetry", &synthesize_symmetry, "");
     m.def("AzimuthalBlur", &AzimuthalBlur, "");
     m.def("saveParamsToFile", &saveParamsToFile, "");
+	m.def("save_tif", &save_tif, "");
+	m.def("read_tif_header", &read_tif_header, "");
+	m.def("read_tif", &read_tif, "");
+	m.def("read_tif_rows", &read_tif_rows, "");
+	m.def("read_tif_cols", &read_tif_cols, "");
 }
 //*/

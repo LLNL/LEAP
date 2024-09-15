@@ -258,3 +258,10 @@ extern "C" PROJECTOR_API bool synthesize_symmetry(float* f_radial, float* f);
 extern "C" PROJECTOR_API bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool saveParamsToFile(const char* param_fn);
+extern "C" PROJECTOR_API bool save_tif(char* fileName, float* data, int numRows, int numCols, float pixelHeight, float pixelWidth, int dtype, float wmin, float wmax);
+extern "C" PROJECTOR_API bool read_tif_header(char* fileName, int* shape, float* size, float* slope_and_offset);
+
+extern "C" PROJECTOR_API bool read_tif(char* fileName, float* data);
+extern "C" PROJECTOR_API bool read_tif_rows(char* fileName, int firstRow, int lastRow, float* data);
+extern "C" PROJECTOR_API bool read_tif_cols(char* fileName, int firstCol, int lastCol, float* data);
+extern "C" PROJECTOR_API bool read_tif_roi(char* fileName, int firstRow, int lastRow, int firstCol, int lastCol, float* data);

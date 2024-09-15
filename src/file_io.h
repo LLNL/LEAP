@@ -53,10 +53,13 @@ struct ImageHeader
 };
 
 FILE* read_header_leave_open(ImageHeader* h);
-float* read_tif(char* fileName, float* data = NULL);
-float* read_tif_rows(char* fileName, int firstRow, int lastRow, float* data = NULL);
-float* read_tif_cols(char* fileName, int firstCol, int lastCol, float* data = NULL);
-bool write_tif(char* fileName, float* data, int numRows, int numCols, int dtype = 3, float slope = 1.0, float offset = 0.0);
+bool read_header(char* fileName, int* shape, float* size, float* slope_and_offset);
+float* load_tif(char* fileName, float* data = NULL);
+float* load_tif_rows(char* fileName, int firstRow, int lastRow, float* data = NULL);
+float* load_tif_rows(ImageHeader* h, int firstRow, int lastRow, float* data = NULL);
+float* load_tif_cols(char* fileName, int firstCol, int lastCol, float* data = NULL);
+float* load_tif_roi(char* fileName, int firstRow, int lastRow, int firstCol, int lastCol, float* data = NULL);
+bool write_tif(char* fileName, float* data, int numRows, int numCols, float pixelHeight = 1.0, float pixelWidth = 1.0, int dtype = 3, float wmin = 0.0, float wmax = 1.0);
 
 
 #endif

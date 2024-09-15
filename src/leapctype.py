@@ -13,6 +13,7 @@ import sys
 os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
 import site
 import glob
+import imageio
 from sys import platform as _platform
 from numpy.ctypeslib import ndpointer
 import numpy as np
@@ -6254,7 +6255,166 @@ class tomographicModels:
             z_0 = 0.0
             T = 1.0
         return self.save_data(fileName, f, T, x_0, y_0, z_0, sequence_offset)
+    
+    def load_tif_python(self, fileName, x=None, rowRange=None, colRange=None):
+        if os.path.isfile(fileName) == False:
+            return None
+
+        try:
+            anImage = np.array(imageio.imread(fileName), dtype=np.float32)
+            
+            numRows = anImage.shape[0]
+            numCols = anImage.shape[1]
+            
+            if rowRange is not None:
+                if rowRange[0] < 0 or rowRange[0] > rowRange[1] or rowRange[1] > anImage.shape[0]-1:
+                    print('Invalid rowRange')
+                    return None
+                numRows = rowRange[1]-rowRange[0]+1
+            if colRange is not None:
+                if colRange[0] < 0 or colRange[0] > colRange[1] or colRange[1] > anImage.shape[1]-1:
+                    print('Invalid colRange')
+                    return None
+                numCols = colRange[1]-colRange[0]+1
+            
+            if x is not None:
+                x = np.zeros((numRows, numCols), dtype=np.float32)
+            elif x.shape[0] != numRows or x.shape[1] != numCols:
+                return None
+            
+            if rowRange is not None:
+                if colRange is not None:
+                    x[:,:] = anImage[rowRange[0]:rowRange[1]+1, colRange[0]:colRange[1]+1]
+                else:
+                    x[:,:] = anImage[rowRange[0]:rowRange[1]+1,:]
+            else:
+                if colRange is not None:
+                    x[:,:] = anImage[:,colRange[0]:colRange[1]+1]
+                else:
+                    x[:,:] = anImage[:,:]
+            return x
+        except:
+            print('error reading: ' + str(fileName))
+            return None
+    
+    def load_tif(self, fileName, x=None, rowRange=None, colRange=None):
+        if os.path.isfile(fileName) == False:
+            return None
+            
+        if sys.version_info[0] == 3:
+            path = bytes(str(fileName), 'ascii')
+        else:
+            path = fileName
+            
+        if x is None:
+            shape = np.zeros(2, dtype=np.int32)
+            size = np.zeros(2, dtype=np.float32)
+            slope_and_offset = size.copy()
+            
+            self.libprojectors.read_tif_header.restype = ctypes.c_bool
+            self.libprojectors.read_tif_header.argtypes = [ctypes.c_char_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            success = self.libprojectors.read_tif_header(path, shape, size, slope_and_offset)
+            if success == False:
+                try:
+                    return self.load_tif_python(fileName, None, rowRange, colRange)
+                    #x = np.array(imageio.imread(fileName), dtype=np.float32)
+                    #return x
+                except:
+                    return None
+            else:
+                numRows = shape[0]
+                numCols = shape[1]
+                if rowRange is not None:
+                    if rowRange[0] < 0 or rowRange[1] > shape[0]-1 or rowRange[0] > rowRange[1]:
+                        return None
+                    else:
+                        numRows = rowRange[1] - rowRange[0] + 1
+                if colRange is not None:
+                    if colRange[0] < 0 or colRange[1] > shape[1]-1 or colRange[0] > colRange[1]:
+                        return None
+                    else:
+                        numCols = colRange[1] - colRange[0] + 1
+                    
+                x = np.zeros((numRows, numCols), dtype=np.float32)
+                
+        if rowRange is not None:
+            if rowRange[0] == 0 and rowRange[1] == x.shape[0]-1:
+                rowRange = None
+            elif rowRange[0] < 0 or rowRange[1]-rowRange[0]+1 > x.shape[0] or rowRange[0] > rowRange[1]:
+                print(rowRange)
+                print(x.shape)
+                print('Invalid rowRange')
+                return None
+        if colRange is not None:
+            if colRange[0] == 0 and colRange[1] == x.shape[1]-1:
+                colRange = None
+            elif colRange[0] < 0 or colRange[1]-colRange[0]+1 > x.shape[1] or colRange[0] > colRange[1]:
+                print('Invalid colRange')
+                return None
+                
+        if rowRange is None:
+            if colRange is None:
+                self.libprojectors.read_tif.restype = ctypes.c_bool
+                self.libprojectors.read_tif.argtypes = [ctypes.c_char_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                if self.libprojectors.read_tif(path, x):
+                    return x
+                else:
+                    return None
+            else:
+                self.libprojectors.read_tif_cols.restype = ctypes.c_bool
+                self.libprojectors.read_tif_cols.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                if self.libprojectors.read_tif_cols(path, colRange[0], colRange[1], x):
+                    return x
+                else:
+                    return None
+        else:
+            if colRange is None:
+                self.libprojectors.read_tif_rows.restype = ctypes.c_bool
+                self.libprojectors.read_tif_rows.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                if self.libprojectors.read_tif_rows(path, rowRange[0], rowRange[1], x):
+                    return x
+                else:
+                    return None
+            else:
+                self.libprojectors.read_tif_roi.restype = ctypes.c_bool
+                self.libprojectors.read_tif_roi.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+                if self.libprojectors.read_tif_roi(path, rowRange[0], rowRange[1], colRange[0], colRange[1], x):
+                    return x
+                else:
+                    return None
         
+    def save_tif(self, fileName, x, T=[1.0,1.0]):
+        if sys.version_info[0] == 3:
+            fileName = bytes(str(fileName), 'ascii')
+        self.libprojectors.save_tif.restype = ctypes.c_bool
+        #bool save_tif(char* fileName, float* data, int numRows, int numCols, float pixelHeight, float pixelWidth, int dtype, float wmin, float wmax);
+        self.libprojectors.save_tif.argtypes = [ctypes.c_char_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.set_model()
+        
+        if self.file_dtype == np.uint8:
+            dtype = 0
+        elif self.file_dtype == np.uint16:
+            dtype = 1
+        else:
+            dtype = 3
+        if dtype == 3:
+            wmin = 0.0
+            wmax = 1.0
+        else:
+            if self.wmin is None:
+                wmin = np.min(x)
+            else:
+                wmin = self.wmin
+            if self.wmax is None:
+                wmax = np.max(x)
+            else:
+                wmax = self.wmax
+            if wmax <= wmin:
+                wmax = wmin + 1.0
+        
+        return self.libprojectors.save_tif(fileName, x, x.shape[0], x.shape[1], T[0], T[1], dtype, wmin, wmax)
+    
+    
     def save_data(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0, sequence_offset=0):
         """Save 3D data to file (tif sequence, nrrd, or npy)"""
         volFilePath, dontCare = os.path.split(fileName)
@@ -6281,6 +6441,19 @@ class tomographicModels:
                 print('To install this package do: pip install pynrrd')
                 return False
         elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
+            baseName, fileExtension = os.path.splitext(fileName)
+            if self.file_dtype != np.uint8 and self.file_dtype != np.uint16 and self.file_dtype != np.float32:
+                print('Can only save as uint8, uint16, or float32!')
+                return False
+                
+            if len(x.shape) <= 2:
+                self.save_tif(baseName + fileExtension, x)
+            else:
+                for i in range(x.shape[0]):
+                    im = x[i,:,:]
+                    self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+            return True
+            """
             try:
                 #from PIL import Image
                 import imageio
@@ -6327,6 +6500,7 @@ class tomographicModels:
                 print('Error: Failed to load imageio library!')
                 print('To install PIL do: pip install imageio')
                 return False
+            """
         else:
             print('Error: must be a tif, npy, or nrrd file!')
             return False
@@ -6425,118 +6599,128 @@ class tomographicModels:
             else:
                 fileExt = '.tiff'
             
-            try:
-                #from PIL import Image
-                import imageio
-                import glob
-                hasPIL = True
-            except:
-                #print('Error: Failed to load PIL or glob library!')
-                #print('To install PIL do: pip install Pillow')
-                print('Error: Failed to load imageio or glob library!')
-                print('To install PIL do: pip install imageio')
-                return None
-            if hasPIL == True:
-                
-                if fileName.find('*') != -1:
-                    import imageio
-                    fileList = glob.glob(fileName)
-                    if fileRange is not None:
-                        fileList = fileList[fileRange[0]:fileRange[1]+1]
-                    ind = None
-                    currentWorkingDirectory = None
-                else:
-                    currentWorkingDirectory = os.getcwd()
-                    dataFolder, baseFileName = os.path.split(fileName)
-                
-                    if len(dataFolder) > 0:
-                        os.chdir(dataFolder)
-                
-                    sequence_separator = "_"
-                
-                    baseFileName, fileExtension = os.path.splitext(os.path.basename(baseFileName))
-                    templateFile = baseFileName + '_*' + fileExtension
+            if fileName.find('*') != -1:
+                fileList = glob.glob(fileName)
+                if fileRange is not None:
+                    fileList = fileList[fileRange[0]:fileRange[1]+1]
+                ind = None
+                currentWorkingDirectory = None
+            else:
+                currentWorkingDirectory = os.getcwd()
+                dataFolder, baseFileName = os.path.split(fileName)
+            
+                if len(dataFolder) > 0:
+                    os.chdir(dataFolder)
+            
+                sequence_separator = "_"
+            
+                baseFileName, fileExtension = os.path.splitext(os.path.basename(baseFileName))
+                templateFile = baseFileName + '_*' + fileExtension
+                fileList = glob.glob(os.path.split(templateFile)[1])
+                if len(fileList) == 0:
+                    sequence_separator = ""
+                    templateFile = baseFileName + '*' + fileExtension
                     fileList = glob.glob(os.path.split(templateFile)[1])
                     if len(fileList) == 0:
-                        sequence_separator = ""
-                        templateFile = baseFileName + '*' + fileExtension
-                        fileList = glob.glob(os.path.split(templateFile)[1])
-                        if len(fileList) == 0:
-                            os.chdir(currentWorkingDirectory)
-                            print('file sequence does not exist')
-                            return None
-                        
-                    if fileRange is not None:
-                        # prune fileList
-                        fileList_pruned = []
-                        for i in range(len(fileList)):
-                            digit = int(fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,''))
-                            if fileRange[0] <= digit and digit <= fileRange[1]:
-                                fileList_pruned.append(fileList[i])
-                        fileList = fileList_pruned
-                        
-                    justDigits = []
+                        os.chdir(currentWorkingDirectory)
+                        print('file sequence does not exist')
+                        return None
+                    
+                if fileRange is not None:
+                    # prune fileList
+                    fileList_pruned = []
                     for i in range(len(fileList)):
-                        digitStr = fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,'')
-                        justDigits.append(int(digitStr))
-                    ind = np.argsort(justDigits)
-
-                firstImg = np.array(imageio.imread(fileList[0]), dtype=np.float32)
-                
-                numRows = firstImg.shape[0]
-                numCols = firstImg.shape[1]
-                if rowRange is not None:
-                    if rowRange[1] > numRows-1:
-                        print('Error: row range is out range')
-                        return None
-                    numRows = rowRange[1] - rowRange[0] + 1
-                if colRange is not None:
-                    if colRange[1] > numCols-1:
-                        print('Error: col range is out range')
-                        return None
-                    numCols = colRange[1] - colRange[0] + 1
-                
-                if x is not None:
-                    if len(x.shape) != 3 or x.shape[0] != len(fileList) or x.shape[1] != numRows or x.shape[2] != numCols:
-                        print('Error: given array size does not match size of data in files!')
-                        return None
-                else:
-                    x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
-                print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
+                        digit = int(fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,''))
+                        if fileRange[0] <= digit and digit <= fileRange[1]:
+                            fileList_pruned.append(fileList[i])
+                    fileList = fileList_pruned
+                    
+                justDigits = []
                 for i in range(len(fileList)):
-                    if ind is None:
-                        anImage = np.array(imageio.imread(fileList[i]), dtype=np.float32)
+                    digitStr = fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,'')
+                    justDigits.append(int(digitStr))
+                ind = np.argsort(justDigits)
+
+            firstImg = self.load_tif(fileList[0], None, rowRange, colRange)
+            if firstImg is None:
+                firstImg = self.load_tif_python(fileList[0], None, rowRange, colRange)
+                if firstImg is None:
+                    return None
+                use_python_readers = True
+                #print('using python readers')
+            else:
+                use_python_readers = False
+                #print('using LEAP readers')
+            
+            numRows = firstImg.shape[0]
+            numCols = firstImg.shape[1]
+            anImage = np.zeros((numRows, numCols), dtype=np.float32)
+            if x is not None:
+                if len(x.shape) != 3 or x.shape[0] != len(fileList) or x.shape[1] != numRows or x.shape[2] != numCols:
+                    print('Error: given array size does not match size of data in files!')
+                    return None
+            else:
+                x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
+            print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
+            for i in range(len(fileList)):
+                if ind is None:
+                    curFile = fileList[i]
+                else:
+                    curFile = fileList[ind[i]]
+                if use_python_readers:
+                    if self.load_tif_python(curFile, anImage, rowRange, colRange) is None:
+                        return None
                     else:
-                        anImage = np.array(imageio.imread(fileList[ind[i]]), dtype=np.float32)
-                    if rowRange is not None:
-                        if colRange is not None:
-                            x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,colRange[0]:colRange[1]+1]
-                        else:
-                            x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,:]
+                        x[i,:,:] = anImage[:,:]
+                else:
+                    if self.load_tif(curFile, anImage, rowRange, colRange) is None:
+                        return None
                     else:
-                        if colRange is not None:
-                            x[i,:,:] = anImage[:,colRange[0]:colRange[1]+1]
-                        else:
-                            x[i,:,:] = anImage[:,:]
-                if currentWorkingDirectory is not None:
-                    os.chdir(currentWorkingDirectory)
-                return x
-            '''
-            try:
-                from PIL import Image
-                
-                baseName, fileExtension = os.path.splitext(fileName)
-                
-                for i in range(x.shape[0]):
-                    im = Image.fromarray(x[i,:,:])
-                    im.save(baseName + '_' + str(int(i)) + fileExtension)
-                return x
-                
-            except:
-                print('Error: Failed to load PIL library!')
-                print('To install this package do: pip install Pillow')
-                return None
-            #'''
+                        x[i,:,:] = anImage[:,:]
+            
+            """
+            firstImg = np.array(imageio.imread(fileList[0]), dtype=np.float32)
+            
+            numRows = firstImg.shape[0]
+            numCols = firstImg.shape[1]
+            if rowRange is not None:
+                if rowRange[1] > numRows-1:
+                    print('Error: row range is out range')
+                    return None
+                numRows = rowRange[1] - rowRange[0] + 1
+            if colRange is not None:
+                if colRange[1] > numCols-1:
+                    print('Error: col range is out range')
+                    return None
+                numCols = colRange[1] - colRange[0] + 1
+            
+            if x is not None:
+                if len(x.shape) != 3 or x.shape[0] != len(fileList) or x.shape[1] != numRows or x.shape[2] != numCols:
+                    print('Error: given array size does not match size of data in files!')
+                    return None
+            else:
+                x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
+            print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
+            for i in range(len(fileList)):
+                if ind is None:
+                    anImage = np.array(imageio.imread(fileList[i]), dtype=np.float32)
+                else:
+                    anImage = np.array(imageio.imread(fileList[ind[i]]), dtype=np.float32)
+                if rowRange is not None:
+                    if colRange is not None:
+                        x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,colRange[0]:colRange[1]+1]
+                    else:
+                        x[i,:,:] = anImage[rowRange[0]:rowRange[1]+1,:]
+                else:
+                    if colRange is not None:
+                        x[i,:,:] = anImage[:,colRange[0]:colRange[1]+1]
+                    else:
+                        x[i,:,:] = anImage[:,:]
+            """
+            if currentWorkingDirectory is not None:
+                os.chdir(currentWorkingDirectory)
+            return x
+            
         else:
             print('Error: must be a tif, npy, or nrrd file!')
             return None
