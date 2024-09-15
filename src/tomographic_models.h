@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.21"
+#define LEAP_VERSION "1.22"
 
 /*
 #include <iostream>
