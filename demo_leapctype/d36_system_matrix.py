@@ -32,7 +32,7 @@ pixelSize = 0.65*512/numCols
 
 # Set the number of detector rows
 # You can increase this, but let's start with an easy case of just one detector row
-numRows = numCols
+numRows = numCols*0+1
 
 # Set the scanner geometry
 leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize*1100.0/1400.0, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
@@ -84,27 +84,27 @@ f = torch.from_numpy(f).to(device)
 Pf = leapct.copyData(g)
 Pf[:] = 0.0
 
-'''
-for iAngle in range(40, leapct.get_numAngles()):
+#'''
+for iAngle in range(leapct.get_numAngles()):
     print(str(iAngle) + ' of ' + str(leapct.get_numAngles()))
     A, indices = leapct.system_matrix(iAngle)
-    print(A.shape)
-    print(indices.shape)
+    #print(A.shape)
+    #print(indices.shape)
     A = A.cpu().numpy()
     indices = indices.cpu().numpy()
-    for i in range(A.shape[1]):
-        print("[%d] %f, (%d, %d)" % (i, A[32, i], indices[32, i, 0], indices[32, i, 1]))
+    #for i in range(A.shape[1]):
+    #    print("[%d] %f, (%d, %d)" % (i, A[32, i], indices[32, i, 0], indices[32, i, 1]))
     for iCol in range(A.shape[0]):
         for ind in range(A.shape[1]):
             a = A[iCol,ind]
             if a > 0.0: # some elements are zero, so check first
                 for iRow in range(numRows):
                     Pf[iAngle,iRow,iCol] += a*f[iRow,indices[iCol,ind,0],indices[iCol,ind,1]]
-'''
+#'''
 
-A, indices = leapct.system_matrix(40, 0, 32, max_size=None, onGPU=True)
-print(A)
-print(indices)
+#A, indices = leapct.system_matrix(40, 0, 32, max_size=None, onGPU=True)
+#print(A)
+#print(indices)
     
 leapct.display(g)
 leapct.display(Pf)

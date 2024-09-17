@@ -38,7 +38,7 @@ __global__ void systemMatrixKernel_parallel(float* A, short* indices, const int*
     //A[numCols][N_max] ==> A[numCols][N_xy][footprint_row * footprint_col]
     //indices[numCols][N_max][2]
 
-    const uint64 ind_offset = uint64(iCol) * uint64(N_max) + uint64(ivox*N_max/N_xy);
+    const uint64 ind_offset = uint64(iCol_thread) * uint64(N_max) + uint64(ivox*N_max/N_xy);
 
     if (fabs(sin_phi) > fabs(cos_phi))
     {

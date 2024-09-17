@@ -2030,7 +2030,7 @@ class tomographicModels:
                 iCols = self.copy_to_device(iCols)
         elif isinstance(iCols, int):
             iCols = max(0, min(self.get_numCols()-1, iCols))
-            iCols = np.array([iCols])
+            iCols = np.array([iCols], dtype=np.int32)
             if has_torch == True and onGPU == True:
                 iCols = self.copy_to_device(iCols)
         elif type(iCols) is np.ndarray:
