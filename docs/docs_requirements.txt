@@ -1,4 +1,5 @@
 numpy
 torch
 imageio
+matplotlib
 sphinx-rtd-theme
