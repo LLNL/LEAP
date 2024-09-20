@@ -471,7 +471,7 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
         leapct.negLog(t)
     return True
 
-def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
+def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05, beta=1.0e3):
     r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     
     This algorithm estimates the rings by first averaging all projections.  Then denoises this
@@ -498,9 +498,12 @@ def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
         delta (float): The delta parameter of the Total Variation Functional
         numIter (int): Number of iterations
         maxChange (float): An upper limit on the maximum difference that can be applied to a detector pixels
+        beta (float): The strength of the regularization
     
     Returns:
         True if successful, False otherwise
+    """
+    
     """
     if has_torch == True and type(g) is torch.Tensor:
         g_sum = torch.zeros((1,g.shape[1],g.shape[2]), dtype=torch.float32)
@@ -509,13 +512,19 @@ def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
     else:
         g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
         g_sum[0,:] = np.mean(g,axis=0)
+    """
+    if has_torch == True and type(g) is torch.Tensor:
+        g_sum = torch.mean(g,axis=0)
+    else:
+        g_sum = np.mean(g,axis=0)
     g_sum_save = leapct.copyData(g_sum)
     minValue = np.min(g_sum_save)
     minValue = min(minValue, 0.0)
     
     numNeighbors = leapct.get_numTVneighbors()
     leapct.set_numTVneighbors(6)
-    leapct.diffuse(g_sum,delta,numIter)
+    #leapct.diffuse(g_sum, delta, numIter, 1.0)
+    leapct.TV_denoise(g_sum, delta, beta, numIter, 1.0)
     g_sum[g_sum<minValue] = minValue
     leapct.set_numTVneighbors(numNeighbors)
     
@@ -661,7 +670,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
         g (contiguous float32 numpy array or torch tensor): attenuation projection data
         values (list of floats): the values to reconstruct with
-        param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt'
+        param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt', 'vertical_shift', 'horizontal_shift'
         iz (integer): the z-slice index to perform the reconstruction; if not given, uses the central slice
         algorithmName (string): the name of the algorithm to use for reconstruction; can be 'FBP' or 'inconsistencyReconstruction'
         
@@ -843,7 +852,7 @@ def MTF(leapct, f, r, center=None, getEdgeResponse=False, oversamplingRate=4):
     
     
 class ball_phantom_calibration:
-    def __init__(self, leapct, ballSpacing, g):
+    def __init__(self, leapct, ballSpacing, g, segmentation_threshold=None):
         if leapct.ct_geometry_defined() == False:
             print('Must define initial guess of CT geometry!')
             return
@@ -862,12 +871,24 @@ class ball_phantom_calibration:
         us = self.T_u*(np.array(range(self.numCols)) - 0.5*(self.numCols-1.0))
         vs = self.T_v*(np.array(range(self.numRows)) - 0.5*(self.numRows-1.0))
         
+        self.numAngles = g.shape[0]
+        self.T_z = ballSpacing
+        self.projectionAngles = leapct.get_angles()
+        self.leapct = leapct
+        
+        numBalls = 0
+        self.N_z = 0
+        self.ball_projection_locations = None
+        
         ### PERFORM CONNECTED COMPONENTS SEGMENTATION
         # ball_projection_locations is numAngles x numBalls x 2 numpy array
         # which gives the COM of each projection of each ball on the detector
         us, vs = np.meshgrid(us, vs)
-        g_labeled = self.connected_components(g)
+        g_labeled = self.connected_components(g, segmentation_threshold)
+        if g_labeled is None:
+            return
         numBalls = np.max(g_labeled)
+        self.N_z = numBalls
         self.ball_projection_locations = np.zeros((g.shape[0], numBalls, 2), dtype=np.float32)
         for i in range(g.shape[0]):
             aProj = np.squeeze(g[i,:,:])
@@ -878,13 +899,9 @@ class ball_phantom_calibration:
                 self.ball_projection_locations[i,k,1] = np.sum(vs[ind]*aProj[ind]) / np.sum(aProj[ind])
         del g_labeled
         
-        self.numAngles = g.shape[0]
-        self.T_z = ballSpacing
-        self.N_z = numBalls
-        self.projectionAngles = leapct.get_angles()
-        self.leapct = leapct
-        
     def initial_guess(self, g=None):
+        if self.N_z <= 0:
+            return None
         sod = self.leapct.get_sod()
         sdd = self.leapct.get_sdd()
         odd = sdd - sod
@@ -918,6 +935,8 @@ class ball_phantom_calibration:
         return x
     
     def estimate_locations(self, x):
+        if self.N_z <= 0:
+            return None
         deg_to_rad = np.pi/180.0
         #x = [centerRow, centerCol, sod, odd, psi, theta, phi, r, z_0, phase]
         
@@ -963,6 +982,8 @@ class ball_phantom_calibration:
         return retVal
         
     def do_plot(self, x):
+        if self.N_z <= 0:
+            return
         estimated = self.estimate_locations(x)
         plt.plot(self.ball_projection_locations[:, :, 0], self.ball_projection_locations[:, :, 1], 'ko')
         plt.plot(estimated[:,:,0], estimated[:,:,1], 'ro')
@@ -972,14 +993,20 @@ class ball_phantom_calibration:
         plt.show()
         
     def residuals(self, x):
+        if self.N_z <= 0:
+            return 0.0
         estimated = self.estimate_locations(x)
         return (estimated - self.ball_projection_locations).flatten()
         
     def cost(self, x):
+        if self.N_z <= 0:
+            return 0.0
         estimated = self.estimate_locations(x)
         return np.sum((estimated - self.ball_projection_locations)**2)
         
     def optimize(self, x=None, set_parameters=False):
+        if self.N_z <= 0:
+            return None
         if x is None:
             x = self.initial_guess()
         res = least_squares(self.residuals, x)
@@ -1016,5 +1043,15 @@ class ball_phantom_calibration:
             
             # perform connected component analysis, connectivity=2 includes diagonals
             labeled_image, count = ski.measure.label(binary_mask, connectivity=connectivity, return_num=True)
+            if i > 0:
+                if count != count_last:
+                    print('Error: inconsistent number of balls found across projections!')
+                    print('Try running connected_components segmentation with different parameters or inspect your data.')
+                    return None
+            if count == 0:
+                print('Error: no balls found!')
+                print('Try running connected_components segmentation with different parameters or inspect your data.')
+                return None
             g_labeled[i,:,:] = labeled_image[:,:]
+            count_last = count
         return g_labeled

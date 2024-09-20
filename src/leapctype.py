@@ -223,7 +223,7 @@ class tomographicModels:
         self.libprojectors.set_log_debug()
         self.print_cost = True
         self.print_warnings = True
-            
+        
     def set_fileIO_parameters(self, dtype=np.float32, wmin=0.0, wmax=None):
         r""" This function sets parameters dealing with how tiff stacks are saved
         
@@ -4885,14 +4885,23 @@ class tomographicModels:
         if prior is None or isinstance(prior, (int, float)):
             return self.BilateralFilter(f, spatialFWHM, intensityFWHM, prior)
             
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         self.libprojectors.PriorBilateralFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.PriorBilateralFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_void_p, ctypes.c_bool]
-            return self.libprojectors.PriorBilateralFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, prior.data_ptr(), f.is_cuda == False)
+            return self.libprojectors.PriorBilateralFilter(f.data_ptr(), N_1, N_2, N_3, spatialFWHM, intensityFWHM, prior.data_ptr(), f.is_cuda == False)
         else:
             self.libprojectors.PriorBilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            return self.libprojectors.PriorBilateralFilter(f, f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, prior, True)
+            return self.libprojectors.PriorBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, prior, True)
     
     def BilateralFilter(self, f, spatialFWHM, intensityFWHM, scale=1.0):
         """Performs 3D (Scaled) Bilateral Filter (BLF) denoising method
@@ -4908,14 +4917,24 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         self.libprojectors.BilateralFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.BilateralFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BilateralFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, scale, f.is_cuda == False)
+            return self.libprojectors.BilateralFilter(f.data_ptr(), N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, f.is_cuda == False)
         else:
             self.libprojectors.BilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.BilateralFilter(f, f.shape[0], f.shape[1], f.shape[2], spatialFWHM, intensityFWHM, scale, True)
+            return self.libprojectors.BilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, True)
             
     def GuidedFilter(self, f, r, epsilon):
         """Performs 3D Guided Filter denoising method
@@ -4931,15 +4950,24 @@ class tomographicModels:
             f, the same as the input
         """
         
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         r = min(r,10)
         self.libprojectors.GuidedFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.GuidedFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.GuidedFilter(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], r, epsilon, f.is_cuda == False)
+            return self.libprojectors.GuidedFilter(f.data_ptr(), N_1, N_2, N_3, r, epsilon, f.is_cuda == False)
         else:
             self.libprojectors.GuidedFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.GuidedFilter(f, f.shape[0], f.shape[1], f.shape[2], r, epsilon, True)
+            return self.libprojectors.GuidedFilter(f, N_1, N_2, N_3, r, epsilon, True)
     
     def DictionaryDenoising(self, f, dictionary, sparsityThreshold=8, epsilon=0.0):
         """Represents 3D data by a sparse representation of an overcomplete dictionary, effectively denoising the data
@@ -4955,15 +4983,25 @@ class tomographicModels:
         Returns:
             f, the same as the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu);
         self.libprojectors.dictionaryDenoising.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.dictionaryDenoising.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.dictionaryDenoising(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, f.is_cuda == False)
+            return self.libprojectors.dictionaryDenoising(f.data_ptr(), N_1, N_2, N_3, dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, f.is_cuda == False)
         else:
             self.libprojectors.dictionaryDenoising.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.dictionaryDenoising(f, f.shape[0], f.shape[1], f.shape[2], dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, True)
+            return self.libprojectors.dictionaryDenoising(f, N_1, N_2, N_3, dictionary, dictionary.shape[0], dictionary.shape[1], dictionary.shape[2], dictionary.shape[3], epsilon, sparsityThreshold, True)
     
     def get_numTVneighbors(self):
         """Gets the number of neighboring voxels to use for 3D TV"""
@@ -5009,15 +5047,25 @@ class tomographicModels:
         Returns:
             TV functional value
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta);
         self.libprojectors.TVcost.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.TVcost.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVcost(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, f.is_cuda == False)
+            return self.libprojectors.TVcost(f.data_ptr(), N_1, N_2, N_3, delta, beta, p, f.is_cuda == False)
         else:
             self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVcost(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
+            return self.libprojectors.TVcost(f, N_1, N_2, N_3, delta, beta, p, True)
         
     def TVgradient(self, f, delta, beta=0.0, p=1.2):
         r"""Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
@@ -5045,6 +5093,16 @@ class tomographicModels:
         Returns:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
         self.libprojectors.TVgradient.restype = ctypes.c_bool
         
@@ -5052,13 +5110,13 @@ class tomographicModels:
             Df = f.clone()
             self.set_model()
             self.libprojectors.TVgradient.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, f.is_cuda == False)
+            self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), N_1, N_2, N_3, delta, beta, p, f.is_cuda == False)
             return Df
         else:
             Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
             self.set_model()
             self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            self.libprojectors.TVgradient(f, Df, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
+            self.libprojectors.TVgradient(f, Df, N_1, N_2, N_3, delta, beta, p, True)
             return Df
     
     def TVquadForm(self, f, d, delta, beta=0.0, p=1.2):
@@ -5093,15 +5151,25 @@ class tomographicModels:
         Returns:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         #float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta);
         self.libprojectors.TVquadForm.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.TVquadForm.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVquadForm(f.data_ptr(), d.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, f.is_cuda == False)
+            return self.libprojectors.TVquadForm(f.data_ptr(), d.data_ptr(), N_1, N_2, N_3, delta, beta, p, f.is_cuda == False)
         else:
             self.libprojectors.TVquadForm.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.TVquadForm(f, d, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, True)
+            return self.libprojectors.TVquadForm(f, d, N_1, N_2, N_3, delta, beta, p, True)
         
     def diffuse(self, f, delta, numIter, p=1.2):
         r"""Performs anisotropic Total Variation (TV) smoothing to the provided 3D numpy array
@@ -5119,14 +5187,24 @@ class tomographicModels:
         Returns:
             f, the same array as the input denoised
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         self.libprojectors.Diffuse.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.Diffuse.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Diffuse(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, p, numIter, f.is_cuda == False)
+            self.libprojectors.Diffuse(f.data_ptr(), N_1, N_2, N_3, delta, p, numIter, f.is_cuda == False)
         else:
             self.libprojectors.Diffuse.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.Diffuse(f, f.shape[0], f.shape[1], f.shape[2], delta, p, numIter, True)
+            self.libprojectors.Diffuse(f, N_1, N_2, N_3, delta, p, numIter, True)
         return f
         ''' Here is equivalent code to run this algorithm using the TV functions above
         for n in range(N):
@@ -5157,14 +5235,24 @@ class tomographicModels:
         Returns:
             f, the same array as the input denoised
         """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
         self.libprojectors.TV_denoise.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.TV_denoise.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.TV_denoise(f.data_ptr(), f.shape[0], f.shape[1], f.shape[2], delta, beta, p, numIter, f.is_cuda == False)
+            self.libprojectors.TV_denoise(f.data_ptr(), N_1, N_2, N_3, delta, beta, p, numIter, f.is_cuda == False)
         else:
             self.libprojectors.TV_denoise.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.TV_denoise(f, f.shape[0], f.shape[1], f.shape[2], delta, beta, p, numIter, True)
+            self.libprojectors.TV_denoise(f, N_1, N_2, N_3, delta, beta, p, numIter, True)
         return f
 
     ###################################################################################################################
@@ -5352,6 +5440,21 @@ class tomographicModels:
         self.set_model()
         
         return self.libprojectors.set_projector(which)
+        
+    def get_projector(self):
+        r"""Get which projector model is currently being used
+        
+        Returns:
+            'SF' or 'VD'
+        """
+        
+        self.libprojectors.get_projector.argtypes = []
+        self.libprojectors.get_projector.restype = ctypes.c_int
+        self.set_model()
+        if self.libprojectors.get_projector() == 2:
+            return 'SF'
+        else:
+            return 'VD'
         
     def set_rampFilter(self,which):
         """Set the ramp filter to use: 0, 2, 4, 6, 8, 10, or 12
@@ -6531,6 +6634,45 @@ class tomographicModels:
         """Load 3D data from the given file name provided (tif sequence, nrrd, or npy)"""
         return self.load_data(fileName, x, fileRange, rowRange, colRange)
         
+    def get_file_list(self, fileName, fileRange=None):
+        if fileName.find('*') != -1:
+            fileList = glob.glob(fileName)
+            if fileRange is not None:
+                fileList = fileList[fileRange[0]:fileRange[1]+1]
+            return fileList
+        else:
+            
+            sequence_separator = "_"
+        
+            #baseFileName, fileExt = os.path.splitext(os.path.basename(fileName))
+            baseFileName, fileExt = os.path.splitext(fileName)
+            templateFile = baseFileName + '_*' + fileExt
+            fileList = glob.glob(templateFile)
+            if len(fileList) == 0:
+                sequence_separator = ""
+                templateFile = baseFileName + '*' + fileExt
+                fileList = glob.glob(os.path.split(templateFile)[1])
+                if len(fileList) == 0:
+                    print('file sequence does not exist')
+                    return None
+                
+            if fileRange is not None:
+                # prune fileList
+                fileList_pruned = []
+                for i in range(len(fileList)):
+                    digit = int(fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,''))
+                    if fileRange[0] <= digit and digit <= fileRange[1]:
+                        fileList_pruned.append(fileList[i])
+                fileList = fileList_pruned
+                
+            justDigits = []
+            for i in range(len(fileList)):
+                digitStr = fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,'')
+                justDigits.append(int(digitStr))
+            ind = np.argsort(justDigits)
+            fileList = [fileList[i] for i in ind]
+            return fileList
+    
     def load_data(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
         """Load 3D data from file (tif sequence, nrrd, or npy)
 
@@ -6594,52 +6736,9 @@ class tomographicModels:
                 return None
         elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
             
-            if fileName.endswith('.tif'):
-                fileExt = '.tif'
-            else:
-                fileExt = '.tiff'
-            
-            if fileName.find('*') != -1:
-                fileList = glob.glob(fileName)
-                if fileRange is not None:
-                    fileList = fileList[fileRange[0]:fileRange[1]+1]
-                ind = None
-                currentWorkingDirectory = None
-            else:
-                currentWorkingDirectory = os.getcwd()
-                dataFolder, baseFileName = os.path.split(fileName)
-            
-                if len(dataFolder) > 0:
-                    os.chdir(dataFolder)
-            
-                sequence_separator = "_"
-            
-                baseFileName, fileExtension = os.path.splitext(os.path.basename(baseFileName))
-                templateFile = baseFileName + '_*' + fileExtension
-                fileList = glob.glob(os.path.split(templateFile)[1])
-                if len(fileList) == 0:
-                    sequence_separator = ""
-                    templateFile = baseFileName + '*' + fileExtension
-                    fileList = glob.glob(os.path.split(templateFile)[1])
-                    if len(fileList) == 0:
-                        os.chdir(currentWorkingDirectory)
-                        print('file sequence does not exist')
-                        return None
-                    
-                if fileRange is not None:
-                    # prune fileList
-                    fileList_pruned = []
-                    for i in range(len(fileList)):
-                        digit = int(fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,''))
-                        if fileRange[0] <= digit and digit <= fileRange[1]:
-                            fileList_pruned.append(fileList[i])
-                    fileList = fileList_pruned
-                    
-                justDigits = []
-                for i in range(len(fileList)):
-                    digitStr = fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,'')
-                    justDigits.append(int(digitStr))
-                ind = np.argsort(justDigits)
+            fileList = self.get_file_list(fileName, fileRange)
+            if fileList is None or len(fileList) == 0:
+                return None
 
             firstImg = self.load_tif(fileList[0], None, rowRange, colRange)
             if firstImg is None:
@@ -6663,10 +6762,7 @@ class tomographicModels:
                 x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
             print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
             for i in range(len(fileList)):
-                if ind is None:
-                    curFile = fileList[i]
-                else:
-                    curFile = fileList[ind[i]]
+                curFile = fileList[i]
                 if use_python_readers:
                     if self.load_tif_python(curFile, anImage, rowRange, colRange) is None:
                         return None
@@ -6716,9 +6812,10 @@ class tomographicModels:
                         x[i,:,:] = anImage[:,colRange[0]:colRange[1]+1]
                     else:
                         x[i,:,:] = anImage[:,:]
-            """
+            
             if currentWorkingDirectory is not None:
                 os.chdir(currentWorkingDirectory)
+            """
             return x
             
         else:

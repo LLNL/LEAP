@@ -527,6 +527,11 @@ bool set_projector(int which)
 	return tomo()->set_projector(which);
 }
 
+int get_projector()
+{
+	return tomo()->params.whichProjector;
+}
+
 bool set_axisOfSymmetry(float axisOfSymmetry)
 {
 	return tomo()->set_axisOfSymmetry(axisOfSymmetry);
@@ -1207,6 +1212,7 @@ PYBIND11_MODULE(leapct, m) {
 	m.def("get_axisOfSymmetry", &get_axisOfSymmetry, "");
     m.def("clear_axisOfSymmetry", &clear_axisOfSymmetry, "");
     m.def("set_projector", &set_projector, "");
+	m.def("get_projector", &get_projector, "");
     m.def("set_rFOV", &set_rFOV, "");
 	m.def("get_rFOV", &get_rFOV, "");
     m.def("set_offsetScan", &set_offsetScan, "");

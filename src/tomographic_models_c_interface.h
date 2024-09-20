@@ -150,6 +150,7 @@ extern "C" PROJECTOR_API bool set_axisOfSymmetry(float axisOfSymmetry);
 extern "C" PROJECTOR_API float get_axisOfSymmetry();
 extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool set_projector(int which);
+extern "C" PROJECTOR_API int get_projector();
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);
 extern "C" PROJECTOR_API float get_rFOV();
 extern "C" PROJECTOR_API bool set_offsetScan(bool);

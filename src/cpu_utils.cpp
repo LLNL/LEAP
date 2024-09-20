@@ -464,10 +464,6 @@ char swapEndian(char x)
 
 short swapEndian(short x)
 {
-    /*
-    x = bswap(x);
-    return x;
-    */
     return (x << 8) | ((x >> 8) & 0xFF);
 }
 
@@ -478,20 +474,12 @@ unsigned short swapEndian(unsigned short x)
 
 int swapEndian(int x)
 {
-    /*
-    x = bswap(x);
-    return x;
-    */
     x = ((x << 8) & 0xFF00FF00) | ((x >> 8) & 0xFF00FF);
     return (x << 16) | ((x >> 16) & 0xFFFF);
 }
 
 unsigned int swapEndian(unsigned int x)
 {
-    /*
-    x = bswap(x);
-    return x;
-    */
     x = ((x << 8) & 0xFF00FF00) | ((x >> 8) & 0xFF00FF);
     return (x << 16) | (x >> 16);
 }
