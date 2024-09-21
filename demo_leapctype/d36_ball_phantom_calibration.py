@@ -14,7 +14,7 @@ It is required that all balls be present in all projections (i.e., they cannot f
 """
 
 ### Set Nominal Geometry
-L = 10
+L = 1
 numCols = 4000//L
 numAngles = 36
 pixelSize = 11.62/1000.0*L
@@ -38,9 +38,8 @@ leapct_true.convert_to_modularbeam()
 leapct_true.rotate_detector(1.0)
 
 ### Simulate Data using the "true" or perturbed geometry
-ballRadius = 0.5*1.0
+ballRadius = 0.5*1.0/2.0
 r = 10.0
-numBalls = 10
 T_z = 4*ballRadius
 numBalls = int(15.0/T_z)
 z_0 = -T_z*0.5*(numBalls-1.0)
@@ -51,15 +50,13 @@ leapct_true.addObject(None, 4, 0.0, np.array([9.0, 9.0, 8.0]), 0.00, oversamplin
 for k in range(numBalls):
     leapct_true.addObject(None, 0, np.array([r*np.cos(alpha), r*np.sin(alpha), T_z*k+z_0]), ballRadius, 2.25, oversampling=3)
 g = leapct_true.allocate_projections()
-#leapct_true.set_gpu(-1)
 leapct_true.rayTrace(g,oversampling=1)
-leapct_true.display(g)
-quit()
+#leapct_true.display(g)
 
 # Initialize the ball phantom calibration class object
 # one must provide the tomographicModels object, the spacing between balls (mm), and the
 # projection data of the ball phantom
-cal = ball_phantom_calibration(leapct, T_z, g)
+cal = ball_phantom_calibration(leapct, T_z, g, segmentation_threshold=np.max(g)/3.0)
 
 # We now provide an initial guess of the CT geometry parameters, below is the format
 # Note that LEAP usually specifes the distances as sod and sdd, but here we use sod and odd,
@@ -85,7 +82,7 @@ print('estimate of CT geometry parameters: ', res.x)
 print('cost function of estimate: ', cal.cost(res.x))
 cal.do_plot(res.x)
 
-leapct_true.print_parameters()
+#leapct_true.print_parameters()
 
 # Test the reconstruction with the calibration CT geometry parameters
 #leapct.display(leapct.FBP(g))

@@ -1032,7 +1032,7 @@ class ball_phantom_calibration:
 
     def connected_components(self, g, threshold=None, FWHM=0.0, connectivity=2):
         if threshold is None:
-            threshold = np.max(g)/5.0
+            threshold = np.max(g)/4.0
         g_labeled = np.zeros((g.shape[0], g.shape[1], g.shape[2]), dtype=np.int8)
         import skimage as ski
         for i in range(g.shape[0]):

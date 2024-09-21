@@ -218,21 +218,21 @@ __device__ bool parametersOfClippingPlaneIntersections(float2& ts, float3 p, flo
 	return true;
 }
 
-__device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r, float2& ts, geometricSolid* solid)
+__device__ bool intersectionEndPoints_centeredAndNormalized(double3& p, double3& r, float2& ts, geometricSolid* solid)
 {
 	ts.x = -OUT_OF_BOUNDS;
 	ts.y = ts.x;
 
 	// r != (0,0,1)
-	const float r_dot_r = r.x * r.x + r.y * r.y + r.z * r.z;
-	const float p_dot_r = r.x * p.x + r.y * p.y + r.z * p.z;
+	const double r_dot_r = r.x * r.x + r.y * r.y + r.z * r.z;
+	const double p_dot_r = r.x * p.x + r.y * p.y + r.z * p.z;
 
 	if (solid->type == d_ELLIPSOID)
 	{
-		float disc = p_dot_r * p_dot_r + r_dot_r * (1.0f - (p.x * p.x + p.y * p.y + p.z * p.z));
-		if (disc > 0.0f)
+		double disc = p_dot_r * p_dot_r + r_dot_r * (1.0 - (p.x * p.x + p.y * p.y + p.z * p.z));
+		if (disc > 0.0)
 		{
-			disc = sqrtf(disc);
+			disc = sqrt(disc);
 			ts.x = (-p_dot_r - disc) / r_dot_r;
 			ts.y = (-p_dot_r + disc) / r_dot_r;
 		}
@@ -265,12 +265,12 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	else if (solid->type == d_CYLINDER_Z)
 	{
 		//double r_dot_r_2D = r.x * r.x + r.y * r.y; // 3
-		const float r_dot_r_2D = r_dot_r - r.z * r.z; // 2
-		const float p_dor_r_2D = p_dot_r - p.z * r.z; // 2
-		float disc = p_dor_r_2D * p_dor_r_2D - r_dot_r_2D * (p.x * p.x + p.y * p.y - 1.0f); // 7
-		if (disc > 0.0f)
+		const double r_dot_r_2D = r_dot_r - r.z * r.z; // 2
+		const double p_dor_r_2D = p_dot_r - p.z * r.z; // 2
+		double disc = p_dor_r_2D * p_dor_r_2D - r_dot_r_2D * (p.x * p.x + p.y * p.y - 1.0); // 7
+		if (disc > 0.0)
 		{
-			disc = sqrtf(disc);
+			disc = sqrt(disc);
 			const float tmin = (-p_dor_r_2D - disc) / r_dot_r_2D; // 2
 			const float tmax = (-p_dor_r_2D + disc) / r_dot_r_2D; // 2
 
@@ -292,11 +292,11 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	}
 	else if (solid->type == d_CYLINDER_X) // ellipsoidal cross sections parallel to x-y axis
 	{
-		const float r_dot_r_2D = r_dot_r - r.x * r.x;
-		float disc = (p.z * r.z + p.y * r.y) * (p.z * r.z + p.y * r.y) - r_dot_r_2D * (p.z * p.z + p.y * p.y - 1.0f);
-		if (disc > 0.0f)
+		const double r_dot_r_2D = r_dot_r - r.x * r.x;
+		double disc = (p.z * r.z + p.y * r.y) * (p.z * r.z + p.y * r.y) - r_dot_r_2D * (p.z * p.z + p.y * p.y - 1.0);
+		if (disc > 0.0)
 		{
-			disc = sqrtf(disc);
+			disc = sqrt(disc);
 			const float tmin = (-(p.z * r.z + r.y * p.y) - disc) / r_dot_r_2D;
 			const float tmax = (-(p.z * r.z + r.y * p.y) + disc) / r_dot_r_2D;
 
@@ -309,7 +309,7 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 			else
 				return false;
 		}
-		else if (r.y == 0.0f && r.z == 0.0f && p.y * p.y + p.z * p.z <= 1.0f)
+		else if (r.y == 0.0 && r.z == 0.0 && p.y * p.y + p.z * p.z <= 1.0)
 		{
 			return parametersOfIntersection_1D(ts, p.x, r.x);
 		}
@@ -318,11 +318,11 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	}
 	else if (solid->type == d_CYLINDER_Y) // ellipsoidal cross sections parallel to x-y axis
 	{
-		const float r_dot_r_2D = r_dot_r - r.y * r.y;
-		float disc = (p.x * r.x + p.z * r.z) * (p.x * r.x + p.z * r.z) - r_dot_r_2D * (p.x * p.x + p.z * p.z - 1.0f);
-		if (disc > 0.0f)
+		const double r_dot_r_2D = r_dot_r - r.y * r.y;
+		double disc = (p.x * r.x + p.z * r.z) * (p.x * r.x + p.z * r.z) - r_dot_r_2D * (p.x * p.x + p.z * p.z - 1.0);
+		if (disc > 0.0)
 		{
-			disc = sqrtf(disc);
+			disc = sqrt(disc);
 			const float tmin = (-(p.x * r.x + r.z * p.z) - disc) / r_dot_r_2D;
 			const float tmax = (-(p.x * r.x + r.z * p.z) + disc) / r_dot_r_2D;
 
@@ -335,7 +335,7 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 			else
 				return false;
 		}
-		else if (r.x == 0.0f && r.z == 0.0f && p.x * p.x + p.z * p.z <= 1.0f)
+		else if (r.x == 0.0 && r.z == 0.0 && p.x * p.x + p.z * p.z <= 1.0)
 		{
 			return parametersOfIntersection_1D(ts, p.y, r.y);
 		}
@@ -344,14 +344,14 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	}
 	else if (solid->type == d_CONE_Z)
 	{
-		float a = r.x * r.x + r.y * r.y - r.z * r.z;
-		const float b_half = p.x * r.x + p.y * r.y - p.z * r.z;
-		const float c = p.x * p.x + p.y * p.y - p.z * p.z;
-		float disc = b_half * b_half - a * c;
+		double a = r.x * r.x + r.y * r.y - r.z * r.z;
+		const double b_half = p.x * r.x + p.y * r.y - p.z * r.z;
+		const double c = p.x * p.x + p.y * p.y - p.z * p.z;
+		double disc = b_half * b_half - a * c;
 
-		if (disc > 0.0f)
+		if (disc > 0.0)
 		{
-			disc = sqrtf(disc);
+			disc = sqrt(disc);
 			float tmin = (-b_half - disc) / a;
 			float tmax = (-b_half + disc) / a;
 			if (tmin > tmax)
@@ -361,8 +361,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 				tmax = a;
 			}
 
-			const float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
-			const float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
+			const double theShift = 0.5 * (solid->clipCone.y + solid->clipCone.x);
+			const double theScale = 0.5 * (solid->clipCone.y - solid->clipCone.x);
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, (p.z - theShift) / theScale, r.z / theScale) == true)
@@ -378,14 +378,14 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	}
 	else if (solid->type == d_CONE_X)
 	{
-		float a = r.z * r.z + r.y * r.y - r.x * r.x;
-		const float b_half = p.z * r.z + p.y * r.y - p.x * r.x;
-		const float c = p.z * p.z + p.y * p.y - p.x * p.x;
-		float disc = b_half * b_half - a * c;
+		double a = r.z * r.z + r.y * r.y - r.x * r.x;
+		const double b_half = p.z * r.z + p.y * r.y - p.x * r.x;
+		const double c = p.z * p.z + p.y * p.y - p.x * p.x;
+		double disc = b_half * b_half - a * c;
 
-		if (disc > 0.0f)
+		if (disc > 0.0)
 		{
-			disc = sqrtf(disc);
+			disc = sqrt(disc);
 			float tmin = (-b_half - disc) / a;
 			float tmax = (-b_half + disc) / a;
 			if (tmin > tmax)
@@ -395,8 +395,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 				tmax = a;
 			}
 
-			const float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
-			const float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
+			const double theShift = 0.5 * (solid->clipCone.y + solid->clipCone.x);
+			const double theScale = 0.5 * (solid->clipCone.y - solid->clipCone.x);
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, (p.x - theShift) / theScale, r.x / theScale) == true)
@@ -412,16 +412,16 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 	}
 	else if (solid->type == d_CONE_Y)
 	{
-		float a = r.x * r.x + r.z * r.z - r.y * r.y;
-		const float b_half = p.x * r.x + p.z * r.z - p.y * r.y;
-		const float c = p.x * p.x + p.z * p.z - p.y * p.y;
-		float disc = b_half * b_half - a * c;
+		double a = r.x * r.x + r.z * r.z - r.y * r.y;
+		const double b_half = p.x * r.x + p.z * r.z - p.y * r.y;
+		const double c = p.x * p.x + p.z * p.z - p.y * p.y;
+		double disc = b_half * b_half - a * c;
 
-		if (disc > 0.0f)
+		if (disc > 0.0)
 		{
-			disc = sqrtf(disc);
-			float tmin = (-b_half - disc) / a;
-			float tmax = (-b_half + disc) / a;
+			disc = sqrt(disc);
+			double tmin = (-b_half - disc) / a;
+			double tmax = (-b_half + disc) / a;
 			if (tmin > tmax)
 			{
 				a = tmin;
@@ -429,8 +429,8 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 				tmax = a;
 			}
 
-			const float theShift = 0.5f * (solid->clipCone.y + solid->clipCone.x);
-			const float theScale = 0.5f * (solid->clipCone.y - solid->clipCone.x);
+			const double theShift = 0.5 * (solid->clipCone.y + solid->clipCone.x);
+			const double theScale = 0.5 * (solid->clipCone.y - solid->clipCone.x);
 
 			float2 tz;
 			if (parametersOfIntersection_1D(tz, (p.y - theShift) / theScale, r.y / theScale) == true)
@@ -438,7 +438,7 @@ __device__ bool intersectionEndPoints_centeredAndNormalized(float3& p, float3& r
 				if (fabs(r.y) > 1.0e-12f)
 				{
 					bool isInside_0 = false;
-					float x_val, y_val, z_val;
+					double x_val, y_val, z_val;
 					x_val = p.x + tz.x * r.x; x_val *= x_val;
 					y_val = p.y + tz.x * r.y; y_val *= y_val;
 					z_val = p.z + tz.x * r.z; z_val *= z_val;
@@ -537,8 +537,8 @@ __device__ bool intersectionEndPoints(float3& p, float3& r, float2& ts, geometri
 {
     // assume ||r|| == 1 && r != (0,0,1) && axis[i] > 0 for i=0,1,2
     // alpha is rotation around x-y axis, currently there is no rotation for x-z or y-z axes
-    float3 q;
-    float3 Minv_r;
+    double3 q;
+	double3 Minv_r;
 
     if (solid->isRotated == false)
     {
@@ -553,7 +553,7 @@ __device__ bool intersectionEndPoints(float3& p, float3& r, float2& ts, geometri
     }
     else
     {
-        float3 temp;
+		double3 temp;
 
         // Shift
         q.x = p.x - solid->centers.x;
