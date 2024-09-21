@@ -971,6 +971,8 @@ bool rayTrace_gpu(float* g, parameters* params, phantom* aPhantom, bool data_on_
 		//for (int j = 0; j < N_g.y; j++)
 		//	rayTracingKernel <<< numBlocks, blockSize >>> (dev_g, dev_phis, dev_solids, numObjects, dev_floatData, dev_intData, i, j);
 		//float* g, const float* phis, geometricSolid* solids, const int numObjects, float* allIntersections
+		//cudaMemset(dev_floatData, 0, numDataCopies * 4 * numObjects * sizeof(float));
+		//cudaMemset(dev_intData, 0, numDataCopies * numObjects * sizeof(int));
 	}
 
     // pull result off GPU
