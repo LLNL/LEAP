@@ -59,6 +59,20 @@ public:
 	bool reset();
 
 	/**
+	 * \fn          allocate_volume
+	 * \brief       allocates volume data; user is responsible for freeing memory
+	 * \return      pointer to the data, NULL if CT volume parameters are not set
+	 */
+	float* allocate_volume();
+
+	/**
+	 * \fn          allocate_projections
+	 * \brief       allocates projection data; user is responsible for freeing memory
+	 * \return      pointer to the data, NULL if CT geometry parameters are not set
+	 */
+	float* allocate_projections();
+
+	/**
 	 * \fn          project_gpu
 	 * \brief       performs a forward projection on GPU
  	 * \param[in]   g pointer to the projection data (output) on the GPU

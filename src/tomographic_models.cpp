@@ -125,6 +125,22 @@ bool tomographicModels::reset()
 	return true;
 }
 
+float* tomographicModels::allocate_volume()
+{
+	float* retVal = NULL;
+	if (params.volumeDefined(false))
+		retVal = new float[params.volumeData_numberOfElements()];
+	return retVal;
+}
+
+float* tomographicModels::allocate_projections()
+{
+	float* retVal = NULL;
+	if (params.geometryDefined(false))
+		retVal = new float[params.projectionData_numberOfElements()];
+	return retVal;
+}
+
 bool tomographicModels::project_gpu(float* g, float* f)
 {
 #ifndef __USE_CPU
