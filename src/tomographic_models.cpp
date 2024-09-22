@@ -2910,7 +2910,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 #endif
 }
 
-bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
+bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool doMean, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
@@ -2976,14 +2976,14 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, p, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
+				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, p, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors, doMean);
 			}
 
 			return true;
 		}
 	}
 	else
-		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors, doMean);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -3068,7 +3068,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 #endif
 }
 
-bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu)
+bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool doMean, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
@@ -3102,7 +3102,7 @@ bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float de
 			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
 			for (int iter = 0; iter < numIter; iter++)
 			{
-				TVgradient(f, d, N_1, N_2, N_3, delta, beta, p, true);
+				TVgradient(f, d, N_1, N_2, N_3, delta, beta, p, doMean, true);
 				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
 				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, beta, p, true);
 				if (denom <= 1.0e-16)
@@ -3118,7 +3118,7 @@ bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float de
 		}
 	}
 	else
-		return TVdenoise(f, N_1, N_2, N_3, delta, beta, p, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
+		return TVdenoise(f, N_1, N_2, N_3, delta, beta, p, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors, doMean);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -3157,7 +3157,7 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
 			for (int iter = 0; iter < numIter; iter++)
 			{
-				TVgradient(f, d, N_1, N_2, N_3, delta, 1.0, p, true);
+				TVgradient(f, d, N_1, N_2, N_3, delta, 1.0, p, false, true);
 				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
 				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, 1.0, p, true);
 				if (denom <= 1.0e-16)

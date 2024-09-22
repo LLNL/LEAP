@@ -390,6 +390,28 @@ __global__ void scalarAddKernel(float* lhs, const float c, const float* rhs, con
     lhs[ind] += c*rhs[ind];
 }
 
+__global__ void meanOverSlicesKernel(float* x, const int3 dim)
+{
+    const int iy = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iz = threadIdx.y + blockIdx.y * blockDim.y;
+
+    if (iy >= dim.y || iz >= dim.z)
+        return;
+
+    float accum = 0.0f;
+    for (int ix = 0; ix < dim.x; ix++)
+    {
+        const uint64 ind = uint64(ix) * uint64(dim.y * dim.z) + uint64(iy * dim.z + iz);
+        accum += x[ind];
+    }
+    accum = accum / float(dim.z);
+    for (int ix = 0; ix < dim.x; ix++)
+    {
+        const uint64 ind = uint64(ix) * uint64(dim.y * dim.z) + uint64(iy * dim.z + iz);
+        x[ind] = accum;
+    }
+}
+
 __global__ void sumKernel(const float* x, float* sum_x, const int3 N)
 {
     if (threadIdx.x > 0)
@@ -720,6 +742,17 @@ cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
     scalarAddKernel <<< dimGrid, dimBlock >>> (dev_lhs, c, dev_rhs, N);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t mean_over_slices(float* dev_lhs, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock_temp = setBlockSize(N);
+    dim3 dimBlock(dimBlock_temp.y, dimBlock_temp.z);
+    dim3 dimGrid(int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    meanOverSlicesKernel <<< dimGrid, dimBlock >>> (dev_lhs, N);
     return cudaPeekAtLastError();
 }
 

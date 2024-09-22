@@ -5218,7 +5218,7 @@ class tomographicModels:
         return f
         '''
         
-    def TV_denoise(self, f, delta, beta, numIter, p=1.2):
+    def TV_denoise(self, f, delta, beta, numIter, p=1.2, meanOverFirstDim=False):
         r"""Performs anisotropic Total Variation (TV) denoising to the provided 3D numpy array
         
         The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size.
@@ -5248,11 +5248,11 @@ class tomographicModels:
         self.libprojectors.TV_denoise.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.TV_denoise.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.TV_denoise(f.data_ptr(), N_1, N_2, N_3, delta, beta, p, numIter, f.is_cuda == False)
+            self.libprojectors.TV_denoise.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.TV_denoise(f.data_ptr(), N_1, N_2, N_3, delta, beta, p, numIter, meanOverFirstDim, f.is_cuda == False)
         else:
-            self.libprojectors.TV_denoise.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.TV_denoise(f, N_1, N_2, N_3, delta, beta, p, numIter, True)
+            self.libprojectors.TV_denoise.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.TV_denoise(f, N_1, N_2, N_3, delta, beta, p, numIter, meanOverFirstDim, True)
         return f
 
     ###################################################################################################################

@@ -68,6 +68,7 @@ extern cudaError_t add(float* dev_lhs, const float c, const int3 N, int whichGPU
 extern cudaError_t sub(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t scale(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const int3 N, int whichGPU = 0);
+extern cudaError_t mean_over_slices(float* dev_lhs, const int3 N, int whichGPU = 0);
 
 extern cudaError_t replaceZeros(float* dev_lhs, const int3 N, int whichGPU = 0, float newVal = 1.0);
 

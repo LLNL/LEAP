@@ -977,7 +977,7 @@ public:
 	 * \param[in]   data_on_cpu true if data (f and Df) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise 
 	 */
-	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
+	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool doMean, bool data_on_cpu);
 
 	/**
 	 * \fn          TVquadForm
@@ -1026,7 +1026,7 @@ public:
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu);
+	bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool doMean, bool data_on_cpu);
 
 	/**
 	 * \fn          rayTrace

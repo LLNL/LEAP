@@ -471,7 +471,7 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
         leapct.negLog(t)
     return True
 
-def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05, beta=1.0e3):
+def ringRemoval_fast(leapct, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.05):
     r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     
     This algorithm estimates the rings by first averaging all projections.  Then denoises this
@@ -574,7 +574,7 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
         g[:] = g[:] - Dg_sum[None,:,:]
     return True
 
-def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
+def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
     r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     
     This algorithm estimates the gain correction necessary to remove ring artifacts by solving denoising
@@ -599,6 +599,7 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
     """
     numNeighbors = leapct.get_numTVneighbors()
     leapct.set_numTVneighbors(6)
+    """
     g_0 = leapct.copyData(g)
     for n in range(numIter):
         Dg = leapct.TVgradient(g, delta, beta)
@@ -616,6 +617,8 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
         stepSize = num / (num+denom)
         
         g[:] = g[:] - stepSize*Dg[:]
+    """
+    leapct.TV_denoise(g, delta, beta, numIter, p=1.0, meanOverFirstDim=True)
     
     '''
     gainMap = g - g_0
