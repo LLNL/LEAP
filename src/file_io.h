@@ -19,6 +19,10 @@
 #include "leap_defines.h"
 
 /**
+ * This file specifies routines to save CT geometry files and read/write TIFF images.
+ */
+
+/**
  * \fn          saveParamsToFile
  * \brief       save the CT geometry and CT volume parameters to an ascii text file
  * \param[in]	param_fn, the name of the file to save the parameter values to

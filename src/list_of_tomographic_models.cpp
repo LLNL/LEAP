@@ -9,7 +9,6 @@
 #include "list_of_tomographic_models.h"
 #include "tomographic_models.h"
 
-//*
 listOfTomographicModels::listOfTomographicModels()
 {
 }
@@ -52,4 +51,3 @@ tomographicModels* listOfTomographicModels::get(int i)
     else
         return list[i % list.size()];
 }
-//*/

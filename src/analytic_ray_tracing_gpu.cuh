@@ -20,7 +20,7 @@
 #include "phantom.h"
 
 /**
- * This class provides GPU-based implementations to perform analytic ray tracing simulation.
+ * This class provides GPU-based implementations to perform analytic ray tracing simulation through geometric solids.
  */
 
 struct geometricSolid

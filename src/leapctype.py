@@ -66,10 +66,11 @@ class tomographicModels:
         The LEAP library has the ability to generate and track several parameter sets.
         By default every new object instance will create a new parameter set.
         Otherwise one can use the param_id parameter so that the object will utilize a parameter set
-        that is also shared by another object of this class.  See the param_id argument description below.
+        that is also shared by another object of this class.  But this parameter index must already be in use.
+        Do not use this argument if you want to create a NEW parameter set. See the param_id argument description below.
         
         Args:
-            param_id (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use
+            param_id (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use, but this parameter index must already be in use
             lib_dir (string): Path to the LEAP dynamic library, default value is the same path as this file
         
         """
@@ -179,6 +180,7 @@ class tomographicModels:
         self.wmax = None
 
     def set_model(self, i=None):
+        """ This should be considered a private class function """
         self.libprojectors.set_model.restype = ctypes.c_bool
         self.libprojectors.set_model.argtypes = [ctypes.c_int]
         if i is None:
@@ -1978,9 +1980,8 @@ class tomographicModels:
         More specifically, the same results as the FBP function can be achieved by running the following functions
         
         .. line-block::
-           filterProjections(f)
+           filterProjections(g)
            weightedBackproject(g,f)
-           f \*= get_FBPscalar()
         
         The CT geometry parameters must be set prior to running this function.
         This function take the argument g and returns the same g.
@@ -2082,11 +2083,10 @@ class tomographicModels:
         If preceeded by the filterProjections function, this function can produce and FBP reconstruction.
         Some geometries require a weighted backprojection for FBP reconstruction,
         such as fan-beam, helical cone-beam, Attenuated Radon Transform, and symmetric objects.
-        For those geometries do not require a weighted backprojection (i.e., backprojection would suffice)
+        Those geometries do not require a weighted backprojection (i.e., backprojection would suffice)
         for FBP reconstruction, we still recommend using this function to perform two-step FBP reconstructions
         because it performs some subtle operations that are only appropriate for FBP reconstruction; for example,
         using extrapolation in the row direction for axial cone-beam FBP (FDK).
-        Don't forget to scale your reconstruction by get_FBPscalar() to get an quantitatively accurate result.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
@@ -2232,7 +2232,7 @@ class tomographicModels:
         return f
 
     def get_FBPscalar(self):
-        """Returns the scalar necessary for quantitative reconstruction when using the filterProjections and backproject functions
+        """Returns the FBP scaling factor
         """
         self.libprojectors.get_FBPscalar.argtypes = []
         self.libprojectors.get_FBPscalar.restype = ctypes.c_float
@@ -6301,7 +6301,7 @@ class tomographicModels:
         
         return self.leapct.save_param(fileName)
     
-    def save_projections(self, fileName, g, sequence_offset=0):
+    def save_projections(self, fileName, g, sequence_offset=0, axis_split=0):
         """Save projection data to file (tif sequence, nrrd, or npy)
         
         Args:
@@ -6310,9 +6310,9 @@ class tomographicModels:
             sequence_offset (int): if saving as a tif/tiff sequence, this specifies the index of the first file
         
         """
-        return self.saveProjections(fileName, g, sequence_offset)
+        return self.saveProjections(fileName, g, sequence_offset, axis_split=axis_split)
         
-    def saveProjections(self, fileName, g, sequence_offset=0):
+    def saveProjections(self, fileName, g, sequence_offset=0, axis_split=0):
         """Save projection data to file (tif sequence, nrrd, or npy)"""
         if self.get_numAngles() > 0 and self.get_numRows() > 0 and self.get_numCols() > 0:
             pixelWidth = self.get_pixelWidth()
@@ -6332,7 +6332,7 @@ class tomographicModels:
             row_0 = 0.0
             col_0 = 0.0
             T = 1.0
-        return self.save_data(fileName, g, T, phi_0, row_0, col_0, sequence_offset)
+        return self.save_data(fileName, g, T, phi_0, row_0, col_0, sequence_offset, axis_split=axis_split)
     
     def save_volume(self, fileName, f, sequence_offset=0):
         """Save volume data to file (tif sequence, nrrd, or npy)
@@ -6408,7 +6408,7 @@ class tomographicModels:
             path = bytes(str(fileName), 'ascii')
         else:
             path = fileName
-            
+
         if x is None:
             shape = np.zeros(2, dtype=np.int32)
             size = np.zeros(2, dtype=np.float32)
@@ -6439,21 +6439,21 @@ class tomographicModels:
                         numCols = colRange[1] - colRange[0] + 1
                     
                 x = np.zeros((numRows, numCols), dtype=np.float32)
-                
-        if rowRange is not None:
-            if rowRange[0] == 0 and rowRange[1] == x.shape[0]-1:
-                rowRange = None
-            elif rowRange[0] < 0 or rowRange[1]-rowRange[0]+1 > x.shape[0] or rowRange[0] > rowRange[1]:
-                print(rowRange)
-                print(x.shape)
-                print('Invalid rowRange')
-                return None
-        if colRange is not None:
-            if colRange[0] == 0 and colRange[1] == x.shape[1]-1:
-                colRange = None
-            elif colRange[0] < 0 or colRange[1]-colRange[0]+1 > x.shape[1] or colRange[0] > colRange[1]:
-                print('Invalid colRange')
-                return None
+        
+        else:
+            # x is given; make sure it is the correct size
+            if rowRange is not None:
+                #if rowRange[0] == 0 and rowRange[1] == x.shape[0]-1:
+                #    rowRange = None
+                if rowRange[0] < 0 or rowRange[1]-rowRange[0]+1 > x.shape[0] or rowRange[0] > rowRange[1]:
+                    print('Invalid rowRange')
+                    return None
+            if colRange is not None:
+                #if colRange[0] == 0 and colRange[1] == x.shape[1]-1:
+                #    colRange = None
+                if colRange[0] < 0 or colRange[1]-colRange[0]+1 > x.shape[1] or colRange[0] > colRange[1]:
+                    print('Invalid colRange')
+                    return None
                 
         if rowRange is None:
             if colRange is None:
@@ -6518,7 +6518,7 @@ class tomographicModels:
         return self.libprojectors.save_tif(fileName, x, x.shape[0], x.shape[1], T[0], T[1], dtype, wmin, wmax)
     
     
-    def save_data(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0, sequence_offset=0):
+    def save_data(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0, sequence_offset=0, axis_split=0):
         """Save 3D data to file (tif sequence, nrrd, or npy)"""
         volFilePath, dontCare = os.path.split(fileName)
         if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
@@ -6552,9 +6552,14 @@ class tomographicModels:
             if len(x.shape) <= 2:
                 self.save_tif(baseName + fileExtension, x)
             else:
-                for i in range(x.shape[0]):
-                    im = x[i,:,:]
-                    self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+                if axis_split == 0:
+                    for i in range(x.shape[0]):
+                        im = x[i,:,:]
+                        self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+                else:
+                    for i in range(x.shape[1]):
+                        im = x[:,i,:]
+                        self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
             return True
             """
             try:
@@ -6619,20 +6624,20 @@ class tomographicModels:
         """
         return self.load_data(fileName, x, fileRange, rowRange, colRange)
         
-    def loadProjections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+    def loadProjections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None, axis_split=0):
         """Load 3D projection data from file (tif sequence, nrrd, or npy)"""
-        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        return self.load_data(fileName, x, fileRange, rowRange, colRange, axis_split)
         
-    def load_projections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+    def load_projections(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None, axis_split=0):
         """Load 3D projection data from the given file name provided (tif sequence, nrrd, or npy)
         
         See load_data for more information
         """
-        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        return self.load_data(fileName, x, fileRange, rowRange, colRange, axis_split)
         
-    def loadData(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+    def loadData(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None, axis_split=0):
         """Load 3D data from the given file name provided (tif sequence, nrrd, or npy)"""
-        return self.load_data(fileName, x, fileRange, rowRange, colRange)
+        return self.load_data(fileName, x, fileRange, rowRange, colRange, axis_split)
         
     def get_file_list(self, fileName, fileRange=None):
         if fileName.find('*') != -1:
@@ -6673,7 +6678,7 @@ class tomographicModels:
             fileList = [fileList[i] for i in ind]
             return fileList
     
-    def load_data(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None):
+    def load_data(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None, axis_split=0):
         """Load 3D data from file (tif sequence, nrrd, or npy)
 
         This function reads 3D data and stores it in a 3D numpy array.  We officially support
@@ -6755,24 +6760,38 @@ class tomographicModels:
             numCols = firstImg.shape[1]
             anImage = np.zeros((numRows, numCols), dtype=np.float32)
             if x is not None:
-                if len(x.shape) != 3 or x.shape[0] != len(fileList) or x.shape[1] != numRows or x.shape[2] != numCols:
-                    print('Error: given array size does not match size of data in files!')
-                    return None
+                if axis_split == 1:
+                    if len(x.shape) != 3 or x.shape[1] != len(fileList) or x.shape[0] != numRows or x.shape[2] != numCols:
+                        print('Error: given array size does not match size of data in files!')
+                        return None
+                else:
+                    if len(x.shape) != 3 or x.shape[0] != len(fileList) or x.shape[1] != numRows or x.shape[2] != numCols:
+                        print('Error: given array size does not match size of data in files!')
+                        return None
             else:
-                x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
-            print('found ' + str(x.shape[0]) + ' images of size ' + str(firstImg.shape[0]) + ' x ' + str(firstImg.shape[1]))
+                if axis_split == 1:
+                    x = np.zeros((numRows, len(fileList), numCols), dtype=np.float32)
+                else:
+                    x = np.zeros((len(fileList), numRows, numCols), dtype=np.float32)
+            print('reading ' + str(len(fileList)) + ' images of size ' + str(numRows) + ' x ' + str(firstImg.shape[1]))
             for i in range(len(fileList)):
                 curFile = fileList[i]
                 if use_python_readers:
                     if self.load_tif_python(curFile, anImage, rowRange, colRange) is None:
                         return None
                     else:
-                        x[i,:,:] = anImage[:,:]
+                        if axis_split == 1:
+                            x[:,i,:] = anImage[:,:]
+                        else:
+                            x[i,:,:] = anImage[:,:]
                 else:
                     if self.load_tif(curFile, anImage, rowRange, colRange) is None:
                         return None
                     else:
-                        x[i,:,:] = anImage[:,:]
+                        if axis_split == 1:
+                            x[:,i,:] = anImage[:,:]
+                        else:
+                            x[i,:,:] = anImage[:,:]
             
             """
             firstImg = np.array(imageio.imread(fileList[0]), dtype=np.float32)

@@ -577,7 +577,7 @@ float* load_tif_rows(ImageHeader* h, int firstRow, int lastRow, float* data)
 			printf("error in fseek\n");
 		size_t length = sizeof(float) * h->numCols * (lastRow - firstRow + 1);
 		if (!fread(data, length, 1, fdes))
-			printf("warning: fread in read_tif_32f may have failed (numCols=%d, offset_to_data=%d)\n", int(h->numCols), int(h->offset_to_data));
+			printf("warning: fread in read_tif_32f may have failed (firstRow=%d, lastRow=%d, numCols=%d, offset_to_data=%d)\n", int(firstRow), int(lastRow), int(h->numCols), int(h->offset_to_data));
 
 		if (h->bigEndian)
 		{
