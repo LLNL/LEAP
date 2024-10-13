@@ -56,3 +56,8 @@ LLNL-CODE-848657
 Please cite our work by referencing this github page and citing our [article](https://arxiv.org/abs/2307.05801):
 
 Hyojin Kim and Kyle Champley, "Differentiable Forward Projector for X-ray Computed Tomography”, ICML, 2023
+
+
+If you use RDLS, azimuthalFilter, or histogramSparsity, please cite the following paper:
+
+Champley, Kyle M., Michael B. Zellner, Joseph W. Tringe, and Harry E. Martz Jr. "Methods for Few-View CT Image Reconstruction." arXiv preprint arXiv:2410.07552 (2024).
