@@ -25,7 +25,7 @@ Demo scripts for AI/ML/DL applications in the [demo_leaptorch](https://github.co
 
 ## Example Results
 
-As a simple demonstration of the accuracy of our projectors we show below the results of FDK reconstructions using ASTRA and LEAP of the walnut CT data.  The LEAP reconstruction has 1.7 times higher SNR and reconstructed this data 7.5 times faster than ASTRA.  An explanation for this improvement in SNR can be found [here](https://github.com/LLNL/LEAP/blob/main/results/SF_vs_VD.md).
+As a simple demonstration of the accuracy of our projectors we show below the results of FDK reconstructions using ASTRA and LEAP of the walnut CT data.  The LEAP reconstruction has 1.7 times higher SNR than ASTRA.  An explanation for this improvement in SNR can be found [here](https://github.com/LLNL/LEAP/blob/main/results/SF_vs_VD.md).
 <p align="center">
   <img src=https://github.com/LLNL/LEAP/blob/main/results/walnut_comparison.png>
 </p>
@@ -37,6 +37,7 @@ For the next releases, we are working on the following:
 2) AMD GPU Support
 3) multi-material beam hardening correction algorithms for more than two materials and that account for variable takeoff angle and graded collimator/ bowtie filter
 4) triple energy decomposition
+5) spectral calibration
 
 If you are interested in requesting a new feature in LEAP, please make a post in the [Feature Request](https://github.com/LLNL/LEAP/discussions/88) discussion.
 

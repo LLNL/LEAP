@@ -169,7 +169,7 @@ def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=
         
     return True
 
-def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=None):
+def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=None, isAttenuationData=False):
     r"""Converts data to attenuation radiographs (flat fielding and negative log)
 
     .. math::
@@ -226,6 +226,15 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         minAir = np.min(air_scan[air_scan>0.0])
         air_scan[air_scan<=0.0] = minAir
     #"""
+    
+    # The input may already be attenuation data
+    # Then this algorithm may just apply the flux normalization
+    # So in this case transform to transmission data
+    if isAttenuationData:
+        if ROI is None:
+            return True
+        else:
+            leapct.expNeg(self.g)
     
     # Perform Flat Fielding
     

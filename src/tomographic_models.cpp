@@ -487,6 +487,26 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 	int numSlices = lastSlice - firstSlice + 1;
 	float* g_chunk = (float*)malloc(sizeof(float) * uint64(params.numAngles) * uint64(params.numCols) * uint64(numSlices));
 
+	/*
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int iphi = 0; iphi < params.numAngles; iphi++)
+	{
+		float* g_proj = &g[uint64(iphi) * uint64(params.numRows * params.numCols) + firstSlice* params.numCols];
+		float* g_chunk_proj = &g_chunk[uint64(iphi) * uint64(numSlices * params.numCols)];
+
+		memcpy(g_chunk_proj, g_proj, sizeof(float) * params.numCols * numSlices);
+
+		//for (int iRow = firstSlice; iRow <= lastSlice; iRow++)
+		//{
+		//	float* g_line = &g_proj[iRow * params.numCols];
+		//	float* g_chunk_line = &g_chunk_proj[(iRow - firstSlice) * params.numCols];
+		//	memcpy(g_chunk_line, g_line, sizeof(float) * params.numCols);
+		//}
+	}
+	//*/
+
+	//*
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
@@ -503,6 +523,7 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 			//	g_chunk_line[iCol] = g_line[iCol];
 		}
 	}
+	//*/
 	return g_chunk;
 }
 
