@@ -179,6 +179,9 @@ class tomographicModels:
         self.wmin = 0.0
         self.wmax = None
 
+    def test_script(self):
+        self.libprojectors.test_script()
+
     def set_model(self, i=None):
         """ This should be considered a private class function """
         self.libprojectors.set_model.restype = ctypes.c_bool
@@ -721,10 +724,20 @@ class tomographicModels:
         return self.libprojectors.set_tau(tau)
     
     def set_helicalPitch(self, helicalPitch):
-        """Set the helicalPitch parameter
+        r"""Set the helicalPitch parameter
+        
+        This function sets the helicalPitch parameter which is measured in mm/radians.  Sometimes the helical pitch is specified in a normalized fashion.
+        If so, please use the set_normalizedHelicalPitch function.
+        
+        If we denote the helical pitch by :math:`h` and the normalized helical pitch by :math:`\widehat{h}`, then they are related by
+        
+        .. math::
+           \begin{eqnarray*}
+           h = \frac{numRows * pixelHeight \frac{sod}{sdd}}{2\pi} \widehat{h}
+           \end{eqnarray*}
         
         Args:
-            helicalPitch (float): the helical pitch (mm/radians) (cone-beam data only)
+            helicalPitch (float): the helical pitch (mm/radians) (cone-beam and cone-parallel data only)
             
         Returns:
             True if the parameters were valid, false otherwise
@@ -735,10 +748,19 @@ class tomographicModels:
         return self.libprojectors.set_helicalPitch(helicalPitch)
         
     def set_normalizedHelicalPitch(self, normalizedHelicalPitch):
-        """Set the helicalPitch parameter
+        r"""Set the normalized helicalPitch parameter
+        
+        This function sets the helicalPitch parameter by specifying the normalized helical pitch value.
+        
+        If we denote the helical pitch by :math:`h` and the normalized helical pitch by :math:`\widehat{h}`, then they are related by
+        
+        .. math::
+           \begin{eqnarray*}
+           h = \frac{numRows * pixelHeight \frac{sod}{sdd}}{2\pi} \widehat{h}
+           \end{eqnarray*}
         
         Args:
-            normalizedHelicalPitch (float): the normalized helical pitch (unitless) (cone-beam data only)
+            normalizedHelicalPitch (float): the normalized helical pitch (unitless) (cone-beam and cone-parallel data only)
             
         Returns:
             True if the parameters were valid, false otherwise

@@ -1119,6 +1119,11 @@ bool read_tif_roi(char* fileName, int firstRow, int lastRow, int firstCol, int l
 		return true;
 }
 
+void test_script()
+{
+	
+}
+
 /*
 //PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 PYBIND11_MODULE(leapct, m) {

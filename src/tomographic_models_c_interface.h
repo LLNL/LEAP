@@ -266,3 +266,5 @@ extern "C" PROJECTOR_API bool read_tif(char* fileName, float* data);
 extern "C" PROJECTOR_API bool read_tif_rows(char* fileName, int firstRow, int lastRow, float* data);
 extern "C" PROJECTOR_API bool read_tif_cols(char* fileName, int firstCol, int lastCol, float* data);
 extern "C" PROJECTOR_API bool read_tif_roi(char* fileName, int firstRow, int lastRow, int firstCol, int lastCol, float* data);
+
+extern "C" PROJECTOR_API void test_script();

@@ -484,10 +484,13 @@ bool tomographicModels::windowFOV(float* f, bool data_on_cpu)
 
 float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 {
+	//Timer clock;
+	//clock.tick();
+
 	int numSlices = lastSlice - firstSlice + 1;
 	float* g_chunk = (float*)malloc(sizeof(float) * uint64(params.numAngles) * uint64(params.numCols) * uint64(numSlices));
 
-	/*
+	//*
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
@@ -506,7 +509,7 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 	}
 	//*/
 
-	//*
+	/*
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
@@ -524,6 +527,10 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 		}
 	}
 	//*/
+
+	//clock.tock();
+	//printf("Elapsed time: %d\n", clock.duration().count());
+
 	return g_chunk;
 }
 
