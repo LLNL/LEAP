@@ -25,6 +25,7 @@
 #include "projectors_symmetric.cuh"
 #include "projectors_attenuated.cuh"
 #include "projectors_Joseph.cuh"
+#include "backprojectors_VD.cuh"
 #endif
 
 projectors::projectors()
@@ -139,6 +140,8 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 			return backproject_symmetric(g, f, params, data_on_cpu);
 		else if (params->muSpecified())
 			return backproject_attenuated(g, f, params, data_on_cpu);
+		else if (params->whichProjector == parameters::VOXEL_DRIVEN /* && (params->helicalPitch == 0.0 || params->doWeightedBackprojection == false)*/)
+			return backproject_VD(g, f, params, data_on_cpu);
 		else if (params->geometry == parameters::MODULAR)
 			return backproject_Joseph_modular(g, f, params, data_on_cpu);
 		else

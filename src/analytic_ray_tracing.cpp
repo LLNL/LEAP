@@ -246,7 +246,7 @@ bool analyticRayTracing::setTrajectory(int iProj, int iRow, int iCol, double* r,
         c = &(params->moduleCenters[iProj * 3]);
         u_vec = &(params->colVectors[iProj * 3]);
         v_vec = &(params->rowVectors[iProj * 3]);
-        r[0] = c[0] + u * u_vec[0] + v*v_vec[0] - s[0];
+        r[0] = c[0] + u * u_vec[0] + v * v_vec[0] - s[0];
         r[1] = c[1] + u * u_vec[1] + v * v_vec[1] - s[1];
         r[2] = c[2] + u * u_vec[2] + v * v_vec[2] - s[2];
         break;

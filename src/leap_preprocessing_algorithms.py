@@ -17,9 +17,159 @@ import sys
 import os
 import time
 import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import least_squares
+from scipy.spatial.transform import Rotation as R
 from leapctype import *
 
-def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=None):
+def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=None, badPixelMap=None, flux_response=None):
+    r""" Performs gain correction
+    
+    This function processes raw radiographs by subtracting off the dark current and
+    correcting for the pixel-to-pixel gain variations which reduces ring artifacts
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (C contiguous float32 numpy array or torch tensor): radiograph data
+        air_scan (C contiguous float32 numpy array or torch tensor): air scan radiograph data; if not given, assumes that the input data is transmission data
+        dark_scan (C contiguous float32 numpy array or torch tensor): dark scan radiograph data; if not given assumes the inputs have already been dark subtracted
+        calibrartion_scans (C contiguous 3D float32 numpy array or torch tensor): calibration scan data
+        ROI (4-element integer array): specifies a bounding box ([first row, last row, first column, last column]) for which to estimate a mean value for flux correction
+        badPixelMap (C contiguous float32 numpy array or torch tensor): 2D bad pixel map (numRows x numCols) where a value of 1.0 marks a pixel as bad
+        flux_response (C contiguous 1D float32 numpy array or torch tensor): transfer function of dark subtracted raw data
+    """
+    if dark_scan is None or air_scan is None:
+        print('Error: must specify air_scan and dark_scan')
+        return False
+    if calibration_scans is not None and len(calibration_scans.shape) != 3:
+        print('Error: calibration_scans should be a 3D array')
+        return False
+        
+    # Check Inputs
+    if g is None:
+        print('Error: no data given')
+        return False
+    if len(g.shape) != 3:
+        print('Error: input data must by 3D')
+        return False
+    if dark_scan is not None:
+        if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+            pass
+        elif len(dark_scan.shape) != 2 or  g.shape[1] != dark_scan.shape[0] or g.shape[2] != dark_scan.shape[1]:
+            print('Error: dark scan image size is invalid')
+            return False
+    if air_scan is not None:
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            pass
+        elif len(air_scan.shape) != 2 or g.shape[1] != air_scan.shape[0] or g.shape[2] != air_scan.shape[1]:
+            print('Error: air scan image size is invalid')
+            return False
+    if ROI is not None:
+        if ROI[0] < 0 or ROI[2] < 0 or ROI[1] < ROI[0] or ROI[3] < ROI[2] or ROI[1] >= g.shape[1] or ROI[3] >= g.shape[2]:
+            print('Error: invalid ROI')
+            return False
+    
+    # Subtract off dark
+    if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+        g[:] = g[:] - dark_scan
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            air_scan = air_scan - dark_scan
+        else:
+            air_scan[:] = air_scan[:] - dark_scan
+    else:
+        g[:] = g[:] - dark_scan[None,:,:]
+        air_scan[:] = air_scan[:] - dark_scan[:]
+
+    if isinstance(air_scan, int) or isinstance(air_scan, float):
+        pass
+    else:
+        leapct.MedianFilter2D(air_scan, threshold=0.03, windowSize=5)
+    
+    if calibration_scans is None or calibration_scans.shape[0] < 3:
+        pass
+    else:
+        # do actual calibration
+        if calibration_scans.shape[0] == 3:
+            M = calibration_scans[1,:,:] - calibration_scans[0,:,:]
+            L = calibration_scans[2,:,:] - calibration_scans[0,:,:]
+
+            leapct.MedianFilter2D(M, threshold=0.1, windowSize=5)
+            leapct.MedianFilter2D(L, threshold=0.1, windowSize=5)
+            
+            if has_torch == True and type(L) is torch.Tensor:
+                minL = torch.min(L[L>0.0])
+                minM = torch.min(M[M>0.0])
+            else:
+                minL = np.min(L[L>0.0])
+                minM = np.min(M[M>0.0])
+            M[M<=0.0] = minM
+            L[L<=0.0] = minL
+            
+            #leapct.MedianFilter2D(M)
+            #leapct.MedianFilter2D(L)
+            medM = np.median(M)
+            medL = np.median(L)
+            
+            gainM = medM/M
+            gainL = (medL - medM) / (L - M)
+            
+            """
+            Although this does not work in python, here is the basic math
+            
+            For g <= M:
+                g = gainM * g
+            For g > M:
+                g = gainL * (g-M) + medM
+            
+            This is basically the way Jerel was doing it
+            g[:] = g[:] * gainM[None,:,:]
+            air_scan[:] = air_scan[:] * gainM[:]
+            gainL[:] = gainL[:] / gainM[:]
+            
+            g[:] = leapct.minimum(g[:], medM) + gainL[None,:,:] * (leapct.maximum(g[:], medM) - medM)
+            """
+
+            if has_torch == True and type(g) is torch.Tensor:
+                g[:] = torch.heaviside(M[None,:,:]-g[:], 0.0) * ((gainM[None,:,:]-gainL[None,:,:])*g[:] + gainL[None,:,:]*M[None,:,:] - medM) + (gainL[None,:,:]*(g[:]-M[None,:,:]) + medM)
+            else:
+                g[:] = np.heaviside(M[None,:,:]-g[:], 0.0) * ((gainM[None,:,:]-gainL[None,:,:])*g[:] + gainL[None,:,:]*M[None,:,:] - medM) + (gainL[None,:,:]*(g[:]-M[None,:,:]) + medM)
+            
+            if isinstance(air_scan, int) or isinstance(air_scan, float):
+                pass
+            else:
+                air_scan[air_scan<=M] = gainM[air_scan<=M]*air_scan[air_scan<=M]
+                air_scan[air_scan>M] = gainL[air_scan>M]*(air_scan[air_scan>M] - M[air_scan>M]) + medM
+            
+            #return True
+            
+        else:
+            print('Error: current implementation only works for 3 calibration scans!')
+            return False
+            
+    # Perform Flux Correction
+    if ROI is not None:
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            postageStamp_air = float(air_scan)
+        elif has_torch == True and type(air_scan) is torch.Tensor:
+            postageStamp_air = torch.mean(air_scan[ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1])
+        else:
+            postageStamp_air = np.mean(air_scan[ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1])
+    
+        if has_torch == True and type(g) is torch.Tensor:
+            postageStamp = torch.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
+        else:
+            postageStamp = np.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
+            
+        postageStamp = postageStamp / postageStamp_air
+        print('ROI mean: ' + str(np.mean(postageStamp)) + ', standard deviation: ' + str(np.std(postageStamp)))
+        #g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
+        g[:] = g[:] / postageStamp[:,None,None]
+        
+    badPixelCorrection(leapct, g, None, None, badPixelMap, 5, isAttenuationData=False)
+        
+    return True
+
+def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=None, isAttenuationData=False):
     r"""Converts data to attenuation radiographs (flat fielding and negative log)
 
     .. math::
@@ -50,11 +200,17 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         print('Error: input data must by 3D')
         return False
     if dark_scan is not None:
-        if g.shape[1] != dark_scan.shape[0] or g.shape[2] != dark_scan.shape[1]:
+        if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+            #print('dark is constant')
+            pass
+        elif len(dark_scan.shape) != 2 or g.shape[1] != dark_scan.shape[0] or g.shape[2] != dark_scan.shape[1]:
             print('Error: dark scan image size is invalid')
             return False
     if air_scan is not None:
-        if g.shape[1] != air_scan.shape[0] or g.shape[2] != air_scan.shape[1]:
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            #print('air is constant')
+            pass
+        elif len(air_scan.shape) != 2 or g.shape[1] != air_scan.shape[0] or g.shape[2] != air_scan.shape[1]:
             print('Error: air scan image size is invalid')
             return False
     if ROI is not None:
@@ -62,15 +218,46 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
             print('Error: invalid ROI')
             return False
     
+    #"""
+    if has_torch == True and type(air_scan) is torch.Tensor:
+        minAir = torch.min(air_scan[air_scan>0.0])
+        air_scan[air_scan<=0.0] = minAir
+    elif type(air_scan) is np.ndarray:
+        minAir = np.min(air_scan[air_scan>0.0])
+        air_scan[air_scan<=0.0] = minAir
+    #"""
+    
+    # The input may already be attenuation data
+    # Then this algorithm may just apply the flux normalization
+    # So in this case transform to transmission data
+    if isAttenuationData:
+        if ROI is None:
+            return True
+        else:
+            leapct.expNeg(self.g)
+    
     # Perform Flat Fielding
+    
     if dark_scan is not None:
         if air_scan is not None:
-            g[:,:,:] = (g[:,:,:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
+            if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+                air_scan = air_scan - dark_scan
+                if isinstance(air_scan, int) or isinstance(air_scan, float):
+                    g[:] = (g[:] - dark_scan) / air_scan
+                else:
+                    g[:] = (g[:] - dark_scan) / air_scan[None,:,:]
+            else:
+                g[:] = (g[:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
         else:
-            g[:,:,:] = g[:,:,:] - dark_scan[None,:,:]
+            if isinstance(dark_scan, int) or isinstance(dark_scan, float):
+                g[:] = g[:] - dark_scan
+            else:
+                g[:] = g[:] - dark_scan[None,:,:]
     else:
-        if air_scan is not None:
-            g[:,:,:] = g[:,:,:] / air_scan[None,:,:]
+        if isinstance(air_scan, int) or isinstance(air_scan, float):
+            g[:] = g[:] / air_scan
+        elif air_scan is not None:
+            g[:] = g[:] / air_scan[None,:,:]
     
     # Perform Flux Correction
     if ROI is not None:
@@ -79,21 +266,26 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         else:
             postageStamp = np.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
         print('ROI mean: ' + str(np.mean(postageStamp)) + ', standard deviation: ' + str(np.std(postageStamp)))
-        g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
-
+        #g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
+        g[:] = g[:] / postageStamp[:,None,None]
+        
     # Convert to attenuation
+    if np.isnan(g).any():
+        print('some nans exist')
     g[g<=0.0] = 2.0**-16
     leapct.negLog(g)
     
     return True
 
-def badPixelCorrection(leapct, g, badPixelMap, windowSize=3, isAttenuationData=True):
+def badPixelCorrection(leapct, g, air_scan=None, dark_scan=None, badPixelMap=None, windowSize=3, isAttenuationData=True):
     r"""Removes bad pixels from CT projections
     
     LEAP CT geometry parameters must be set prior to running this function 
     and can be applied to any CT geometry type.
     This algorithm processes each projection independently
     and removes bad pixels specified by the user using a median filter
+    
+    If no bad pixel map is provided, this routine will estimate it from the average of all projections.
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
@@ -106,13 +298,32 @@ def badPixelCorrection(leapct, g, badPixelMap, windowSize=3, isAttenuationData=T
         True if successful, False otherwise
     """
     
-    if g is None or badPixelMap is None:
+    if g is None:
         return False
     
     # This algorithm processes each transmission
     if isAttenuationData:
         leapct.expNeg(g)
+        
+    if badPixelMap is None:
+        if has_torch == True and type(g) is torch.Tensor:
+            g_mean = torch.mean(g, axis=0)
+        else:
+            g_mean = np.mean(g, axis=0)
+        g_mean_filtered = leapct.copyData(g_mean)
+        #leapct.MedianFilter2D(g_mean_filtered, threshold=0.03, windowSize=3)
+        leapct.MedianFilter2D(g_mean_filtered, threshold=0.1, windowSize=5)
+        ind = g_mean != g_mean_filtered
+        g_mean[ind] = 1.0
+        g_mean[~ind] = 0.0
+        badPixelMap = g_mean
+        #print('Estimated ' + str(np.sum(badPixelMap)) + ' bad pixels')
+        
     leapct.badPixelCorrection(g, badPixelMap, windowSize)
+    if air_scan is not None:
+        leapct.badPixelCorrection(air_scan, badPixelMap, windowSize)
+    if dark_scan is not None:
+        leapct.badPixelCorrection(dark_scan, badPixelMap, windowSize)
     if isAttenuationData:
         leapct.negLog(g)
     return True
@@ -269,7 +480,7 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
         leapct.negLog(t)
     return True
 
-def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
+def ringRemoval_fast(leapct, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.05):
     r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     
     This algorithm estimates the rings by first averaging all projections.  Then denoises this
@@ -296,9 +507,12 @@ def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
         delta (float): The delta parameter of the Total Variation Functional
         numIter (int): Number of iterations
         maxChange (float): An upper limit on the maximum difference that can be applied to a detector pixels
+        beta (float): The strength of the regularization
     
     Returns:
         True if successful, False otherwise
+    """
+    
     """
     if has_torch == True and type(g) is torch.Tensor:
         g_sum = torch.zeros((1,g.shape[1],g.shape[2]), dtype=torch.float32)
@@ -307,18 +521,27 @@ def ringRemoval_fast(leapct, g, delta=0.01, numIter=30, maxChange=0.05):
     else:
         g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
         g_sum[0,:] = np.mean(g,axis=0)
+    """
+    if has_torch == True and type(g) is torch.Tensor:
+        g_sum = torch.mean(g,axis=0)
+    else:
+        g_sum = np.mean(g,axis=0)
     g_sum_save = leapct.copyData(g_sum)
+    minValue = np.min(g_sum_save)
+    minValue = min(minValue, 0.0)
     
     numNeighbors = leapct.get_numTVneighbors()
     leapct.set_numTVneighbors(6)
-    leapct.diffuse(g_sum,delta,numIter)
+    #leapct.diffuse(g_sum, delta, numIter, 1.0)
+    leapct.TV_denoise(g_sum, delta, beta, numIter, 1.0)
+    g_sum[g_sum<minValue] = minValue
     leapct.set_numTVneighbors(numNeighbors)
     
     gainMap = g_sum - g_sum_save
     
     gainMap[gainMap>maxChange] = maxChange
     gainMap[gainMap<-maxChange] = -maxChange
-    g[:,:,:] = g[:,:,:] + gainMap[None,:,:]
+    g[:] = g[:] + gainMap[None,:,:]
     return True
 
 def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
@@ -357,10 +580,10 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
         else:
             Dg_sum = np.mean(Dg,axis=0)
 
-        g[:,:,:] = g[:,:,:] - Dg_sum[None,:,:]
+        g[:] = g[:] - Dg_sum[None,:,:]
     return True
 
-def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
+def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
     r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     
     This algorithm estimates the gain correction necessary to remove ring artifacts by solving denoising
@@ -385,6 +608,7 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
     """
     numNeighbors = leapct.get_numTVneighbors()
     leapct.set_numTVneighbors(6)
+    """
     g_0 = leapct.copyData(g)
     for n in range(numIter):
         Dg = leapct.TVgradient(g, delta, beta)
@@ -402,6 +626,8 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
         stepSize = num / (num+denom)
         
         g[:] = g[:] - stepSize*Dg[:]
+    """
+    leapct.TV_denoise(g, delta, beta, numIter, p=1.0, meanOverFirstDim=True)
     
     '''
     gainMap = g - g_0
@@ -411,6 +637,30 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30):
     #'''
     leapct.set_numTVneighbors(numNeighbors)
     
+    return True
+
+def transmission_shift(leapct, g, shift, isAttenuationData=True):
+    r""" Subtracts constant from transmission data which is a simple method for scatter correction
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        shift (float): the amount to subtract from the transmission data
+        isAttenuationData (bool): True if g is attenuation data, False otherwise
+    
+    Returns:
+        True is successful, False otherwise
+    
+    """
+    if not isinstance(shift, float):
+        raise TypeError
+    minTransmission = 2.0**-16
+    if isAttenuationData:
+        leapct.expNeg(g)
+    g -= shift
+    g[g<minTransmission] = minTransmission
+    if isAttenuationData:
+        leapct.negLog(t)
     return True
     
 def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP'):
@@ -432,14 +682,14 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
         g (contiguous float32 numpy array or torch tensor): attenuation projection data
         values (list of floats): the values to reconstruct with
-        param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt'
+        param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt', 'vertical_shift', 'horizontal_shift'
         iz (integer): the z-slice index to perform the reconstruction; if not given, uses the central slice
         algorithmName (string): the name of the algorithm to use for reconstruction; can be 'FBP' or 'inconsistencyReconstruction'
         
     Returns:
         stack of single-slice reconstructions (i.e., 3D numpy array or torch tensor) for all parameter values
     """
-    valid_params = ['centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt']
+    valid_params = ['centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt', 'vertical_shift', 'horizontal_shift']
     if param == None:
         param = 'centerCol'
     if any(name in param for name in valid_params) == False:
@@ -456,6 +706,10 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     if param == 'tau' and leapct.get_geometry() == 'PARALLEL':
         print('Error: tau does not apply to parallel-beam data.')
         return None
+    if leapct.get_geometry() == 'MODULAR':
+        if param == 'tau' or param == 'centerCol' or param == 'centerRow':
+            print('Error: centerCol, centerRow, and tau do not apply to modular-beam data.')
+            return None
         
     if has_torch == True and type(g) is torch.Tensor:
         f_stack = torch.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=torch.float32)
@@ -491,11 +745,15 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     for n in range(len(values)):
         print(str(n) + ': ' + str(param) + ' = ' + str(values[n]))
         if param == 'centerCol':
+            #col_shift = (leapct_sweep.get_centerCol() - values[n])*leapct_sweep.get_pixelWidth()
+            #leapct_sweep.shift_detector(0.0, col_shift)
             leapct_sweep.set_centerCol(values[n])
         elif param == 'centerRow':
-            if leapct_sweep.get_geometry() == 'CONE':
+            if leapct_sweep.get_geometry() == 'CONE' or leapct_sweep.get_geometry() == 'CONE-PARALLEL':
                 z_shift = (leapct_sweep.get_centerRow() - values[n])*leapct_sweep.get_pixelHeight()*leapct_sweep.get_sod()/leapct_sweep.get_sdd()
                 leapct_sweep.set_offsetZ(leapct_sweep.get_offsetZ() + z_shift)
+            #row_shift = (leapct_sweep.get_centerRow() - values[n])*leapct_sweep.get_pixelHeight()
+            #leapct_sweep.shift_detector(row_shift, 0.0)
             leapct_sweep.set_centerRow(values[n])
         elif param == 'tau':
             delta_tau = values[n] - leapct_sweep.get_tau()
@@ -508,6 +766,10 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             leapct_sweep.set_sod(values[n])
         elif param == 'sdd':
             leapct_sweep.set_sdd(values[n])
+        elif param == 'vertical_shift':
+            leapct_sweep.shift_detector(values[n]-last_value, 0.0)
+        elif param == 'horizontal_shift':
+            leapct_sweep.shift_detector(0.0, values[n]-last_value)
         if param == 'tilt':
             leapct_sweep.rotate_detector(values[n]-last_value)
         
@@ -600,3 +862,209 @@ def MTF(leapct, f, r, center=None, getEdgeResponse=False, oversamplingRate=4):
     
     return MTF
     
+    
+class ball_phantom_calibration:
+    def __init__(self, leapct, ballSpacing, g, segmentation_threshold=None):
+        if leapct.ct_geometry_defined() == False:
+            print('Must define initial guess of CT geometry!')
+            return
+        if g is None:
+            print('Must define ball phantom scan data!')
+            return
+        if ballSpacing is None or ballSpacing <= 0.0:
+            return('Must define spacing (mm) between balls')
+            return
+            
+        self.T_u = leapct.get_pixelWidth()
+        self.T_v = leapct.get_pixelHeight()
+        self.numCols = leapct.get_numCols()
+        self.numRows = leapct.get_numRows()
+        
+        us = self.T_u*(np.array(range(self.numCols)) - 0.5*(self.numCols-1.0))
+        vs = self.T_v*(np.array(range(self.numRows)) - 0.5*(self.numRows-1.0))
+        
+        self.numAngles = g.shape[0]
+        self.T_z = ballSpacing
+        self.projectionAngles = leapct.get_angles()
+        self.leapct = leapct
+        
+        numBalls = 0
+        self.N_z = 0
+        self.ball_projection_locations = None
+        
+        ### PERFORM CONNECTED COMPONENTS SEGMENTATION
+        # ball_projection_locations is numAngles x numBalls x 2 numpy array
+        # which gives the COM of each projection of each ball on the detector
+        us, vs = np.meshgrid(us, vs)
+        g_labeled = self.connected_components(g, segmentation_threshold)
+        if g_labeled is None:
+            return
+        numBalls = np.max(g_labeled)
+        self.N_z = numBalls
+        self.ball_projection_locations = np.zeros((g.shape[0], numBalls, 2), dtype=np.float32)
+        for i in range(g.shape[0]):
+            aProj = np.squeeze(g[i,:,:])
+            aProj_labeled = np.squeeze(g_labeled[i,:,:])
+            for k in range(numBalls):
+                ind = aProj_labeled == k+1
+                self.ball_projection_locations[i,k,0] = np.sum(us[ind]*aProj[ind]) / np.sum(aProj[ind])
+                self.ball_projection_locations[i,k,1] = np.sum(vs[ind]*aProj[ind]) / np.sum(aProj[ind])
+        del g_labeled
+        
+    def initial_guess(self, g=None):
+        if self.N_z <= 0:
+            return None
+        sod = self.leapct.get_sod()
+        sdd = self.leapct.get_sdd()
+        odd = sdd - sod
+        
+        if self.N_z >= 3:
+            spread = np.zeros(self.N_z, dtype=np.float32)
+            for k in range(self.N_z):
+                spread[k] = np.max(self.ball_projection_locations[:, k, 1]) - np.min(self.ball_projection_locations[:, k, 1])
+            k_arg = np.argmin(spread)
+            v_c = np.mean(self.ball_projection_locations[:, k_arg, 1])
+            #v_c = self.T_v * (x[3] - 0.5*(self.numRows-1.0))
+            centerRow = v_c / self.T_v + 0.5*(self.numRows-1.0)
+            self.leapct.set_centerRow(centerRow)
+        
+        r = 0.5*(np.max(self.ball_projection_locations[:, :, 0]) - np.min(self.ball_projection_locations[:, :, 0])) * sod / sdd
+        phase = 0.0
+        
+        #mean_z = 0.5*T_z*(N_z-1) + z_0
+        #mean_z = np.mean(self.ball_projection_locations[:, :, 1])
+        #z_0 = 0.0*mean_z - 0.5*self.T_z*(self.N_z-1)
+        z_0 = -self.T_z*0.5*(self.N_z-1.0)
+        
+        if g is not None:
+            g_sum = np.sum(g,axis=1)
+            g_copy = g.copy()
+            g_copy[:,:,:] = g_sum[:,None,:]
+            self.leapct.find_centerCol(g_copy)
+            del g_copy
+            del g_sum
+        x = [self.leapct.get_centerRow(), self.leapct.get_centerCol(), self.leapct.get_sod(), self.leapct.get_sdd()-self.leapct.get_sod(), 0.0, 0.0, 0.0, r, z_0, 0.0]
+        return x
+    
+    def estimate_locations(self, x):
+        if self.N_z <= 0:
+            return None
+        deg_to_rad = np.pi/180.0
+        #x = [centerRow, centerCol, sod, odd, psi, theta, phi, r, z_0, phase]
+        
+        v_c = self.T_v * (x[0] - 0.5*(self.numRows-1.0))
+        u_c = self.T_u * (x[1] - 0.5*(self.numCols-1.0))
+        
+        sod = x[2]
+        odd = x[3]
+        psi = x[4]
+        theta = x[5]
+        phi = x[6]
+        A = R.from_euler('xyz', [psi, theta, phi], degrees=True).as_matrix()
+        detNormal = A[:,1]
+        u_vec = A[:,0]
+        v_vec = A[:,2]
+        
+        sourcePos = np.array([0.0, sod, 0.0])
+        detectorCenter = np.array([u_c, -odd, v_c])
+        c_minus_s_dot_n = np.dot(detectorCenter - sourcePos, detNormal)
+        
+        r = x[7]
+        z_0 = x[8]
+        phase = x[9]
+        
+        retVal = np.zeros((self.numAngles, self.N_z, 2), dtype=np.float32)
+        for k in range(self.N_z):
+            u_est = np.zeros(self.numAngles)
+            v_est = np.zeros(self.numAngles)
+            for i in range(self.numAngles):
+                ball = np.array([r*np.cos((self.projectionAngles[i]-phase)*deg_to_rad), r*np.sin((self.projectionAngles[i]-phase)*deg_to_rad), self.T_z*k+z_0])
+                traj = ball - sourcePos
+                
+                t = c_minus_s_dot_n / np.dot(traj, detNormal)
+                
+                hitPosition = sourcePos + t * traj
+                
+                u_coord = np.dot(hitPosition, u_vec) + u_c
+                v_coord = np.dot(hitPosition, v_vec) + v_c
+                
+                retVal[i,k,0] = u_coord
+                retVal[i,k,1] = v_coord
+        
+        return retVal
+        
+    def do_plot(self, x):
+        if self.N_z <= 0:
+            return
+        estimated = self.estimate_locations(x)
+        plt.plot(self.ball_projection_locations[:, :, 0], self.ball_projection_locations[:, :, 1], 'ko')
+        plt.plot(estimated[:,:,0], estimated[:,:,1], 'ro')
+        plt.title('Ball Center Locations (black from data, red are estimated)')
+        plt.xlabel('detector column dimension (mm)')
+        plt.ylabel('detector row dimension (mm)')
+        plt.show()
+        
+    def residuals(self, x):
+        if self.N_z <= 0:
+            return 0.0
+        estimated = self.estimate_locations(x)
+        return (estimated - self.ball_projection_locations).flatten()
+        
+    def cost(self, x):
+        if self.N_z <= 0:
+            return 0.0
+        estimated = self.estimate_locations(x)
+        return np.sum((estimated - self.ball_projection_locations)**2)
+        
+    def optimize(self, x=None, set_parameters=False):
+        if self.N_z <= 0:
+            return None
+        if x is None:
+            x = self.initial_guess()
+        res = least_squares(self.residuals, x)
+        if set_parameters:
+            self.leapct.set_centerRow(res.x[0])
+            self.leapct.set_centerCol(res.x[1])
+            self.leapct.set_sod(res.x[2])
+            self.leapct.set_sdd(res.x[2]+res.x[3])
+            """
+            if np.abs(res.x[4]) < 0.1:
+                res.x[4] = 0.0
+            if np.abs(res.x[6]) < 0.1:
+                res.x[6] = 0.0
+            if np.abs(res.x[5]) < 0.05:
+                res.x[5] = 0.0
+            #"""
+            if res.x[4] != 0.0 or res.x[5] != 0.0 or res.x[6] != 0.0:
+                A = R.from_euler('xyz', [res.x[4], res.x[5], res.x[6]], degrees=True).as_matrix()
+                self.leapct.convert_to_modularbeam()
+                #self.leapct.rotate_detector(-res.x[5])
+                self.leapct.rotate_detector(A.T)
+        return res
+
+    def connected_components(self, g, threshold=None, FWHM=0.0, connectivity=2):
+        if threshold is None:
+            threshold = np.max(g)/4.0
+        g_labeled = np.zeros((g.shape[0], g.shape[1], g.shape[2]), dtype=np.int8)
+        import skimage as ski
+        for i in range(g.shape[0]):
+            I = np.squeeze(g[i,:,:])
+            if FWHM > 1.0:
+                self.BlurFilter2D(I, FWHM)
+            binary_mask = I > threshold
+            
+            # perform connected component analysis, connectivity=2 includes diagonals
+            labeled_image, count = ski.measure.label(binary_mask, connectivity=connectivity, return_num=True)
+            if i > 0:
+                if count != count_last:
+                    print('Error: inconsistent number of balls found across projections!')
+                    print('Try running connected_components segmentation with different parameters or inspect your data.')
+                    return None
+            if count == 0:
+                print('Error: no balls found!')
+                print('Try running connected_components segmentation with different parameters or inspect your data.')
+                return None
+            g_labeled[i,:,:] = labeled_image[:,:]
+            count_last = count
+        print('found ' + str(count) + ' balls')
+        return g_labeled

@@ -29,8 +29,6 @@ pixelSize = 0.65*512/numCols
 numRows = 64
 
 # Set the scanner geometry
-# Let's start with a standard cone-beam geometry so make it easier to specify,
-# then convert it to modular beam for we can perform detector dithering
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1)+10, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
 # Set the volume parameters.

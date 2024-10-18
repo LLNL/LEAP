@@ -972,7 +972,7 @@ __global__ void applyPolarWeight(float* g, int4 N_g, float4 T_g, float4 startVal
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrt(1.0f + v*v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= rsqrtf(1.0f + v*v);
 }
 
 __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 startVals_g)
@@ -984,7 +984,7 @@ __global__ void applyInversePolarWeight(float* g, int4 N_g, float4 T_g, float4 s
         return;
 
     const float v = j * T_g.y + startVals_g.y;
-    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrt(1.0f + v * v);
+    g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrtf(1.0f + v * v);
 }
 
 __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder)
@@ -1180,7 +1180,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
     const float v_min = 1.0f / d_v_min_inv;
     const float v_max = 1.0f / d_v_max_inv;
 
-    float val = 0.0;
+    float val = 0.0f;
 
     const float atan_term = atan(2.0f * tau * R / (R * R - tau * tau));
     
@@ -1657,7 +1657,27 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
         const float u_arg = x_dot_theta_perp * R_minus_x_dot_theta_inv;
         const float x_denom = fabs(u_arg * cos_phi - sin_phi);
         const float y_denom = fabs(u_arg * sin_phi + cos_phi);
-        const float l_phi = T_f.x * sqrt(1.0f + u_arg * u_arg) / max(x_denom, y_denom);
+        const float l_phi = T_f.x * sqrtf(1.0f + u_arg * u_arg) / max(x_denom, y_denom);
+        /*
+        float l_phi;
+        if (x * cos_phi + y * sin_phi >= 0.0f)
+        {
+            const float R_minus_x_dot_theta_inv_conj = 1.0f / (R + x * cos_phi + y * sin_phi);
+            const float u_arg_conj = -x_dot_theta_perp * R_minus_x_dot_theta_inv_conj;
+            const float rt = sqrt(1.0f + u_arg_conj * u_arg_conj) * rsqrtf(1.0f + u_arg * u_arg);
+            //const float l_phi_conj = T_f.x * sqrt(1.0f + u_arg_conj * u_arg_conj) / max(fabs(u_arg_conj * cos_phi - sin_phi), fabs(u_arg_conj * sin_phi + cos_phi));
+            l_phi = T_f.x * sqrt(1.0f + u_arg * u_arg) / max(x_denom, y_denom);
+            //l_phi = 2.0f * T_f.x * sqrtf(1.0f + u_arg * u_arg) / max(x_denom, y_denom) * R_minus_x_dot_theta * R_minus_x_dot_theta / (R * R);
+            //l_phi = 2.0f * T_f.x / max(x_denom, y_denom) * R_minus_x_dot_theta* R_minus_x_dot_theta / (R*R) * ((R + x * cos_phi + y * sin_phi)/R);
+            //const float temp = R_minus_x_dot_theta * R_minus_x_dot_theta / (R * R);
+            //l_phi*temp*(1/temp + 1/temp_conv) = l_phi*(1+temp/temp_conj)
+            l_phi = l_phi * (1.0f + rt*R_minus_x_dot_theta * R_minus_x_dot_theta / ((R + x * cos_phi + y * sin_phi) * (R + x * cos_phi + y * sin_phi)));
+            //l_phi += l_phi_conj * R * R / ((R + x * cos_phi + y * sin_phi) * (R + x * cos_phi + y * sin_phi));
+        }
+        else
+            continue;
+        //*/
+
         float A_x;
         if (x_denom > y_denom)
             A_x = fabs(sin_phi) * T_x_over_2;
@@ -2148,7 +2168,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     {
         if (params->doWeightedBackprojection && params->helicalPitch != 0.0)
         {
-            float q_helical = float(0.7);
+            float q_helical = float(params->helicalFBPWeight);
             //float q_helical = float(0.99);
             float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
             float weightFcnTransition = float((q_helical + 1.0) / 2.0);
@@ -2213,7 +2233,7 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     {
         if (params->doWeightedBackprojection == true && params->helicalPitch != 0.0)
         {
-            float q_helical = float(0.7);
+            float q_helical = float(params->helicalFBPWeight);
             //float q_helical = float(0.99);
             float weightFcnParameter = float(-2.0 / ((1.0 - q_helical) * (1.0 - q_helical)));
             float weightFcnTransition = float((q_helical + 1.0) / 2.0);

@@ -126,6 +126,22 @@ bool tomographicModels::reset()
 	return true;
 }
 
+float* tomographicModels::allocate_volume()
+{
+	float* retVal = NULL;
+	if (params.volumeDefined(false))
+		retVal = new float[params.volumeData_numberOfElements()];
+	return retVal;
+}
+
+float* tomographicModels::allocate_projections()
+{
+	float* retVal = NULL;
+	if (params.geometryDefined(false))
+		retVal = new float[params.projectionData_numberOfElements()];
+	return retVal;
+}
+
 bool tomographicModels::project_gpu(float* g, float* f)
 {
 #ifndef __USE_CPU
@@ -479,9 +495,32 @@ bool tomographicModels::system_matrix(float* A, short* indices, int N_max, int i
 
 float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 {
+	//Timer clock;
+	//clock.tick();
+
 	int numSlices = lastSlice - firstSlice + 1;
 	float* g_chunk = (float*)malloc(sizeof(float) * uint64(params.numAngles) * uint64(params.numCols) * uint64(numSlices));
 
+	//*
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int iphi = 0; iphi < params.numAngles; iphi++)
+	{
+		float* g_proj = &g[uint64(iphi) * uint64(params.numRows * params.numCols) + firstSlice* params.numCols];
+		float* g_chunk_proj = &g_chunk[uint64(iphi) * uint64(numSlices * params.numCols)];
+
+		memcpy(g_chunk_proj, g_proj, sizeof(float) * params.numCols * numSlices);
+
+		//for (int iRow = firstSlice; iRow <= lastSlice; iRow++)
+		//{
+		//	float* g_line = &g_proj[iRow * params.numCols];
+		//	float* g_chunk_line = &g_chunk_proj[(iRow - firstSlice) * params.numCols];
+		//	memcpy(g_chunk_line, g_line, sizeof(float) * params.numCols);
+		//}
+	}
+	//*/
+
+	/*
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
@@ -498,6 +537,11 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice)
 			//	g_chunk_line[iCol] = g_line[iCol];
 		}
 	}
+	//*/
+
+	//clock.tock();
+	//printf("Elapsed time: %d\n", clock.duration().count());
+
 	return g_chunk;
 }
 
@@ -1245,7 +1289,6 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 	params.detectorType = parameters::FLAT;
 
 	params.geometry = parameters::FAN;
-	params.detectorType = parameters::FLAT;
 	params.sod = sod;
 	params.sdd = sdd;
 	params.pixelWidth = pixelWidth;
@@ -1259,6 +1302,7 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 	params.set_angles(phis, numAngles);
 	if (params.geometryDefined())
 	{
+		params.set_helicalPitch(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1281,6 +1325,7 @@ bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols
 	params.set_angles(phis, numAngles);
 	if (params.geometryDefined())
 	{
+		params.set_helicalPitch(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1305,6 +1350,7 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 	params.set_sourcesAndModules(sourcePositions_in, moduleCenters_in, rowVectors_in, colVectors_in, numAngles);
 	if (params.geometryDefined())
 	{
+		params.set_helicalPitch(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1402,6 +1448,30 @@ int tomographicModels::get_volumeDimensionOrder()
 	return params.volumeDimensionOrder;
 }
 
+int tomographicModels::number_of_gpus()
+{
+#ifndef __USE_CPU
+	return numberOfGPUs();
+#else
+	return 0;
+#endif
+}
+
+int tomographicModels::get_gpus(int* list_of_gpus)
+{
+#ifndef __USE_CPU
+	int retVal = params.whichGPUs.size();
+	if (list_of_gpus != NULL)
+	{
+		for (int i = 0; i < retVal; i++)
+			list_of_gpus[i] = params.whichGPUs[i];
+	}
+	return retVal;
+#else
+	return 0;
+#endif
+}
+
 bool tomographicModels::set_GPU(int whichGPU)
 {
 #ifndef __USE_CPU
@@ -1441,9 +1511,11 @@ bool tomographicModels::set_projector(int which)
 {
 	if (which == parameters::SEPARABLE_FOOTPRINT)
 		params.whichProjector = parameters::SEPARABLE_FOOTPRINT;
+	else if (which == parameters::VOXEL_DRIVEN)
+		params.whichProjector = parameters::VOXEL_DRIVEN;
 	else
 	{
-		printf("Error: currently only SF projectors are implemented!\n");
+		printf("Error: currently only SF and VD projectors are implemented!\n");
 		return false;
 		//params.whichProjector = 0;
 	}
@@ -2077,6 +2149,72 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 	return true;
 }
 
+bool tomographicModels::HighPassFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	//uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	{
+		if (data_on_cpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			// do chunking
+			int numSlices = std::min(N_1, maxSlicesForChunking);
+			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of slices per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				highPassFilter(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, FWHM, 2, 0, true, whichGPU);
+			}
+
+			return true;
+		}
+	}
+	else
+		return highPassFilter(f, N_1, N_2, N_3, FWHM, 2, 0, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
 bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
 {
 #ifndef __USE_CPU
@@ -2129,14 +2267,14 @@ bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float 
 				float* f_chunk = &f[uint64(sliceStart) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				blurFilter(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, FWHM, 2, true, whichGPU);
+				blurFilter(f_chunk, sliceEnd - sliceStart + 1, N_2, N_3, FWHM, 2, 0, true, whichGPU);
 			}
 
 			return true;
 		}
 	}
 	else
-		return blurFilter(f, N_1, N_2, N_3, FWHM, 2, data_on_cpu, params.whichGPU);
+		return blurFilter(f, N_1, N_2, N_3, FWHM, 2, 0, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2207,7 +2345,7 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				blurFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				blurFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
 			}
 			free(f_in);
 
@@ -2215,7 +2353,7 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 		}
 	}
 	else
-		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, data_on_cpu, params.whichGPU);
+		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, 0, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2286,7 +2424,7 @@ bool tomographicModels::HighPassFilter(float* f, int N_1, int N_2, int N_3, floa
 				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				highPassFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				highPassFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
 			}
 			free(f_in);
 
@@ -2294,15 +2432,17 @@ bool tomographicModels::HighPassFilter(float* f, int N_1, int N_2, int N_3, floa
 		}
 	}
 	else
-		return highPassFilter(f, N_1, N_2, N_3, FWHM, 3, data_on_cpu, params.whichGPU);
+		return highPassFilter(f, N_1, N_2, N_3, FWHM, 3, 0, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
 #endif
 }
 
-bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu)
+bool tomographicModels::badPixelCorrection(float* g, int N_1, int N_2, int N_3, float* badPixelMap, int w, bool data_on_cpu)
 {
+	if (N_1 <= 0 || N_2 <= 0 || N_3 <= 0)
+		return false;
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
@@ -2315,14 +2455,13 @@ bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, 
 	else
 		numProj = 0.0;
 
-	uint64 numElements = params.projectionData_numberOfElements();
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	//uint64 maxElements = 2147483646;
 
 	if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize || params.whichGPUs.size() > 1))
 	{
 		// do chunking
-		int N_1 = params.numAngles;
 		//int numSlices = std::min(N_1, maxSlicesForChunking);
 		int numSlices = int(ceil(double(N_1) / double(int(params.whichGPUs.size()))));
 		while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
@@ -2345,11 +2484,14 @@ bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, 
 			int sliceStart = ichunk * numSlices;
 			int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
 
-			float* g_chunk = &g[uint64(sliceStart) * uint64(params.numRows * params.numCols)];
+			float* g_chunk = &g[uint64(sliceStart) * uint64(N_2 * N_3)];
 			int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
 			parameters params_chunk = params;
-			params_chunk.removeProjections(sliceStart, sliceEnd);
+			params_chunk.numAngles = sliceEnd - sliceStart + 1;
+			params_chunk.numRows = N_2;
+			params_chunk.numCols = N_3;
+			//params_chunk.removeProjections(sliceStart, sliceEnd);
 			//params_chunk.numAngles = sliceEnd - sliceStart + 1;
 			params_chunk.whichGPU = whichGPU;
 
@@ -2358,7 +2500,16 @@ bool tomographicModels::badPixelCorrection(float* g, float* badPixelMap, int w, 
 		return true;
 	}
 	else
-		return badPixelCorrection_gpu(g, &params, badPixelMap, w, data_on_cpu);
+	{
+		parameters params_chunk = params;
+		params_chunk.numAngles = N_1;
+		params_chunk.numRows = N_2;
+		params_chunk.numCols = N_3;
+		//params_chunk.removeProjections(sliceStart, sliceEnd);
+		//params_chunk.numAngles = sliceEnd - sliceStart + 1;
+
+		return badPixelCorrection_gpu(g, &params_chunk, badPixelMap, w, data_on_cpu);
+	}
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2798,7 +2949,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 #endif
 }
 
-bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
+bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool doMean, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
@@ -2864,14 +3015,14 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 				float* f_chunk = &f[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
 				int whichGPU = params.whichGPUs[omp_get_thread_num()];
 
-				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, p, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors);
+				anisotropicTotalVariation_gradient(f_chunk, Df_chunk, numSlices_pad, N_2, N_3, delta, beta, p, true, whichGPU, sliceStart_relative, sliceEnd_relative, params.numTVneighbors, doMean);
 			}
 
 			return true;
 		}
 	}
 	else
-		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors);
+		return anisotropicTotalVariation_gradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu, params.whichGPU, -1, -1, params.numTVneighbors, doMean);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2956,7 +3107,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 #endif
 }
 
-bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
+bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool doMean, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
@@ -2967,6 +3118,63 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 	float numVol = 1.0;
 	if (data_on_cpu)
 		numVol = 3.0;
+	else
+		numVol = 2.0;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	//uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	{
+		if (data_on_cpu == false)
+		{
+			printf("Error: Insufficient GPU memory for this operation!\n");
+			return false;
+		}
+		else
+		{
+			//printf("diffuse: processing in chunks...\n");
+			// will process in chunks
+			float* f_0 = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
+			equal_cpu(f_0, f, N_1, N_2, N_3);
+			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
+			for (int iter = 0; iter < numIter; iter++)
+			{
+				TVgradient(f, d, N_1, N_2, N_3, delta, beta, p, doMean, true);
+				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
+				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, beta, p, true);
+				if (denom <= 1.0e-16)
+					break;
+				float stepSize = num / denom;
+				scale_cpu(f, 1.0 - stepSize, N_1, N_2, N_3);
+				sub_cpu(d, f_0, N_1, N_2, N_3);
+				scalarAdd_cpu(f, -stepSize, d, N_1, N_2, N_3);
+			}
+			free(f_0);
+			free(d);
+			return true;
+		}
+	}
+	else
+		return TVdenoise(f, N_1, N_2, N_3, delta, beta, p, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors, doMean);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
 	else
 		numVol = 1.0;
 	
@@ -2988,7 +3196,7 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 			float* d = (float*)malloc(sizeof(float) * uint64(N_1) * uint64(N_2) * uint64(N_3));
 			for (int iter = 0; iter < numIter; iter++)
 			{
-				TVgradient(f, d, N_1, N_2, N_3, delta, 1.0, p, true);
+				TVgradient(f, d, N_1, N_2, N_3, delta, 1.0, p, false, true);
 				float num = innerProduct_cpu(d, d, N_1, N_2, N_3);
 				float denom = TVquadForm(f, d, N_1, N_2, N_3, delta, 1.0, p, true);
 				if (denom <= 1.0e-16)

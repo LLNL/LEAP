@@ -84,17 +84,17 @@ bool reset()
 
 bool all_defined()
 {
-	return tomo()->params.allDefined();
+	return tomo()->params.allDefined(false);
 }
 
 bool ct_geometry_defined()
 {
-	return tomo()->params.geometryDefined();
+	return tomo()->params.geometryDefined(false);
 }
 
 bool ct_volume_defined()
 {
-	return tomo()->params.volumeDefined();
+	return tomo()->params.volumeDefined(false);
 }
 
 void set_log_error()
@@ -452,6 +452,18 @@ bool set_numX(int numX)
 		return false;
 }
 
+bool set_offsetX(float offsetX)
+{
+	tomo()->params.offsetX = offsetX;
+	return true;
+}
+
+bool set_offsetY(float offsetY)
+{
+	tomo()->params.offsetY = offsetY;
+	return true;
+}
+
 bool set_offsetZ(float offsetZ)
 {
 	tomo()->params.offsetZ = offsetZ;
@@ -490,6 +502,16 @@ int get_volumeDimensionOrder()
 	return tomo()->get_volumeDimensionOrder();
 }
 
+int number_of_gpus()
+{
+	return tomo()->number_of_gpus();
+}
+
+int get_gpus(int* list_of_gpus)
+{
+	return tomo()->get_gpus(list_of_gpus);
+}
+
 bool set_GPU(int whichGPU)
 {
 	return tomo()->set_GPU(whichGPU);
@@ -510,6 +532,11 @@ bool set_projector(int which)
 	return tomo()->set_projector(which);
 }
 
+int get_projector()
+{
+	return tomo()->params.whichProjector;
+}
+
 bool set_axisOfSymmetry(float axisOfSymmetry)
 {
 	return tomo()->set_axisOfSymmetry(axisOfSymmetry);
@@ -528,6 +555,11 @@ bool clear_axisOfSymmetry()
 bool set_rFOV(float rFOV_in)
 {
 	return tomo()->set_rFOV(rFOV_in);
+}
+
+float get_rFOV()
+{
+	return tomo()->params.rFOV();
 }
 
 bool set_offsetScan(bool aFlag)
@@ -626,14 +658,26 @@ bool flipAttenuationMapSign(bool data_on_cpu)
 	return tomo()->flipAttenuationMapSign(data_on_cpu);
 }
 
+bool angles_are_defined()
+{
+	return tomo()->params.angles_are_defined();
+}
+
+bool angles_are_equispaced()
+{
+	return tomo()->params.anglesAreEquispaced();
+}
+
 bool set_geometry(int which)
 {
 	//CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3
-	if (which < parameters::CONE || which > parameters::MODULAR)
+	if (which < parameters::CONE || which > parameters::CONE_PARALLEL)
 		return false;
 	else
 	{
 		tomo()->params.geometry = which;
+		if (which != parameters::CONE)
+			tomo()->params.detectorType = parameters::FLAT;
 		return true;
 	}
 }
@@ -917,14 +961,19 @@ bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_
 	return tomo()->BlurFilter2D(f, N_1, N_2, N_3, FWHM, data_on_cpu);
 }
 
+bool HighPassFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu)
+{
+	return tomo()->HighPassFilter2D(f, N_1, N_2, N_3, FWHM, data_on_cpu);
+}
+
 bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu)
 {
 	return tomo()->MedianFilter2D(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu);
 }
 
-bool badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu)
+bool badPixelCorrection(float* g, int N_1, int N_2, int N_3, float* badPixelMap, int w, bool data_on_cpu)
 {
-	return tomo()->badPixelCorrection(g, badPixelMap, w, data_on_cpu);
+	return tomo()->badPixelCorrection(g, N_1, N_2, N_3, badPixelMap, w, data_on_cpu);
 }
 
 bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu)
@@ -954,7 +1003,7 @@ float TVcost(float* f, int N_1, int N_2, int N_3, float delta, float beta, float
 
 bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
 {
-	return tomo()->TVgradient(f, Df, N_1, N_2, N_3, delta, beta, p, data_on_cpu);
+	return tomo()->TVgradient(f, Df, N_1, N_2, N_3, delta, beta, p, false, data_on_cpu);
 }
 
 float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu)
@@ -965,6 +1014,11 @@ float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, flo
 bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
 {
 	return tomo()->Diffuse(f, N_1, N_2, N_3, delta, p, numIter, data_on_cpu);
+}
+
+bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool doMean, bool data_on_cpu)
+{
+	return tomo()->TV_denoise(f, N_1, N_2, N_3, delta, beta, p, numIter, doMean, data_on_cpu);
 }
 
 bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
@@ -1026,6 +1080,53 @@ bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 bool saveParamsToFile(const char* param_fn)
 {
 	return saveParametersToFile(param_fn, &(tomo()->params));
+}
+
+bool save_tif(char* fileName, float* data, int numRows, int numCols, float pixelHeight, float pixelWidth, int dtype, float wmin, float wmax)
+{
+	return write_tif(fileName, data, numRows, numCols, pixelHeight, pixelWidth, dtype, wmin, wmax);
+}
+
+bool read_tif_header(char* fileName, int* shape, float* size, float* slope_and_offset)
+{
+	return read_header(fileName, shape, size, slope_and_offset);
+}
+
+bool read_tif(char* fileName, float* data)
+{
+	if (load_tif(fileName, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
+bool read_tif_rows(char* fileName, int firstRow, int lastRow, float* data)
+{
+	if (load_tif_rows(fileName, firstRow, lastRow, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
+bool read_tif_cols(char* fileName, int firstCol, int lastCol, float* data)
+{
+	if (load_tif_cols(fileName, firstCol, lastCol, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
+bool read_tif_roi(char* fileName, int firstRow, int lastRow, int firstCol, int lastCol, float* data)
+{
+	if (load_tif_roi(fileName, firstRow, lastRow, firstCol, lastCol, data) == NULL)
+		return false;
+	else
+		return true;
+}
+
+void test_script()
+{
+	
 }
 
 /*
@@ -1095,10 +1196,14 @@ PYBIND11_MODULE(leapct, m) {
     m.def("set_numZ", &set_numZ, "");
     m.def("set_numY", &set_numY, "");
     m.def("set_numX", &set_numX, "");
+	m.def("set_offsetX", &set_offsetX, "");
+	m.def("set_offsetY", &set_offsetY, "");
     m.def("set_offsetZ", &set_offsetZ, "");
     m.def("set_voxelWidth", &set_voxelWidth, "");
     m.def("set_voxelHeight", &set_voxelHeight, "");
 	m.def("set_geometry", &set_geometry, "");
+	m.def("angles_are_defined", &angles_are_defined, "");
+	m.def("angles_are_equispaced", &angles_are_equispaced, "");
     m.def("projectConeBeam", &projectConeBeam, "");
     m.def("backprojectConeBeam", &backprojectConeBeam, "");
     m.def("projectFanBeam", &projectFanBeam, "");
@@ -1109,14 +1214,18 @@ PYBIND11_MODULE(leapct, m) {
 	m.def("viewRangeNeededForBackprojection", &viewRangeNeededForBackprojection, "");
 	m.def("sliceRangeNeededForProjection", &sliceRangeNeededForProjection, "");
 	m.def("numRowsRequiredForBackprojectingSlab", &numRowsRequiredForBackprojectingSlab, "");
-    m.def("set_GPU", &set_GPU, "");
+    m.def("number_of_gpus", &number_of_gpus, "");
+	m.def("get_gpus", &get_gpus, "");
+	m.def("set_GPU", &set_GPU, "");
     m.def("set_GPUs", &set_GPUs, "");
     m.def("get_GPU", &get_GPU, "");
     m.def("set_axisOfSymmetry", &set_axisOfSymmetry, "");
 	m.def("get_axisOfSymmetry", &get_axisOfSymmetry, "");
     m.def("clear_axisOfSymmetry", &clear_axisOfSymmetry, "");
     m.def("set_projector", &set_projector, "");
+	m.def("get_projector", &get_projector, "");
     m.def("set_rFOV", &set_rFOV, "");
+	m.def("get_rFOV", &get_rFOV, "");
     m.def("set_offsetScan", &set_offsetScan, "");
 	m.def("get_offsetScan", &get_offsetScan, "");
     m.def("set_truncatedScan", &set_truncatedScan, "");
@@ -1179,6 +1288,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("MedianFilter", &MedianFilter, "");
 	m.def("MeanOrVarianceFilter", &MeanOrVarianceFilter, "");
     m.def("BlurFilter2D", &BlurFilter2D, "");
+	m.def("HighPassFilter2D", &HighPassFilter2D, "");
     m.def("MedianFilter2D", &MedianFilter2D, "");
 	m.def("badPixelCorrection", &badPixelCorrection, "");
     m.def("BilateralFilter", &BilateralFilter, "");
@@ -1189,6 +1299,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("TVgradient", &TVgradient, "");
     m.def("TVquadForm", &TVquadForm, "");
     m.def("Diffuse", &Diffuse, "");
+	m.def("TV_denoise", &TV_denoise, "");
     m.def("addObject", &addObject, "");
     m.def("clearPhantom", &clearPhantom, "");
     m.def("rayTrace", &rayTrace, "");
@@ -1201,5 +1312,10 @@ PYBIND11_MODULE(leapct, m) {
     m.def("synthesize_symmetry", &synthesize_symmetry, "");
     m.def("AzimuthalBlur", &AzimuthalBlur, "");
     m.def("saveParamsToFile", &saveParamsToFile, "");
+	m.def("save_tif", &save_tif, "");
+	m.def("read_tif_header", &read_tif_header, "");
+	m.def("read_tif", &read_tif, "");
+	m.def("read_tif_rows", &read_tif_rows, "");
+	m.def("read_tif_cols", &read_tif_cols, "");
 }
 //*/

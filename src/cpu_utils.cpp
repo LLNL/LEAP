@@ -250,6 +250,23 @@ float innerProduct_cpu(float* x, float* y, int N_1, int N_2, int N_3)
     return accum;
 }
 
+bool sub_cpu(float* x, float* y, int N_1, int N_2, int N_3)
+{
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int i = 0; i < N_1; i++)
+    {
+        float* x_slice = &x[uint64(i) * uint64(N_2 * N_3)];
+        float* y_slice = &y[uint64(i) * uint64(N_2 * N_3)];
+        for (int j = 0; j < N_2; j++)
+        {
+            for (int k = 0; k < N_3; k++)
+                x_slice[j * N_3 + k] -= y_slice[j * N_3 + k];
+        }
+    }
+    return true;
+}
+
 bool scalarAdd_cpu(float* x, float c, float* y, int N_1, int N_2, int N_3)
 {
     omp_set_num_threads(omp_get_num_procs());
@@ -437,4 +454,59 @@ float* rotateAroundAxis(float* theAxis, float phi, float* aVec)
     aVec[2] = w * axis_dot_vector * (1.0 - cos_phi) + z * cos_phi + (-v * x + u * y) * sin_phi;
 
     return aVec;
+}
+
+char swapEndian(char x)
+{
+    x = bswap(x);
+    return x;
+}
+
+short swapEndian(short x)
+{
+    return (x << 8) | ((x >> 8) & 0xFF);
+}
+
+unsigned short swapEndian(unsigned short x)
+{
+    return (x << 8) | (x >> 8);
+}
+
+int swapEndian(int x)
+{
+    x = ((x << 8) & 0xFF00FF00) | ((x >> 8) & 0xFF00FF);
+    return (x << 16) | ((x >> 16) & 0xFFFF);
+}
+
+unsigned int swapEndian(unsigned int x)
+{
+    x = ((x << 8) & 0xFF00FF00) | ((x >> 8) & 0xFF00FF);
+    return (x << 16) | (x >> 16);
+}
+
+float swapEndian(float x)
+{
+    x = bswap(x);
+    return x;
+}
+
+double swapEndian(double x)
+{
+    x = bswap(x);
+    return x;
+}
+
+template <typename T>
+T bswap(T val)
+{
+    T retVal;
+    char* pVal = (char*)&val;
+    char* pRetVal = (char*)&retVal;
+    int size = sizeof(T);
+    for (int i = 0; i < size; i++)
+    {
+        pRetVal[size - 1 - i] = pVal[i];
+    }
+
+    return retVal;
 }

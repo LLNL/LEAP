@@ -96,6 +96,7 @@ extern "C" PROJECTOR_API bool set_flatDetector();
 extern "C" PROJECTOR_API bool set_curvedDetector();
 extern "C" PROJECTOR_API int get_detectorType();
 
+extern "C" PROJECTOR_API bool set_numAngles(int);
 extern "C" PROJECTOR_API bool set_numCols(int);
 extern "C" PROJECTOR_API bool set_numRows(int);
 
@@ -116,12 +117,17 @@ extern "C" PROJECTOR_API bool set_default_volume(float scale);
 extern "C" PROJECTOR_API bool set_numZ(int numZ);
 extern "C" PROJECTOR_API bool set_numY(int numY);
 extern "C" PROJECTOR_API bool set_numX(int numX);
+extern "C" PROJECTOR_API bool set_offsetX(float offsetX);
+extern "C" PROJECTOR_API bool set_offsetY(float offsetY);
 extern "C" PROJECTOR_API bool set_offsetZ(float offsetZ);
 
 extern "C" PROJECTOR_API bool set_voxelWidth(float W);
 extern "C" PROJECTOR_API bool set_voxelHeight(float H);
 
 extern "C" PROJECTOR_API bool set_geometry(int);
+
+extern "C" PROJECTOR_API bool angles_are_defined();
+extern "C" PROJECTOR_API bool angles_are_equispaced();
 
 extern "C" PROJECTOR_API bool projectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 extern "C" PROJECTOR_API bool backprojectConeBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
@@ -137,6 +143,8 @@ extern "C" PROJECTOR_API bool viewRangeNeededForBackprojection(int* viewsNeeded)
 extern "C" PROJECTOR_API bool sliceRangeNeededForProjection(int* slicesNeeded, bool doClip);
 extern "C" PROJECTOR_API int numRowsRequiredForBackprojectingSlab(int numSlicesPerChunk);
 
+extern "C" PROJECTOR_API int number_of_gpus();
+extern "C" PROJECTOR_API int get_gpus(int* list_of_gpus);
 extern "C" PROJECTOR_API bool set_GPU(int whichGPU);
 extern "C" PROJECTOR_API bool set_GPUs(int* whichGPUs, int N);
 extern "C" PROJECTOR_API int get_GPU();
@@ -144,7 +152,9 @@ extern "C" PROJECTOR_API bool set_axisOfSymmetry(float axisOfSymmetry);
 extern "C" PROJECTOR_API float get_axisOfSymmetry();
 extern "C" PROJECTOR_API bool clear_axisOfSymmetry();
 extern "C" PROJECTOR_API bool set_projector(int which);
+extern "C" PROJECTOR_API int get_projector();
 extern "C" PROJECTOR_API bool set_rFOV(float rFOV_in);
+extern "C" PROJECTOR_API float get_rFOV();
 extern "C" PROJECTOR_API bool set_offsetScan(bool);
 extern "C" PROJECTOR_API bool get_offsetScan();
 extern "C" PROJECTOR_API bool set_truncatedScan(bool);
@@ -215,10 +225,11 @@ extern "C" PROJECTOR_API bool convertToRhoeZe(float* f_L, float* f_H, int N_1, i
 extern "C" PROJECTOR_API bool BlurFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter(float* f, int, int, int, float threshold, int w, float signalThreshold, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MeanOrVarianceFilter(float* f, int, int, int, int r, int order, bool data_on_cpu);
+extern "C" PROJECTOR_API bool HighPassFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BlurFilter2D(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool HighPassFilter(float* f, int, int, int, float FWHM, bool data_on_cpu);
 extern "C" PROJECTOR_API bool MedianFilter2D(float* f, int, int, int, float threshold, int w, float signalThreshold, bool data_on_cpu);
-extern "C" PROJECTOR_API bool badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu);
+extern "C" PROJECTOR_API bool badPixelCorrection(float* g, int, int, int, float* badPixelMap, int w, bool data_on_cpu);
 extern "C" PROJECTOR_API bool BilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu);
 extern "C" PROJECTOR_API bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* prior, bool data_on_cpu);
 extern "C" PROJECTOR_API bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu);
@@ -229,6 +240,7 @@ extern "C" PROJECTOR_API float TVcost(float* f, int N_1, int N_2, int N_3, float
 extern "C" PROJECTOR_API bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
 extern "C" PROJECTOR_API float TVquadForm(float* f, float* d, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
 extern "C" PROJECTOR_API bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu);
+extern "C" PROJECTOR_API bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool doMean, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool addObject(float* f, int type, float* c, float* r, float val, float* A, float* clip, int oversampling);
 extern "C" PROJECTOR_API bool clearPhantom();
@@ -249,3 +261,12 @@ extern "C" PROJECTOR_API bool synthesize_symmetry(float* f_radial, float* f);
 extern "C" PROJECTOR_API bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool saveParamsToFile(const char* param_fn);
+extern "C" PROJECTOR_API bool save_tif(char* fileName, float* data, int numRows, int numCols, float pixelHeight, float pixelWidth, int dtype, float wmin, float wmax);
+extern "C" PROJECTOR_API bool read_tif_header(char* fileName, int* shape, float* size, float* slope_and_offset);
+
+extern "C" PROJECTOR_API bool read_tif(char* fileName, float* data);
+extern "C" PROJECTOR_API bool read_tif_rows(char* fileName, int firstRow, int lastRow, float* data);
+extern "C" PROJECTOR_API bool read_tif_cols(char* fileName, int firstCol, int lastCol, float* data);
+extern "C" PROJECTOR_API bool read_tif_roi(char* fileName, int firstRow, int lastRow, int firstCol, int lastCol, float* data);
+
+extern "C" PROJECTOR_API void test_script();

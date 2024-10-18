@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.18"
+#define LEAP_VERSION "1.23"
 
 /*
 #include <iostream>
@@ -57,6 +57,20 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool reset();
+
+	/**
+	 * \fn          allocate_volume
+	 * \brief       allocates volume data; user is responsible for freeing memory
+	 * \return      pointer to the data, NULL if CT volume parameters are not set
+	 */
+	float* allocate_volume();
+
+	/**
+	 * \fn          allocate_projections
+	 * \brief       allocates projection data; user is responsible for freeing memory
+	 * \return      pointer to the data, NULL if CT geometry parameters are not set
+	 */
+	float* allocate_projections();
 
 	/**
 	 * \fn          project_gpu
@@ -419,6 +433,19 @@ public:
 	 * \return      params.volumeDimensionOrder
 	 */
 	int get_volumeDimensionOrder();
+
+	/**
+	 * \fn          number_of_gpus
+	 * \return      number of GPUs on the system
+	 */
+	int number_of_gpus();
+
+	/**
+	 * \fn          get_gpus
+	 * \brief       gets a list of all gpus being used
+	 * \return      number of gpus being used
+	 */
+	int get_gpus(int* list_of_gpus);
 
 	/**
 	 * \fn          set_GPU
@@ -801,6 +828,19 @@ public:
 	bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
 
 	/**
+	 * \fn          HighPassFilter2D
+	 * \brief       applies a 2D high pass filter to the second two dimensions of a 3D array
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   FWHM full width at half maximum of the filter (measured in number of voxels)
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool HighPassFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
+
+	/**
 	 * \fn          MedianFilter
 	 * \brief       applies a thresholded 3D median filter
 	 * \param[in]   f pointer to the 3D data (input and output)
@@ -850,12 +890,15 @@ public:
 	 * \fn          badPixelCorrection
 	 * \brief       applies a 2D median filter to the second two dimensions of a 3D array to a specified list of pixels only
 	 * \param[in]   g: pointer to the 3D projection data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   badPixelMap: pointer to a 2D array of the bad pixels which are label as 1.0
 	 * \param[in]   w: the window size in each dimension (must be 3, 5, or 7)
 	 * \param[in]   data_on_cpu: true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool badPixelCorrection(float* g, float* badPixelMap, int w, bool data_on_cpu);
+	bool badPixelCorrection(float* g, int N_1, int N_2, int N_3, float* badPixelMap, int w, bool data_on_cpu);
 
 	/**
 	 * \fn          BilateralFilter
@@ -949,7 +992,7 @@ public:
 	 * \param[in]   data_on_cpu true if data (f and Df) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise 
 	 */
-	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
+	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool doMean, bool data_on_cpu);
 
 	/**
 	 * \fn          TVquadForm
@@ -982,6 +1025,23 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu);
+
+	/**
+	 * \fn          TV_denoise
+	 * \brief       anisotropic Total Variation denoising
+	 * \param[in]   f pointer to the input/output 3D data
+	 * \param[in]   Df pointer to the output 3D data
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   delta transition value of the Huber-like loss function
+	 * \param[in]	beta: the regularization strength
+	 * \param[in]	p the exponent on the Huber-like loss function
+	 * \param[in]   numIter the number of iterations
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool doMean, bool data_on_cpu);
 
 	/**
 	 * \fn          rayTrace

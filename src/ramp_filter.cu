@@ -924,6 +924,10 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
     LOG(logDEBUG, "ramp_filter", "conv1D") << "GPU " << params->whichGPU << ": start" << std::endl;
     //printf("size = %d x %d x %d\n", params->numAngles, params->numRows, params->numCols);
 
+    //cudaStream_t stream;
+    //if (CUFFT_SUCCESS != cudaStreamCreate(&stream))
+    //    return false;
+
     //return true;
     bool retVal = true;
     cudaError_t cudaStatus;
@@ -1070,6 +1074,9 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
             //setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
             setPaddedDataKernel <<< dimGrid_setting, dimBlock_setting >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
             //cudaDeviceSynchronize();
+
+            //cudaMemset(dev_g_pad, 0, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H) * sizeof(float));
+            //cudaMemcpy2D(dev_g_pad, N_H*sizeof(float), &dev_g[uint64(startView)*uint64(params->numCols*numRows)], params->numCols * sizeof(float), params->numCols * sizeof(float), numRows * (endView - startView + 1), cudaMemcpyDeviceToDevice);
 
             // FFT
             result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);

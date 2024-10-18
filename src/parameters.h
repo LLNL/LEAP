@@ -63,21 +63,21 @@ public:
 	 * \brief       returns whether all CT geometry and CT volume parameter values are defined and valid
 	 * \return      returns true if all CT geometry and CT volume parameter values are defined and valid, false otherwise
 	 */
-	bool allDefined();
+	bool allDefined(bool doPrint = true);
 
 	/**
-	 * \fn          allDefined
+	 * \fn          geometryDefined
 	 * \brief       returns whether all CT geometry parameter values are defined and valid
 	 * \return      returns true if all CT geometry parameter values are defined and valid, false otherwise
 	 */
-	bool geometryDefined();
+	bool geometryDefined(bool doPrint = true);
 
 	/**
-	 * \fn          allDefined
+	 * \fn          volumeDefined
 	 * \brief       returns whether all CT volume parameter values are defined and valid
 	 * \return      returns true if all CT volume parameter values are defined and valid, false otherwise
 	 */
-	bool volumeDefined();
+	bool volumeDefined(bool doPrint = true);
 
 	/**
 	 * \fn          offsetScan_has_adequate_angular_range
@@ -107,6 +107,12 @@ public:
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
 	bool set_default_volume(float scale = 1.0);
+
+	/**
+	 * \fn          angles_are_defined
+	 * \return      returns true if the angles are defined, false otherwise
+	 */
+	bool angles_are_defined();
 
 	/**
 	 * \fn          set_angles
@@ -305,6 +311,7 @@ public:
 	float tau;
 	float helicalPitch;
 	float z_source_offset;
+	float helicalFBPWeight;
 
 	// Volume Parameters
 	int volumeDimensionOrder;
@@ -565,7 +572,7 @@ public:
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3, CONE_PARALLEL = 4 };
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };
-    enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2};
+    enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2,VOXEL_DRIVEN=3};
 
 	float get_extraMemoryReserved();
 

@@ -81,6 +81,7 @@ void parameters::initialize()
 	helicalPitch = 0.0;
 	z_source_offset = 0.0;
 	rFOVspecified = 0.0;
+	helicalFBPWeight = 0.7;
 
 	muCoeff = 0.0;
 	muRadius = 0.0;
@@ -182,6 +183,7 @@ void parameters::assign(const parameters& other)
     this->rFOVspecified = other.rFOVspecified;
     this->axisOfSymmetry = other.axisOfSymmetry;
     this->volumeDimensionOrder = other.volumeDimensionOrder;
+	this->helicalFBPWeight = other.helicalFBPWeight;
     this->numX = other.numX;
     this->numY = other.numY;
     this->numZ = other.numZ;
@@ -565,59 +567,68 @@ bool parameters::muSpecified()
 		return false;
 }
 
-bool parameters::allDefined()
+bool parameters::allDefined(bool doPrint)
 {
-	return geometryDefined() & volumeDefined();
+	return geometryDefined(doPrint) & volumeDefined(doPrint);
 }
 
-bool parameters::geometryDefined()
+bool parameters::geometryDefined(bool doPrint)
 {
 	if (geometry != CONE && geometry != PARALLEL && geometry != FAN && geometry != MODULAR && geometry != CONE_PARALLEL)
 	{
-		printf("Error: CT geometry type not defined!\n");
+		if (doPrint)
+			printf("Error: CT geometry type not defined!\n");
 		return false;
 	}
 	if (numCols <= 0 || numRows <= 0 || numAngles <= 0 || pixelWidth <= 0.0 || pixelHeight <= 0.0)
 	{
-		printf("Error: detector pixel sizes and number of data elements must be positive\n");
+		if (doPrint)
+			printf("Error: detector pixel sizes and number of data elements must be positive\n");
 		return false;
 	}
 	if (geometry == MODULAR)
 	{
 		if (sourcePositions == NULL || moduleCenters == NULL || rowVectors == NULL || colVectors == NULL)
 		{
-			printf("Error: sourcePositions, moduleCenters, rowVectors, and colVectors must be defined for modular-beam geometries\n");
+			if (doPrint)
+				printf("Error: sourcePositions, moduleCenters, rowVectors, and colVectors must be defined for modular-beam geometries\n");
 			return false;
 		}
 	}
 	else if (angularRange == 0.0 && phis == NULL)
 	{
-		printf("Error: projection angles not defined\n");
+		if (doPrint)
+			printf("Error: projection angles not defined\n");
 		return false;
 	}
 	if (geometry == CONE || geometry == FAN || geometry == CONE_PARALLEL)
 	{
 		if (sod <= 0.0 || sdd <= sod)
 		{
-			printf("Error: sod and sdd must be positive for fan- and cone-beam geometries\n");
+			if (doPrint)
+				printf("Error: sod and sdd must be positive for fan- and cone-beam geometries\n");
 			return false;
 		}
 	}
 	if (detectorType == CURVED && geometry != CONE)
 	{
-		printf("Error: curved detector only defined for cone-beam geometries\n");
+		if (doPrint)
+			printf("Error: curved detector only defined for cone-beam geometries\n");
 		return false;
 	}
 
 	return true;
 }
 
-bool parameters::volumeDefined()
+bool parameters::volumeDefined(bool doPrint)
 {
 	if (numX <= 0 || numY <= 0 || numZ <= 0 || voxelWidth <= 0.0 || voxelHeight <= 0.0 || volumeDimensionOrder < 0 || volumeDimensionOrder > 1)
 	{
-		printf("numZ = %d voxelHeight = %f\n", numZ, voxelHeight);
-		printf("Error: volume voxel sizes and number of data elements must be positive\n");
+		if (doPrint)
+		{
+			printf("numZ = %d voxelHeight = %f\n", numZ, voxelHeight);
+			printf("Error: volume voxel sizes and number of data elements must be positive\n");
+		}
 		return false;
 	}
 	else
@@ -628,15 +639,19 @@ bool parameters::volumeDefined()
 			{
 				//voxelHeight = pixelHeight;
 				//printf("Warning: for parallel and fan-beam data volume voxel height must equal detector pixel height, so forcing voxel height to match pixel height!\n");
-				printf("Error: for parallel and fan-beam data volume voxel height must equal detector pixel height!\n");
-				printf("Please modify either the detector pixel height or the voxel height so they match!\n");
+				if (doPrint)
+				{
+					printf("Error: for parallel and fan-beam data volume voxel height must equal detector pixel height!\n");
+					printf("Please modify either the detector pixel height or the voxel height so they match!\n");
+				}
 				return false;
 			}
 			if (numRows != numZ)
 			{
 				//voxelHeight = pixelHeight;
 				//printf("Warning: for parallel and fan-beam data volume voxel height must equal detector pixel height, so forcing voxel height to match pixel height!\n");
-				printf("Error: for parallel and fan-beam data numZ == numRows!\n");
+				if (doPrint)
+					printf("Error: for parallel and fan-beam data numZ == numRows!\n");
 				return false;
 			}
 			offsetZ = 0.0;
@@ -647,19 +662,22 @@ bool parameters::volumeDefined()
 			if (modularbeamIsAxiallyAligned() == false || voxelSizeWorksForFastSF() == false)
 			{
 				voxelHeight = voxelWidth;
-				printf("Warning: for (non axially-aligned) modular-beam data volume voxel height must equal voxel width (voxels must be cubic), so forcing voxel height to match voxel width!\n");
+				if (doPrint)
+					printf("Warning: for (non axially-aligned) modular-beam data volume voxel height must equal voxel width (voxels must be cubic), so forcing voxel height to match voxel width!\n");
 			}
 		}
 		if (isSymmetric())
 		{
 			if (numX > 1)
 			{
-				printf("Error: symmetric objects must specify numX = 1!\n");
+				if (doPrint)
+					printf("Error: symmetric objects must specify numX = 1!\n");
 				return false;
 			}
 			if (numY % 2 == 1)
 			{
-				printf("Error: symmetric objects must specify numY as even !\n");
+				if (doPrint)
+					printf("Error: symmetric objects must specify numY as even !\n");
 				return false;
 			}
 			offsetX = 0.0;
@@ -714,19 +732,24 @@ bool parameters::set_default_volume(float scale)
 	offsetY = 0.0;
 	offsetZ = 0.0;
 
+	//printf("source range: %f to %f\n", z_source(0), z_source(numAngles-1));
+
 	if ((geometry == CONE || geometry == CONE_PARALLEL) && helicalPitch != 0.0)
 	{
-		int minSlices = int(sod / sdd * float(numRows) * pixelHeight / voxelHeight + 0.5);
+		float detectorHeightAtIso = sod / sdd * float(numRows) * pixelHeight;
+		int minSlices = int(detectorHeightAtIso / voxelHeight + 0.5);
 		if (fabs(angularRange) <= 180.0)
 			numZ = minSlices;
 		else if (fabs(angularRange) <= 360.0)
 		{
-			numZ = int(ceil((sod / sdd * (numRows - 1) * pixelHeight + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight));
-			numZ = max(minSlices, numZ);
+			//numZ = int(ceil((detectorHeightAtIso + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight));
+			//numZ = max(minSlices, numZ);
+			numZ = minSlices;
 		}
 		else
 		{
-			numZ = int(ceil(fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight));
+			//numZ = int(ceil(fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight));
+			numZ = int(ceil((detectorHeightAtIso + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - 2.0*PI)) / voxelHeight));
 			numZ = max(minSlices, numZ);
 		}
 	}
@@ -932,6 +955,14 @@ float* parameters::setToConstant(float* data, uint64 N, float val)
 float* parameters::setToZero(float* data, uint64 N)
 {
 	return setToConstant(data, N, 0.0);
+}
+
+bool parameters::angles_are_defined()
+{
+	if (phis != NULL || geometryDefined(false) == true)
+		return true;
+	else
+		return false;
 }
 
 bool parameters::set_angles()
@@ -1477,7 +1508,13 @@ bool parameters::set_normalizedHelicalPitch(float h_normalized)
 
 bool parameters::set_helicalPitch(float h)
 {
-	if (phis == NULL)
+	if (h == 0.0)
+	{
+		helicalPitch = 0.0;
+		z_source_offset = 0.0;
+		return true;
+	}
+	else if (phis == NULL)
 	{
 		printf("Error: must set CT geometry before setting helicalPitch\n");
 		return false;
@@ -2047,7 +2084,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 		return false;
 	}
 
-	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + u_0();
+	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + u_0() - tau;
 	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + v_0();
 	//printf("horizontalDetectorShift = %f\n", horizontalDetectorShift);
 
@@ -2096,6 +2133,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 	//for (int i = 0; i < numAngles; i++)
 	//	printf("%f\n", phis[i]*180.0/PI);
 
+	set_helicalPitch(0.0);
 	set_offsetScan(offsetScan);
 
 	return true;
@@ -2176,6 +2214,7 @@ bool parameters::convert_parallelbeam_to_modularbeam()
 	delete[] v_vec;
 	delete[] u_vec;
 
+	set_helicalPitch(0.0);
 	set_offsetScan(offsetScan);
 
 	return true;

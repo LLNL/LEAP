@@ -68,6 +68,9 @@ leapct.set_default_volume()
 leapct.print_parameters()
 #leapct.sketch_system()
 
+# Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
+#leapct.set_projector('VD')
+
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
 # All you need is for the data to be C contiguous float32 arrays with the right dimensions

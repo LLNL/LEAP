@@ -66,6 +66,7 @@ cuda_files=[
     'geometric_calibration.cu',
     'analytic_ray_tracing_gpu.cu',
     'system_matrix.cu',
+    'backprojectors_VD.cu',
 ]
 
 cuda = torch.cuda.is_available()
@@ -113,7 +114,7 @@ else:
 
 setup(
     name='leapct',
-    version='1.18', 
+    version='1.23', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 
