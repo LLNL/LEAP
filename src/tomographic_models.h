@@ -252,19 +252,34 @@ public:
 	bool windowFOV(float* f, bool data_on_cpu);
 
 	/**
-	 * \fn          system_matrix
+	 * \fn          system_matrix_parallel
 	 * \brief       calculates several rows of the system matrix
 	 * \param[in]   A: pointer to the system matrix data
 	 * \param[in]	indices: pointer to the volume indices for the system matrix elements
 	 * \param[in]	N_max: the maximum number of columns of the system matrix
 	 * \param[in]	iAngle: projection angle index for which to calculate the system matrix value
-	 * \param[in]	iRow: detector row index for which to calculate the system matrix values
 	 * \param[in]	iCols: detector column indices for which to calculate the system matrix
 	 * \param[in]	numCols: number of elements in iCols array
 	 * \param[in]   data_on_cpu true if data (A) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu);
+	bool system_matrix_parallel(float* A, short* indices, int N_max, int iAngle, int* iCols, int numCols, bool data_on_cpu);
+
+	/**
+	 * \fn          system_matrix_cone
+	 * \brief       calculates several rows of the system matrix
+	 * \param[in]   A: pointer to the system matrix data
+	 * \param[in]	indices: pointer to the volume indices for the system matrix elements
+	 * \param[in]	N_max: the maximum number of columns of the system matrix
+	 * \param[in]	iAngle: projection angle index for which to calculate the system matrix value
+	 * \param[in]	iRows: detector row indices for which to calculate the system matrix values
+	 * \param[in]	numRows: number of elements in iRows array
+	 * \param[in]	iCols: detector column indices for which to calculate the system matrix
+	 * \param[in]	numCols: number of elements in iCols array
+	 * \param[in]   data_on_cpu true if data (A) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool system_matrix_cone(float* A, short* indices, int N_max, int iAngle, int* iRows, int numRows, int* iCols, int numCols, bool data_on_cpu);
 
 	/**
 	 * \fn          print_parameters

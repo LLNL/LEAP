@@ -35,11 +35,8 @@ pixelSize = 0.65*512/numCols
 numRows = numCols*0+1
 
 # Set the scanner geometry
-leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize*1100.0/1400.0, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
-#leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-#leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-#leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-#leapct.set_curvedDetector()
+#leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize*1100.0/1400.0, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
+leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
@@ -85,21 +82,38 @@ Pf = leapct.copyData(g)
 Pf[:] = 0.0
 
 #'''
-for iAngle in range(leapct.get_numAngles()):
-    print(str(iAngle) + ' of ' + str(leapct.get_numAngles()))
-    A, indices = leapct.system_matrix(iAngle)
-    #print(A.shape)
-    #print(indices.shape)
-    A = A.cpu().numpy()
-    indices = indices.cpu().numpy()
-    #for i in range(A.shape[1]):
-    #    print("[%d] %f, (%d, %d)" % (i, A[32, i], indices[32, i, 0], indices[32, i, 1]))
-    for iCol in range(A.shape[0]):
-        for ind in range(A.shape[1]):
-            a = A[iCol,ind]
-            if a > 0.0: # some elements are zero, so check first
-                for iRow in range(numRows):
-                    Pf[iAngle,iRow,iCol] += a*f[iRow,indices[iCol,ind,0],indices[iCol,ind,1]]
+if leapct.get_geometry() == 'PARALLEL':
+    for iAngle in range(leapct.get_numAngles()):
+        print(str(iAngle) + ' of ' + str(leapct.get_numAngles()))
+        A, indices = leapct.system_matrix(iAngle)
+        #print(A.shape)
+        #print(indices.shape)
+        A = A.cpu().numpy()
+        indices = indices.cpu().numpy()
+        #for i in range(A.shape[1]):
+        #    print("[%d] %f, (%d, %d)" % (i, A[32, i], indices[32, i, 0], indices[32, i, 1]))
+        for iCol in range(A.shape[0]):
+            for ind in range(A.shape[1]):
+                a = A[iCol,ind]
+                if a > 0.0: # some elements are zero, so check first
+                    for iRow in range(numRows):
+                        Pf[iAngle,iRow,iCol] += a*f[iRow,indices[iCol,ind,0],indices[iCol,ind,1]]
+else:
+    for iAngle in range(leapct.get_numAngles()):
+        print(str(iAngle) + ' of ' + str(leapct.get_numAngles()))
+        A, indices = leapct.system_matrix(iAngle)
+        #print(A.shape)
+        #print(indices.shape)
+        A = A.cpu().numpy()
+        indices = indices.cpu().numpy()
+        #for i in range(A.shape[1]):
+        #    print("[%d] %f, (%d, %d)" % (i, A[32, i], indices[32, i, 0], indices[32, i, 1]))
+        for iRow in range(A.shape[0]):
+            for iCol in range(A.shape[1]):
+                for ind in range(A.shape[2]):
+                    a = A[iRow,iCol,ind]
+                    if a > 0.0: # some elements are zero, so check first
+                        Pf[iAngle,iRow,iCol] += a*f[indices[iRow,iCol,ind,0],indices[iRow,iCol,ind,1],indices[iRow,iCol,ind,2]]
 #'''
 
 #A, indices = leapct.system_matrix(40, 0, 32, max_size=None, onGPU=True)

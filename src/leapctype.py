@@ -1996,15 +1996,26 @@ class tomographicModels:
             print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
 
-    def system_matrix_maxsize(self):
+    def system_matrix_maxsize(self, width=None):
         #phi = 0.785398 # 45 deg
         #width = 1.0 / max(np.abs(np.cos(phi)), np.abs(np.sin(phi)))
-        width = np.sqrt(2.0)
-        footprint_row = 1
-        footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
+        pixelWidth = self.get_pixelWidth()
+        pixelHeight = self.get_pixelHeight()
+        if width is None:
+            width = np.sqrt(2.0)
+        if self.get_geometry() == 'PARALLEL':
+            footprint_row = 1
+            footprint_col = 2*int(np.ceil(pixelWidth / (width*self.get_voxelWidth()))) + 1
+        else:
+            magFactor = self.get_sod() / self.get_sdd()
+            pixelWidth *= magFactor
+            pixelHeight *= magFactor
+            footprint_row = 2*int(np.ceil(pixelHeight / (self.get_voxelHeight()))) + 1
+            footprint_col = 2*int(np.ceil(pixelWidth / (width*self.get_voxelWidth()))) + 1
         max_size = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
         return max_size
 
+    """
     def system_matrix_single(self, nangle, nrow, ncol, max_size, onGPU=True):
         if self.all_defined() == False:
             print('Error: CT geometry and CT volume parameters not defined!')
@@ -2043,25 +2054,19 @@ class tomographicModels:
             self.libprojectors.system_matrix(weights, inds, max_size, iAngle, iRow, iCols, iCols_size, True)
             
         return weights, inds
+    """    
 
-        '''
-        inds[:,0] / dim_x
-
-        self.get_numX()
-
-        # index -> coordinates
-        (ind + 0.5) / dim_x
-        x_sample
-
-        inds = [x1,, y1, z1, x2, y2, z2...]
-        ws = [w1, w2.,]
-
-        ec = Encoder(inds)
-        y = NN(ec)
-        ray_sum = y * ws
-        '''
-
-    def system_matrix(self, iAngle, iRow=0, iCols=None, max_size=None, onGPU=True):
+    def system_matrix(self, iAngle, iRows=None, iCols=None, max_size=None, onGPU=True):
+        geometry_str = self.get_geometry()
+        if geometry_str == 'PARALLEL':
+            return self.system_matrix_parallel(iAngle, iCols, max_size, onGPU)
+        elif geometry_str == 'CONE':
+            return self.system_matrix_cone(iAngle, iRows, iCols, max_size, onGPU)
+        else:
+            print('Error: current implementation only works for parallel- and cone-beam geometries')
+            return None, None
+    
+    def system_matrix_cone(self, iAngle, iRows=None, iCols=None, max_size=None, onGPU=True):
         r"""Calculates several rows of the system matrix
         
         The CT geometry and CT volume parameters must be set prior to running this function.
@@ -2070,14 +2075,110 @@ class tomographicModels:
         
         Args:
             iAngle (int): projection angle index
-            iRow (int): detector row index
+            iRows (list/ array): list of detector row indices for which to calculate the system matrix, if this argument is not given, all are calculated
             iCols (list/ array): list of detector column indices for which to calculate the system matrix, if this argument is not given, all are calculated
             onGPU (bool): whether to allocate the system matrix on the GPU or not
             
         Returns:
             sparse representation of the system matrix values
         """
-        #bool system_matrix(float* A, short* indices, int iAngle, int iRow, bool data_on_cpu);
+        
+        if self.all_defined() == False:
+            print('Error: CT geometry and CT volume parameters not defined!')
+            return None, None
+        if self.get_geometry() != 'CONE':
+            print('Error: current implementation only works for parallel-beam geometries')
+            return None, None
+        if iAngle < 0 or iAngle >= self.get_numAngles():
+            print("Error: iAngle is out of range")
+            return None, None
+        
+        phi = np.pi/180.0*self.get_angles()[iAngle]
+        width = 1.0 / max(np.abs(np.cos(phi)), np.abs(np.sin(phi)))
+
+        # These calculation only work for parallel-beam
+        if max_size is None:
+            N = self.system_matrix_maxsize(width)
+        else:
+            N = max_size
+        
+        # Setup/fix iRows
+        if iRows is None:
+            iRows = np.array(range(self.get_numRows()), dtype=np.int32)
+            if has_torch and onGPU == True:
+                iRows = self.copy_to_device(iRows)
+        elif isinstance(iRows, int):
+            iRows = max(0, min(self.get_numRows()-1, iRows))
+            iRows = np.array([iRows], dtype=np.int32)
+            if has_torch == True and onGPU == True:
+                iRows = self.copy_to_device(iRows)
+        elif type(iRows) is np.ndarray:
+            pass
+        elif has_torch == True and type(iRows) is torch.Tensor:
+            if onGPU:
+                iRows = self.copy_to_device(iRows)
+        else:
+            print('Error: invalid format for iRows!')
+            return None, None
+        iRows_size = iRows.shape[0]
+        
+        # Setup/fix iCols
+        if iCols is None:
+            iCols = np.array(range(self.get_numCols()), dtype=np.int32)
+            if has_torch and onGPU == True:
+                iCols = self.copy_to_device(iCols)
+        elif isinstance(iCols, int):
+            iCols = max(0, min(self.get_numCols()-1, iCols))
+            iCols = np.array([iCols], dtype=np.int32)
+            if has_torch == True and onGPU == True:
+                iCols = self.copy_to_device(iCols)
+        elif type(iCols) is np.ndarray:
+            pass
+        elif has_torch == True and type(iCols) is torch.Tensor:
+            if onGPU:
+                iCols = self.copy_to_device(iCols)
+        else:
+            print('Error: invalid format for iCols!')
+            return None, None
+        iCols_size = iCols.shape[0]
+        
+        if has_torch:
+            if onGPU:
+                A = torch.zeros((iRows_size, iCols_size, N), dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                indices = torch.zeros((iRows_size, iCols_size, N, 3), dtype=torch.int16, device=torch.device('cuda:'+str(self.get_gpu())))
+            else:
+                A = torch.zeros((iRows_size, iCols_size, N), dtype=torch.float32)
+                indices = torch.zeros((iRows_size, iCols_size, N, 3), dtype=torch.int16)
+            
+            self.libprojectors.system_matrix_cone.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.system_matrix_cone.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix_cone(A.data_ptr(), indices.data_ptr(), N, iAngle, iRows.data_ptr(), iRows_size, iCols.data_ptr(), iCols_size, A.is_cuda == False)
+        else:
+            A = np.zeros((iRows_size, iCols_size, N), dtype=np.float32)
+            indices = np.zeros((iRows_size, iCols_size, N, 3), dtype=np.int16)
+            
+            self.libprojectors.system_matrix_cone.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.system_matrix_cone.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix_cone(A, indices, N, iAngle, iRows, iRows_size, iCols, iCols_size, True)
+        return A, indices
+    
+    def system_matrix_parallel(self, iAngle, iCols=None, max_size=None, onGPU=True):
+        r"""Calculates several rows of the system matrix
+        
+        The CT geometry and CT volume parameters must be set prior to running this function.
+        If PyTorch exists, the system matrix will be stored in a torch tensor, otherwise in numpy arrays.
+        Currently only works for parallel-beam data.
+        
+        Args:
+            iAngle (int): projection angle index
+            iCols (list/ array): list of detector column indices for which to calculate the system matrix, if this argument is not given, all are calculated
+            onGPU (bool): whether to allocate the system matrix on the GPU or not
+            
+        Returns:
+            sparse representation of the system matrix values
+        """
         
         if self.all_defined() == False:
             print('Error: CT geometry and CT volume parameters not defined!')
@@ -2092,12 +2193,9 @@ class tomographicModels:
         phi = np.pi/180.0*self.get_angles()[iAngle]
         width = 1.0 / max(np.abs(np.cos(phi)), np.abs(np.sin(phi)))
 
-        # These calculation only work for parallel-beam            
-        # the width in the denominator is the extreme case where the pixel is intersected like a diamond
+        # These calculation only work for parallel-beam
         if max_size is None:
-            footprint_row = 1
-            footprint_col = 2*int(np.ceil(self.get_pixelWidth() / (width*self.get_voxelWidth()))) + 1
-            N = max(self.get_numX(), self.get_numY()) * footprint_row * footprint_col
+            N = self.system_matrix_maxsize(width)
         else:
             N = max_size
         
@@ -2129,19 +2227,20 @@ class tomographicModels:
                 A = torch.zeros((iCols_size, N), dtype=torch.float32)
                 indices = torch.zeros((iCols_size, N, 2), dtype=torch.int16)
             
-            self.libprojectors.system_matrix.restype = ctypes.c_bool
+            self.libprojectors.system_matrix_parallel.restype = ctypes.c_bool
             self.set_model()
-            self.libprojectors.system_matrix.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.system_matrix(A.data_ptr(), indices.data_ptr(), N, iAngle, iRow, iCols.data_ptr(), iCols_size, A.is_cuda == False)
+            self.libprojectors.system_matrix_parallel.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix_parallel(A.data_ptr(), indices.data_ptr(), N, iAngle, iCols.data_ptr(), iCols_size, A.is_cuda == False)
         else:
             A = np.zeros((iCols_size, N), dtype=np.float32)
             indices = np.zeros((iCols_size, N, 2), dtype=np.int16)
             
-            self.libprojectors.system_matrix.restype = ctypes.c_bool
+            self.libprojectors.system_matrix_parallel.restype = ctypes.c_bool
             self.set_model()
-            self.libprojectors.system_matrix.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.system_matrix(A, indices, N, iAngle, iRow, iCols, iCols_size, True)
+            self.libprojectors.system_matrix_parallel.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_short, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.system_matrix_parallel(A, indices, N, iAngle, iCols, iCols_size, True)
         return A, indices
+        
         
     def filterProjections(self, g):
         r"""Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction.

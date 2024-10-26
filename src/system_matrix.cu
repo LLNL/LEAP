@@ -16,6 +16,175 @@
 #include "system_matrix.cuh"
 #include "log.h"
 
+__global__ void systemMatrixKernel_cone(float* A, short* indices, const int* iRows, const int numRows, const int* iCols, const int numCols, const float z_source, const float cos_phi, const float sin_phi, const int4 N_g, const float4 T_g, const float4 startVals_g, const int4 N_f, const float4 T_f, const float4 startVals_f, const int N_max, const int iAngle, const float R, const float tau)
+{
+    const int N_xy = max(N_f.x, N_f.y);
+    const int iRow_thread = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iCol_thread = threadIdx.y + blockIdx.y * blockDim.y;
+    const int ivox = threadIdx.z + blockIdx.z * blockDim.z;
+    if (iRow_thread >= numRows || iCol_thread >= numCols || ivox >= N_xy)
+        return;
+
+    const int iRow = iRows[iRow_thread];
+    const int iCol = iCols[iCol_thread];
+
+    const uint64 ind_offset = uint64(iRow_thread) * uint64(N_max) * uint64(numCols) +  uint64(iCol_thread) * uint64(N_max) + uint64(ivox * N_max / N_xy);
+
+    const float v = iRow * T_g.y + startVals_g.y;
+    const float u = iCol * T_g.z + startVals_g.z;
+
+    //const float z_source = phi * T_g.w + startVals_g.w;
+
+    const float u_lo = iCol - 0.5f;
+    const float u_hi = iCol + 0.5f;
+
+    const float v_lo = iRow - 0.5f;
+    const float v_hi = iRow + 0.5f;
+
+    const float T_x_inv = 1.0f / T_f.x;
+    const float T_z_inv = 1.0f / T_f.z;
+
+    const float T_u_inv = 1.0f / T_g.z;
+    const float T_v_inv = 1.0f / T_g.y;
+
+    const float vox_half = 0.5f * T_f.x;
+
+    int count = 0;
+    if (fabs(u * cos_phi - sin_phi) > fabs(u * sin_phi + cos_phi))
+    {
+        const float theWeight = T_f.x * sqrtf(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * sqrtf(1.0f + v * v);
+
+        const float rayParam_slope = 1.0f / (-sin_phi + u * cos_phi);
+        const float rayParam_offset = (-R * sin_phi + tau * cos_phi) * rayParam_slope;
+
+        const float x_shift = R * cos_phi + tau * sin_phi;
+        const float x_slope = -cos_phi - u * sin_phi;
+
+        const float cos_over_sin = cos_phi / sin_phi;
+
+        // primary direction is y
+        if (ivox >= N_f.y)
+            return;
+        const int iy = ivox;
+        const float y = (float)iy * T_f.y + startVals_f.y;
+
+        const float rayParam = y * rayParam_slope + rayParam_offset;
+        const float x_c = x_shift + x_slope * rayParam;
+        const float z_c = v * rayParam + z_source;
+
+        const float rayParam_inv = 1.0f / rayParam;
+        const float rayParam_sin_inv = 1.0f / (rayParam * sin_phi);
+
+        //const int dix = max(1,int(ceil(T_f.x * rayParam_sin_inv * T_u_inv)));
+        //const int diz = max(1, int(ceil(T_f.z * rayParam_inv * T_v_inv)));
+        const int dix = max(1, int(ceil(0.5f * T_g.z / (T_f.x * fabs(rayParam_sin_inv)))));
+        const int diz = max(1, int(ceil(0.5f * T_g.y / (T_f.z * fabs(rayParam_inv)))));
+
+        const int iz_c = int(0.5f + (z_c - startVals_f.z) * T_z_inv);
+        const int ix_c = int(0.5f + (x_c - startVals_f.x) * T_x_inv);
+        const int ix_min = max(0, ix_c - dix);
+        const int ix_max = min(N_f.x - 1, ix_c + dix);
+        const int iz_min = max(0, iz_c - diz);
+        const int iz_max = min(N_f.z - 1, iz_c + diz);
+
+        for (int ix = ix_min; ix <= ix_max; ix++)
+        {
+            // calculate u index for x-0.5*T_f.x and x+0.5*T_f.x
+            const float x = ix * T_f.x + startVals_f.x;
+
+            const float x_A = (((x_shift - x + vox_half) * rayParam_sin_inv - cos_over_sin) - startVals_g.z) * T_u_inv;
+            const float x_B = (((x_shift - x - vox_half) * rayParam_sin_inv - cos_over_sin) - startVals_g.z) * T_u_inv;
+            const float uFootprint = max(0.0f, min(max(x_A, x_B), u_hi) - max(min(x_A, x_B), u_lo));
+            if (uFootprint == 0.0f)
+                continue;
+            for (int iz = iz_min; iz <= iz_max; iz++)
+            {
+                // calculate v index for z-0.5*T_f.z and z+0.5*T_f.z
+                const float z = iz * T_f.z + startVals_f.z - z_source;
+                const float z_A = ((z - 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
+                const float z_B = ((z + 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
+
+                const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
+
+                if (vFootprint > 0.0f)
+                {
+                    A[ind_offset + count] = vFootprint * uFootprint * theWeight;
+                    indices[3 * (ind_offset + count) + 0] = iz;
+                    indices[3 * (ind_offset + count) + 1] = iy;
+                    indices[3 * (ind_offset + count) + 2] = ix;
+                    count += 1;
+                }
+            }
+        }
+    }
+    else
+    {
+        const float theWeight = T_f.x * sqrtf(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * sqrtf(1.0f + v * v);
+
+        const float rayParam_slope = 1.0f / (-cos_phi - u * sin_phi);
+        const float rayParam_offset = (-R * cos_phi - tau * sin_phi) * rayParam_slope;
+
+        const float y_shift = R * sin_phi - tau * cos_phi;
+        const float y_slope = -sin_phi + u * cos_phi;
+
+        const float sin_over_cos = sin_phi / cos_phi;
+
+        // primary direction is x
+        if (ivox >= N_f.x)
+            return;
+        const int ix = ivox;
+        const float x = (float)ix * T_f.x + startVals_f.x;
+
+        const float rayParam = x * rayParam_slope + rayParam_offset;
+        const float y_c = y_shift + y_slope * rayParam;
+        const float z_c = v * rayParam + z_source;
+
+        const float rayParam_inv = 1.0f / rayParam;
+        const float rayParam_cos_inv = 1.0f / (rayParam * cos_phi);
+
+        const int diy = max(1, int(ceil(0.5f * T_g.z / (T_f.y * fabs(rayParam_cos_inv)))));
+        const int diz = max(1, int(ceil(0.5f * T_g.y / (T_f.z * fabs(rayParam_inv)))));
+
+        const int iz_c = int(0.5f + (z_c - startVals_f.z) * T_z_inv);
+        const int iy_c = int(0.5f + (y_c - startVals_f.y) * T_x_inv);
+
+        const int iy_min = max(0, iy_c - diy);
+        const int iy_max = min(N_f.y - 1, iy_c + diy);
+        const int iz_min = max(0, iz_c - diz);
+        const int iz_max = min(N_f.z - 1, iz_c + diz);
+
+        for (int iy = iy_min; iy <= iy_max; iy++)
+        {
+            // calculate u index for y-0.5*T_f.y and y+0.5*T_f.y
+            const float y = iy * T_f.y + startVals_f.y;
+
+            const float y_A = (((y - vox_half - y_shift) * rayParam_cos_inv + sin_over_cos) - startVals_g.z) * T_u_inv;
+            const float y_B = (((y + vox_half - y_shift) * rayParam_cos_inv + sin_over_cos) - startVals_g.z) * T_u_inv;
+            const float uFootprint = max(0.0f, min(max(y_A, y_B), u_hi) - max(min(y_A, y_B), u_lo));
+            if (uFootprint == 0.0f)
+                continue;
+            for (int iz = iz_min; iz <= iz_max; iz++)
+            {
+                // calculate v index for z-0.5*T_f.z and z+0.5*T_f.z
+                const float z = iz * T_f.z + startVals_f.z - z_source;
+                const float z_A = ((z - 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
+                const float z_B = ((z + 0.5f * T_f.z) * rayParam_inv - startVals_g.y) * T_v_inv;
+
+                const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
+
+                if (vFootprint > 0.0f)
+                {
+                    A[ind_offset + count] = vFootprint * uFootprint * theWeight;
+                    indices[3 * (ind_offset + count) + 0] = iz;
+                    indices[3 * (ind_offset + count) + 1] = iy;
+                    indices[3 * (ind_offset + count) + 2] = ix;
+                    count += 1;
+                }
+            }
+        }
+    }
+}
+
 __global__ void systemMatrixKernel_parallel(float* A, short* indices, const int* iCols, const int numCols, const float cos_phi, const float sin_phi, const int4 N_g, const float4 T_g, const float4 startVals_g, const int4 N_f, const float4 T_f, const float4 startVals_f, const int N_max, const int iAngle)
 {
     const int N_xy = max(N_f.x, N_f.y);
@@ -109,11 +278,171 @@ __global__ void systemMatrixKernel_parallel(float* A, short* indices, const int*
     }
 }
 
-bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu)
+bool systemMatrix_cone(float*& A, short*& indices, int N_max, parameters* params, int iAngle, int* iRows, int numRows, int* iCols, int numCols, bool data_on_cpu)
 {
     if (A == NULL || indices == NULL || params == NULL)
         return false;
-    if (iRow < 0 || iRow >= params->numRows || iAngle < 0 || iAngle >= params->numAngles)
+    if (iAngle < 0 || iAngle >= params->numAngles)
+        return false;
+    if (params->geometry != parameters::CONE)
+        return false;
+
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    float* dev_A = 0;
+    short* dev_ind = 0;
+    int* dev_iCols = 0;
+    int* dev_iRows = 0;
+
+    uint64 N_A = numCols * numRows * uint64(N_max);
+    uint64 N_ind = N_A * uint64(3);
+
+    // Allocate planogram data on GPU
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+
+    //float v = iRow * T_g.y + startVal_g.y;
+    //float u = iCol * T_g.z + startVal_g.z;
+
+    float rFOVsq = params->rFOV() * params->rFOV();
+
+    if (data_on_cpu)
+    {
+        if ((cudaStatus = cudaMalloc((void**)&dev_A, N_A * sizeof(float))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(system matrix) failed!\n");
+            return false;
+        }
+        if ((cudaStatus = cudaMalloc((void**)&dev_ind, N_ind * sizeof(short))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(system matrix) failed!\n");
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            return false;
+        }
+        if ((cudaStatus = cudaMalloc((void**)&dev_iCols, numCols * sizeof(short))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(system matrix) failed!\n");
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            if (dev_ind != 0)
+                cudaFree(dev_ind);
+            return false;
+        }
+        if ((cudaStatus = cudaMemcpy(dev_iCols, iCols, numCols * sizeof(int), cudaMemcpyHostToDevice)) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+            printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            if (dev_ind != 0)
+                cudaFree(dev_ind);
+            cudaFree(dev_iCols);
+            return false;
+        }
+
+        if ((cudaStatus = cudaMalloc((void**)&dev_iRows, numRows * sizeof(short))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(system matrix) failed!\n");
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            if (dev_ind != 0)
+                cudaFree(dev_ind);
+            cudaFree(dev_iCols);
+            return false;
+        }
+        if ((cudaStatus = cudaMemcpy(dev_iRows, iRows, numRows * sizeof(int), cudaMemcpyHostToDevice)) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+            printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+            if (dev_A != 0)
+                cudaFree(dev_A);
+            if (dev_ind != 0)
+                cudaFree(dev_ind);
+            cudaFree(dev_iCols);
+            cudaFree(dev_iRows);
+            return false;
+        }
+    }
+    else
+    {
+        dev_A = A;
+        dev_ind = indices;
+        dev_iCols = iCols;
+        dev_iRows = iRows;
+    }
+
+    float phi = params->phis[iAngle];
+    float cos_phi = cos(phi);
+    float sin_phi = sin(phi);
+
+    int4 N_f; float4 T_f; float4 startVal_f;
+    setVolumeGPUparams(params, N_f, T_f, startVal_f);
+
+    bool retVal = true;
+
+    // Call Kernel
+    int N_xy = max(params->numX, params->numY);
+    //dim3 dimBlock = setBlockSize(N_g);
+    //dim3 dimGrid = setGridSize(N_g, dimBlock);
+    dim3 dimBlock(min(8, numRows), min(8, numCols), min(8, N_xy));
+    dim3 dimGrid(int(ceil(double(numRows) / double(dimBlock.x))), int(ceil(double(numCols) / double(dimBlock.y))), int(ceil(double(N_xy) / double(dimBlock.z))));
+    systemMatrixKernel_cone <<< dimGrid, dimBlock >>> (dev_A, dev_ind, dev_iRows, numRows, dev_iCols, numCols, params->z_source(iAngle), cos_phi, sin_phi, N_g, T_g, startVal_g, N_f, T_f, startVal_f, N_max, iAngle, params->sod, params->tau);
+
+    // pull result off GPU
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess)
+    {
+        fprintf(stderr, "kernel failed!\n");
+        fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+        fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+        retVal = false;
+    }
+
+    if (data_on_cpu && retVal == true)
+    {
+        //pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+        if ((cudaStatus = cudaMemcpy(A, dev_A, N_A * sizeof(float), cudaMemcpyDeviceToHost)) != cudaSuccess)
+        {
+            fprintf(stderr, "error pulling result off GPU!\n");
+            fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+            fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+            retVal = false;
+        }
+        if ((cudaStatus = cudaMemcpy(indices, dev_ind, N_ind * sizeof(short), cudaMemcpyDeviceToHost)) != cudaSuccess)
+        {
+            fprintf(stderr, "error pulling result off GPU!\n");
+            fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+            fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+            retVal = false;
+        }
+    }
+
+    // Clean up
+    //cudaFree(dev_phis);
+    if (data_on_cpu)
+    {
+        if (dev_A != 0)
+            cudaFree(dev_A);
+        if (dev_ind != 0)
+            cudaFree(dev_ind);
+        if (dev_iCols != 0)
+            cudaFree(dev_iCols);
+        if (dev_iRows != 0)
+            cudaFree(dev_iRows);
+    }
+
+    return retVal;
+}
+
+bool systemMatrix_parallel(float*& A, short*& indices, int N_max, parameters* params, int iAngle, int* iCols, int numCols, bool data_on_cpu)
+{
+    if (A == NULL || indices == NULL || params == NULL)
+        return false;
+    if (iAngle < 0 || iAngle >= params->numAngles)
+        return false;
+    if (params->geometry != parameters::PARALLEL)
         return false;
 
     cudaSetDevice(params->whichGPU);
@@ -123,8 +452,11 @@ bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int
     short* dev_ind = 0;
     int* dev_iCols = 0;
 
-    uint64 N_A = params->numAngles * uint64(N_max);
-    uint64 N_ind = N_A * uint64(3);
+    // N_max is the maximum number of voxels with non-zero system matrix value for an arbitrary ray
+    // N_A is the number of elements in the input, A
+    // N_ind is the number of elements in the input, indices
+    uint64 N_A = numCols * uint64(N_max); // was numAngles * N_max, but seems wrong
+    uint64 N_ind = N_A * uint64(2); // was 3, but seems wrong
 
     // Allocate planogram data on GPU
     int4 N_g; float4 T_g; float4 startVal_g;
@@ -187,35 +519,14 @@ bool systemMatrix(float*& A, short*& indices, int N_max, parameters* params, int
     bool retVal = true;
 
     // Call Kernel
+    // The block size is somewhat arbitrary and should be optimized
+    // A thread is cast for every column index and volume plane that is most orthogonal to the direction of the rays
     int N_xy = max(params->numX, params->numY);
     //dim3 dimBlock = setBlockSize(N_g);
     //dim3 dimGrid = setGridSize(N_g, dimBlock);
     dim3 dimBlock(min(8, numCols), min(8, N_xy));
     dim3 dimGrid(int(ceil(double(numCols) / double(dimBlock.x))), int(ceil(double(N_xy) / double(dimBlock.y))));
-    if (params->geometry == parameters::CONE)
-    {
-        LOG(logERROR, "system_matrix", "") << "Error: the function not yet implemented for cone-beam data" << std::endl;
-        retVal = false;
-    }
-    else if (params->geometry == parameters::FAN)
-    {
-        LOG(logERROR, "system_matrix", "") << "Error: the function not yet implemented for fan-beam data" << std::endl;
-        retVal = false;
-    }
-    else if (params->geometry == parameters::PARALLEL)
-    {
-        systemMatrixKernel_parallel <<< dimGrid, dimBlock >>> (dev_A, dev_ind, dev_iCols, numCols, cos_phi, sin_phi, N_g, T_g, startVal_g, N_f, T_f, startVal_f, N_max, iAngle);
-    }
-    else if (params->geometry == parameters::CONE_PARALLEL)
-    {
-        LOG(logERROR, "system_matrix", "") << "Error: the function not yet implemented for cone-parallel data" << std::endl;
-        retVal = false;
-    }
-    else if (params->geometry == parameters::MODULAR)
-    {
-        LOG(logERROR, "system_matrix", "") << "Error: the function not yet implemented for modular-beam data" << std::endl;
-        retVal = false;
-    }
+    systemMatrixKernel_parallel <<< dimGrid, dimBlock >>> (dev_A, dev_ind, dev_iCols, numCols, cos_phi, sin_phi, N_g, T_g, startVal_g, N_f, T_f, startVal_f, N_max, iAngle);
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();

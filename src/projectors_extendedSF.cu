@@ -636,7 +636,7 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
         const float u_c = x_dot_theta_perp * R_minus_x_dot_theta_inv;
         const float x_denom = fabs(u_c * cos_phi - sin_phi);
         const float y_denom = fabs(u_c * sin_phi + cos_phi);
-        const float l_phi = T_f.x * sqrt(1.0f + u_c * u_c) / max(x_denom, y_denom);
+        const float l_phi = T_f.x * sqrtf(1.0f + u_c * u_c) / max(x_denom, y_denom);
 
         const int iu_c = (u_c - startVals_g.z) / T_g.z;
 
@@ -771,7 +771,7 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
             const float sin_phi_conj = sin(phi_cur_conj);
             const float dist_from_source_components_x_conj = fabs(R * cos_phi_conj + tau * sin_phi_conj - x);
             const float dist_from_source_components_y_conj = fabs(R * sin_phi_conj - tau * cos_phi_conj - y);
-            const float dist_from_source_conj = sqrt(dist_from_source_components_x_conj * dist_from_source_components_x_conj + dist_from_source_components_y_conj * dist_from_source_components_y_conj);
+            const float dist_from_source_conj = sqrtf(dist_from_source_components_x_conj * dist_from_source_components_x_conj + dist_from_source_components_y_conj * dist_from_source_components_y_conj);
             const float dist_from_source_inv_conj = 1.0f / dist_from_source_conj;
 
             float sumWeights = 0.0f;
@@ -970,7 +970,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
             const float u_c = x_dot_theta_perp * R_minus_x_dot_theta_inv;
             const float x_denom = fabs(u_c * cos_phi - sin_phi);
             const float y_denom = fabs(u_c * sin_phi + cos_phi);
-            const float l_phi = T_f.x * sqrt(1.0f + u_c * u_c) / max(x_denom, y_denom);// *sqrt(1.0f + v_c * v_c);
+            const float l_phi = T_f.x * sqrtf(1.0f + u_c * u_c) / max(x_denom, y_denom);// *sqrt(1.0f + v_c * v_c);
 
             // Calculate the View Redundancy Weight
             const float phi_cur_conj = phi_cur - 2.0f * atan(u_c) + atan_term + PI;
@@ -1317,7 +1317,7 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
         const float x_denom = fabs(u_c * cos_phi - sin_phi);
         const float y_denom = fabs(u_c * sin_phi + cos_phi);
         const float v_c = (z - z_source) * R_minus_x_dot_theta_inv;
-        const float l_phi = T_f.x * sqrt(1.0f + u_c * u_c) / max(x_denom, y_denom);// *sqrt(1.0f + v_c * v_c);
+        const float l_phi = T_f.x * sqrtf(1.0f + u_c * u_c) / max(x_denom, y_denom);// *sqrt(1.0f + v_c * v_c);
 
         //const int iv_c = (v_c - startVals_g.y) / T_g.y;
         //const int iu_c = (u_c - startVals_g.z) / T_g.z;
@@ -1577,7 +1577,7 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
                     g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * g_output;
     }
     else
     {
@@ -1620,7 +1620,7 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
             }
         }
 
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * g_output;
     }
 }
 
@@ -1714,7 +1714,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
                 }
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs(u * cos_phi - sin_phi) * sqrtf(1.0f + v * v) * g_output;
     }
     else
     {
@@ -1771,7 +1771,7 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
             }
         }
 
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrt(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs(u * sin_phi + cos_phi) * sqrtf(1.0f + v * v) * g_output;
     }
 }
 
@@ -1869,7 +1869,7 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
                 }
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs((u * cos_phi - sin_phi)) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs((u * cos_phi - sin_phi)) * sqrtf(1.0f + v * v) * g_output;
     }
     else
     {
@@ -1925,7 +1925,7 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
                 }
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs((u * sin_phi + cos_phi)) * sqrt(1.0f + v * v) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(1.0f + u * u) / fabs((u * sin_phi + cos_phi)) * sqrtf(1.0f + v * v) * g_output;
     }
 }
 

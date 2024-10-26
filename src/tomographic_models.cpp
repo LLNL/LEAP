@@ -483,10 +483,20 @@ bool tomographicModels::windowFOV(float* f, bool data_on_cpu)
 #endif
 }
 
-bool tomographicModels::system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu)
+bool tomographicModels::system_matrix_parallel(float* A, short* indices, int N_max, int iAngle, int* iCols, int numCols, bool data_on_cpu)
 {
 #ifndef __USE_CPU
-	return systemMatrix(A, indices, N_max, &params, iAngle, iRow, iCols, numCols, data_on_cpu);
+	return systemMatrix_parallel(A, indices, N_max, &params, iAngle, iCols, numCols, data_on_cpu);
+#else
+	LOG(logERROR, "tomographicModels", "system_matrix") << "Error: operation only implemented for GPU" << endl;
+	return false;
+#endif
+}
+
+bool tomographicModels::system_matrix_cone(float* A, short* indices, int N_max, int iAngle, int* iRows, int numRows, int* iCols, int numCols, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+	return systemMatrix_cone(A, indices, N_max, &params, iAngle, iRows, numRows, iCols, numCols, data_on_cpu);
 #else
 	LOG(logERROR, "tomographicModels", "system_matrix") << "Error: operation only implemented for GPU" << endl;
 	return false;

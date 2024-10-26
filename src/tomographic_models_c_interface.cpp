@@ -269,9 +269,14 @@ bool windowFOV(float* f, bool data_on_cpu)
 	return tomo()->windowFOV(f, data_on_cpu);
 }
 
-bool system_matrix(float* A, short* indices, int N_max, int iAngle, int iRow, int* iCols, int numCols, bool data_on_cpu)
+bool system_matrix_parallel(float* A, short* indices, int N_max, int iAngle, int* iCols, int numCols, bool data_on_cpu)
 {
-	return tomo()->system_matrix(A, indices, N_max, iAngle, iRow, iCols, numCols, data_on_cpu);
+	return tomo()->system_matrix_parallel(A, indices, N_max, iAngle, iCols, numCols, data_on_cpu);
+}
+
+bool system_matrix_cone(float* A, short* indices, int N_max, int iAngle, int* iRows, int numRows, int* iCols, int numCols, bool data_on_cpu)
+{
+	return tomo()->system_matrix_cone(A, indices, N_max, iAngle, iRows, numRows, iCols, numCols, data_on_cpu);
 }
 
 float get_FBPscalar()
@@ -1171,7 +1176,8 @@ PYBIND11_MODULE(leapct, m) {
 	m.def("lambdaTomography", &lambdaTomography, "");
     m.def("sensitivity", &sensitivity, "");
     m.def("windowFOV", &windowFOV, "");
-	m.def("system_matrix", &system_matrix, "");
+	m.def("system_matrix_parallel", &system_matrix_parallel, "");
+	m.def("system_matrix_cone", &system_matrix_cone, "");
     m.def("set_conebeam", &set_conebeam, "");
 	m.def("set_coneparallel", &set_coneparallel, "");
     m.def("set_fanbeam", &set_fanbeam, "");
