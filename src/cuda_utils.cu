@@ -1001,6 +1001,122 @@ dim3 setGridSize(int4 N, dim3 dimBlock)
     return setGridSize(make_int3(N.x, N.y, N.z), dimBlock);
 }
 
+extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
+{
+    int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);
+    if (swapFirstAndLastDimensions)
+    {
+        N.x = N_txt.z;
+        N.z = N_txt.x;
+    }
+    return loadTexture_from_cpu(tex_object, data, N, useExtrapolation, useLinearInterpolation);
+}
+
+extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions, bool data_on_cpu)
+{
+    int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);
+    if (swapFirstAndLastDimensions)
+    {
+        N.x = N_txt.z;
+        N.z = N_txt.x;
+    }
+    return loadTexture_from_cpu(tex_object, data, N, useExtrapolation, useLinearInterpolation);
+}
+
+cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+{
+    int3 N3 = make_int3(N_txt.x, N_txt.y, N_txt.z);
+    return loadTexture_from_cpu(tex_object, data, N3, useExtrapolation, useLinearInterpolation);
+}
+
+cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+{
+    if (data == nullptr)
+        return nullptr;
+    cudaArray* d_data_array = nullptr;
+    cudaError_t cudaStatus;
+
+    // Allocate CUDA memory array
+    cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float>();
+    if ((cudaStatus = cudaMalloc3DArray(&d_data_array, &channel_desc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x), 0)) != cudaSuccess)
+    {
+        printf("cudaMalloc3DArray Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+
+    // Bind array memory to texture object
+    cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = (cudaArray_t)d_data_array;
+
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.normalizedCoords = false;  // Texture coordinates normalization
+
+    if (useExtrapolation)
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeClamp;
+        texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeClamp;
+        texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeClamp;
+    }
+    else
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
+        texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
+        texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
+    }
+
+    if (useLinearInterpolation)
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
+    }
+    else
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
+    }
+    if ((cudaStatus = cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr)) != cudaSuccess)
+    {
+        printf("cudaCreateTextureObject Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        return nullptr;
+    }
+
+    //###################################################################
+    //void setData(T* src_data, cudaMemcpyKind memcpy_kind = cudaMemcpyHostToDevice, cudaStream_t stream = 0)
+    cudaMemcpy3DParms copy_params_;
+    memset(&copy_params_, 0, sizeof(cudaMemcpy3DParms));
+
+    copy_params_.dstArray = (cudaArray_t)d_data_array;
+    copy_params_.dstPos = make_cudaPos(0, 0, 0);
+    copy_params_.extent = make_cudaExtent(N_txt.z, N_txt.y, N_txt.x);
+    copy_params_.srcPos = make_cudaPos(0, 0, 0);
+    copy_params_.kind = cudaMemcpyHostToDevice;
+    copy_params_.srcPtr = make_cudaPitchedPtr((void*)data, N_txt.z * sizeof(float), N_txt.z, N_txt.y);
+
+    /*
+    cudaStream_t stream;
+    if ((cudaStatus = cudaMemcpy3DAsync(&copy_params_, stream)) != cudaSuccess)
+    {
+        printf("cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        cudaDestroyTextureObject(tex_object);
+        return nullptr;
+    }
+    //*/
+    if ((cudaStatus = cudaMemcpy3D(&copy_params_)) != cudaSuccess)
+    {
+        printf("cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        cudaDestroyTextureObject(tex_object);
+        return nullptr;
+    }
+    //###################################################################
+
+    return d_data_array;
+}
+
 cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
 {
     int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);

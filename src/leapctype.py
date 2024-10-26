@@ -1041,10 +1041,14 @@ class tomographicModels:
             print('Use convert_to_modularbeam() first')
             return False
         if type(alpha) is np.ndarray:
-            if type(alpha) is not np.ndarray or len(alpha.shape) != 2 or alpha.shape[0] != 3 or alpha.shape[1] != 3:
+            if alpha.size == 3:
+                from scipy.spatial.transform import Rotation as R
+                A = R.from_euler('xyz', alpha, degrees=True).as_matrix()
+            elif len(alpha.shape) != 2 or alpha.shape[0] != 3 or alpha.shape[1] != 3:
                 print('Error: input argument must be scalar or a 3x3 numpy array')
                 return False
-            A = np.ascontiguousarray(alpha.copy(), dtype=np.float32)
+            else:
+                A = np.ascontiguousarray(alpha.copy(), dtype=np.float32)
             if np.linalg.det(A) == 0.0:
                 print('Error: rotation matrix must be nonsingular')
                 return False

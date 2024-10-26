@@ -689,7 +689,8 @@ float tomographicModels::project_memoryRequired(int numRowsPerChunk)
 		params.sliceRangeNeededForProjection(firstRow, lastRow, sliceRange);
 		int numSlices = sliceRange[1] - sliceRange[0] + 1;
 
-		float memoryNeeded = 2.0*float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize();
+		//float memoryNeeded = 2.0*float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize();
+		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize();
 		maxMemory = std::max(maxMemory, memoryNeeded);
 	}
 
@@ -711,7 +712,8 @@ float tomographicModels::project_memoryRequired_splitViews(int numViewsPerChunk)
 		params.sliceRangeNeededForProjectionRange(firstView, lastView, sliceRange);
 		int numSlices = sliceRange[1] - sliceRange[0] + 1;
 
-		float memoryNeeded = 2.0*float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
+		//float memoryNeeded = 2.0*float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
+		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
 		maxMemory = std::max(maxMemory, memoryNeeded);
 	}
 	return maxMemory + params.get_extraMemoryReserved();

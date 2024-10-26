@@ -1033,14 +1033,24 @@ bool backproject_VD_modular(float* g, float*& f, parameters* params, bool data_o
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
 
+    bool doLinearInterpolation = true;
+    bool modularbeamIsAxiallyAligned = params->modularbeamIsAxiallyAligned();
+
+    cudaTextureObject_t d_data_txt = NULL;
+    cudaArray* d_data_array = NULL;
+    /*
     if (data_on_cpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
     else
         dev_g = g;
-
-
-    bool doLinearInterpolation = true;
-    bool modularbeamIsAxiallyAligned = params->modularbeamIsAxiallyAligned();
+    d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
+    //*/
+    //*
+    if (data_on_cpu)
+        d_data_array = loadTexture_from_cpu(d_data_txt, g, N_g, params->doExtrapolation, doLinearInterpolation);
+    else
+        d_data_array = loadTexture(d_data_txt, g, N_g, params->doExtrapolation, doLinearInterpolation);
+    //*/
 
     dim3 dimBlock_g = setBlockSize(N_g);
     dim3 dimGrid_g = setGridSize(N_g, dimBlock_g);
@@ -1053,10 +1063,8 @@ bool backproject_VD_modular(float* g, float*& f, parameters* params, bool data_o
         //applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, true, false);
         applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, false, false);
     }
+    d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
     //*/
-
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
 
     float rFOV_sq = params->rFOV() * params->rFOV();
 

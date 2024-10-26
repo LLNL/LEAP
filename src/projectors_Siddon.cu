@@ -1496,14 +1496,22 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool data_on_cpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
+	bool useLinearInterpolation = false;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = NULL;
+	/*
 	if (data_on_cpu)
 		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
 	else
 		dev_f = f;
-
-	bool useLinearInterpolation = false;
-	cudaTextureObject_t d_data_txt = NULL;
-	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	//*/
+	//*
+	if (data_on_cpu)
+		d_data_array = loadTexture_from_cpu(d_data_txt, f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	else
+		d_data_array = loadTexture(d_data_txt, f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	//*/
 
 	// Call Kernel
 	dim3 dimBlock = setBlockSize(N_g);
@@ -1712,13 +1720,21 @@ bool project_modular(float *&g, float* f, parameters* params, bool data_on_cpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = NULL;
+	/*
 	if (data_on_cpu)
 		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
 	else
 		dev_f = f;
-
-	cudaTextureObject_t d_data_txt = NULL;
-	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	//*/
+	//*
+	if (data_on_cpu)
+		d_data_array = loadTexture_from_cpu(d_data_txt, f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	else
+		d_data_array = loadTexture(d_data_txt, f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	//*/
 
 	// Call Kernel
 	dim3 dimBlock = setBlockSize(N_g);

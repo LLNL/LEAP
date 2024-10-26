@@ -1807,13 +1807,21 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
+    cudaTextureObject_t d_data_txt = NULL;
+    cudaArray* d_data_array = NULL;
+    /*
     if (data_on_cpu)
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
     else
         dev_f = f;
-
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
+    d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
+    //*/
+    //*
+    if (data_on_cpu)
+        d_data_array = loadTexture_from_cpu(d_data_txt, f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
+    else
+        d_data_array = loadTexture(d_data_txt, f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
+    //*/
 
     bool useSF = true;
     if (params->voxelSizeWorksForFastSF() == false)
