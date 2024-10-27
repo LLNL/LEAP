@@ -1555,6 +1555,13 @@ bool setProjectionGPUparams(parameters* params, int4& N, float4& T, float4& star
         N.x = params->numAngles; N.y = params->numRows; N.z = params->numCols;
         T.x = params->T_phi(); T.y = params->pixelHeight; T.z = params->pixelWidth;
         startVals.x = params->phi_0(); startVals.y = params->v_0(); startVals.z = params->u_0();
+        //*
+        if (params->geometry == parameters::MODULAR)
+        {
+            startVals.y = -(params->centerRow + params->rowShiftFromFilter) * params->pixelHeight;
+            startVals.z = -(params->centerCol + params->colShiftFromFilter) * params->pixelWidth;
+        }
+        //*/
 
         if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL)
         {

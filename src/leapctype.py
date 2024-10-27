@@ -992,8 +992,8 @@ class tomographicModels:
         
     def convert_to_modularbeam(self):
         """Converts parallel- or cone-beam data to a modular-beam format for extra customization of the scanning geometry"""
-        dFOV = self.get_diameterFOV()
-        self.set_diameterFOV(dFOV)
+        #dFOV = self.get_diameterFOV()
+        #self.set_diameterFOV(dFOV)
         if self.get_geometry() == 'PARALLEL':
             return self.convert_parallelbeam_to_modularbeam()
         elif self.get_geometry() == 'CONE':
