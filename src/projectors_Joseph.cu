@@ -37,6 +37,7 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
     //    u_vec.z * v_vec.x - u_vec.x * v_vec.z,
     //    u_vec.x * v_vec.y - u_vec.y * v_vec.x);
 
+    // These are just needed to calculate the footprint width but not the location
     const float u_vec_flat_normalizer = rsqrtf(u_vec.x * u_vec.x + u_vec.y * u_vec.y);
     const float3 u_vec_flat = make_float3(u_vec.x* u_vec_flat_normalizer, u_vec.y* u_vec_flat_normalizer, 0.0f);
 
@@ -1898,16 +1899,6 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (data_on_cpu)
-    {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(volume) failed!\n");
-        }
-    }
-    else
-        dev_f = f;
-
     float* dev_sourcePositions = 0;
     if (cudaSuccess != cudaMalloc((void**)&dev_sourcePositions, 3 * params->numAngles * sizeof(float)))
         fprintf(stderr, "cudaMalloc failed!\n");
@@ -1976,6 +1967,19 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
 
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
+
+    if (data_on_cpu)
+    {
+        if (dev_g != 0)
+            cudaFree(dev_g);
+        dev_g = 0;
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(volume) failed!\n");
+        }
+    }
+    else
+        dev_f = f;
 
     float rFOV_sq = params->rFOV() * params->rFOV();
 

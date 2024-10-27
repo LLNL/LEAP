@@ -66,7 +66,7 @@ f = leapct.allocateVolume()
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
 # so we implemented this feature with multi-threaded C++
-leapct.set_FORBILD(f,True)
+leapct.set_FORBILD(f,True,3)
 #leapct.display(f)
 
 
@@ -107,7 +107,8 @@ filters.append(TV(leapct, delta=0.02/20.0))
 #leapct.OSEM(g,f,10,10)
 #leapct.LS(g,f,50,'SQS')
 #leapct.RWLS(g,f,100,filters,None,'SQS')
-leapct.RDLS(g,f,100,filters,1.0,True,1)
+leapct.RWLS(g,f,1,filters,None,'SQS')
+leapct.RDLS(g,f,20,filters,1.0,True,1)
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 

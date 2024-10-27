@@ -847,14 +847,14 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	if (params.hasSufficientGPUmemory(true, extraCols, numProjectionData, numVolumeData) == false)
 	{
 		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
-		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols);
+		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP);
 
 		while (memAvailable < memNeeded)
 		{
 			numSlicesPerChunk = numSlicesPerChunk / 2;
 			if (numSlicesPerChunk <= 1)
 				return false;
-			memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols);
+			memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP);
 		}
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
@@ -971,7 +971,7 @@ int tomographicModels::numRowsRequiredForBackprojectingSlab(int numSlicesPerChun
 	return maxRows;
 }
 
-float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols)
+float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols, bool doFBP)
 {
 	float maxMemory = 0.0;
 
@@ -986,13 +986,23 @@ float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int e
 		params.rowRangeNeededForBackprojection(firstSlice, lastSlice, rowRange);
 		int numRows = rowRange[1] - rowRange[0] + 1;
 
-		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + 2.0*float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
-		maxMemory = std::max(maxMemory, memoryNeeded);
+		if (doFBP)
+		{
+			float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + 2.0 * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			maxMemory = std::max(maxMemory, memoryNeeded);
+		}
+		else
+		{
+			float memoryNeeded_A = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			float memoryNeeded_B = 2.0 * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			float memoryNeeded = std::max(memoryNeeded_A, memoryNeeded_B);
+			maxMemory = std::max(maxMemory, memoryNeeded);
+		}
 	}
 	return maxMemory + params.get_extraMemoryReserved();
 }
 
-float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerChunk)
+float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerChunk, bool doFBP)
 {
 	float maxMemory = 0.0;
 
@@ -1007,8 +1017,18 @@ float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerC
 		params.viewRangeNeededForBackprojection(firstSlice, lastSlice, viewRange);
 		int numViews = viewRange[1] - viewRange[0] + 1;
 
-		float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + 2.0*float(numViews) / float(params.numAngles) * params.projectionDataSize();
-		maxMemory = std::max(maxMemory, memoryNeeded);
+		if (doFBP)
+		{
+			float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + 2.0 * float(numViews) / float(params.numAngles) * params.projectionDataSize();
+			maxMemory = std::max(maxMemory, memoryNeeded);
+		}
+		else
+		{
+			float memoryNeeded_A = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
+			float memoryNeeded_B = 2.0 * float(numViews) / float(params.numAngles) * params.projectionDataSize();
+			float memoryNeeded = std::max(memoryNeeded_A, memoryNeeded_B);
+			maxMemory = std::max(maxMemory, memoryNeeded);
+		}
 	}
 	return maxMemory + params.get_extraMemoryReserved();
 }
@@ -1031,14 +1051,14 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 	if (params.hasSufficientGPUmemory(true, 0, numProjectionData, numVolumeData) == false)
 	{
 		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
-		float memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk);
+		float memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk, doFBP);
 
 		while (memAvailable < memNeeded)
 		{
 			numSlicesPerChunk = numSlicesPerChunk / 2;
 			if (numSlicesPerChunk <= 1)
 				return false;
-			memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk);
+			memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk, doFBP);
 		}
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}

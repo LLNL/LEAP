@@ -2121,17 +2121,6 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (data_on_cpu)
-    {
-        //printf("mallocing %.0f elements\n", float(params->volumeData_numberOfElements()));
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(volume) failed!\n");
-        }
-    }
-    else
-        dev_f = f;
-
     float* dev_phis = copyAngleArrayToGPU(params);
 
     int4 N_g; float4 T_g; float4 startVal_g;
@@ -2155,6 +2144,20 @@ bool backproject_SF(float *g, float *&f, parameters* params, bool data_on_cpu)
     cudaTextureObject_t d_data_txt = NULL;
     //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, true);
+
+    if (data_on_cpu)
+    {
+        if (dev_g != 0)
+            cudaFree(dev_g);
+        dev_g = 0;
+        //printf("mallocing %.0f elements\n", float(params->volumeData_numberOfElements()));
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(volume) failed!\n");
+        }
+    }
+    else
+        dev_f = f;
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);

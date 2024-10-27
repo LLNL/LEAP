@@ -1009,16 +1009,6 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    if (data_on_cpu)
-    {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(volume) failed!\n");
-        }
-    }
-    else
-        dev_f = f;
-
     float* dev_phis = copyAngleArrayToGPU(params);
 
     //if (params->doWeightedBackprojection)
@@ -1052,6 +1042,19 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
 
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
+
+    if (data_on_cpu)
+    {
+        if (dev_g != 0)
+            cudaFree(dev_g);
+        dev_g = 0;
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(volume) failed!\n");
+        }
+    }
+    else
+        dev_f = f;
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);

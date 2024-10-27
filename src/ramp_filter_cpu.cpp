@@ -632,7 +632,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
     int N_add = 0;
     float abs_minVal = 0.0;
     float abs_maxVal = 0.0;
-    if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
+    if (params->geometry == parameters::CONE || params->geometry == parameters::FAN || params->geometry == parameters::MODULAR)
     {
         bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
         params->normalizeConeAndFanCoordinateFunctions = true;

@@ -1246,7 +1246,7 @@ private:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      the number of GB of memory required
 	 */
-	float backproject_memoryRequired(int numSlicesPerChunk, int extraCols = 0);
+	float backproject_memoryRequired(int numSlicesPerChunk, int extraCols = 0, bool doFBP = true);
 
 	/**
 	 * \fn          backproject_memoryRequired
@@ -1254,7 +1254,7 @@ private:
 	 * \param[in]   numSlicesPerChunk the number of z-slice to calculate the backprojection
 	 * \return      the number of GB of memory required
 	 */
-	float backproject_memoryRequired_splitViews(int numSlicesPerChunk);
+	float backproject_memoryRequired_splitViews(int numSlicesPerChunk, bool doFBP = true);
 
 	bool copy_volume_data_to_mask(float* f, float* mask, bool data_on_cpu, bool do_forward);
 
