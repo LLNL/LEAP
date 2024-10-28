@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
+#include <algorithm>
 #include "log.h"
 
 using namespace std;
@@ -354,7 +355,7 @@ float* setInverseConeWeight(parameters* params)
 		float* retVal = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
 		for (int iv = 0; iv < params->numRows; iv++)
 		{
-			float v = params->v(iv,0);
+			float v = params->v(iv,0) + params->v_offset();
 			for (int iu = 0; iu < params->numCols; iu++)
 			{
 				float u = params->u(iu,0);
@@ -403,7 +404,7 @@ float* setViewDependentPolarWeights(parameters* params)
 	{
 		for (int iv = 0; iv < params->numRows; iv++)
 		{
-			float v = params->v(iv, iphi);
+			float v = params->v(iv, iphi) + params->v_offset(iphi);
 			retVal[iphi * params->numRows + iv] = sqrt(1.0 + v * v);
 		}
 	}

@@ -1366,7 +1366,15 @@ float parameters::u_0()
 
 float parameters::v_0()
 {
-	return -(centerRow + rowShiftFromFilter) * pixelHeight;
+	if (modularbeamIsAxiallyAligned())
+	{
+		float retVal = v(0, 0);
+		if (normalizeConeAndFanCoordinateFunctions)
+			retVal *= sdd;
+		return retVal;
+	}
+	else
+		return -(centerRow + rowShiftFromFilter) * pixelHeight;
 }
 
 float parameters::phi_0()
@@ -1496,7 +1504,7 @@ float parameters::v(int i, int iphi)
 		p_minus_c[2] = sourcePos[2] - moduleCenter[2];
 		float D = (p_minus_c[0] * n_vec[0] + p_minus_c[1] * n_vec[1] + p_minus_c[2] * n_vec[2]) / (sourcePos[0] * n_vec[0] + sourcePos[1] * n_vec[1] + sourcePos[2] * n_vec[2]);
 		float v_val = (p_minus_c[0] - D * sourcePos[0]) * v_vec[0] + (p_minus_c[1] - D * sourcePos[1]) * v_vec[1] + (p_minus_c[2] - D * sourcePos[2]) * v_vec[2];
-		//v_val *= -1.0;
+		v_val *= -1.0;
 		//printf("u_val = %f\n", u_val);
 		v_val += (i * pixelHeight - (centerRow + rowShiftFromFilter) * pixelHeight);
 		if (normalizeConeAndFanCoordinateFunctions)
@@ -1507,15 +1515,43 @@ float parameters::v(int i, int iphi)
 		float* v_vec = &rowVectors[3 * iphi];
 		float rowVec_dot_z = v_vec[2];
 		if (normalizeConeAndFanCoordinateFunctions)
-			return rowVec_dot_z * (i * pixelHeight + v_0()) / sdd;
+			return rowVec_dot_z * (i * pixelHeight + -(centerRow + rowShiftFromFilter) * pixelHeight) / sdd;
 		else
-			return rowVec_dot_z * (i * pixelHeight + v_0());
+			return rowVec_dot_z * (i * pixelHeight + -(centerRow + rowShiftFromFilter) * pixelHeight);
 		//*/
 	}
 	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN || geometry == MODULAR || geometry == CONE_PARALLEL))
 		return (i * pixelHeight + v_0()) / sdd;
 	else
 		return i * pixelHeight + v_0();
+}
+
+float parameters::v_offset(int iphi)
+{
+	if (modularbeamIsAxiallyAligned() /*&& iphi >= 0 && iphi < numAngles*/)
+	{
+		iphi = max(0, min(numAngles - 1, iphi));
+		float* u_vec = &colVectors[3 * iphi];
+		float* v_vec = &rowVectors[3 * iphi];
+		float* moduleCenter = &moduleCenters[3 * iphi];
+		float* sourcePos = &sourcePositions[3 * iphi];
+		float n_vec[3];
+		n_vec[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
+		n_vec[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
+		n_vec[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+		float p_minus_c[3];
+		p_minus_c[0] = sourcePos[0] - moduleCenter[0];
+		p_minus_c[1] = sourcePos[1] - moduleCenter[1];
+		p_minus_c[2] = sourcePos[2] - moduleCenter[2];
+		float D = (p_minus_c[0] * n_vec[0] + p_minus_c[1] * n_vec[1] + p_minus_c[2] * n_vec[2]) / (sourcePos[0] * n_vec[0] + sourcePos[1] * n_vec[1] + sourcePos[2] * n_vec[2]);
+		float v_val = (p_minus_c[0] - D * sourcePos[0]) * v_vec[0] + (p_minus_c[1] - D * sourcePos[1]) * v_vec[1] + (p_minus_c[2] - D * sourcePos[2]) * v_vec[2];
+		v_val *= -1.0;
+		if (normalizeConeAndFanCoordinateFunctions)
+			v_val = v_val / sdd;
+		return v_val;
+	}
+	else
+		return 0.0;
 }
 
 float parameters::pixelWidth_normalized()

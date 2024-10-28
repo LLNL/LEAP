@@ -1132,6 +1132,7 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 
 bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
 {
+	//printf("v range: %f to %f\n", params.v(0), params.v(params.numRows-1));
 	if (data_on_cpu == true && FBP_multiGPU(g, f) == true)
 		return true;
 	else

@@ -7,6 +7,7 @@
 // basic CUDA operations
 ////////////////////////////////////////////////////////////////////////////////
 #include <string.h>
+#include <algorithm>
 
 #ifndef __USE_CPU
 #include "cuda_utils.h"

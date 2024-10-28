@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <cstring>
 #include <math.h>
+#include <algorithm>
 #include "cpu_utils.h"
 
 /*

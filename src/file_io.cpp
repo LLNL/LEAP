@@ -13,6 +13,7 @@
 #include <math.h>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 #include "file_io.h"
 #include "cpu_utils.h"
 

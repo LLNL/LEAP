@@ -11,6 +11,7 @@
 #include <cstring>
 #include <math.h>
 #include <stdio.h>
+#include <algorithm>
 #include "find_center_cpu.h"
 #include "log.h"
 #include "rebin.h"

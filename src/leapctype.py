@@ -487,6 +487,7 @@ class tomographicModels:
            \end{eqnarray*}
         
         for curved detector cone-beam data.  Here, we have used :math:`R` for sod, :math:`\tau` for tau, :math:`\Delta` for helicalPitch, u = s/sdd, and v = t/sdd.
+        Note that :math:`u = \tan\alpha` and :math:`v = \nu \sqrt{1+u^2}`.
         
         To switch between flat and curved detectors, use the set_flatDetector() and set_curvedDetector() functions.  Flat detectors are the default setting.
         
@@ -806,7 +807,18 @@ class tomographicModels:
         return self.libprojectors.set_centerCol(centerCol)
         
     def find_centerCol(self, g, iRow=-1):
-        """Find the centerCol parameter
+        r"""Find the centerCol parameter
+
+        This function works by minimizing the difference of conjugate rays, by changing the detector column sample locations. The cost functions
+        for parallel-beam and fan-beam are given by
+        
+        .. math::
+           \begin{eqnarray*}
+           &&\int \int \left[g(s,\varphi) - g(-s,\varphi \pm \pi)\right]^2 \, ds \, d\varphi \\
+           &&\int \int \left[g(u,\varphi) - g\left(\frac{-u+\frac{2\tau R}{R^2-\tau^2}}{1+u\left(\frac{2\tau R}{R^2-\tau^2}\right)},\varphi -2\tan^{-1}u + \tan^{-1}\left(\frac{2\tau R}{R^2-\tau^2}\right) \pm \pi\right)\right]^2 \, du \, d\varphi, \\
+           \end{eqnarray*}
+           
+        respectively.  For rays near the mid-plane, one can also use these cost functions for cone-parallel and cone-beam coordinates as well.
 
         Note that it only works for parallel-, fan-, and cone-beam CT geometry types (i.e., everything but modular-beam)
         and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
@@ -2381,14 +2393,17 @@ class tomographicModels:
         """
         
         # Make a copy of g if necessary
+        delete_q = False
         if has_torch == True and type(g) is torch.Tensor:
             if inplace == False:
                 q = self.copyData(g)
+                delete_q = True
             else:
                 q = g
         else:
             if self.get_gpu() < 0 and inplace == False:
                 q = self.copyData(g)
+                delete_q = True
             else:
                 q = g
         
@@ -2406,6 +2421,8 @@ class tomographicModels:
             self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.set_model()
             self.libprojectors.FBP(q, f, True)
+        if delete_q:
+            del q
         return f
         
     def fbp_cpu(self, g, f, inplace=False):
@@ -2436,8 +2453,10 @@ class tomographicModels:
             return f
 
         # Make a copy of g if necessary
+        delete_q = False
         if inplace == False:
             q = self.copyData(g)
+            delete_q = True
         else:
             q = g
             
@@ -2450,6 +2469,8 @@ class tomographicModels:
             self.libprojectors.FBP_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
             self.set_model()
             self.libprojectors.FBP_cpu(q, f)
+        if delete_q:
+            del q
         return f
         
     def FBP_gpu(self, g, f, inplace=False):
@@ -2478,8 +2499,10 @@ class tomographicModels:
             return f
 
         # Make a copy of g if necessary
+        delete_q = False
         if inplace == False:
             q = self.copyData(g)
+            delete_q = True
         else:
             q = g
         
@@ -2488,6 +2511,8 @@ class tomographicModels:
             self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
             self.set_model()
             self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
+        if delete_q:
+            del q
         return f
     
     def fbp_adjoint(self, g, f):

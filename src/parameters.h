@@ -233,6 +233,8 @@ public:
 	 */
 	float v(int i, int iphi = -1);
 
+	float v_offset(int iphi = -1);
+
 	/**
 	 * \fn          z_samples
 	 * \brief       returns the position of the k-th z-coordinate value (mm)
