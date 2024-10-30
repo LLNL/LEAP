@@ -584,7 +584,7 @@ class tomographicModels:
         .. math::
            \begin{eqnarray*}
            Pf(s, \varphi, x_3) &:=& \int_\mathbb{R} f(s\boldsymbol{\theta}^\perp(\varphi) - l\boldsymbol{\theta}(\varphi) + x_3\widehat{\boldsymbol{z}}) \, dl \\
-           P^*g(\boldsymbol{x}) &=& \int_0^{2\pi} g(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi), \varphi, x_3) \, d\varphi
+           P^*g(\boldsymbol{x}) &=& \int g(\boldsymbol{x}\cdot\boldsymbol{\theta}^\perp(\varphi), \varphi, x_3) \, d\varphi
            \end{eqnarray*}
         
         Args:
@@ -624,16 +624,25 @@ class tomographicModels:
     def set_modularbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors):
         r"""Sets the parameters for a modular-beam CT geometry
         
-        The origin of the coordinate system is always at the center of rotation.  The forward (P) projection operator is given by
+        The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
         
         .. math::
            \begin{eqnarray*}
-           Pf(s,t) &:=& \int_{\mathbb{R}} f\left( \boldsymbol{y} + \frac{l}{\sqrt{D^2 + s^2 + t^2}}\left[ \boldsymbol{c}-\boldsymbol{y} + s\boldsymbol{\widehat{u}} + t\boldsymbol{\widehat{v}} \right] \right) \, dl,
+           Pf(s,t) &:=& \int_{\mathbb{R}} f\left( \boldsymbol{y} + \frac{l}{\sqrt{D^2 + s^2 + t^2}}\left[ \boldsymbol{c}-\boldsymbol{y} + s\boldsymbol{\widehat{u}} + t\boldsymbol{\widehat{v}} \right] \right) \, dl, \\
+           P^*g(\boldsymbol{x}) &=& <\boldsymbol{c} - \boldsymbol{y}, \boldsymbol{n}> \frac{\| \boldsymbol{c} - \boldsymbol{y} + s\boldsymbol{u} + t\boldsymbol{v} \|}{<\boldsymbol{x} - \boldsymbol{y}, \boldsymbol{n}>^2} g\left(s(\boldsymbol{x}),t(\boldsymbol{x})\right)
+           \end{eqnarray*}
+           
+        where
+        
+        .. math::
+           \begin{eqnarray*}
+           s(\boldsymbol{x}) &:=& \frac{<\boldsymbol{c}-\boldsymbol{y},\boldsymbol{n}>}{<\boldsymbol{x}-\boldsymbol{y},\boldsymbol{n}>}<\boldsymbol{x}-\boldsymbol{y},\boldsymbol{u}> - <\boldsymbol{c}-\boldsymbol{y},\boldsymbol{u}> \\
+           t(\boldsymbol{x}) &:=& \frac{<\boldsymbol{c}-\boldsymbol{y},\boldsymbol{n}>}{<\boldsymbol{x}-\boldsymbol{y},\boldsymbol{n}>}<\boldsymbol{x}-\boldsymbol{y},\boldsymbol{v}> - <\boldsymbol{c}-\boldsymbol{y},\boldsymbol{v}>
            \end{eqnarray*}
        
-        where :math:`\boldsymbol{y}` be a location of sourcePositions, :math:`\boldsymbol{c}` be a location of moduleCenters,
+        and :math:`\boldsymbol{y}` be a location of sourcePositions, :math:`\boldsymbol{c}` be a location of moduleCenters,
         :math:`\boldsymbol{\widehat{v}}` be a rowVectors instance, :math:`\boldsymbol{\widehat{u}}` be a colVectors instance,
-        and :math:`D := \|\boldsymbol{c}-\boldsymbol{y}\|`.
+        :math:`D := \|\boldsymbol{c}-\boldsymbol{y}\|`, and :math:`\boldsymbol{n} := \boldsymbol{\widehat{u}} \times \boldsymbol{\widehat{v}}`.
        
         Args:
             numAngles (int): number of projection angles

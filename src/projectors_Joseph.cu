@@ -126,7 +126,7 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
                         + tex3D<float>(f, float(ix + 1) + 0.5f, float(j) + 0.5f, float(iz + 1) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(r.x*r.x + r.y*r.y) * fabs(r_y_inv) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf((r.y*r.y + r.x*r.x)*(r.y*r.y + r.z*r.z)) * fabs(r_y_inv*r_y_inv) * g_output;
     }
     else
     {
@@ -189,7 +189,7 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
                         + tex3D<float>(f, float(i) + 0.5f, float(iy + 1) + 0.5f, float(iz + 1) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf(r.x * r.x + r.y * r.y) * fabs(r_x_inv) * g_output;
+        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf((r.x*r.x + r.y*r.y)*(r.x*r.x + r.z*r.z)) * fabs(r_x_inv*r_x_inv) * g_output;
     }
 }
 //*/
@@ -1844,7 +1844,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
         float rFOV_sq = params->rFOV() * params->rFOV();
         modularBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
         //applyViewDependentPolarWeights_gpu(dev_g, params, NULL, true, false);
-        applyViewDependentPolarWeights_gpu(dev_g, params, NULL, false, false);
+        //applyViewDependentPolarWeights_gpu(dev_g, params, NULL, false, false); // was this
     }
     else
     {

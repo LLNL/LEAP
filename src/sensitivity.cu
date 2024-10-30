@@ -119,6 +119,7 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
     const float scalar = (T_f.x * T_f.x / T_g.z) * (T_f.z / T_g.y);
 
     float val = 0.0;
+    /*
     for (int l = 0; l < N_g.x; l++)
     {
         float* sourcePosition = &sourcePositions[3 * l];
@@ -129,6 +130,11 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
             u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
             u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
 
+        const float3 sourceToVoxel = make_float3(x - sourcePosition[0], y - sourcePosition[1], z - sourcePosition[2]);
+
+        const float l_phi_denom = (fabs(sourceToVoxel.x) >= fabs(sourceToVoxel.y)) ? fabs(sourceToVoxel.x) : fabs(sourceToVoxel.y);
+        const float l_phi = sqrtf(sourceToVoxel.x * sourceToVoxel.x + sourceToVoxel.y * sourceToVoxel.y + sourceToVoxel.z * sourceToVoxel.z) / l_phi_denom;
+
         const float3 c_minus_s = make_float3(moduleCenter[0] - sourcePosition[0], moduleCenter[1] - sourcePosition[1], moduleCenter[2] - sourcePosition[2]);
         //const float D = sqrtf(c_minus_s.x * c_minus_s.x + c_minus_s.y * c_minus_s.y);
 
@@ -138,7 +144,7 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
 
         //const float R = sourcePosition[0] * cos_phi + sourcePosition[1] * sin_phi;
         const float D_sq = c_minus_s.x * c_minus_s.x + c_minus_s.y * c_minus_s.y + c_minus_s.z * c_minus_s.z;
-        const float one_over_D = rsqrtf(D_sq);
+        //const float one_over_D = rsqrtf(D_sq);
         //const float scalar = (T_f.x * T_f.x / (one_over_D * T_g.z)) * (T_f.z / (one_over_D * T_g.y));
 
         const float c_minus_s_dot_u = c_minus_s.x * u_vec[0] + c_minus_s.y * u_vec[1] + c_minus_s.z * u_vec[2];
@@ -153,8 +159,49 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
         const float v_arg = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
 
         if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-            val += sqrtf(D_sq + u_arg * u_arg + v_arg * v_arg) * one_over_D * t_C * t_C;
+            val += l_phi * t_C * t_C;
+            //val += sqrtf(D_sq + u_arg * u_arg + v_arg * v_arg) * one_over_D * t_C * t_C;
     }
+    //*/
+
+    for (int iphi = 0; iphi < N_g.x; iphi++)
+    {
+        float L = float(iphi) + 0.5f;
+        float* sourcePosition = &sourcePositions[3 * iphi];
+        float* moduleCenter = &moduleCenters[3 * iphi];
+        float* v_vec = &rowVectors[3 * iphi];
+        float* u_vec = &colVectors[3 * iphi];
+        const float3 detNormal = make_float3(u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1],
+            u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
+            u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
+
+        float3 r = make_float3(x - sourcePosition[0], y - sourcePosition[1], z - sourcePosition[2]);
+
+        const float3 p_minus_c = make_float3(sourcePosition[0] - moduleCenter[0], sourcePosition[1] - moduleCenter[1], sourcePosition[2] - moduleCenter[2]);
+        const float p_minus_c_dot_n = p_minus_c.x * detNormal.x + p_minus_c.y * detNormal.y + p_minus_c.z * detNormal.z;
+        const float r_dot_d_inv = 1.0f / (r.x * detNormal.x + r.y * detNormal.y + r.z * detNormal.z);
+        const float D = -p_minus_c_dot_n * r_dot_d_inv;
+
+        const float p_minus_c_dot_u = p_minus_c.x * u_vec[0] + p_minus_c.y * u_vec[1] + p_minus_c.z * u_vec[2];
+        const float p_minus_c_dot_v = p_minus_c.x * v_vec[0] + p_minus_c.y * v_vec[1] + p_minus_c.z * v_vec[2];
+
+        const float r_dot_u = r.x * u_vec[0] + r.y * u_vec[1] + r.z * u_vec[2];
+        const float r_dot_v = r.x * v_vec[0] + r.y * v_vec[1] + r.z * v_vec[2];
+
+        const float u_val = p_minus_c_dot_u + D * r_dot_u;
+        const float v_val = p_minus_c_dot_v + D * r_dot_v;
+
+        //const float num = p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n );
+        //const float backprojectionWeight = p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n )*r_dot_d_inv*r_dot_d_inv;
+
+        //const float u_arg = (u_val - startVals_g.z) * T_u_inv + 0.5f;
+        //const float v_arg = (v_val - startVals_g.y) * T_v_inv + 0.5f;
+        //val += tex3D<float>(g, u_arg, v_arg, L) * backprojectionWeight;
+
+        if (u_min <= u_val && u_val <= u_max && v_min <= v_val && v_val <= v_max)
+            val += p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n )*r_dot_d_inv*r_dot_d_inv;
+    }
+
     if (val == 0.0f)
         val = 1.0f;
     else

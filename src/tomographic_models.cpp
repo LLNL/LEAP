@@ -580,7 +580,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 	}
 
 	int numProjectionData = 1;
-	int numVolumeData = 2; // need an extra for texture memory
+	int numVolumeData = 1; // need an extra for texture memory (not anymore)
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numRowsPerChunk = std::min(64, params.numRows);
@@ -727,7 +727,7 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 		return false;
 
 	int numProjectionData = 1;
-	int numVolumeData = 2; // need an extra for texture memory
+	int numVolumeData = 1; // need an extra for texture memory (not anymore)
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numRowsPerChunk = std::min(64, params.numRows);
@@ -988,14 +988,16 @@ float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int e
 
 		if (doFBP)
 		{
+			// projections are copied to the GPU for filtering, so cannot go directly from CPU memory to texture memory
 			float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + 2.0 * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
 			maxMemory = std::max(maxMemory, memoryNeeded);
 		}
 		else
 		{
-			float memoryNeeded_A = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
-			float memoryNeeded_B = 2.0 * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
-			float memoryNeeded = std::max(memoryNeeded_A, memoryNeeded_B);
+			float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			//float memoryNeeded_A = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			//float memoryNeeded_B = 2.0 * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			//float memoryNeeded = std::max(memoryNeeded_A, memoryNeeded_B);
 			maxMemory = std::max(maxMemory, memoryNeeded);
 		}
 	}
@@ -1024,9 +1026,10 @@ float tomographicModels::backproject_memoryRequired_splitViews(int numSlicesPerC
 		}
 		else
 		{
-			float memoryNeeded_A = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
-			float memoryNeeded_B = 2.0 * float(numViews) / float(params.numAngles) * params.projectionDataSize();
-			float memoryNeeded = std::max(memoryNeeded_A, memoryNeeded_B);
+			float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
+			//float memoryNeeded_A = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numViews) / float(params.numAngles) * params.projectionDataSize();
+			//float memoryNeeded_B = 2.0 * float(numViews) / float(params.numAngles) * params.projectionDataSize();
+			//float memoryNeeded = std::max(memoryNeeded_A, memoryNeeded_B);
 			maxMemory = std::max(maxMemory, memoryNeeded);
 		}
 	}
