@@ -30,6 +30,7 @@ parameters::parameters()
 	rowVectors = NULL;
 	colVectors = NULL;
 	phis = NULL;
+	phis_full = NULL;
 	mu = NULL;
 	initialize();
 }
@@ -102,6 +103,8 @@ void parameters::initialize()
 	extraMemoryReserved = 0.25;
 	phi_start = 0.0;
 	phi_end = 0.0;
+	numAngles_full = 0;
+	phi_full_ind_offset = 0;
 }
 
 float parameters::get_extraMemoryReserved()
@@ -126,6 +129,7 @@ parameters::parameters(const parameters& other)
     rowVectors = NULL;
     colVectors = NULL;
     phis = NULL;
+	phis_full = NULL;
 	initialize();
     assign(other);
 }
@@ -195,14 +199,30 @@ void parameters::assign(const parameters& other)
 
 	this->phi_start = other.phi_start;
 	this->phi_end = other.phi_end;
+	this->numAngles_full = other.numAngles_full;
+	this->phi_full_ind_offset = other.phi_full_ind_offset;
 
-    if (this->phis != NULL)
-        delete [] this->phis;
+	if (this->phis != NULL)
+	{
+		delete[] this->phis;
+		this->phis = NULL;
+	}
+	if (this->phis_full != NULL)
+	{
+		delete[] this->phis_full;
+		this->phis_full = NULL;
+	}
 	if (other.phis != NULL)
 	{
-		this->phis = new float[numAngles];
-		for (int i = 0; i < numAngles; i++)
+		this->phis = new float[other.numAngles];
+		for (int i = 0; i < other.numAngles; i++)
 			this->phis[i] = other.phis[i];
+	}
+	if (other.phis_full != NULL)
+	{
+		this->phis_full = new float[other.numAngles_full];
+		for (int i = 0; i < other.numAngles_full; i++)
+			this->phis_full[i] = other.phis_full[i];
 	}
     
 	if (other.sourcePositions != NULL)
@@ -217,7 +237,16 @@ float parameters::T_phi()
     if (numAngles <= 1 || phis == NULL)
         return float(2.0*PI);
 	else
-		return (phis[numAngles-1] - phis[0]) / float(numAngles-1);
+	{
+		float* phis_local = phis;
+		int numAngles_local = numAngles;
+		if (phis_full != NULL)
+		{
+			phis_local = phis_full;
+			numAngles_local = numAngles_full;
+		}
+		return (phis_local[numAngles_local - 1] - phis_local[0]) / float(numAngles_local - 1);
+	}
 }
 
 float parameters::min_T_phi()
@@ -226,9 +255,16 @@ float parameters::min_T_phi()
 		return float(2.0 * PI);
 	else
 	{
-		double retVal = fabs(phis[1] - phis[0]);
-		for (int i = 1; i < numAngles - 1; i++)
-			retVal = std::min(retVal, double(fabs(phis[i + 1] - phis[i])));
+		float* phis_local = phis;
+		int numAngles_local = numAngles;
+		if (phis_full != NULL)
+		{
+			phis_local = phis_full;
+			numAngles_local = numAngles_full;
+		}
+		double retVal = fabs(phis_local[1] - phis_local[0]);
+		for (int i = 1; i < numAngles_local - 1; i++)
+			retVal = std::min(retVal, double(fabs(phis_local[i + 1] - phis_local[i])));
 		return float(retVal);
 	}
 }
@@ -828,6 +864,11 @@ void parameters::clearAll()
 	if (phis != NULL)
 		delete[] phis;
 	phis = NULL;
+	if (phis_full != NULL)
+		delete[] phis_full;
+	phis_full = NULL;
+	numAngles_full = 0;
+	phi_full_ind_offset = 0;
 
 	clearModularBeamParameters();
 }
@@ -1307,6 +1348,14 @@ bool parameters::offsetScan_has_adequate_angular_range()
 		return false;
 	else
 		return true;
+}
+
+bool parameters::less_than_full_scan()
+{
+	if (angularRange < 360.0 - 0.5 * fabs(T_phi()) * 180.0 / PI)
+		return true;
+	else
+		return false;
 }
 
 bool parameters::set_offsetScan(bool aFlag)
@@ -2136,14 +2185,18 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 
 	int numAngles_new = lastProj - firstProj + 1;
 	float* phis_new = NULL;
+	float angularRange_save = angularRange;
 	if (phis != NULL)
 	{
-		float* phis_cur = new float[numAngles];
-		get_angles(phis_cur);
+		if (phis_full != NULL)
+			delete[] phis_full;
+		phis_full = new float[numAngles];
+		get_angles(phis_full);
 		phis_new = new float[numAngles_new];
 		for (int i = firstProj; i <= lastProj; i++)
-			phis_new[i - firstProj] = phis_cur[i];
-		delete[] phis_cur;
+			phis_new[i - firstProj] = phis_full[i];
+		numAngles_full = numAngles;
+		phi_full_ind_offset = firstProj;
 	}
 	if (geometry == MODULAR)
 	{
@@ -2178,9 +2231,43 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 		set_angles(phis_new, numAngles_new);
 		phi_start = phi_start_save;
 		phi_end = phi_end_save;
+		angularRange = angularRange_save;
 	}
 	numAngles = numAngles_new;
 	return true;
+}
+
+float parameters::get_phis_full(int i)
+{
+	if (phis_full != NULL)
+	{
+		i = max(0, min(i, numAngles_full));
+		return phis_full[i];
+	}
+	else if (phis != NULL)
+	{
+		i = max(0, min(i, numAngles));
+		return phis[i];
+	}
+	return 0.0;
+}
+
+int parameters::get_numAngles_full()
+{
+	return numAngles_full;
+}
+
+int parameters::get_phi_full_ind_offset()
+{
+	return phi_full_ind_offset;
+}
+
+bool parameters::is_partial_view_data()
+{
+	if (numAngles_full > numAngles && phis_full != NULL)
+		return true;
+	else
+		return false;
 }
 
 bool parameters::set_numTVneighbors(int N)

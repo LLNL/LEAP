@@ -87,6 +87,12 @@ public:
 	bool offsetScan_has_adequate_angular_range();
 
 	/**
+	 * \fn          less_than_full_scan
+	 * \return      returns true if angularRange < min(359.0, 360.0 - fabs(T_phi()) * 180.0 / PI), false otherwise
+	 */
+	bool less_than_full_scan();
+
+	/**
 	 * \fn          default_voxelWidth
 	 * \brief       calculates the default voxelWidth value
 	 * \return      returns the default voxelWidth value
@@ -587,6 +593,11 @@ public:
 	 */
 	void assign(const parameters& other);
 
+	float get_phis_full(int i);
+	int get_numAngles_full();
+	int get_phi_full_ind_offset();
+	bool is_partial_view_data();
+
 private:
 
 	/**
@@ -597,8 +608,14 @@ private:
 	bool clearModularBeamParameters();
 
 	float extraMemoryReserved;
+
+	// These parameters store the projection angle samples for the whole scan
+	// these are created by removeProjections
 	float phi_start;
 	float phi_end;
+	float* phis_full;
+	int numAngles_full;
+	int phi_full_ind_offset;
 };
 
 #endif

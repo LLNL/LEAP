@@ -21,16 +21,10 @@
  * parallel-, fan-, and cone-beam geometries.
  */
 
+bool backproject_VD(float*, float*&, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+bool backproject_VD_modular(float*, float*&, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+
 bool backproject_VD(float*, float*&, parameters*, bool data_on_cpu);
-
 bool backproject_VD_modular(float*, float*&, parameters*, bool data_on_cpu);
-
-bool backproject_VD_fan(float*, float*&, parameters*, bool data_on_cpu);
-
-bool backproject_VD_cone(float*, float*&, parameters*, bool data_on_cpu);
-
-bool backproject_VD_coneParallel(float*, float*&, parameters*, bool data_on_cpu);
-
-bool backproject_VD_parallel(float*, float*&, parameters*, bool data_on_cpu);
 
 #endif

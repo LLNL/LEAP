@@ -21,22 +21,11 @@
  * parallel-, fan-, and cone-beam geometries where the voxel sizes are close to the default values.
  */
 
+bool project_SF(float*&, float*, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+bool backproject_SF(float*, float*&, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+
 bool project_SF(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_SF(float*, float*&, parameters*, bool data_on_cpu);
 
-//bool project_SF_modular(float*&, float*, parameters*, bool data_on_cpu);
-//bool backproject_SF_modular(float*, float*&, parameters*, bool data_on_cpu);
-
-bool project_SF_fan(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_SF_fan(float*, float*&, parameters*, bool data_on_cpu);
-
-bool project_SF_cone(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_SF_cone(float*, float*&, parameters*, bool data_on_cpu);
-
-bool project_SF_coneParallel(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_SF_coneParallel(float*, float*&, parameters*, bool data_on_cpu);
-
-bool project_SF_parallel(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_SF_parallel(float*, float*&, parameters*, bool data_on_cpu);
 
 #endif

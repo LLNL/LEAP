@@ -691,7 +691,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
     return N_add;
 }
 
-float* zeroPadForOffsetScan(float* g, parameters* params)
+float* zeroPadForOffsetScan(float* g, parameters* params, float* g_out)
 {
     if (g == NULL || params == NULL)
         return NULL;
@@ -706,7 +706,11 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
     float* offsetScanWeights = setOffsetScanWeights(params);
     if (N_add > 0 && offsetScanWeights != NULL)
     {
-        float* g_pad = (float*)calloc(size_t(uint64(params->numAngles)* uint64(params->numRows)* uint64(params->numCols+N_add)), sizeof(float));
+        float* g_pad = NULL;
+        if (g_out == NULL)
+            g_pad = (float*)calloc(size_t(uint64(params->numAngles) * uint64(params->numRows) * uint64(params->numCols + N_add)), sizeof(float));
+        else
+            g_pad = g_out;
         if (padOnLeft)
         {
             // zero pad on the left
@@ -722,6 +726,11 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
                     float* aLine_pad = &aProj_pad[j * (params->numCols+N_add)];
                     for (int k = 0; k < params->numCols; k++)
                         aLine_pad[k + N_add] = aLine[k] * 2.0 * offsetScanWeights[i * params->numCols + k];
+                    if (g_out != NULL)
+                    {
+                        for (int k = 0; k < N_add; k++)
+                            aLine_pad[k] = 0.0;
+                    }
                 }
             }
             params->centerCol += N_add;
@@ -740,7 +749,12 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
                     float* aLine = &aProj[j * params->numCols];
                     float* aLine_pad = &aProj_pad[j * (params->numCols + N_add)];
                     for (int k = 0; k < params->numCols; k++)
-                        aLine_pad[k] = aLine[k] * 2.0 * offsetScanWeights[i * params->numCols + k];
+                        aLine_pad[k] = aLine[k] *2.0 * offsetScanWeights[i * params->numCols + k];
+                    if (g_out != NULL)
+                    {
+                        for (int k = 0; k < N_add; k++)
+                            aLine_pad[params->numCols+k] = 0.0;
+                    }
                 }
             }
         }

@@ -234,7 +234,7 @@ bool tomographicModels::filterProjections_cpu(float* g)
 {
 	int whichGPU_save = params.whichGPU;
 	params.whichGPU = -1;
-	bool retVal = filterProjections(g, true);
+	bool retVal = filterProjections(g, g, true);
 	params.whichGPU = whichGPU_save;
 	return retVal;
 }
@@ -245,7 +245,7 @@ bool tomographicModels::filterProjections_gpu(float* g)
 	int whichGPU_save = params.whichGPU;
 	if (params.whichGPU < 0)
 		params.whichGPU = 0;
-	bool retVal = filterProjections(g, false);
+	bool retVal = filterProjections(g, g, false);
 	params.whichGPU = whichGPU_save;
 	return retVal;
 #else
@@ -397,9 +397,116 @@ bool tomographicModels::rampFilterProjections(float* g, bool data_on_cpu, float 
 	return FBP.rampFilterProjections(g, &params, data_on_cpu, scalar);
 }
 
-bool tomographicModels::filterProjections(float* g, bool data_on_cpu)
+bool tomographicModels::filterProjections_multiGPU(float* g, float* g_out)
 {
-	return FBP.filterProjections(g, &params, data_on_cpu);
+#ifndef __USE_CPU
+	//return false;
+	if (params.whichGPU < 0)
+		return false;
+	if (params.muSpecified() || params.isSymmetric())
+		return false;
+	if (params.geometry == parameters::MODULAR && params.modularbeamIsAxiallyAligned() == false)
+		return false;
+	//if (params.offsetScan)
+	//	return false; // FIXME
+	int extraCols = zeroPadForOffsetScan_numberOfColsToAdd(&params);
+
+	// First divide numAngles across all GPUs
+	int numViewsPerChunk = std::max(1, int(ceil(float(params.numAngles) / std::max(1.0, double(params.whichGPUs.size())))));
+	//if (numViewsPerChunk == params.numAngles)
+	//	numViewsPerChunk = params.numAngles / 2; // FIXME: this is only temporary!!!
+
+	// Now divide numAngles further to fit on the GPUs
+	// reserve some extra memory for filtering (FFT)
+	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
+	float memNeeded = (1.0+2.0/40.0)*params.projectionDataSize()*float(params.numCols + extraCols)/float(params.numCols);
+	if (memNeeded >= memAvailable)
+	{
+		// memNeeded*N/params.numAngles = memAvailable
+		numViewsPerChunk = std::min(numViewsPerChunk, int(floor(memAvailable * float(params.numAngles) / memNeeded)));
+	}
+	if (numViewsPerChunk < 2)
+		return false; // not enough GPU memory for even two projections, ouch!
+
+	if (numViewsPerChunk == params.numAngles)
+		return false; // chunking not necessary, just run usual single-gpu routine
+
+	// Now calculate the number of chunks necessary
+	int numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
+
+	// Have to divide data into numChunks, so make the chunks equal
+	numViewsPerChunk = int(ceil(float(params.numAngles) / float(numChunks)));
+
+	int numCols = params.numCols;
+	float centerCol = params.centerCol;
+	float colShiftFromFilter = params.colShiftFromFilter;
+	float rowShiftFromFilter = params.rowShiftFromFilter;
+
+	// FIXME: need to copy over some of the changes to params that filter makes
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	#pragma omp parallel for schedule(dynamic)
+	for (int ichunk = 0; ichunk < numChunks; ichunk++)
+	{
+		int firstView = ichunk * numViewsPerChunk;
+		int lastView = std::min(firstView + numViewsPerChunk - 1, params.numAngles - 1);
+		int numViews = lastView - firstView + 1;
+
+		// make a pointer to the start of the view to process
+		float* g_chunk = &g[uint64(firstView) * uint64(params.numRows * params.numCols)];
+		float* g_out_chunk = &g_out[uint64(firstView) * uint64(params.numRows * (params.numCols+ extraCols))];
+
+		// make a copy of the params
+		parameters chunk_params;
+		chunk_params = params;
+		chunk_params.removeProjections(firstView, lastView);
+
+		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+		chunk_params.whichGPUs.clear();
+
+		//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
+		//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
+
+		LOG(logDEBUG, className, "") << "filtering on GPU " << chunk_params.whichGPU << ": views = (" << firstView << ", " << lastView << ")" << std::endl;
+
+		// Do Computation
+		FBP.filterProjections(g_chunk, g_out_chunk, &chunk_params, true);
+
+		if (ichunk == 0)
+		{
+			numCols = chunk_params.numCols;
+			centerCol = chunk_params.centerCol;
+			colShiftFromFilter = chunk_params.colShiftFromFilter;
+			rowShiftFromFilter = chunk_params.rowShiftFromFilter;
+		}
+	}
+
+	params.numCols = numCols;
+	params.centerCol = centerCol;
+	params.colShiftFromFilter = colShiftFromFilter;
+	params.rowShiftFromFilter = rowShiftFromFilter;
+
+	return true;
+#else
+	return false;
+#endif
+}
+
+bool tomographicModels::filterProjections(float* g, float* g_out, bool data_on_cpu)
+{
+	if (data_on_cpu == true && filterProjections_multiGPU(g, g_out) == true)
+		return true;
+	else
+		return FBP.filterProjections(g, g_out, &params, data_on_cpu);
+}
+
+bool tomographicModels::preRampFiltering(float* g, bool data_on_cpu)
+{
+	return FBP.preRampFiltering(g, &params, data_on_cpu);
+}
+
+bool tomographicModels::postRampFiltering(float* g, bool data_on_cpu)
+{
+	return FBP.postRampFiltering(g, &params, data_on_cpu);
 }
 
 bool tomographicModels::rampFilterVolume(float* f, bool data_on_cpu)
@@ -836,8 +943,10 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		LOG(logDEBUG, className, "") << "Extra columns needed for offset scan reconstruction: " << extraCols << std::endl;
 	}
 
-	int numProjectionData = 2; // need an extra for texture memory
+	int numProjectionData = 1;
 	int numVolumeData = 1;
+	if (doFBP)
+		numProjectionData = 2; // need an extra for texture memory
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numSlicesPerChunk = std::min(64, params.numZ);
@@ -969,6 +1078,11 @@ int tomographicModels::numRowsRequiredForBackprojectingSlab(int numSlicesPerChun
 		maxRows = std::max(maxRows, numRows);
 	}
 	return maxRows;
+}
+
+int tomographicModels::extraColumnsForOffsetScan()
+{
+	return zeroPadForOffsetScan_numberOfColsToAdd(&params);
 }
 
 float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols, bool doFBP)

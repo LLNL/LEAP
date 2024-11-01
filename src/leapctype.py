@@ -410,6 +410,19 @@ class tomographicModels:
         self.libprojectors.getOptimalFFTsize.restype = ctypes.c_int
         return self.libprojectors.getOptimalFFTsize(N)
 
+    def extraColumnsForOffsetScan(self):
+        """Get the number of extra columns that need to be padded in order to do an offset scan FBP reconstruction
+        
+        We don't recommend users to use this function.  It is just a utility function for the filterProjections function.
+        
+        """
+        if self.get_offsetScan() == False:
+            return 0
+        else:
+            self.set_model()
+            self.libprojectors.extraColumnsForOffsetScan.restype = ctypes.c_int
+            return self.libprojectors.extraColumnsForOffsetScan()
+
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS SET THE CT SCANNER GEOMETRY PARAMETERS
@@ -1578,7 +1591,7 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS PROVIDE CONVENIENT ROUTINES TO MAKE THE PROJECTION DATA AND VOLUME DATA NUMPY ARRAYS
     ###################################################################################################################
     ###################################################################################################################
-    def allocate_projections(self, val=0.0, astensor=False):
+    def allocate_projections(self, val=0.0, astensor=False, forOffsetScanFilteringStep=False):
         """Allocates projection data
         
         It is not necessary to use this function. It is included simply for convenience.
@@ -1590,9 +1603,9 @@ class tomographicModels:
         Returns:
             numpy array/ pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
         """
-        return self.allocateProjections(val, astensor)
+        return self.allocateProjections(val, astensor, forOffsetScanFilteringStep)
     
-    def allocateProjections(self, val=0.0, astensor=False):
+    def allocateProjections(self, val=0.0, astensor=False, forOffsetScanFilteringStep=False):
         """Allocates projection data
         
         It is not necessary to use this function. It is included simply for convenience.
@@ -1607,6 +1620,8 @@ class tomographicModels:
         N_phis = self.get_numAngles()
         N_rows = self.get_numRows()
         N_cols = self.get_numCols()
+        if forOffsetScanFilteringStep:
+            N_cols += self.extraColumnsForOffsetScan()
         if N_phis > 0 and N_rows > 0 and N_cols > 0:
             if val == 0.0:
                 g = np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
@@ -1618,7 +1633,7 @@ class tomographicModels:
         else:
             return None
             
-    def allocateProjections_gpu(self, val=0.0):
+    def allocateProjections_gpu(self, val=0.0, forOffsetScanFilteringStep=False):
         """Allocates projection data as a pytorch tensor on the gpu
         
         It is not necessary to use this function. It is included simply for convenience.
@@ -1635,6 +1650,8 @@ class tomographicModels:
         N_phis = self.get_numAngles()
         N_rows = self.get_numRows()
         N_cols = self.get_numCols()
+        if forOffsetScanFilteringStep:
+            N_cols += self.extraColumnsForOffsetScan()
         if N_phis > 0 and N_rows > 0 and N_cols > 0:
             if val == 0.0:
                 g = np.ascontiguousarray(np.zeros((N_phis,N_rows,N_cols),dtype=np.float32), dtype=np.float32)
@@ -2021,7 +2038,7 @@ class tomographicModels:
             print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
         
-    def filterProjections(self, g):
+    def filterProjections(self, g, g_out=None):
         r"""Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction.
         
         More specifically, the same results as the FBP function can be achieved by running the following functions
@@ -2040,15 +2057,28 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
+        
+        if g_out is None:
+            if self.extraColumnsForOffsetScan() > 0:
+                if has_torch == True and type(g) is torch.Tensor:
+                    if g.is_cuda:
+                        g_out = self.allocateProjections_gpu(forOffsetScanFilteringStep=True)
+                    else:
+                        g_out = self.allocate_projections(astensor=True, forOffsetScanFilteringStep=True)
+                else:
+                    g_out = self.allocate_projections(forOffsetScanFilteringStep=True)
+            else:
+                g_out = g
+        
         self.libprojectors.filterProjections.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.filterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.filterProjections(g.data_ptr(), g.is_cuda == False)
+            self.libprojectors.filterProjections.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.filterProjections(g.data_ptr(), g_out.data_ptr(), g.is_cuda == False)
         else:
-            self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.filterProjections(g, True)
-        return g
+            self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.filterProjections(g, g_out, True)
+        return g_out
         
     def filterProjections_cpu(self, g):
         self.libprojectors.filterProjections_cpu.restype = ctypes.c_bool
@@ -2073,9 +2103,17 @@ class tomographicModels:
         else:
             print('Error: filterProjections_gpu requires the input be a torch tensor on a gpu')
         return g
+
+    def preRampFiltering(self, g):
+        r"""Applying pre-ramp filter weighting to the projection data, g, for FBP reconstruction
         
-    def rampFilterProjections(self, g):
-        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function.
+        More specifically, the same results as the FBP function can be achieved by running the following functions
+        
+        .. line-block::
+           preRampFiltering(g)
+           rampFilterProjections(g, get_FBPscalar())
+           postRampFiltering(g)
+           weightedBackproject(g,f)
         
         The CT geometry parameters must be set prior to running this function.
         This function take the argument g and returns the same g.
@@ -2087,14 +2125,69 @@ class tomographicModels:
         Returns:
             g, the same as the input with the same name
         """
+        self.libprojectors.preRampFiltering.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.preRampFiltering.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.preRampFiltering(g.data_ptr(), g.is_cuda == False)
+        else:
+            self.libprojectors.preRampFiltering.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.preRampFiltering(g, True)
+        return g
+
+    def postRampFiltering(self, g):
+        r"""Applying post-ramp filter weighting to the projection data, g, for FBP reconstruction
+        
+        More specifically, the same results as the FBP function can be achieved by running the following functions
+        
+        .. line-block::
+           preRampFiltering(g)
+           rampFilterProjections(g, get_FBPscalar())
+           postRampFiltering(g)
+           weightedBackproject(g,f)
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            
+        Returns:
+            g, the same as the input with the same name
+        """
+        self.libprojectors.postRampFiltering.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.postRampFiltering.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.postRampFiltering(g.data_ptr(), g.is_cuda == False)
+        else:
+            self.libprojectors.postRampFiltering.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.postRampFiltering(g, True)
+        return g
+        
+    def rampFilterProjections(self, g, scalar=1.0):
+        """Applies the ramp filter to the projection data, g, which is a subset of the operations in the filterProjections function.
+        
+        The CT geometry parameters must be set prior to running this function.
+        This function take the argument g and returns the same g.
+        Returning g is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            scalar: optional scalar to be applied (defaults to 1.0)
+            
+        Returns:
+            g, the same as the input with the same name
+        """
         self.libprojectors.rampFilterProjections.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.rampFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.rampFilterProjections(g.data_ptr(), g.is_cuda == False, 1.0)
+            self.libprojectors.rampFilterProjections(g.data_ptr(), g.is_cuda == False, scalar)
         else:
             self.libprojectors.rampFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.rampFilterProjections(g, True, 1.0)
+            self.libprojectors.rampFilterProjections(g, True, scalar)
         return g
         
     def HilbertFilterProjections(self, g):
@@ -2423,13 +2516,19 @@ class tomographicModels:
                 f = f.to(g.get_device())
             self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
             self.set_model()
-            self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
+            isSuccessful = self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
+            if isSuccessful == False:
+                self.filterProjections(q)
+                self.weightedBackproject(q,f)
         else:
             if f is None:
                 f = self.allocateVolume()
             self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.set_model()
-            self.libprojectors.FBP(q, f, True)
+            isSuccessful = self.libprojectors.FBP(q, f, True)
+            if isSuccessful == False:
+                self.filterProjections(q)
+                self.weightedBackproject(q,f)
         if delete_q:
             del q
         return f
@@ -5334,7 +5433,10 @@ class tomographicModels:
         self.libprojectors.set_GPU.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_GPU(which)
-        
+
+    def set_all_gpus(self):
+        return self.set_gpus(list(range(self.number_of_gpus())))
+
     def set_gpus(self, listOfGPUs):
         """Set which GPUs to use when doing multi-GPU calculations"""
         return self.set_GPUs(listOfGPUs)

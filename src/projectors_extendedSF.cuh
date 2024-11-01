@@ -22,19 +22,11 @@
  * parallel-, fan-, and cone-beam geometries where the voxel sizes are significantly larger or smaller than the default values.
  */
 
+bool project_eSF(float*&, float*, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+bool backproject_eSF(float*, float*&, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+
 bool project_eSF(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_eSF(float*, float*&, parameters*, bool data_on_cpu);
 
-bool project_eSF_fan(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_eSF_fan(float*, float*&, parameters*, bool data_on_cpu);
-
-bool project_eSF_cone(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_eSF_cone(float*, float*&, parameters*, bool data_on_cpu);
-
-bool project_eSF_coneparallel(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_eSF_coneparallel(float*, float*&, parameters*, bool data_on_cpu);
-
-bool project_eSF_parallel(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_eSF_parallel(float*, float*&, parameters*, bool data_on_cpu);
 
 #endif

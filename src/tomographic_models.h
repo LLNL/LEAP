@@ -211,11 +211,12 @@ public:
 	/**
 	 * \fn          filterProjections
 	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
-	 * \param[in]   g pointer to the projection data (input and output)
-	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
+	 * \param[in]   g pointer to the input projection data
+	 * \param[in]	g_out pointer to the output projection data
+	 * \param[in]   data_on_cpu true if data (g and g_out) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool filterProjections(float* g, bool data_on_cpu);
+	bool filterProjections(float* g, float* g_out, bool data_on_cpu);
 
 	/**
 	 * \fn          filterProjections_cpu
@@ -232,6 +233,24 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool filterProjections_gpu(float* g);
+
+	/**
+	 * \fn          preRampFiltering
+	 * \brief       Applies all pre ramp filter weighting
+	 * \param[in]   g pointer to the projection data (input and output)
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool preRampFiltering(float* g, bool data_on_cpu);
+
+	/**
+	 * \fn          postRampFiltering
+	 * \brief       Applies all post ramp filter weighting
+	 * \param[in]   g pointer to the projection data (input and output)
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool postRampFiltering(float* g, bool data_on_cpu);
 
 	/**
 	 * \fn          rampFilterVolume
@@ -1143,10 +1162,20 @@ public:
 	 * \return      number of slices required
 	 */
 	int numRowsRequiredForBackprojectingSlab(int numSlicesPerChunk);
+	int extraColumnsForOffsetScan();
 
 	parameters params;
 	phantom geometricPhantom;
 private:
+
+	/**
+	 * \fn          filterProjections_multiGPU
+	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
+	 * \param[in]   g pointer to the projection data (on CPU)
+	 * \param[in]	g_out pointer to the output projection data (can be the same as the input)
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool filterProjections_multiGPU(float* g, float* g_out);
 
 	/**
 	 * \fn          project_multiGPU

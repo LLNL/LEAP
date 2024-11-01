@@ -15,6 +15,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <algorithm>
+#include <omp.h>
 #include "log.h"
 
 using namespace std;
@@ -113,7 +114,8 @@ float* setParkerWeights(parameters* params)
 		//plus_or_minus = 1.0;
 		for (int i = 0; i < params->numAngles; i++)
 		{
-			beta = fabs(params->phis[i] - params->phis[0]);
+			//beta = fabs(params->phis[i] - params->phis[0]);
+			beta = fabs(params->get_phis_full(i+params->get_phi_full_ind_offset()) - params->get_phis_full(0));
 			for (int j = 0; j < params->numCols; j++)
 			{
 				if (params->detectorType == parameters::FLAT)
@@ -303,17 +305,24 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 	for (int i = 0; i < params->numAngles; i++)
 	{
 		float theWeight = 1.0;
-		if (i == 0)
+		if (params->is_partial_view_data())
 		{
-			theWeight = fabs(params->phis[1] - params->phis[0]) / T_phi;
-		}
-		else if (i == params->numAngles - 1)
-		{
-			theWeight = fabs(params->phis[params->numAngles - 1] - params->phis[params->numAngles - 2]) / T_phi;
+			int i_offs = i + params->get_phi_full_ind_offset();
+			if (i_offs == 0)
+				theWeight = fabs(params->get_phis_full(1) - params->get_phis_full(0)) / T_phi;
+			else if (i_offs == params->get_numAngles_full() - 1)
+				theWeight = fabs(params->get_phis_full(params->get_numAngles_full() - 1) - params->get_phis_full(params->get_numAngles_full() - 2)) / T_phi;
+			else
+				theWeight = 0.5 * (fabs(params->get_phis_full(i_offs + 1) - params->get_phis_full(i_offs)) + fabs(params->get_phis_full(i_offs) - params->get_phis_full(i_offs - 1))) / T_phi;
 		}
 		else
 		{
-			theWeight = 0.5 * (fabs(params->phis[i + 1] - params->phis[i]) + fabs(params->phis[i] - params->phis[i - 1])) / T_phi;
+			if (i == 0)
+				theWeight = fabs(params->phis[1] - params->phis[0]) / T_phi;
+			else if (i == params->numAngles - 1)
+				theWeight = fabs(params->phis[params->numAngles - 1] - params->phis[params->numAngles - 2]) / T_phi;
+			else
+				theWeight = 0.5 * (fabs(params->phis[i + 1] - params->phis[i]) + fabs(params->phis[i] - params->phis[i - 1])) / T_phi;
 		}
 		for (int j = 0; j < params->numCols; j++)
 			retVal[i * params->numCols + j] *= theWeight;
@@ -323,23 +332,41 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 	if (params->angularRange >= 359.9999 && params->helicalPitch == 0.0)
 	{
 		float c = 0.5;
-		//float c = 1.0;
-		//if (params->geometry == parameters::FAN || params->geometry == parameters::CONE)
-		//	c = 0.5;
 		float T = fabs(params->T_phi());
-		for (int i = 0; i < params->numAngles; i++)
+		if (params->is_partial_view_data())
 		{
-			float viewWeight = 0.0;
-			for (int j = 0; j < params->numAngles; j++)
+			for (int i = 0; i < params->numAngles; i++)
 			{
-				double viewOffset = atan2(sin(double(j - i) * T), cos(double(j - i) * T)); // signed angular distance
-				if (fabs(viewOffset) < T)
-					viewWeight += min(0.5, viewOffset / T + 0.5) - max(-0.5, viewOffset / T - 0.5);
+				int i_offs = i + params->get_phi_full_ind_offset();
+				float viewWeight = 0.0;
+				for (int j = 0; j < params->get_numAngles_full(); j++)
+				{
+					double viewOffset = atan2(sin(double(j - i_offs) * T), cos(double(j - i_offs) * T)); // signed angular distance
+					if (fabs(viewOffset) < T)
+						viewWeight += min(0.5, viewOffset / T + 0.5) - max(-0.5, viewOffset / T - 0.5);
+				}
+				//printf("%f\n", viewWeight);
+				viewWeight = 1.0 / viewWeight;
+				for (int j = 0; j < params->numCols; j++)
+					retVal[i * params->numCols + j] *= c * viewWeight;
 			}
-			//printf("%f\n", viewWeight);
-			viewWeight = 1.0 / viewWeight;
-			for (int j = 0; j < params->numCols; j++)
-				retVal[i * params->numCols + j] *= c * viewWeight;
+		}
+		else
+		{
+			for (int i = 0; i < params->numAngles; i++)
+			{
+				float viewWeight = 0.0;
+				for (int j = 0; j < params->numAngles; j++)
+				{
+					double viewOffset = atan2(sin(double(j - i) * T), cos(double(j - i) * T)); // signed angular distance
+					if (fabs(viewOffset) < T)
+						viewWeight += min(0.5, viewOffset / T + 0.5) - max(-0.5, viewOffset / T - 0.5);
+				}
+				//printf("%f\n", viewWeight);
+				viewWeight = 1.0 / viewWeight;
+				for (int j = 0; j < params->numCols; j++)
+					retVal[i * params->numCols + j] *= c * viewWeight;
+			}
 		}
 	}
 	return retVal;
@@ -444,6 +471,8 @@ bool applyPreRampFilterWeights_CPU(float* g, parameters* params)
 	if (w == NULL && w_view == NULL)
 		return true;
 
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
 	for (int iphi = 0; iphi < params->numAngles; iphi++)
 	{
 		for (int iv = 0; iv < params->numRows; iv++)
@@ -473,6 +502,8 @@ bool applyPostRampFilterWeights_CPU(float* g, parameters* params)
 		return true;
 	else
 	{
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
 		for (int iphi = 0; iphi < params->numAngles; iphi++)
 		{
 			for (int iv = 0; iv < params->numRows; iv++)
@@ -496,6 +527,9 @@ bool convertARTtoERT_CPU(float* g, parameters* params, bool doInverse)
 	float muCoeff = params->muCoeff;
 	if (doInverse)
 		muCoeff *= -1.0;
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
 	for (int iphi = 0; iphi < params->numAngles; iphi++)
 	{
 		for (int iv = 0; iv < params->numRows; iv++)

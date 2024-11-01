@@ -20,7 +20,7 @@
 #include "ray_weighting_cpu.h"
 
 //*
-__global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOVsq)
+__global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOVsq, const bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -126,7 +126,10 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
                         + tex3D<float>(f, float(ix + 1) + 0.5f, float(j) + 0.5f, float(iz + 1) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf((r.y*r.y + r.x*r.x)*(r.y*r.y + r.z*r.z)) * fabs(r_y_inv*r_y_inv) * g_output;
+        if (accum)
+            g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] += T_f.x * sqrtf((r.y*r.y + r.x*r.x)*(r.y*r.y + r.z*r.z)) * fabs(r_y_inv*r_y_inv) * g_output;
+        else
+            g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf((r.y*r.y + r.x*r.x)*(r.y*r.y + r.z*r.z)) * fabs(r_y_inv*r_y_inv) * g_output;
     }
     else
     {
@@ -189,7 +192,10 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
                         + tex3D<float>(f, float(i) + 0.5f, float(iy + 1) + 0.5f, float(iz + 1) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
-        g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf((r.x*r.x + r.y*r.y)*(r.x*r.x + r.z*r.z)) * fabs(r_x_inv*r_x_inv) * g_output;
+        if (accum)
+            g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] += T_f.x * sqrtf((r.x*r.x + r.y*r.y)*(r.x*r.x + r.z*r.z)) * fabs(r_x_inv*r_x_inv) * g_output;
+        else
+            g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * sqrtf((r.x*r.x + r.y*r.y)*(r.x*r.x + r.z*r.z)) * fabs(r_x_inv*r_x_inv) * g_output;
     }
 }
 //*/
@@ -410,7 +416,7 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
 //*/
 
 //*
-__global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
+__global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, const bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -467,7 +473,9 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
             const float u_arg_A = t_A * ((x - sourcePosition[0]) * u_vec[0] + (y - half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
             const float u_arg_B = t_B * ((x - sourcePosition[0]) * u_vec[0] + (y + half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
 
-            const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
+            //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
+            const float l_phi = sqrtf(((x - sourcePosition[0]) * (x - sourcePosition[0]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) *((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((x - sourcePosition[0])* (x - sourcePosition[0]));
+            //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) / fabs(x - sourcePosition[0]);
 
             // Weights for u
             const float tau_low = (min(u_arg_A, u_arg_B) - startVals_g.z) * Tu_inv;
@@ -481,6 +489,10 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
             const float u_ind_last = u_ind_first + 2.5f;
             u_ind_first = u_ind_first + 0.5f + max(0.0f, min(tau_high - u_ind_first - 0.5f, 1.0f)) * l_phi / horizontalWeights_0_A;
 
+            //const float v_val = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
+            //const float vWeight = sqrtf(1.0f + v_val*v_val);
+
+            //const float v_phi_x = (v_val - startVals_g.y) * Tv_inv;
             const float v_phi_x = (t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v - startVals_g.y) * Tv_inv;
             const float v_phi_x_step_A = t_C * (T_f.z * v_vec[2]) * Tv_inv;
 
@@ -515,7 +527,8 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
             const float u_arg_A = t_A * ((x - half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
             const float u_arg_B = t_B * ((x + half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
 
-            const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
+            //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
+            const float l_phi = sqrtf(((y - sourcePosition[1]) * (y - sourcePosition[1]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((y - sourcePosition[1]) * (y - sourcePosition[1]));
 
             // Weights for u
             const float tau_low = (min(u_arg_A, u_arg_B) - startVals_g.z) * Tu_inv;
@@ -529,6 +542,10 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
             const float u_ind_last = u_ind_first + 2.5f;
             u_ind_first = u_ind_first + 0.5f + max(0.0f, min(tau_high - u_ind_first - 0.5f, 1.0f)) * l_phi / horizontalWeights_0_A;
 
+            //const float v_val = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
+            //const float vWeight = sqrtf(1.0f + v_val*v_val);
+
+            //const float v_phi_x = (v_val - startVals_g.y) * Tv_inv;
             const float v_phi_x = (t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v - startVals_g.y) * Tv_inv;
             const float v_phi_x_step_A = t_C * (T_f.z * v_vec[2]) * Tv_inv;
 
@@ -554,7 +571,10 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
             }
         }
     }
-    f[ind] = val * T_f.x;
+    if (accum)
+        f[ind] += val * T_f.x;
+    else
+        f[ind] = val * T_f.x;
 }
 //*/
 
@@ -681,7 +701,7 @@ __global__ void modularBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_
 }
 //*/
 
-__global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
+__global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, const bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -736,6 +756,8 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
         //const int iv_c = int(0.5f+(v_c - startVals_g.y) * Tv_inv);
         const int div = max(1, int(ceil(half_T_z*v_vec[2]*t_C * Tv_inv)));
 
+        //const float coneWeight = sqrtf(1.0f + v_c*v_c);
+
         const float v_A = (v_c - half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
         const float v_B = (v_c + half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
         const int iv_min = int(ceil(v_A - 0.5f));
@@ -758,7 +780,8 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
             const int iu_min = int(ceil(u_min-0.5f));
             const int iu_max = int(floor(u_max+0.5f));
 
-            const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
+            //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
+            const float l_phi = sqrtf(((x - sourcePosition[0]) * (x - sourcePosition[0]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((x - sourcePosition[0]) * (x - sourcePosition[0]));
 
             /*
             for (int iu = iu_min; iu <= iu_max; iu++)
@@ -818,7 +841,8 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
             const int iu_min = int(ceil(u_min - 0.5f));
             const int iu_max = int(floor(u_max + 0.5f));
 
-            const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
+            //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
+            const float l_phi = sqrtf(((y - sourcePosition[1]) * (y - sourcePosition[1]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((y - sourcePosition[1]) * (y - sourcePosition[1]));
 
             /*
             for (int iu = iu_min; iu <= iu_max; iu++)
@@ -864,7 +888,10 @@ __global__ void modularBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N
 
         }
     }
-    f[ind] = val * T_f.x;
+    if (accum)
+        f[ind] += val * T_f.x;
+    else
+        f[ind] = val * T_f.x;
 }
 
 __device__ float lineIntegral_Joseph_ZYX(cudaTextureObject_t mu, const int4 N, const float4 T, const float4 startVal, const float3 p, const float3 dst)
@@ -1141,7 +1168,7 @@ __device__ float lineIntegral_Joseph_XYZ(cudaTextureObject_t mu, const int4 N, c
     }
 }
 
-__global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
+__global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, const bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1290,10 +1317,13 @@ __global__ void modularBeamParallelJosephBackprojectorKernel(cudaTextureObject_t
             val += val_local * footprintSize_u * footprintSize_v / sum_weights;
 
     }
-    f[ind] = val * T_f.x;
+    if (accum)
+        f[ind] += val * T_f.x;
+    else
+        f[ind] = val * T_f.x;
 }
 
-__global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
+__global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, const bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1563,11 +1593,14 @@ __global__ void modularBeamJosephBackprojectorKernel(cudaTextureObject_t g, int4
         }
         //*/
     }
-    f[ind] = val * T_f.x;
+    if (accum)
+        f[ind] += val * T_f.x;
+    else
+        f[ind] = val * T_f.x;
 }
 
 //#####################################################################################################################
-__global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq)
+__global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, const bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1684,11 +1717,14 @@ __global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, 
         }
         
     }
-    f[ind] = val * T_f.x;
+    if (accum)
+        f[ind] += val * T_f.x;
+    else
+        f[ind] = val * T_f.x;
 }
 //#####################################################################################################################
 
-__global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder)
+__global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1734,29 +1770,33 @@ __global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g,
     }
     const float3 edgePos = make_float3(float(double(sourcePos.x) + t * r.x), float(double(sourcePos.y) + t * r.y), float(double(sourcePos.z) + t * r.z));
 
-    if (volumeDimensionOrder == 0)
-        g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_XYZ(f, N_f, T_f, startVals_f, edgePos, dst);
+    if (accum)
+    {
+        if (volumeDimensionOrder == 0)
+            g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] += lineIntegral_Joseph_XYZ(f, N_f, T_f, startVals_f, edgePos, dst);
+        else
+            g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] += lineIntegral_Joseph_ZYX(f, N_f, T_f, startVals_f, edgePos, dst);
+    }
     else
-        g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_ZYX(f, N_f, T_f, startVals_f, edgePos, dst);
-}
-
-bool project_Joseph(float*& g, float* f, parameters* params, bool data_on_cpu)
-{
-    if (params->geometry == parameters::MODULAR)
-        return project_Joseph_modular(g, f, params, data_on_cpu);
-    else
-        return false;
-}
-
-bool backproject_Joseph(float* g, float*& f, parameters* params, bool data_on_cpu)
-{
-    if (params->geometry == parameters::MODULAR)
-        return backproject_Joseph_modular(g, f, params, data_on_cpu);
-    else
-        return false;
+    {
+        if (volumeDimensionOrder == 0)
+            g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_XYZ(f, N_f, T_f, startVals_f, edgePos, dst);
+        else
+            g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_ZYX(f, N_f, T_f, startVals_f, edgePos, dst);
+    }
 }
 
 bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_on_cpu)
+{
+    return project_Joseph_modular(g, f, params, data_on_cpu, data_on_cpu);
+}
+
+bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool data_on_cpu)
+{
+    return backproject_Joseph_modular(g, f, params, data_on_cpu, data_on_cpu);
+}
+
+bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accum)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -1818,7 +1858,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
     d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
     //*/
     //*
-    if (data_on_cpu)
+    if (volume_on_cpu)
         d_data_array = loadTexture_from_cpu(d_data_txt, f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
     else
         d_data_array = loadTexture(d_data_txt, f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
@@ -1842,13 +1882,13 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
         //printf("v = %f, %f, %f\n", params->rowVectors[0], params->rowVectors[1], params->rowVectors[2]);
 
         float rFOV_sq = params->rFOV() * params->rFOV();
-        modularBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+        modularBeamProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq, accum);
         //applyViewDependentPolarWeights_gpu(dev_g, params, NULL, true, false);
         //applyViewDependentPolarWeights_gpu(dev_g, params, NULL, false, false); // was this
     }
     else
     {
-        modularBeamJosephProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder);
+        modularBeamJosephProjectorKernel <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, accum);
     }
 
     // pull result off GPU
@@ -1877,6 +1917,9 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
     {
         if (dev_g != 0)
             cudaFree(dev_g);
+    }
+    if (volume_on_cpu)
+    {
         if (dev_f != 0)
             cudaFree(dev_f);
     }
@@ -1884,7 +1927,7 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
     return true;
 }
 
-bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool data_on_cpu)
+bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accum)
 {
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
@@ -1926,11 +1969,6 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, false);
 
-    if (data_on_cpu)
-        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
-    else
-        dev_g = g;
-
     double alpha = max(atan(0.5 * (params->numCols - 1) * params->pixelWidth / params->sdd), atan(0.5 * (params->numRows - 1) * params->pixelHeight / params->sdd));
     double rFOV = max(params->furthestFromCenter(), max(fabs(params->z_0()), fabs(params->z_samples(params->numZ - 1))));
     double maxDivergence = tan(alpha) * (params->sdd + rFOV) - tan(alpha) * (params->sdd - rFOV);
@@ -1950,29 +1988,39 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     if (isParallel)
         modularbeamIsAxiallyAligned = false;
     if (modularbeamIsAxiallyAligned == true)
+        doLinearInterpolation = true;
+
+    cudaTextureObject_t d_data_txt = NULL;
+    cudaArray* d_data_array = NULL;
+
+    /*
+    if (data_on_cpu)
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+    else
+        dev_g = g;
+    if (modularbeamIsAxiallyAligned == true)
     {
-        if (params->voxelSizeWorksForFastSF() == true)
-        {
-            doLinearInterpolation = true;
-        }
-        else
-        {
-            //doLinearInterpolation = false;
-            doLinearInterpolation = true;
-        }
         w_polar = setViewDependentPolarWeights(params);
         //applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, true, false);
         applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, false, false);
     }
-
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
+    d_data_array = loadTexture(d_data_txt, dev_g, N_g, params->doExtrapolation, doLinearInterpolation);
 
     if (data_on_cpu)
     {
         if (dev_g != 0)
             cudaFree(dev_g);
         dev_g = 0;
+    }
+    //*/
+
+    if (data_on_cpu)
+        d_data_array = loadTexture_from_cpu(d_data_txt, g, N_g, params->doExtrapolation, doLinearInterpolation);
+    else
+        d_data_array = loadTexture(d_data_txt, g, N_g, params->doExtrapolation, doLinearInterpolation);
+
+    if (volume_on_cpu)
+    {
         if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
@@ -1989,20 +2037,20 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     if (isParallel)
     {
         //printf("executing parallel Joseph backprojector\n");
-        modularBeamParallelJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+        modularBeamParallelJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq, accum);
     }
     else if (modularbeamIsAxiallyAligned == true)
     {
         //printf("SF backproject\n");
         if (params->voxelSizeWorksForFastSF() == true)
-            modularBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+            modularBeamBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq, accum);
         else
-            modularBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+            modularBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq, accum);
     }
     else
     {
         //printf("executing cone Joseph backprojector\n");
-        modularBeamJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq);
+        modularBeamJosephBackprojectorKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, dev_sourcePositions, dev_moduleCenters, dev_rowVectors, dev_colVectors, params->volumeDimensionOrder, rFOV_sq, accum);
     }
 
     // pull result off GPU
@@ -2014,13 +2062,15 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
 
-    if (modularbeamIsAxiallyAligned == true && data_on_cpu == false /* && params->voxelSizeWorksForFastSF() == true */ )
+    /*
+    if (modularbeamIsAxiallyAligned == true && data_on_cpu == false)
     {
         //applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, true, true);
         applyViewDependentPolarWeights_gpu(dev_g, params, w_polar, false, true);
     }
+    //*/
 
-    if (data_on_cpu)
+    if (volume_on_cpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
     else
         f = dev_f;
@@ -2037,6 +2087,9 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
     {
         if (dev_g != 0)
             cudaFree(dev_g);
+    }
+    if (volume_on_cpu)
+    {
         if (dev_f != 0)
             cudaFree(dev_f);
     }

@@ -33,6 +33,7 @@ leapct.print_parameters()
 
 # Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
 #leapct.set_projector('VD')
+#leapct.convert_to_modularbeam()
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()

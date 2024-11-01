@@ -205,9 +205,9 @@ bool weightedBackproject(float* g, float* f, bool data_on_cpu)
 	return tomo()->weightedBackproject(g, f, data_on_cpu);
 }
 
-bool filterProjections(float* g, bool data_on_cpu)
+bool filterProjections(float* g, float* g_out, bool data_on_cpu)
 {
-	return tomo()->filterProjections(g, data_on_cpu);
+	return tomo()->filterProjections(g, g_out, data_on_cpu);
 }
 
 bool filterProjections_gpu(float* g)
@@ -220,6 +220,11 @@ bool filterProjections_cpu(float* g)
 	return tomo()->filterProjections_cpu(g);
 }
 
+int extraColumnsForOffsetScan()
+{
+	return tomo()->extraColumnsForOffsetScan();
+}
+
 bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar)
 {
 	return tomo()->HilbertFilterProjections(g, data_on_cpu, scalar);
@@ -228,6 +233,16 @@ bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar)
 bool rampFilterProjections(float* g, bool data_on_cpu, float scalar)
 {
 	return tomo()->rampFilterProjections(g, data_on_cpu, scalar);
+}
+
+bool preRampFiltering(float* g, bool data_on_cpu)
+{
+	return tomo()->preRampFiltering(g, data_on_cpu);
+}
+
+bool postRampFiltering(float* g, bool data_on_cpu)
+{
+	return tomo()->postRampFiltering(g, data_on_cpu);
 }
 
 bool rampFilterVolume(float* f, bool data_on_cpu)
@@ -1159,6 +1174,9 @@ PYBIND11_MODULE(leapct, m) {
     m.def("filterProjections", &filterProjections, "");
 	m.def("filterProjections_gpu", &filterProjections_gpu, "");
 	m.def("filterProjections_cpu", &filterProjections_cpu, "");
+	m.def("extraColumnsForOffsetScan", &extraColumnsForOffsetScan, "");
+	m.def("preRampFiltering", &preRampFiltering, "");
+	m.def("postRampFiltering", &postRampFiltering, "");
     m.def("rampFilterVolume", &rampFilterVolume, "");
     m.def("get_FBPscalar", &get_FBPscalar, "");
     m.def("FBP", &FBP, "");

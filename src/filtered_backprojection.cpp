@@ -18,6 +18,7 @@
 #include "ray_weighting_cpu.h"
 #include "projectors_symmetric_cpu.h"
 #include "ramp_filter_cpu.h"
+#include "cpu_utils.h"
 #ifndef __USE_CPU
 #include "cuda_utils.h"
 #include "ramp_filter.cuh"
@@ -110,7 +111,7 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool data_
 	}
 }
 
-bool filteredBackprojection::filterProjections(float* g, parameters* params, bool data_on_cpu)
+bool filteredBackprojection::preRampFiltering(float* g, parameters* params, bool data_on_cpu)
 {
 	if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
 	{
@@ -119,7 +120,10 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 	}
 
 	if (params->muSpecified())
-		return filterProjections_Novikov(g, params, data_on_cpu);
+	{
+		printf("Error: does not apply to ART!\n");
+		return false;
+	}
 
 	if (params->whichGPU < 0 || data_on_cpu == false)
 	{
@@ -127,15 +131,9 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
 		{
 #ifndef __USE_CPU
-			parallelRay_derivative(g, params, false);
-			applyPostRampFilterWeights(g, params, false);
-			if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
-				return true;
-			else
-				return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
+			return true;
 #else
-			printf("Error: helical FBP filtering is only implemented on the GPU at this time!\n");
-			return false;
+			return true;
 #endif
 		}
 		else
@@ -143,44 +141,9 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 #ifndef __USE_CPU
 			if (params->geometry != parameters::CONE_PARALLEL || params->helicalPitch == 0.0)
 				applyPreRampFilterWeights(g, params, data_on_cpu);
-			if (params->muCoeff != 0.0)
-				convertARTtoERT(g, params, data_on_cpu, false);
-			if (params->lambdaTomography)
-			{
-				if (params->whichGPU < 0)
-					return Laplacian_cpu(g, 1, false, params, -1.0);
-				else
-					return Laplacian_gpu(g, 1, false, params, data_on_cpu, -1.0);
-			}
-			else if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
-			{
-				if (params->whichGPU < 0)
-					ray_derivative_cpu(g, params);
-				else
-					ray_derivative(g, params, data_on_cpu);
-			}
-			else
-				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
-			if (params->muCoeff != 0.0)
-				convertARTtoERT(g, params, data_on_cpu, true);
-			return applyPostRampFilterWeights(g, params, data_on_cpu);
+			return true;
 #else
-			applyPreRampFilterWeights_CPU(g, params);
-			if (params->muCoeff != 0.0)
-				convertARTtoERT_CPU(g, params, false);
-			if (params->lambdaTomography == true)
-			{
-				Laplacian_cpu(g, 1, false, params, -1.0);
-			}
-			else if (params->inconsistencyReconstruction == true && params->angularRange >= 358.0)
-			{
-				ray_derivative_cpu(g, params);
-			}
-			else
-				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
-			if (params->muCoeff != 0.0)
-				convertARTtoERT_CPU(g, params, true);
-			return applyPostRampFilterWeights_CPU(g, params);
+			return applyPreRampFilterWeights_CPU(g, params);
 #endif
 		}
 	}
@@ -204,7 +167,7 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 			printf("Error: failed to copy projections to gpu!\n");
 			return false;
 		}
-		retVal = filterProjections(dev_g, params, false);
+		retVal = preRampFiltering(dev_g, params, false);
 
 		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
 
@@ -214,6 +177,244 @@ bool filteredBackprojection::filterProjections(float* g, parameters* params, boo
 #else
 		return false;
 #endif
+	}
+}
+
+bool filteredBackprojection::postRampFiltering(float* g, parameters* params, bool data_on_cpu)
+{
+	if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
+	{
+		printf("Error: projection filtering only implemented for modular geometries whose rowVectors are aligned with the z-axis\n");
+		return false;
+	}
+
+	if (params->muSpecified())
+	{
+		printf("Error: does not apply to ART!\n");
+		return false;
+	}
+
+	if (params->whichGPU < 0 || data_on_cpu == false)
+	{
+		// no transfers to/from GPU are necessary; just run the code
+		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
+		{
+			#ifndef __USE_CPU
+				return applyPostRampFilterWeights(g, params, false);
+			#else
+				return applyPostRampFilterWeights(g, params, false);
+			#endif
+		}
+		else
+		{
+			#ifndef __USE_CPU
+				return applyPostRampFilterWeights(g, params, data_on_cpu);
+			#else
+				return applyPostRampFilterWeights_CPU(g, params);
+			#endif
+		}
+	}
+	else
+	{
+		#ifndef __USE_CPU
+		if (getAvailableGPUmemory(params->whichGPU) < params->projectionDataSize())
+		{
+			printf("Error: insufficient GPU memory\n");
+			return false;
+		}
+
+		bool retVal = true;
+
+		cudaSetDevice(params->whichGPU);
+		//cudaError_t cudaStatus;
+
+		float* dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		if (dev_g == 0)
+		{
+			printf("Error: failed to copy projections to gpu!\n");
+			return false;
+		}
+		retVal = postRampFiltering(dev_g, params, false);
+
+		pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		return retVal;
+		#else
+		return false;
+		#endif
+	}
+}
+
+bool filteredBackprojection::filterProjections(float* g, float* g_out, parameters* params, bool data_on_cpu)
+{
+	if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
+	{
+		printf("Error: projection filtering only implemented for modular geometries whose rowVectors are aligned with the z-axis\n");
+		return false;
+	}
+
+	if (params->muSpecified())
+		return filterProjections_Novikov(g, params, data_on_cpu);
+
+	int extraCols = 0;
+
+	if (params->offsetScan)
+	{
+		extraCols = zeroPadForOffsetScan_numberOfColsToAdd(params);
+		if (g_out == NULL || g_out == g)
+		{
+			printf("Error: to perform offsetScan filtering, one must provide a place to store the output because the size of the data changes\n");
+			return false;
+		}
+	}
+
+	if (params->whichGPU < 0 || data_on_cpu == false)
+	{
+		if (params->offsetScan && extraCols > 0)
+		{
+			if (params->whichGPU >= 0 && data_on_cpu == false)
+			{
+				printf("Error: currently offsetScan reconstruction only works for input data that resides on the CPU (but calculations can be done on CPU or GPU)\n");
+				printf("Please submit a new feature request\n");
+				return false;
+			}
+
+			if (zeroPadForOffsetScan(g, params, g_out) == NULL)
+			{
+				// no padding was needed, so just copy g into g_out
+				equal_cpu(g_out, g, params->numAngles, params->numRows, params->numCols);
+			}
+			else
+				g = g_out;
+			params->offsetScan = false;
+		}
+
+		// no transfers to/from GPU are necessary; just run the code
+		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
+		{
+			#ifndef __USE_CPU
+			parallelRay_derivative(g, params, false);
+			applyPostRampFilterWeights(g, params, false);
+			if (params->inconsistencyReconstruction == true && params->offsetScan_has_adequate_angular_range() == true)
+				return true;
+			else
+				return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
+			#else
+			printf("Error: helical FBP filtering is only implemented on the GPU at this time!\n");
+			return false;
+			#endif
+		}
+		else
+		{
+			#ifndef __USE_CPU
+			if (params->geometry != parameters::CONE_PARALLEL || params->helicalPitch == 0.0)
+				applyPreRampFilterWeights(g, params, data_on_cpu);
+			if (params->muCoeff != 0.0)
+				convertARTtoERT(g, params, data_on_cpu, false);
+			if (params->lambdaTomography)
+			{
+				if (params->whichGPU < 0)
+					Laplacian_cpu(g, 1, false, params, -1.0);
+				else
+					Laplacian_gpu(g, 1, false, params, data_on_cpu, -1.0);
+			}
+			else if (params->inconsistencyReconstruction == true && params->offsetScan_has_adequate_angular_range() == true)
+			{
+				if (params->whichGPU < 0)
+					ray_derivative_cpu(g, params);
+				else
+					ray_derivative(g, params, data_on_cpu);
+			}
+			else
+				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
+			if (params->muCoeff != 0.0)
+				convertARTtoERT(g, params, data_on_cpu, true);
+			return applyPostRampFilterWeights(g, params, data_on_cpu);
+			#else
+			if (params->geometry != parameters::CONE_PARALLEL || params->helicalPitch == 0.0)
+				applyPreRampFilterWeights_CPU(g, params);
+			if (params->muCoeff != 0.0)
+				convertARTtoERT_CPU(g, params, false);
+			if (params->lambdaTomography == true)
+			{
+				Laplacian_cpu(g, 1, false, params, -1.0);
+			}
+			else if (params->inconsistencyReconstruction == true && params->offsetScan_has_adequate_angular_range() == true)
+			{
+				ray_derivative_cpu(g, params);
+			}
+			else
+				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
+			if (params->muCoeff != 0.0)
+				convertARTtoERT_CPU(g, params, true);
+			return applyPostRampFilterWeights_CPU(g, params);
+			#endif
+		}
+	}
+	else
+	{
+		#ifndef __USE_CPU
+		if (getAvailableGPUmemory(params->whichGPU) < params->projectionDataSize())
+		{
+			printf("Error: insufficient GPU memory\n");
+			return false;
+		}
+
+		bool retVal = true;
+
+		cudaSetDevice(params->whichGPU);
+		//cudaError_t cudaStatus;
+
+		float* dev_g = 0;
+
+		//*
+		if (params->offsetScan == true && extraCols > 0)
+		{
+			float* g_pad = NULL;
+			if (g_out != NULL && g_out != g)
+				g_pad = zeroPadForOffsetScan(g, params, g_out);
+			else
+				g_pad = zeroPadForOffsetScan(g, params);
+			if (g_pad != NULL)
+			{
+				dev_g = copyProjectionDataToGPU(g_pad, params, params->whichGPU);
+				params->offsetScan = false;
+				if (g_out == NULL || g_out == g)
+					free(g_pad);
+			}
+			else
+			{
+				printf("Error in filterProjections: zeroPadForOffsetScan failed!\n");
+				return false;
+			}
+		}
+		else
+		{
+			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		}
+		//*/
+
+		//dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		if (dev_g == 0)
+		{
+			printf("Error: failed to copy projections to gpu!\n");
+			return false;
+		}
+		retVal = filterProjections(dev_g, dev_g, params, false);
+
+		if (g_out == NULL)
+			pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
+		else
+			pullProjectionDataFromGPU(g_out, params, dev_g, params->whichGPU);
+
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		return retVal;
+		#else
+		return false;
+		#endif
 	}
 }
 
@@ -242,11 +443,11 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		float* g_save = g;
 		if (params->offsetScan)
 		{
-			/*
+			//*
 			if (params->whichGPU >= 0 && data_on_cpu == false)
 			{
-				printf("Error: currently offsetScan reconstruction only works on CPU or on GPU and the data resided on the CPU\n");
-				printf("In other words, you did something we did not expect.  Please submit a new feature request\n");
+				printf("Error: currently offsetScan reconstruction only works for input data that resides on the CPU (but calculations can be done on CPU or GPU)\n");
+				printf("Please submit a new feature request\n");
 				return false;
 			}
 			//*/
@@ -259,7 +460,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		// no transfers to/from GPU are necessary; just run the code
 		//printf("WARNING: disabling filtering in FBP for debugging purposes!!!!\n");
 		//printf("sum = %f\n", sum(g, make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU));
-		filterProjections(g, params, false);
+		filterProjections(g, NULL, params, false);
 		//printf("sum = %f\n", sum(g, make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU));
 
 		bool retVal = true;
@@ -352,7 +553,7 @@ bool filteredBackprojection::execute_attenuated(float* g, float* f, parameters* 
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi())*180.0/PI)
+	if (params->less_than_full_scan())
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;
@@ -428,7 +629,7 @@ bool filteredBackprojection::filterProjections_Novikov(float* g, parameters* par
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi())*180.0/PI)
+	if (params->less_than_full_scan())
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;
@@ -561,7 +762,7 @@ bool filteredBackprojection::execute_Novikov(float* g, float* f, parameters* par
 		printf("Error: FBP of attenuated x-ray transform only implemented for parallel-beam data!\n");
 		return false;
 	}
-	if (params->angularRange < 360.0 - 0.5 * fabs(params->T_phi()) * 180.0 / PI)
+	if (params->less_than_full_scan())
 	{
 		printf("Error: FBP of attenuated x-ray transform requires at least 360 degree angular range!\n");
 		return false;

@@ -16,8 +16,9 @@
 
 #include "parameters.h"
 
-bool project_Joseph(float*&, float*, parameters*, bool data_on_cpu);
-bool backproject_Joseph(float*, float*&, parameters*, bool data_on_cpu);
+
+bool project_Joseph_modular(float*&, float*, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+bool backproject_Joseph_modular(float*, float*&, parameters*, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
 
 bool project_Joseph_modular(float*&, float*, parameters*, bool data_on_cpu);
 bool backproject_Joseph_modular(float*, float*&, parameters*, bool data_on_cpu);
