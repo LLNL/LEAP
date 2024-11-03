@@ -432,6 +432,15 @@ float parameters::rFOV()
 			alpha_right = atan(alpha_right / sdd);
 			alpha_left = atan(alpha_left / sdd);
 		}
+		else
+		{
+			//-(centerCol + colShiftFromFilter) * atan(pixelWidth / sdd);
+			//(i * atan(pixelWidth/sdd) + u_0());
+
+			//alpha_right = u(0);
+			alpha_left = u(numCols - 1);
+		}
+
 		if (offsetScan)
 			return sod * sin(max(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
 		else
@@ -1364,12 +1373,16 @@ bool parameters::set_offsetScan(bool aFlag)
 		offsetScan = aFlag;
 	else
 	{
-		if (offsetScan_has_adequate_angular_range() == false)
+		if (geometryDefined(false))
 		{
-			printf("Error: offsetScan requires at least 360 degrees of projections!\n");
-			//printf("angularRange = %f, T_phi = %f\n", angularRange, T_phi());
-			offsetScan = false;
-			return false;
+			if (offsetScan_has_adequate_angular_range() == false)
+			{
+				if (aFlag)
+					printf("Error: offsetScan requires at least 360 degrees of projections!\n");
+				//printf("angularRange = %f, T_phi = %f\n", angularRange, T_phi());
+				offsetScan = false;
+				return false;
+			}
 		}
 		/*
 		if (geometry == MODULAR)

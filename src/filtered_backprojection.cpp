@@ -276,18 +276,21 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 		{
 			if (params->whichGPU >= 0 && data_on_cpu == false)
 			{
-				printf("Error: currently offsetScan reconstruction only works for input data that resides on the CPU (but calculations can be done on CPU or GPU)\n");
-				printf("Please submit a new feature request\n");
-				return false;
-			}
-
-			if (zeroPadForOffsetScan(g, params, g_out) == NULL)
-			{
-				// no padding was needed, so just copy g into g_out
-				equal_cpu(g_out, g, params->numAngles, params->numRows, params->numCols);
+				//printf("Error: currently offsetScan reconstruction only works for input data that resides on the CPU (but calculations can be done on CPU or GPU)\n");
+				//printf("Please submit a new feature request\n");
+				//return false;
+				g = zeroPadForOffsetScan_GPU(g, params, g_out);
 			}
 			else
-				g = g_out;
+			{
+				if (zeroPadForOffsetScan(g, params, g_out) == NULL)
+				{
+					// no padding was needed, so just copy g into g_out
+					equal_cpu(g_out, g, params->numAngles, params->numRows, params->numCols);
+				}
+				else
+					g = g_out;
+			}
 			params->offsetScan = false;
 		}
 
@@ -420,6 +423,11 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 
 bool filteredBackprojection::execute(float* g, float* f, parameters* params, bool data_on_cpu)
 {
+	return execute(g, f, params, data_on_cpu, data_on_cpu);
+}
+
+bool filteredBackprojection::execute(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate)
+{
 	if (params->geometry == parameters::MODULAR)
 	{
 		if (params->modularbeamIsAxiallyAligned() == false || params->min_T_phi() < 1.0e-16)
@@ -443,18 +451,20 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		float* g_save = g;
 		if (params->offsetScan)
 		{
-			//*
 			if (params->whichGPU >= 0 && data_on_cpu == false)
 			{
-				printf("Error: currently offsetScan reconstruction only works for input data that resides on the CPU (but calculations can be done on CPU or GPU)\n");
-				printf("Please submit a new feature request\n");
-				return false;
+				//printf("Error: currently offsetScan reconstruction only works for input data that resides on the CPU (but calculations can be done on CPU or GPU)\n");
+				//printf("Please submit a new feature request\n");
+				//return false;
+				g_pad = zeroPadForOffsetScan_GPU(g, params);
 			}
-			//*/
-			g_pad = zeroPadForOffsetScan(g, params);
-			params->offsetScan = false;
+			else
+			{
+				g_pad = zeroPadForOffsetScan(g, params);
+			}
 			if (g_pad != NULL)
 				g = g_pad;
+			params->offsetScan = false;
 		}
 
 		// no transfers to/from GPU are necessary; just run the code
@@ -481,21 +491,31 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 #endif
 		}
 		else
-			retVal = proj.backproject(g, f, params, data_on_cpu);
+			retVal = proj.backproject(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
 		params->doWeightedBackprojection = doWeightedBackprojection_save;
 		params->doExtrapolation = doExtrapolation_save;
 		params->colShiftFromFilter = 0.0;
 		params->rowShiftFromFilter = 0.0;
 
 		if (g_pad != NULL)
-			free(g_pad);
+		{
+			if (data_on_cpu)
+				free(g_pad);
+			else
+				cudaFree(g_pad);
+		}
 
 		return retVal;
 	}
 	else
 	{
 #ifndef __USE_CPU
-		if (params->hasSufficientGPUmemory() == false)
+
+		int numVolumeData = 1;
+		if (volume_on_cpu == false)
+			numVolumeData = 0;
+
+		if (params->hasSufficientGPUmemory(false, 0, 1, numVolumeData) == false)
 		{
 			printf("Error: insufficient GPU memory\n");
 			return false;
@@ -522,19 +542,27 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 			return false;
 
 		float* dev_f = 0;
-		if ((cudaStatus = cudaMalloc((void**)&dev_f, uint64(params->numX) * uint64(params->numY) * uint64(params->numZ) * sizeof(float))) != cudaSuccess)
+		if (volume_on_cpu)
 		{
-			fprintf(stderr, "cudaMalloc(volume) failed!\n");
-			if (dev_g != 0)
-				cudaFree(dev_g);
-			return false;
+			if ((cudaStatus = cudaMalloc((void**)&dev_f, uint64(params->numX) * uint64(params->numY) * uint64(params->numZ) * sizeof(float))) != cudaSuccess)
+			{
+				fprintf(stderr, "cudaMalloc(volume) failed!\n");
+				if (dev_g != 0)
+					cudaFree(dev_g);
+				return false;
+			}
 		}
+		else
+			dev_f = f;
 
-		retVal = execute(dev_g, dev_f, params, false);
+		retVal = execute(dev_g, dev_f, params, false, false, accumulate);
 
-		pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
-		if (dev_f != 0)
-			cudaFree(dev_f);
+		if (volume_on_cpu)
+		{
+			pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
+			if (dev_f != 0)
+				cudaFree(dev_f);
+		}
 		if (dev_g != 0)
 			cudaFree(dev_g);
 		return retVal;

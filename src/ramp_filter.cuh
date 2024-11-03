@@ -51,4 +51,6 @@ bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar = 1.0);
 bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu);
 bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cpu);
 
+float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out = NULL);
+
 #endif

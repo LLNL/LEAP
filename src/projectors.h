@@ -27,8 +27,8 @@
  * This class also only performs the calculations on a single GPU.  Again, the tomographicModels is responsible for break up jobs
  * from multiple GPUs.
  * If params->whichGPU < 0, then the computations will be carried out on the CPU, otherwise it is assumed that params->whichGPU
- * specifies the GPU index to perform the computations.  And if the data_on_gpu function argument is true, it is assumed that the
- * data (projection and volume) is on the GPU specified by the params->whichGPU index.  If data_on_gpu is false and params->whichGPU >= 0,
+ * specifies the GPU index to perform the computations.  And if the data_on_cpu function argument is false, it is assumed that the
+ * projection data  is on the GPU specified by the params->whichGPU index.  If data_on_cpu is true and params->whichGPU >= 0,
  * then the data is copied to the specified GPU, the computation is performed, and then the result is copied back to the CPU.  All temporary
  * GPU memory is freed.
  */
@@ -52,6 +52,19 @@ public:
     bool project(float* g, float* f, parameters* params, bool data_on_cpu);
 
     /**
+     * \fn          project
+     * \brief       Performs a forward projection using a modified Separable Footprint method
+     * \param[in]   g, pointer to the projection data
+     * \param[in]   f, pointer to the volume data
+     * \param[in]   params, pointer to the parameters object
+     * \param[in]   data_on_cpu, true if data (g) is on the cpu, false if it is on the gpu
+     * \param[in]   volume_on_cpu, true if volume (f) is on the cpu, false if it is on the gpu
+     * \param[in]   accumulate, true if this backprojection is supposed to increment on the volume, false otherwise
+     * \return      true if operation  was sucessful, false otherwise
+     */
+    bool project(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+
+    /**
      * \fn          backproject
      * \brief       Performs a backprojection using a modified Separable Footprint method
      * \param[in]   g, pointer to the projection data
@@ -61,6 +74,19 @@ public:
      * \return      true if operation  was sucessful, false otherwise
      */
     bool backproject(float* g, float* f, parameters* params, bool data_on_cpu);
+
+    /**
+     * \fn          backproject
+     * \brief       Performs a backprojection using a modified Separable Footprint method
+     * \param[in]   g, pointer to the projection data
+     * \param[in]   f, pointer to the volume data
+     * \param[in]   params, pointer to the parameters object
+     * \param[in]   data_on_cpu, true if data (g) is on the cpu, false if it is on the gpu
+     * \param[in]   volume_on_cpu, true if volume (f) is on the cpu, false if it is on the gpu
+     * \param[in]   accumulate, true if this backprojection is supposed to increment on the volume, false otherwise
+     * \return      true if operation  was sucessful, false otherwise
+     */
+    bool backproject(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
 
     /**
      * \fn          weightedBackproject
@@ -74,6 +100,21 @@ public:
      * \return      true if operation  was sucessful, false otherwise
      */
     bool weightedBackproject(float* g, float* f, parameters* params, bool data_on_cpu);
+
+    /**
+     * \fn          weightedBackproject
+     * \brief       Performs a weighted backprojection using a modified Separable Footprint method.
+                    A weighted backprojection is different than just a plain backprojection because uses extrapolation on the detector
+                    and for fan-beam and helical cone-beam data has additional weighting terms.  See the LEAP technical manual for more information.
+     * \param[in]   g, pointer to the projection data
+     * \param[in]   f, pointer to the volume data
+     * \param[in]   params, pointer to the parameters object
+     * \param[in]   data_on_cpu, true if data (g) is on the cpu, false if it is on the gpu
+     * \param[in]   volume_on_cpu, true if volume (f) is on the cpu, false if it is on the gpu
+     * \param[in]   accumulate, true if this backprojection is supposed to increment on the volume, false otherwise
+     * \return      true if operation  was sucessful, false otherwise
+     */
+    bool weightedBackproject(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
 };
 
 #endif

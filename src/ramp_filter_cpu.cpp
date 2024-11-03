@@ -684,6 +684,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
         else
             N_add = int(ceil(params->u_inv(params->rFOV()))) - params->numCols;
     }
+    N_add = std::max(0, N_add);
     if (abs_minVal < abs_maxVal)
         padOnLeft = true;
     else

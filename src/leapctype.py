@@ -2518,8 +2518,9 @@ class tomographicModels:
             self.set_model()
             isSuccessful = self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
             if isSuccessful == False:
-                self.filterProjections(q)
-                self.weightedBackproject(q,f)
+                #self.filterProjections(q)
+                #self.weightedBackproject(q,f)
+                return None
         else:
             if f is None:
                 f = self.allocateVolume()
@@ -2527,8 +2528,9 @@ class tomographicModels:
             self.set_model()
             isSuccessful = self.libprojectors.FBP(q, f, True)
             if isSuccessful == False:
-                self.filterProjections(q)
-                self.weightedBackproject(q,f)
+                #self.filterProjections(q)
+                #self.weightedBackproject(q,f)
+                return None
         if delete_q:
             del q
         return f
@@ -7097,7 +7099,7 @@ class tomographicModels:
         that define a phantom to be used for an analytic ray-tracing simulation.
         
         Note that the values of the FORBILD head phantom are all scaled by 0.02
-        which is the LAC of water at around 60 keV.
+        which is the LAC of water at around 60 keV.  The FOV is about [-96, 96, -120, 120, -125, 125]
         
         Args:
             f (C contiguous float32 numpy array): CT volume

@@ -491,7 +491,7 @@ def ringRemoval_fast(leapct, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.
     .. math::
        \begin{eqnarray}
          \overline{g} &:=& \frac{1}{numAngles}\sum_{angles} g \\
-         gain\_correction &:=&argmin \; TV(\overline{g}) - \overline{g} \\
+         gain\_correction &:=& argmin_x \; \left[\frac{1}{2} \|x - \overline{g}\|^2 + \beta TV(x) \right] - \overline{g} \\
          g\_corrected &:=& g + gain\_correction
        \end{eqnarray}
     
@@ -591,10 +591,19 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
     all angles.
     
     Assumes the input data is in attenuation space.
-    No LEAP parameters need to be set for this function to work 
-    and can be applied to any CT geometry type.
+    No LEAP parameters need to be set for this function to work and can be applied to any CT geometry type.
     This algorithm is effective at removing ring artifacts without creating new ring artifacts, 
-    but is computationally expensive.
+    but is more computationally expensive than ringRemoval_fast.
+
+    This algorithm works by minimizing the standard TV denoising cost function with gradient descent
+    except we replace the gradient by averaging it over all projections.  This ensures that the
+    projections are smoothed by a function that is constant over projection angles.
+    The cost function is given by
+
+    .. math::
+       \begin{eqnarray}
+       \frac{1}{2} \|x - g\|^2 + \beta TV(x)
+       \end{eqnarray}
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms

@@ -40,6 +40,11 @@ projectors::~projectors()
 
 bool projectors::project(float* g, float* f, parameters* params, bool data_on_cpu)
 {
+	return project(g, f, params, data_on_cpu, data_on_cpu);
+}
+
+bool projectors::project(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate)
+{
 	if (params == NULL)
 		return false;
 	if (params->allDefined() == false || g == NULL || f == NULL)
@@ -50,9 +55,13 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 #ifndef __USE_CPU
 	else if (params->whichGPU >= 0)
 	{
+		int numVolumeData = 1;
+		if (volume_on_cpu == false)
+			numVolumeData = 0;
+
 		if (data_on_cpu)
 		{
-			if (params->hasSufficientGPUmemory() == false)
+			if (params->hasSufficientGPUmemory(false, 0, 1, numVolumeData) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;
@@ -122,14 +131,23 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 
 bool projectors::backproject(float* g, float* f, parameters* params, bool data_on_cpu)
 {
+	return backproject(g, f, params, data_on_cpu, data_on_cpu);
+}
+
+bool projectors::backproject(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate)
+{
 	if (params->allDefined() == false || g == NULL || f == NULL)
 		return false;
 #ifndef __USE_CPU
 	else if (params->whichGPU >= 0)
 	{
+		int numVolumeData = 1;
+		if (volume_on_cpu == false)
+			numVolumeData = 0;
+
 		if (data_on_cpu)
 		{
-			if (params->hasSufficientGPUmemory() == false)
+			if (params->hasSufficientGPUmemory(false, 0, 1, numVolumeData) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;
@@ -141,11 +159,11 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 		else if (params->muSpecified())
 			return backproject_attenuated(g, f, params, data_on_cpu);
 		else if (params->whichProjector == parameters::VOXEL_DRIVEN /* && (params->helicalPitch == 0.0 || params->doWeightedBackprojection == false)*/)
-			return backproject_VD(g, f, params, data_on_cpu);
+			return backproject_VD(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
 		else if (params->geometry == parameters::MODULAR)
-			return backproject_Joseph_modular(g, f, params, data_on_cpu);
+			return backproject_Joseph_modular(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
 		else
-			return backproject_SF(g, f, params, data_on_cpu);
+			return backproject_SF(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
 	}
 #endif
 	else
@@ -207,11 +225,16 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 
 bool projectors::weightedBackproject(float* g, float* f, parameters* params, bool data_on_cpu)
 {
+	return weightedBackproject(g, f, params, data_on_cpu, data_on_cpu);
+}
+
+bool projectors::weightedBackproject(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate)
+{
 	bool doWeightedBackprojection_save = params->doWeightedBackprojection;
 	params->doWeightedBackprojection = true;
 	bool doExtrapolation_save = params->doExtrapolation;
 	params->doExtrapolation = true;
-	bool retVal = backproject(g, f, params, data_on_cpu);
+	bool retVal = backproject(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
 	params->doWeightedBackprojection = doWeightedBackprojection_save;
 	params->doExtrapolation = doExtrapolation_save;
 	return retVal;

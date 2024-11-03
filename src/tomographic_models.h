@@ -1237,9 +1237,11 @@ private:
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   rowStart the first index to copy
 	 * \param[in]   rowEnd the last index to copy
+	 * \param[in]	firstView the first view to copy
+	 * \param[in]	lastView the last view to copy
 	 * \return      pointer to the copy of the data for the specified indices of rows
 	 */
-	float* copyRows(float* g, int rowStart, int rowEnd);
+	float* copyRows(float* g, int rowStart, int rowEnd, int firstView = -1, int lastView = -1);
 
 	/**
 	 * \fn          combineRows
@@ -1248,9 +1250,11 @@ private:
 	 * \param[in]   g_chunk the cropped data
 	 * \param[in]   rowStart the first index to copy
 	 * \param[in]   rowEnd the last index to copy
+	 * \param[in]	firstView the first view to copy
+	 * \param[in]	lastView the last view to copy
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool combineRows(float* g, float* g_chunk, int rowStart, int rowEnd);
+	bool combineRows(float* g, float* g_chunk, int rowStart, int rowEnd, int firstView = -1, int lastView = -1);
 
 	/**
 	 * \fn          project_memoryRequired
@@ -1275,7 +1279,7 @@ private:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      the number of GB of memory required
 	 */
-	float backproject_memoryRequired(int numSlicesPerChunk, int extraCols = 0, bool doFBP = true);
+	float backproject_memoryRequired(int numSlicesPerChunk, int extraCols = 0, bool doFBP = true, int numViews = -1);
 
 	/**
 	 * \fn          backproject_memoryRequired
@@ -1288,6 +1292,7 @@ private:
 	bool copy_volume_data_to_mask(float* f, float* mask, bool data_on_cpu, bool do_forward);
 
 	int maxSlicesForChunking;
+	int minSlicesForChunking;
 
 	filteredBackprojection FBP;
 	projectors proj;

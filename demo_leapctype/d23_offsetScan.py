@@ -73,6 +73,8 @@ f = leapct.allocateVolume()
 leapct.set_FORBILD(f,True)
 #leapct.display(f)
 
+#f = leapct.copy_to_device(f)
+#g = leapct.copy_to_device(g)
 
 # "Simulate" projection data
 startTime = time.time()

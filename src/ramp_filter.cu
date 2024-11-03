@@ -8,6 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "ramp_filter.cuh"
 #include "ramp_filter_cpu.h"
+#include "ray_weighting_cpu.h"
 #include "log.h"
 
 #include <iostream>
@@ -25,6 +26,36 @@
 
 #ifdef __INCLUDE_CUFFT
 #include <cufft.h>
+
+__global__ void zeroPadForOffsetScanKernel(float* g, float* g_pad, const int3 N, const int N_add, const bool padOnLeft, const float* offsetScanWeights)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    const int numAngles = N.x;
+    const int numRows = N.y;
+    const int numCols = N.z - N_add;
+    const uint64 ind = uint64(i) * uint64(numCols * N.y) + uint64(j * numCols);
+    const uint64 ind_pad = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z);
+
+    if (padOnLeft)
+    {
+        if (k < N_add)
+            g_pad[ind_pad + k + N_add] = 0.0f;
+        else
+            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k - N_add)] * 2.0f * offsetScanWeights[i * numCols + k-N_add];
+    }
+    else
+    {
+        if (k < numCols)
+            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k)] * 2.0f * offsetScanWeights[i * numCols + k];
+        else
+            g_pad[ind_pad + uint64(k)] = 0.0f;
+    }
+}
 
 __global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N)
 {
@@ -2048,6 +2079,59 @@ float* rampImpulseResponse_modified(int N, parameters* params)
     }
     delete[] h_d;
     return h;
+}
+
+float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out)
+{
+    if (g == NULL || params == NULL)
+        return NULL;
+    else if (params->helicalPitch != 0.0 || params->offsetScan == false)
+        return NULL;
+    if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
+        return NULL;
+
+    bool padOnLeft;
+    int N_add = zeroPadForOffsetScan_numberOfColsToAdd(params, padOnLeft);
+
+    float* offsetScanWeights = setOffsetScanWeights(params);
+    if (N_add > 0 && offsetScanWeights != NULL)
+    {
+        cudaSetDevice(params->whichGPU);
+        cudaError_t cudaStatus;
+
+        float* g_pad = g_out;
+        if (g_out == NULL)
+        {
+            if ((cudaStatus = cudaMalloc((void**)&g_pad, params->numAngles * params->numRows * (params->numCols + N_add) * sizeof(float))) != cudaSuccess)
+            {
+                fprintf(stderr, "cudaMalloc(projections) failed!\n");
+                return NULL;
+            }
+        }
+        float* dev_offsetScanWeights = copy1DdataToGPU(offsetScanWeights, params->numAngles * params->numCols, params->whichGPU);
+        free(offsetScanWeights);
+
+        int3 N_g = make_int3(params->numAngles, params->numRows, params->numCols + N_add);
+        dim3 dimBlock = setBlockSize(N_g);
+        dim3 dimGrid = setGridSize(N_g, dimBlock);
+
+        zeroPadForOffsetScanKernel <<< dimGrid, dimBlock >>> (g, g_pad, N_g, N_add, padOnLeft, dev_offsetScanWeights);
+        cudaStatus = cudaDeviceSynchronize();
+
+        if (padOnLeft)
+            params->centerCol += N_add;
+        params->numCols += N_add;
+
+        if (dev_offsetScanWeights != 0)
+            cudaFree(dev_offsetScanWeights);
+        return g_pad;
+    }
+    else
+    {
+        if (offsetScanWeights != NULL)
+            free(offsetScanWeights);
+        return NULL;
+    }
 }
 
 #ifndef __INCLUDE_CUFFT

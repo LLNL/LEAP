@@ -108,6 +108,19 @@ public:
      */
     bool execute(float* g, float* f, parameters* params, bool data_on_cpu);
 
+    /**
+     * \fn          execute
+     * \brief       Performs an FBP reconstruction
+     * \param[in]   g, pointer to the projection data
+     * \param[in]   f, pointer to the volume data
+     * \param[in]   params, pointer to the parameters object
+     * \param[in]   data_on_cpu, true if data (g) is on the cpu, false if it is on the gpu
+     * \param[in]   volume_on_cpu, true if volume (f) is on the cpu, false if it is on the gpu
+     * \param[in]   accumulate, true if this backprojection is supposed to increment on the volume, false otherwise
+     * \return      true if operation  was sucessful, false otherwise
+     */
+    bool execute(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate = false);
+
 private:
 
     /**

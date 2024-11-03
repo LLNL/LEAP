@@ -89,18 +89,18 @@ leapct.set_rampFilter(10)
 # If we set inplaceProcessing to true, the filtering operations in FBP are
 # done in-place.  This runs faster, but you are not able to recover the 
 # original projection data.
-inplaceProcessing = True
-leapct.set_projector('VD')
+#inplaceProcessing = True
+#leapct.set_projector('VD')
 f = leapct.allocate_volume()
 print('FBP reconstruction...')
 startTime = time.time()
-leapct.FBP(g,f,inplaceProcessing)
+leapct.FBP(g,f)
 #leapct.backproject(g,f)
 print('FBP time: ' + str(time.time()-startTime))
 
 # Flip the reconstruction so that it is aligned with the ASTRA reconstruction
 f = np.flip(f,axis=0)
-f = np.flip(f,axis=2)
+f = np.ascontiguousarray(np.flip(f,axis=2), dtype=np.float32)
 
 
 # Display result with napari
