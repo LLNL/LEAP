@@ -514,8 +514,11 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		int numVolumeData = 1;
 		if (volume_on_cpu == false)
 			numVolumeData = 0;
+		int numProjectionData = 1;
+		//if (data_on_cpu == false)
+		//	numProjectionData = 0;
 
-		if (params->hasSufficientGPUmemory(false, 0, 1, numVolumeData) == false)
+		if (params->hasSufficientGPUmemory(false, 0, numProjectionData, numVolumeData) == false)
 		{
 			printf("Error: insufficient GPU memory\n");
 			return false;

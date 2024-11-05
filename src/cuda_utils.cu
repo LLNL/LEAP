@@ -650,7 +650,7 @@ float getAvailableGPUmemory(int whichGPU)
         std::size_t free_byte;
         std::size_t total_byte;
         cudaMemGetInfo(&free_byte, &total_byte);
-        return float(double(free_byte) / pow(2.0, 30.0));
+        return float(double(free_byte) / pow(2.0, 30.0)) * GPU_MEMORY_SAFETY_MULTIPLIER;
     }
     else
         return 0.0;

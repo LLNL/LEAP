@@ -749,6 +749,8 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
 
+	//memAvailable = 2.0; // FIXME!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 	// Calculate the minimum number of rows one would like to calculate at a time before the volume must be divided further
 	// We want to make sure that this lower bound is set low enough to leave extra room for the volume data
 	// For now let's make it so it can't occupy more than half the memory
@@ -842,9 +844,13 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 			}
 			else
 			{
+				// Further reduce number of volume slices
 				// memAvailable => params.projectionDataSize() * float(numRows) / float(params.numRows) + params.volumeDataSize() * float(numSlices_stage2) / float(params.numZ)
 				int numSlices_stage2 = std::max(1, int(floor((memAvailable - params.projectionDataSize() * float(numRows) / float(params.numRows)) * float(params.numZ) / params.volumeDataSize())));
 				int numChunks_z = std::max(1, int(ceil(float(numSlices) / float(numSlices_stage2))));
+				numSlices_stage2 = std::max(1, int(ceil(float(numSlices) / float(numChunks_z)))); // make each chunk approximately equal in size
+
+				LOG(logDEBUG, className, "") << "GPU " << params.whichGPUs[omp_get_thread_num()] << ": numSices = " << numSlices_stage2 << ", numRows = " << numRows << std::endl;
 
 				float* dev_g = 0;
 				cudaError_t cudaStatus;
@@ -879,7 +885,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 						chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 						chunk_params.whichGPUs.clear();
 						if (params.mu != NULL)
-							chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
+							chunk_params.mu = &params.mu[uint64(sliceRange_stage2[0]) * uint64(params.numX * params.numY)];
 
 						LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": volume: z-slices: (" << sliceRange_stage2[0] << ", " << sliceRange_stage2[1] << "), rows = (" << firstRow << ", " << lastRow << ")" << std::endl;
 
@@ -1072,13 +1078,18 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 
 	int numProjectionData = 1;
 	int numVolumeData = 1;
+	if (params.mu != NULL)
+		numVolumeData += 1;
 	if (doFBP)
 		numProjectionData = 2; // need an extra for texture memory
 
-	int numViewsPerChunk = params.numAngles;
-	int numViewChunks = 1;
+	//int numViewsPerChunk = params.numAngles;
+	//int numViewChunks = 1;
 
 	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
+	LOG(logDEBUG, className, "") << "GPU memory available: " << memAvailable << " GB" << std::endl;
+
+	//memAvailable = 0.5; // FIXME!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	// Calculate the minimum number of slices one would like to calculate at a time before jobs are broken across views
 	// We want to make sure that this lower bound is set low enough so that the volume will still fit into memory
@@ -1095,8 +1106,22 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	if (params.hasSufficientGPUmemory(true, extraCols, numProjectionData, numVolumeData) == false)
 	{
-		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP, numViewsPerChunk);
+		//*
+		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP);
+		while (memAvailable < memNeeded)
+		{
+			numSlicesPerChunk = numSlicesPerChunk / 2;
+			if (numSlicesPerChunk <= minSlicesForChunking_local)
+			{
+				numSlicesPerChunk = minSlicesForChunking_local;
+				break;
+			}
+			memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP);
+		}
+		//*/
 
+		/*
+		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP, numViewsPerChunk);
 		while (memAvailable < memNeeded)
 		{
 			if (numSlicesPerChunk <= minSlicesForChunking_local)
@@ -1107,8 +1132,9 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 				return false;
 			memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP, numViewsPerChunk);
 		}
-		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 		numViewChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
+		//*/
+		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory(extraCols, numProjectionData, numVolumeData) <= params.chunkingMemorySizeThreshold)
 		return false;
@@ -1127,8 +1153,6 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		if (retVal2 == false)
 			return false;
 	}
-
-	LOG(logDEBUG, className, "") << "using volume slab size of " << numSlicesPerChunk << " and number of angles: " << numViewsPerChunk << std::endl;
 
 	bool retVal = true;
 
@@ -1170,8 +1194,16 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
 
-		if (numViewChunks <= 1)
+		// Calculate the view chunking
+		float memForVolume = numVolumeData * params.volumeDataSize() * float(numSlices) / float(params.numZ);
+		float memForOneProjection = numProjectionData * params.projectionDataSize(extraCols) * (chunk_params.numRows / float(params.numRows)) / float(params.numAngles);
+		// memAvailable > memForVolume + numViewsPerChunk * memForOneProjection
+		int numViewsPerChunk = std::max(1, std::min(params.numAngles, int(floor((memAvailable - memForVolume) / memForOneProjection))));
+		int numViewChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
+		if (numViewsPerChunk == params.numAngles)
 		{
+			LOG(logDEBUG, className, "") << "using volume slab size of " << numSlicesPerChunk << std::endl;
+
 			//*
 			float* g_chunk = NULL;
 			if (rowRange[0] == 0 && rowRange[1] == params.numRows - 1)
@@ -1197,6 +1229,12 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		}
 		else
 		{
+			numViewsPerChunk = int(ceil(float(params.numAngles) / float(numViewChunks)));
+			numViewChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
+			LOG(logDEBUG, className, "") << "using volume slab size of " << numSlicesPerChunk << " and number of angles: " << numViewsPerChunk << std::endl;
+			//LOG(logDEBUG, className, "") << "memForVolume = " << memForVolume << std::endl;
+			//LOG(logDEBUG, className, "") << "memForOneProjection = " << memForOneProjection << std::endl;
+
 			cudaError_t cudaStatus;
 			cudaSetDevice(chunk_params.whichGPU);
 			float* dev_f = 0;

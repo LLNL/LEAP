@@ -58,10 +58,13 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 		int numVolumeData = 1;
 		if (volume_on_cpu == false)
 			numVolumeData = 0;
+		int numProjectionData = 1;
+		if (data_on_cpu == false)
+			numProjectionData = 0;
 
 		if (data_on_cpu)
 		{
-			if (params->hasSufficientGPUmemory(false, 0, 1, numVolumeData) == false)
+			if (params->hasSufficientGPUmemory(false, 0, numProjectionData, numVolumeData) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;
@@ -73,9 +76,9 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 		else if (params->muSpecified())
 			return project_attenuated(g, f, params, data_on_cpu);
 		else if (params->geometry == parameters::MODULAR)
-			return project_Joseph_modular(g, f, params, data_on_cpu);
+			return project_Joseph_modular(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
 		else
-			return project_SF(g, f, params, data_on_cpu);
+			return project_SF(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
 	}
 #endif
 	else
@@ -144,10 +147,13 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 		int numVolumeData = 1;
 		if (volume_on_cpu == false)
 			numVolumeData = 0;
+		int numProjectionData = 1;
+		if (data_on_cpu == false)
+			numProjectionData = 0;
 
 		if (data_on_cpu)
 		{
-			if (params->hasSufficientGPUmemory(false, 0, 1, numVolumeData) == false)
+			if (params->hasSufficientGPUmemory(false, 0, numProjectionData, numVolumeData) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
 				return false;

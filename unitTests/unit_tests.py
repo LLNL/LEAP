@@ -10,8 +10,8 @@ numRows = int(numCols*25.0/24.0)
 pixelSize = 1.03*2.0*250.0/512 # 0.5*512*x=240
 centerRow = 0.5*(numRows-1)
 centerCol = 0.5*(numCols-1)
-#sdd = 765
-sdd = 1500
+sdd = 765
+#sdd = 1500
 sod = 0.5*sdd
 
 #centerCol += centerCol*0.1
@@ -24,6 +24,7 @@ sod = 0.5*sdd
 
 includeEar = False
 
+geometries = list(range(6))
 voxelScales = [0.5, 1.0, 2.0]
 angularRanges = [200.0, 360.0]
 projection_methods = ['VD', 'SF']
@@ -34,9 +35,10 @@ pitch = 0.0
 #voxelScales = [1.0]
 #voxelScales = [2.0]
 #projection_methods = ['VD']
+#geometries = [3]
 
-
-for igeom in range(6):
+for ii in range(len(geometries)):
+    igeom = geometries[ii]
     leapct.reset()
     #leapct.set_rampFilter(12)
     geo = None
