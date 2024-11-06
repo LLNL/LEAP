@@ -2081,8 +2081,9 @@ float* rampImpulseResponse_modified(int N, parameters* params)
     return h;
 }
 
-float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out)
+float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out, bool data_on_cpu)
 {
+    // it is assumed that either g_out is NULL or g_out is data on the GPU
     if (g == NULL || params == NULL)
         return NULL;
     else if (params->helicalPitch != 0.0 || params->offsetScan == false)
@@ -2098,6 +2099,14 @@ float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out)
     {
         cudaSetDevice(params->whichGPU);
         cudaError_t cudaStatus;
+
+        float* dev_g = 0;
+        if (data_on_cpu)
+        {
+            dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+        }
+        else
+            dev_g = g;
 
         float* g_pad = g_out;
         if (g_out == NULL)
@@ -2115,7 +2124,7 @@ float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out)
         dim3 dimBlock = setBlockSize(N_g);
         dim3 dimGrid = setGridSize(N_g, dimBlock);
 
-        zeroPadForOffsetScanKernel <<< dimGrid, dimBlock >>> (g, g_pad, N_g, N_add, padOnLeft, dev_offsetScanWeights);
+        zeroPadForOffsetScanKernel <<< dimGrid, dimBlock >>> (dev_g, g_pad, N_g, N_add, padOnLeft, dev_offsetScanWeights);
         cudaStatus = cudaDeviceSynchronize();
 
         if (padOnLeft)
@@ -2124,6 +2133,8 @@ float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out)
 
         if (dev_offsetScanWeights != 0)
             cudaFree(dev_offsetScanWeights);
+        if (data_on_cpu == true && dev_g != 0)
+            cudaFree(dev_g);
         return g_pad;
     }
     else

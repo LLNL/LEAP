@@ -49,7 +49,7 @@ moduleCenters[:,2] *= -1.0
 # Set LEAP CT geometry parameters
 pixelSize = 0.149600
 leapct.set_modularbeam(numAngles, 972, 768, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
-leapct.set_conebeam(numAngles, 972, 768, pixelSize, pixelSize, 972/2, 768/2, leapct.setAngleArray(numAngles, 360.0), 66.010880, 199.011551)
+#leapct.set_conebeam(numAngles, 972, 768, pixelSize, pixelSize, 972/2, 768/2, leapct.setAngleArray(numAngles, 360.0), 66.010880, 199.011551)
 
 # Set LEAP CT volume parameters
 #leapct.set_default_volume()

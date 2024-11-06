@@ -511,6 +511,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 	{
 #ifndef __USE_CPU
 
+		// params->whichGPU >= 0 && data_on_cpu == true
 		int numVolumeData = 1;
 		if (volume_on_cpu == false)
 			numVolumeData = 0;
@@ -530,6 +531,7 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		cudaError_t cudaStatus;
 		float* dev_g = 0;
 
+		/*
 		float* g_pad = zeroPadForOffsetScan(g, params);
 		if (g_pad != NULL)
 		{
@@ -541,6 +543,15 @@ bool filteredBackprojection::execute(float* g, float* f, parameters* params, boo
 		{
 			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
 		}
+		//*/
+
+		//*
+		dev_g = zeroPadForOffsetScan_GPU(g, params, NULL, true);
+		if (dev_g == NULL)
+			dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+		params->offsetScan = false;
+		//*/
+
 		if (dev_g == 0)
 			return false;
 

@@ -20,7 +20,7 @@
  * This header and associated source file are for generic GPU-based functions that are used in LEAP
  */
 
-#define GPU_MEMORY_SAFETY_MULTIPLIER 1.0
+#define GPU_MEMORY_SAFETY_MULTIPLIER 0.9
 
 #ifndef __USE_CPU
 #include "cuda_runtime.h"
