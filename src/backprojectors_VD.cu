@@ -581,7 +581,17 @@ __global__ void coneParallelBackprojectorKernel_vox(cudaTextureObject_t g, int4 
     const float z = k * T_f.z + startVals_f.z;
     if (x * x + y * y > rFOVsq)
     {
-        f[ind] = 0.0f;
+        if (volumeDimensionOrder == 0)
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset)] = 0.0f;
+        }
+        else
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset) * uint64(N_f.y * N_f.x)] = 0.0f;
+        }
+        //f[ind] = 0.0f;
         return;
     }
 
@@ -765,12 +775,24 @@ __global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int
     else
         ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
+    int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
+
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
     if (x * x + y * y > rFOVsq)
     {
-        f[ind] = 0.0f;
+        if (volumeDimensionOrder == 0)
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset)] = 0.0f;
+        }
+        else
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset) * uint64(N_f.y * N_f.x)] = 0.0f;
+        }
+        //f[ind] = 0.0f;
         return;
     }
 
@@ -781,7 +803,6 @@ __global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int
     const float Tu_inv = 1.0f / T_g.z;
 
     float vals[NUM_SLICES_PER_THREAD];
-    int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
     for (int k_offset = 0; k_offset < numZ; k_offset++)
         vals[k_offset] = 0.0f;
 
@@ -848,17 +869,28 @@ __global__ void fanBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, 
     else
         ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
+    int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
+
     const float x = i * T_f.x + startVals_f.x;
     const float y = j * T_f.y + startVals_f.y;
     const float z = k * T_f.z + startVals_f.z;
     if (x * x + y * y > rFOVsq)
     {
-        f[ind] = 0.0f;
+        if (volumeDimensionOrder == 0)
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset)] = 0.0f;
+        }
+        else
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset) * uint64(N_f.y * N_f.x)] = 0.0f;
+        }
+        //f[ind] = 0.0f;
         return;
     }
 
     float vals[NUM_SLICES_PER_THREAD];
-    int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
     for (int k_offset = 0; k_offset < numZ; k_offset++)
         vals[k_offset] = 0.0f;
 
@@ -927,9 +959,21 @@ __global__ void parallelBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 
     else
         ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
 
+    int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
+
     if (x * x + y * y > rFOVsq)
     {
-        f[ind] = 0.0;
+        if (volumeDimensionOrder == 0)
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset)] = 0.0f;
+        }
+        else
+        {
+            for (int k_offset = 0; k_offset < numZ; k_offset++)
+                f[ind + uint64(k_offset) * uint64(N_f.y * N_f.x)] = 0.0f;
+        }
+        //f[ind] = 0.0;
         return;
     }
 
@@ -937,7 +981,6 @@ __global__ void parallelBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 
     const float s_shift = -startVals_g.z * Tu_inv + 0.5f;
 
     float vals[NUM_SLICES_PER_THREAD];
-    int numZ = min(NUM_SLICES_PER_THREAD, N_f.z - k);
     for (int k_offset = 0; k_offset < numZ; k_offset++)
         vals[k_offset] = 0.0f;
     for (int l = 0; l < N_g.x; l++)
