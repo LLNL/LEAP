@@ -317,32 +317,45 @@ float interpolate2D(float* data, float ind_1, float ind_2, int N_1, int N_2)
 		d_1 * ((1.0 - d_2) * data[ind_1_hi * N_2 + ind_2_lo] + d_2 * data[ind_1_hi * N_2 + ind_2_hi]);
 }
 
-bool findCenter_cpu(float* g, parameters* params, int iRow)
+bool findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
 {
 	if (g == NULL || params == NULL)
 		return false;
 	if (params->offsetScan == true)
-		printf("Warning: findCenter may not work for offsetScan\n");
-    if (params->geometry == parameters::PARALLEL)
-        return findCenter_parallel_cpu(g, params, iRow);
+	{
+		if (find_tau)
+			printf("Warning: find_tau may not work for offsetScan\n");
+		else
+			printf("Warning: find_centerCol may not work for offsetScan\n");
+	}
+	if (params->geometry == parameters::PARALLEL)
+	{
+		if (find_tau)
+		{
+			printf("Error: find_tau only works for fan- or cone-beam data\n");
+			return false;
+		}
+		else
+			return findCenter_parallel_cpu(g, params, iRow);
+	}
     else if (params->geometry == parameters::FAN)
-        return findCenter_fan_cpu(g, params, iRow);
+        return findCenter_fan_cpu(g, params, iRow, find_tau);
 	else if (params->geometry == parameters::CONE)
 	{
 		if (params->helicalPitch != 0.0)
-			printf("Warning: findCenter will likely not work for helical data\n");
-		return findCenter_cone_cpu(g, params, iRow);
+			printf("Warning: find_centerCol/find_tau will likely not work for helical data\n");
+		return findCenter_cone_cpu(g, params, iRow, find_tau);
 	}
     else
     {
-        printf("Error: currently findCenter only works for parallel-, fan-, or cone-beam data\n");
+        printf("Error: currently find_centerCol/find_tau only works for parallel-, fan-, or cone-beam data\n");
         return false;
     }
 }
 
-bool findCenter_fan_cpu(float* g, parameters* params, int iRow)
+bool findCenter_fan_cpu(float* g, parameters* params, int iRow, bool find_tau)
 {
-	return findCenter_cone_cpu(g, params, iRow);
+	return findCenter_cone_cpu(g, params, iRow, find_tau);
 }
 
 bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
@@ -457,7 +470,7 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 	return true;
 }
 
-bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
+bool findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 {
     if (iRow < 0 || iRow > params->numRows - 1)
         iRow = max(0, min(params->numRows - 1, int(floor(0.5 + params->centerRow))));
@@ -479,10 +492,12 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 	
 	double* shiftCosts = (double*)malloc(sizeof(double) * params->numCols);
 
-	float A = 2.0 * params->tau * params->sod / (params->sod * params->sod - params->tau * params->tau);
-	float atanA = atan(A);
+	float A_0 = 2.0 * params->tau * params->sod / (params->sod * params->sod - params->tau * params->tau);
+	float atanA_0 = atan(A_0);
 	bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 	params->normalizeConeAndFanCoordinateFunctions = true;
+
+	float tau_shift = params->pixelWidth * params->sod / params->sdd;
 
 	float phi_0 = params->phis[0];
 	float phi_end = params->phis[params->numAngles - 1];
@@ -493,6 +508,9 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 	float u_end = params->u(params->numCols-1);
 
 	float atanTu = atan(params->pixelWidth / params->sdd);
+	float T_u = params->pixelWidth;
+	if (params->detectorType == parameters::CURVED)
+		T_u = atanTu;
 
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
@@ -501,9 +519,20 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 		shiftCosts[n] = 0.0;
 		//double denom = 0.0;
 
-		float u_0 = -(float(n) + params->colShiftFromFilter) * params->pixelWidth;
-		if (params->detectorType == parameters::CURVED)
-			u_0 = -(float(n) + params->colShiftFromFilter) * atanTu;
+		float A = A_0;
+		float atanA = atanA_0;
+		float u_0 = -(params->centerCol + params->colShiftFromFilter) * T_u;
+
+		if (find_tau)
+		{
+			float tau_cur = tau_shift * (float(n) - 0.5 * float(params->numCols - 1));
+			A = 2.0 * tau_cur * params->sod / (params->sod * params->sod - tau_cur * tau_cur);
+			atanA = atan(A_0);
+		}
+		else
+		{
+			u_0 = -(float(n) + params->colShiftFromFilter) * T_u;
+		}
 
 		double num = 0.0;
 		double count = 0.0;
@@ -564,7 +593,11 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow)
 
 	params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
 
-	params->centerCol = findMinimum(shiftCosts, centerCol_low, centerCol_high);
+	float new_center = findMinimum(shiftCosts, centerCol_low, centerCol_high);
+	if (find_tau)
+		params->tau = tau_shift * (new_center - 0.5 * float(params->numCols - 1));
+	else
+		params->centerCol = new_center;
 	free(shiftCosts);
 
     return true;

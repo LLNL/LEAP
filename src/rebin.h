@@ -34,6 +34,7 @@ public:
 
     bool rebin_parallel(float* g, parameters* params_in, int order = 6);
     float* rebin_parallel_singleProjection(float* g, parameters* params_in, int order, float desiredAngle);
+    int rebin_parallel_singleSinogram(float* g, parameters* params_in, float* parallel_sinogram, int order = 6, int desiredRow=-1, bool reduce180 = true);
 
 private:
     

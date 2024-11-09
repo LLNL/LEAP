@@ -48,8 +48,12 @@ public:
     int numClippingPlanes;
     float clipCone[2];
 
+    void restore_cone_params();
+
 private:
     double dot(double* x, double* y, int N = 3);
+    float centers_save[3];
+    float radii_save[3];
 };
 
 class phantom
@@ -97,6 +101,9 @@ public:
     double lineIntegral(double* p, double* r);
 
     bool synthesizeSymmetry(float* f_radial, float* f);
+
+    bool scale_phantom(float scale_x, float scale_y, float scale_z);
+    bool voxelize(float* f, parameters* params_in, int oversampling = 1);
 
     // enumerated list of all the 3D geometric shapes that are supported
     enum objectType_list { ELLIPSOID = 0, PARALLELEPIPED = 1, CYLINDER_X = 2, CYLINDER_Y = 3, CYLINDER_Z = 4, CONE_X = 5, CONE_Y = 6, CONE_Z = 7 };

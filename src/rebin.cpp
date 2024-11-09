@@ -10,6 +10,7 @@
 #include "rebin.h"
 #include "leap_defines.h"
 #include "log.h"
+#include "ramp_filter_cpu.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -253,6 +254,339 @@ float* rebin::rebin_parallel_singleProjection(float* g, parameters* params_in, i
     params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
 
     return outProj;
+}
+
+int rebin::rebin_parallel_singleSinogram(float* g, parameters* params_in, float* parallel_sinogram, int order, int desiredRow, bool reduce180)
+{
+    //*
+    params = params_in;
+    if (g == NULL || params == NULL || params->numCols <= 2 || parallel_sinogram == NULL)
+        return 0;
+    if (params->geometry != parameters::CONE && params->geometry != parameters::FAN)
+    {
+        printf("Error: rebin_parallel_singleSinogram: input data must be specified as fan-beam or cone-beam\n");
+        return 0;
+    }
+    if (params->anglesAreEquispaced() == false && order > 2)
+    {
+        order = 2;
+        LOG(logWARNING, "rebin", "rebin_parallel_singleSinogram") << "Warning: non-equi-spaced angles can only be rebinned with bilinear interpolation" << std::endl;
+        //LOG(logERROR, "rebin", "rebin_parallel_singleSinogram") << "Error: current implementation requires angles to be equi-spaced.  If this feature is of interest please submit a feature request." << std::endl;
+        //return NULL;
+    }
+
+    if (desiredRow < 0 || desiredRow >= params->numRows)
+        desiredRow = max(0, min(params->numRows-1, int(floor(0.5 + params->centerRow))));
+
+    reduce180 = true;
+    bool padOnLeft;
+    int N_add = 0;
+    if (reduce180)
+        N_add = zeroPadForOffsetScan_numberOfColsToAdd(params, padOnLeft);
+    if (N_add <= 0)
+        reduce180 = false;
+
+    order = order + (order % 2);
+    order = max(2, min(order, 6));
+
+    T_phi = params->T_phi();
+    phi_0 = params->phis[0];
+    N_phi = params->numAngles;
+
+    float angularRange_mod_360 = fabs(params->angularRange) - floor(0.5 + fabs(params->angularRange) / 360.0) * 360.0;
+    //printf("angularRange_mod_360 = %f\n", angularRange_mod_360);
+    //printf("fabs(params->T_phi())*180.0/PI = %f\n", fabs(params->T_phi()) * 180.0 / PI);
+
+    bool doWrapAround = true;
+    if (params->helicalPitch != 0.0)
+        doWrapAround = false;
+    else if (fabs(params->angularRange) < min(359.0, 360.0 - fabs(T_phi) * 180.0 / PI)) //if (angularRange_mod_360 > fabs(params->T_phi())*180.0/PI)
+        doWrapAround = false;
+
+    if (doWrapAround)
+    {
+        LOG(logDEBUG, "rebin", "rebin_parallel") << "doWrapAround = TRUE" << std::endl;
+    }
+    else
+        LOG(logDEBUG, "rebin", "rebin_parallel") << "doWrapAround = FALSE" << std::endl;
+
+    bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
+    params->normalizeConeAndFanCoordinateFunctions = true;
+
+    double tau = params->tau;
+    double R = params->sod;
+    double R_tau = sqrt(R * R + tau * tau);
+    double atan_A = atan(2.0 * tau * R / (R * R - tau * tau));
+    double asin_tau_R_tau = asin(tau / R_tau);
+
+    float rotationDirection = 1.0;
+    if (T_phi < 0.0)
+        rotationDirection = -1.0;
+
+    N_phi_new = N_phi;
+    phi_0_new = phi_0;
+
+    //double T_u = params->pixelWidth * params->sod / params->sdd;
+    double T_u = params->u(1) - params->u(0);
+    double u_0 = params->u(0);
+    double u_end = params->u(params->numCols - 1);
+
+    double u_mid = 0.5*(u_end + u_0);
+    double u_mid_ind = (u_mid-u_0)/T_u;// T_u* i + u_0
+
+    int N_s = params->numCols;
+    double T_s = params->pixelWidth * R_tau / params->sdd;
+    //double s_0 = -u_mid_ind * T_s;//u_mid_ind*T_s + s_0 = 0
+    double s_0 = -params->centerCol * T_s;
+
+    if (doWrapAround == false)
+    {
+        double fanAngle_low, fanAngle_high;
+        // Need to change N_phi and phi_0
+        if (params->detectorType == parameters::FLAT)
+        {
+            fanAngle_low = atan(params->u(0));
+            fanAngle_high = atan(params->u(params->numCols-1));
+        }
+        else
+        {
+            fanAngle_low = params->u(0);
+            fanAngle_high = params->u(params->numCols - 1);
+        }
+        //float phi_start = params->phis[0] - fanAngle_low * rotationDirection;
+        //float phi_end = params->phis[params->numAngles - 1] - fanAngle_high * rotationDirection;
+        float phi_start, phi_end;
+        if (T_phi >= 0.0)
+        {
+            phi_start = params->phis[0] - fanAngle_low;
+            phi_end = params->phis[params->numAngles - 1] - fanAngle_high;
+        }
+        else
+        {
+            phi_start = params->phis[0] - fanAngle_high;
+            phi_end = params->phis[params->numAngles - 1] - fanAngle_low;
+        }
+
+        //phi_start = T_phi*? + phi_0
+        int phi_0_new_ind = int(ceil((phi_start - phi_0) / (T_phi)));
+        int phi_end_new_ind = int(floor((phi_end - phi_0) / (T_phi)));
+
+        phi_0_new = phi_0_new_ind * T_phi + phi_0;
+        N_phi_new = phi_end_new_ind - phi_0_new_ind + 1;
+    }
+    //double beta_min = min(phi_0_new, T_phi * (N_phi_new-1) + phi_0_new);
+    //double beta_max = max(phi_0_new, T_phi * (N_phi_new-1) + phi_0_new);
+    double beta_min = min(phi_0, T_phi * (N_phi-1) + phi_0);
+    double beta_max = max(phi_0, T_phi * (N_phi-1) + phi_0);
+    //printf("beta_max = %f, beta_min = %f\n", beta_max, beta_min);
+
+    float* sino_input = new float[params->numCols * params->numAngles];
+    if (params->geometry == parameters::CONE && params->detectorType == parameters::FLAT && params->numRows > 1)
+    {
+        LOG(logDEBUG, "rebin", "rebin_parallel_singleSinogram") << "performing detector column stretching..." << std::endl;
+        double T_v = params->v(1) - params->v(0);
+        double v_0 = params->v(0);
+
+        //*
+        omp_set_num_threads(omp_get_num_procs());
+        #pragma omp parallel for
+        for (int i = 0; i < params->numAngles; i++)
+        {
+            float* aProj = &g[uint64(i) * uint64(params->numRows * params->numCols)];
+            for (int k = 0; k < params->numCols; k++)
+            {
+                float lineLength = sqrt(1.0 + params->u(k) * params->u(k));
+
+                int j = desiredRow;
+                //for (int j = 0; j < params->numRows; j++)
+                {
+                    //double v_new = params->v(j) / lineLength;
+                    double v_new = params->v(j) * lineLength;
+
+                    double ind = (v_new - v_0) / T_v;
+                    int ind_closest = int(floor(0.5 + ind));
+                    if (fabs(ind - double(ind_closest)) < 1.0e-8 || ind_closest < 0 || ind_closest > params->numRows-1)
+                    {
+                        ind_closest = max(0, min(params->numRows - 1, ind_closest));
+                        sino_input[i * params->numCols + k] = aProj[ind_closest*params->numCols + k];
+                    }
+                    else
+                    {
+                        // Determine interpolation polynomial order and placement
+                        int ind_lowest, M;
+                        int M_default_local = order;
+                        if (fabs(ind - double(ind_closest)) < 0.25)
+                        {
+                            // use odd length filter
+                            M = min(M_default_local - ((M_default_local + 1) % 2), 1 + min(params->numCols - 1 - ind_closest, ind_closest));
+                            if (M % 2 == 0)
+                                M -= 1;
+                            ind_lowest = ind_closest - (M - 1) / 2;
+                        }
+                        else
+                        {
+                            M = min(M_default_local - (M_default_local % 2), min(params->numCols - int(ceil(ind)), 1 + int(ind)));
+                            if (M % 2 == 1)
+                                M -= 1;
+                            ind_lowest = int(ind) - M / 2 + 1;
+                        }
+                        if (M <= 1)
+                        {
+                            ind_closest = max(0, min(params->numRows - 1, ind_closest));
+                            sino_input[i * params->numCols + k] = aProj[ind_closest*params->numCols + k];
+                        }
+                        else
+                        {
+                            double val = 0.0;
+                            for (int l = 0; l < M; l++)
+                            {
+                                double h = 1.0;
+                                for (int m = 0; m < M; m++)
+                                {
+                                    if (m != l)
+                                        h *= double(ind - m - ind_lowest) / double(l - m);
+                                }
+                                int row_ind = max(0, min(params->numRows-1, l + ind_lowest));
+                                val += h * aProj[row_ind*params->numCols + k];
+                            }
+                            sino_input[i * params->numCols + k] = val;
+                        }
+                    }
+                }
+            }
+        }
+        //*/
+    }
+    else
+    {
+        omp_set_num_threads(omp_get_num_procs());
+        #pragma omp parallel for
+        for (int i = 0; i < params->numAngles; i++)
+        {
+            float* aLine = &g[uint64(i) * uint64(params->numRows * params->numCols) + uint64(desiredRow*params->numCols)];
+            for (int k = 0; k < params->numCols; k++)
+                sino_input[i * params->numCols + k] = aLine[k];
+        }
+    }
+
+    if (N_add > 0)
+    {
+        /*
+        if (padOnLeft) // params->centerCol += N_add;
+            s_0 = -(params->centerCol+N_add) * T_s;
+        N_s += N_add;
+        N_phi_new = params->numAngles/2;
+        //*/
+        N_s = params->numCols*2;
+        s_0 = -0.5*(N_s-1)*T_s;
+        N_phi_new = params->numAngles/2;
+    }
+
+    // Perform fan to parallel rebinning
+    int iRow = desiredRow;
+
+    LOG(logDEBUG, "rebin", "rebin_parallel") << "performing fan to parallel rebinning..." << std::endl;
+
+    omp_set_num_threads(omp_get_num_procs());
+    #pragma omp parallel for
+    for (int iAngle = 0; iAngle < N_phi_new; iAngle++)
+    {
+        uint64 ind_offset = uint64(iAngle) * uint64(N_s);
+        double phi = iAngle*T_phi + phi_0_new;
+        for (int iCol = 0; iCol < N_s; iCol++)
+        {
+            double s = iCol*T_s + s_0;
+            double alpha = asin(s / R_tau) + asin_tau_R_tau;
+            double beta = phi + alpha;
+
+            double lateral = alpha;
+            if (params->detectorType == parameters::FLAT)
+                lateral = tan(alpha);
+
+            if (reduce180)
+            {
+                if ((lateral < u_0 && padOnLeft) || (lateral > u_end && padOnLeft == false))
+                {
+                    alpha = asin(-s / R_tau) + asin_tau_R_tau;
+                    beta = phi + alpha + PI;
+                }
+            }
+
+            if (doWrapAround)
+            {
+                if (beta < beta_min)
+                    beta = beta + 2.0 * PI;
+                else if (beta > beta_max)
+                    beta = beta - 2.0 * PI;
+                //if (beta < beta_min || beta > beta_max)
+                //    printf("beta error!\n");
+            }
+            else
+            {
+                //if (iRow == params->numRows / 2 && (beta < beta_min || beta > beta_max))
+                //    printf("using conjugate ray: phi = %f, beta = %f, alpha = %f\n", phi, beta, alpha);
+                if (beta < beta_min)
+                {
+                    double alpha_new = -alpha + atan_A;
+                    beta = beta - (alpha - alpha_new) + PI;
+                    alpha = alpha_new;
+                }
+                else if (beta > beta_max)
+                {
+                    double alpha_new = -alpha + atan_A;
+                    beta = beta - (alpha - alpha_new) - PI;
+                    alpha = alpha_new;
+                }
+            }
+
+            lateral = alpha;
+            if (params->detectorType == parameters::FLAT)
+                lateral = tan(alpha);
+
+            float beta_ind = params->phi_inv(beta);
+            parallel_sinogram[ind_offset + uint64(iCol)] = LagrangeInterpolation13(sino_input, params, beta_ind, (lateral-u_0)/T_u, iRow, doWrapAround, order);
+        }
+    }
+    delete [] sino_input;
+
+    params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+    //*/
+
+    /* Modify CT geometry parameters
+    if (params->geometry == parameters::CONE)
+        params->geometry = parameters::CONE_PARALLEL;
+    else if (params->geometry == parameters::FAN)
+        params->geometry = parameters::PARALLEL;
+    //*/
+
+    if (N_phi_new != N_phi || phi_0_new != phi_0)
+    {
+        /*
+        float* phis = new float[N_phi_new];
+        for (int i = 0; i < N_phi_new; i++)
+            phis[i] = (T_phi * i + phi_0_new) * 180.0 / PI + 90.0;
+        params->set_angles(phis, N_phi_new);
+        delete[] phis;
+        //*/
+
+        uint64 offs = uint64(N_phi_new) * uint64(params->numCols);
+        float* g_crop = &g[offs];
+        if (reduce180 == false)
+            params->setToZero(g_crop, uint64(N_phi - N_phi_new) * uint64(params->numCols));
+        LOG(logWARNING, "rebin", "rebin_parallel") << "WARNING: Reducing number of angles from " << N_phi << " to " << N_phi_new << std::endl;
+        //LOG(logWARNING, "rebin", "rebin_parallel") << "New angular coverage: " << params->angularRange << " degrees" << std::endl;
+    }
+
+    /*
+    params->numCols = N_s;
+    params->centerCol = -s_0/T_s; // i* T_s + s_0 == 0
+    params->tau = 0.0;
+    params->sod = R_tau;
+    params->pixelWidth = T_s;
+    params->detectorType = parameters::FLAT;
+    //*/
+
+    return N_s;
 }
 
 bool rebin::rebin_parallel(float* g, parameters* params_in, int order)

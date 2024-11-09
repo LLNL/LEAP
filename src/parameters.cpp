@@ -1221,21 +1221,27 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 			float d_y = moduleCenters[3 * i + 1];
 			float d_z = moduleCenters[3 * i + 2];
 
-			float sod_cur = sqrt(s_x * s_x + s_y * s_y + s_z * s_z);
-			//float odd_cur = sqrt(d_x * d_x + d_y * d_y + d_z * d_z);
 			//float sdd_cur = sqrt((d_x-s_x) * (d_x-s_x) + (d_y-s_y) * (d_y-s_y) + (d_z-s_z) * (d_z-s_z));
 
-			//*
 			float n_vec[3];
-			//n_vec[0] = colVectors[3 * i + 1] * rowVectors[3 * i + 2] - colVectors[3 * i + 2] * rowVectors[3 * i + 1];
-			//n_vec[1] = colVectors[3 * i + 2] * rowVectors[3 * i + 0] - colVectors[3 * i + 0] * rowVectors[3 * i + 2];
-			//n_vec[2] = colVectors[3 * i + 0] * rowVectors[3 * i + 1] - colVectors[3 * i + 1] * rowVectors[3 * i + 0];
+
+			//*
+			n_vec[0] = colVectors[3 * i + 1] * rowVectors[3 * i + 2] - colVectors[3 * i + 2] * rowVectors[3 * i + 1];
+			n_vec[1] = colVectors[3 * i + 2] * rowVectors[3 * i + 0] - colVectors[3 * i + 0] * rowVectors[3 * i + 2];
+			n_vec[2] = colVectors[3 * i + 0] * rowVectors[3 * i + 1] - colVectors[3 * i + 1] * rowVectors[3 * i + 0];
+			float sdd_cur = fabs((s_x - d_x) * n_vec[0] + (s_y - d_y) * n_vec[1] + (s_z - d_z) * n_vec[2]);
+
+			float sod_cur = fabs((s_x - 0.0) * n_vec[0] + (s_y - 0.0) * n_vec[1] + (s_z - 0.0) * n_vec[2]);
+			//*/
+
+			/*
+			float sod_cur = sqrt(s_x * s_x + s_y * s_y + s_z * s_z);
+			
 			n_vec[0] = s_x / sod_cur;
 			n_vec[1] = s_y / sod_cur;
 			n_vec[2] = s_z / sod_cur;
 
 			float sdd_cur = sod_cur*(((s_x - d_x) * n_vec[0] + (s_y - d_y) * n_vec[1] + (s_z - d_z) * n_vec[2]) / (s_x * n_vec[0] + s_y * n_vec[1] + s_z * n_vec[2]));
-			//float sdd_cur = fabs((s_x - d_x) * n_vec[0] + (s_y - d_y) * n_vec[1] + (s_z - d_z) * n_vec[2]);
 			//*/
 
 			if (sod_cur <= 0.0 || sdd_cur <= 0.0)

@@ -3794,6 +3794,17 @@ bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
 	}
 }
 
+bool tomographicModels::find_tau(float* g, int iRow, bool data_on_cpu)
+{
+	if (data_on_cpu)
+		return findCenter_cpu(g, &params, iRow, true);
+	else
+	{
+		printf("Error: find_tau not yet implemented for data on the GPU\n");
+		return false;
+	}
+}
+
 float tomographicModels::estimate_tilt(float* g, bool data_on_cpu)
 {
 	if (data_on_cpu)

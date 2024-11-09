@@ -51,8 +51,8 @@ numRows = numCols
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
-leapct.convert_to_modularbeam()
-leapct.rotate_detector(1.0)
+#leapct.convert_to_modularbeam()
+#leapct.rotate_detector(1.0)
 
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set

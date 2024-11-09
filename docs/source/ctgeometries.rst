@@ -44,6 +44,8 @@ Below is a sketch of the cone-beam geometry used in LEAP; :math:`i_c` and :math:
 .. autofunction:: leapctype.tomographicModels.shift_detector
 .. autofunction:: leapctype.tomographicModels.rotate_coordinate_system
 .. autofunction:: leapctype.tomographicModels.find_centerCol
+.. autofunction:: leapctype.tomographicModels.find_tau
 .. autofunction:: leapctype.tomographicModels.estimate_tilt
 .. autofunction:: leapctype.tomographicModels.conjugate_difference
 .. autofunction:: leapctype.tomographicModels.consistency_cost
+.. autofunction:: leapctype.tomographicModels.rebin_parallel_sinogram

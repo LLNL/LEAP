@@ -97,6 +97,42 @@ void phantom::clearObjects()
 	objects.clear();
 }
 
+bool phantom::voxelize(float* f, parameters* params_in, int oversampling)
+{
+	if (f == NULL || params_in == NULL)
+		return false;
+	else
+	{
+		for (int n = 0; n < int(objects.size()); n++)
+		{
+			float clip[4];
+			float* clip_ptr = clip;
+			if (objects[n].numClippingPlanes <= 0)
+				clip_ptr = NULL;
+			//*
+			if (CONE_X <= objects[n].type && objects[n].type <= CONE_Z)
+			{
+				objects[n].restore_cone_params();
+				clip[0] = 0.0;
+				clip[1] = 0.0;
+				clip[2] = 0.0;
+				clip[3] = 0.0;
+				clip_ptr = NULL;
+			}
+			else
+			{
+				clip[0] = -objects[n].clippingPlanes[0][0];
+				clip[1] = -objects[n].clippingPlanes[0][1];
+				clip[2] = -objects[n].clippingPlanes[0][2];
+				clip[3] = -objects[n].clippingPlanes[0][3];
+			}
+			//*/
+			addObject(f, params_in, objects[n].type, objects[n].centers, objects[n].radii, objects[n].val, objects[n].A, clip_ptr, oversampling);
+		}
+		return true;
+	}
+}
+
 bool phantom::addObject(float* f, parameters* params_in, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
 {
 	if (c == NULL || r == NULL)
@@ -540,6 +576,15 @@ void geometricObject::reset()
 	numClippingPlanes = 0;
 }
 
+void geometricObject::restore_cone_params()
+{
+	for (int i = 0; i < 3; i++)
+	{
+		radii[i] = radii_save[i];
+		centers[i] = centers_save[i];
+	}
+}
+
 bool geometricObject::init(int type_in, float* c_in, float* r_in, float val_in, float* A_in, float* clip_in)
 {
 	reset();
@@ -560,6 +605,9 @@ bool geometricObject::init(int type_in, float* c_in, float* r_in, float val_in, 
 	{
 		centers[i] = c_in[i];
 		radii[i] = r_in[i];
+
+		centers_save[i] = c_in[i];
+		radii_save[i] = r_in[i];
 	}
 
 	if (clip_in != NULL)
@@ -1120,6 +1168,29 @@ double geometricObject::dot(double* x, double* y, int N)
 			retVal += x[i] * y[i];
 		return retVal;
 	}
+}
+
+bool phantom::scale_phantom(float scale_x, float scale_y, float scale_z)
+{
+	for (int i = 0; i < int(objects.size()); i++)
+	{
+		objects[i].centers[0] *= scale_x;
+		objects[i].centers[1] *= scale_y;
+		objects[i].centers[2] *= scale_z;
+		objects[i].radii[0] *= scale_x;
+		objects[i].radii[1] *= scale_y;
+		objects[i].radii[2] *= scale_z;
+		//objects[i].clipCone[0] *= scale_x;
+		//objects[i].clipCone[1] *= scale_x;
+		for (int n = 0; n < objects[i].numClippingPlanes; n++)
+		{
+			//objects[i].clippingPlanes[n][0] *= scale_x;
+			objects[i].clippingPlanes[n][1] *= scale_y;
+			objects[i].clippingPlanes[n][2] *= scale_z;
+			objects[i].clippingPlanes[n][3] *= scale_x;
+		}
+	}
+	return true;
 }
 
 bool phantom::synthesizeSymmetry(float* f_radial, float* f)

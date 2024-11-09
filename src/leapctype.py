@@ -870,6 +870,47 @@ class tomographicModels:
             self.libprojectors.find_centerCol(g, iRow, True)
         return g
         
+    def find_tau(self, g, iRow=-1):
+        r"""Find the tau parameter
+
+        This function works by minimizing the difference of conjugate rays, by changing the horizontal source position shift (equivalent to rotation stage shifts).
+        The cost function for fan-beam is given by
+        
+        .. math::
+           \begin{eqnarray*}
+           &&\int \int \left[g(u,\varphi) - g\left(\frac{-u+\frac{2\tau R}{R^2-\tau^2}}{1+u\left(\frac{2\tau R}{R^2-\tau^2}\right)},\varphi -2\tan^{-1}u + \tan^{-1}\left(\frac{2\tau R}{R^2-\tau^2}\right) \pm \pi\right)\right]^2 \, du \, d\varphi, \\
+           \end{eqnarray*}
+           
+        For rays near the mid-plane, one can also use these cost functions for cone-beam coordinates as well.
+
+        Note that it only works for fan- and cone-beam CT geometry types
+        and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
+        If you have any bad edge detectors, these must be cropped out before running this algorithm.
+        If this function does not return a good estimate, try changing the iRow parameter value or try using the
+        inconsistencyReconstruction function is this class.
+        
+        See d12_geometric_calibration.py for a working example that uses this function.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            iRow (int): The detector row index to be used for the estimation, if no value is given, uses the row closest to the centerRow parameter
+            
+        Returns:
+            g, the same as the input
+        
+        """
+        if iRow is None:
+            iRow = -1
+        self.libprojectors.find_tau.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.find_tau.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.find_tau(g.data_ptr(), iRow, g.is_cuda == False)
+        else:
+            self.libprojectors.find_tau.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.find_tau(g, iRow, True)
+        return g
+        
     def estimate_tilt(self, g):
         """Estimates the tilt angle (around the optical axis) of the detector
 
@@ -1225,6 +1266,49 @@ class tomographicModels:
             self.libprojectors.rebin_parallel.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
             return self.libprojectors.rebin_parallel(g, order)
     
+    def rebin_parallel_sinogram(self, g, order=6, iRow=-1):
+        r""" rebin a single sinogram to parallel-beam or cone-parallel coordinates
+        
+        The CT geometry parameters must be defined before running this function.
+        This function does not rebin the whole data set.  The purpose of this function
+        is to generate a parallel-beam sinogram that can be used for geometric calibration.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            order (int): the order of the interpolating polynomial
+            iRow (int): detector row index to perform rebinning
+            
+        Returns:
+            2D array of the rebinned sinogram
+        
+        """
+
+        self.set_model()
+        self.libprojectors.rebin_parallel_sinogram.restype = ctypes.c_int
+        
+        if has_torch == True and type(g) is torch.Tensor:
+        
+            if g.is_cuda == True:
+                print('Error: rebin_parallel_sinogram only implemented for data on CPU!')
+                print('If this feature is of interest please submit a feature request.')
+                return None
+
+            sino = torch.zeros((self.get_numAngles(), self.get_numCols()), dtype=torch.float32)
+
+            self.libprojectors.rebin_parallel_sinogram.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+            numRays = self.libprojectors.rebin_parallel_sinogram(g.data_ptr(), sino.data_ptr(), order, iRow)
+            if numRays != self.get_numCols():
+                sino = torch.reshape(sino, (self.get_numAngles()//2, 2*self.get_numCols()))
+            return sino
+        else:
+            sino = np.zeros((self.get_numAngles(), self.get_numCols()), dtype=np.float32)
+
+            self.libprojectors.rebin_parallel_sinogram.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int]
+            numRays = self.libprojectors.rebin_parallel_sinogram(g, sino, order, iRow)
+            if numRays != self.get_numCols():
+                sino = np.reshape(sino, (self.get_numAngles()//2, 2*self.get_numCols()))
+            return sino
+
     def sinogram_replacement(self, g, priorSinogram, metalTrace, windowSize=None):
         """ replaces specified region in projection data with other projection data
         
@@ -7036,6 +7120,24 @@ class tomographicModels:
             self.libprojectors.rayTrace(g, int(oversampling), True)
         return g
     
+    def voxelize(self, f, oversampling=1):
+        r"""Voxelizes a phantom defined by geometric objects.
+        
+        One must have a phantom already defined before running this function.
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            oversampling (int): the oversampling factor of the voxelization
+        """
+        self.libprojectors.addObject.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.voxelize.argtypes = [ctypes.c_void_p, ctypes.c_int]
+            return self.libprojectors.voxelize(f.data_ptr(), oversampling)
+        else:
+            self.libprojectors.voxelize.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            return self.libprojectors.voxelize(f, oversampling)
+    
     def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None, oversampling=1):
         """Adds a geometric object to the phantom
         
@@ -7153,6 +7255,30 @@ class tomographicModels:
         """Clears all phantom objects"""
         self.set_model()
         self.libprojectors.clearPhantom()
+        
+    def scalePhantom(self, c):
+        r"""Scales the size of the phantom by the provided factor
+        
+        One must have a phantom already defined before running this function.
+        
+        Args:
+            c (float or list of three float): the scaling values (values greater than one make the phantom larger)
+        """
+        if isinstance(c, int) or isinstance(c, float):
+            c_x = c
+            c_y = c
+            c_z = c
+        elif isinstance(c, np.ndarray) and c.size == 3:
+            c_x = c[0]
+            c_y = c[1]
+            c_z = c[2]
+        else:
+            return False
+            
+        self.libprojectors.scalePhantom.restype = ctypes.c_bool
+        self.libprojectors.scalePhantom.argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.set_model()
+        return self.libprojectors.scalePhantom(c_x, c_y, c_z)
         
 class subsetParameters:
     def __init__(self, ctModel, numSubsets):

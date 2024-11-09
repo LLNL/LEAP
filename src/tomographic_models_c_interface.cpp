@@ -11,6 +11,7 @@
 #include "list_of_tomographic_models.h"
 #include "tomographic_models.h"
 #include "phantom.h"
+#include "rebin.h"
 #include "file_io.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -906,6 +907,11 @@ bool find_centerCol(float* g, int iRow, bool data_on_cpu)
 	return tomo()->find_centerCol(g, iRow, data_on_cpu);
 }
 
+bool find_tau(float* g, int iRow, bool data_on_cpu)
+{
+	return tomo()->find_tau(g, iRow, data_on_cpu);
+}
+
 float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu)
 {
 	return tomo()->consistency_cost(g, Delta_centerRow, Delta_centerCol, Delta_tau, Delta_tilt, data_on_cpu);
@@ -1036,6 +1042,16 @@ bool addObject(float* f, int type, float* c, float* r, float val, float* A, floa
 	return tomo()->geometricPhantom.addObject(f, &(tomo()->params), type, c, r, val, A, clip, oversampling);
 }
 
+bool voxelize(float* f, int oversampling)
+{
+	return tomo()->geometricPhantom.voxelize(f, &(tomo()->params), oversampling);
+}
+
+bool scalePhantom(float scale_x, float scale_y, float scale_z)
+{
+	return tomo()->geometricPhantom.scale_phantom(scale_x, scale_y, scale_z);
+}
+
 bool clearPhantom()
 {
 	tomo()->geometricPhantom.clearObjects();
@@ -1055,6 +1071,12 @@ bool rebin_curved(float* g, float* fanAngles, int order)
 bool rebin_parallel(float* g, int order)
 {
 	return tomo()->rebin_parallel(g, order);
+}
+
+int rebin_parallel_sinogram(float* g, float* output, int order, int desiredRow)
+{
+	rebin rebinningRoutines;
+	return rebinningRoutines.rebin_parallel_singleSinogram(g, &(tomo()->params), output, order, desiredRow);
 }
 
 bool sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
@@ -1288,6 +1310,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("get_offsetZ", &get_offsetZ, "");
     m.def("get_z0", &get_z0, "");
     m.def("find_centerCol", &find_centerCol, "");
+	m.def("find_tau", &find_tau, "");
 	m.def("estimate_tilt", &estimate_tilt, "");
 	m.def("conjugate_difference", &conjugate_difference, "");
     m.def("Laplacian", &Laplacian, "");
@@ -1313,10 +1336,13 @@ PYBIND11_MODULE(leapct, m) {
     m.def("Diffuse", &Diffuse, "");
 	m.def("TV_denoise", &TV_denoise, "");
     m.def("addObject", &addObject, "");
+	m.def("voxelize", &voxelize, "");
     m.def("clearPhantom", &clearPhantom, "");
+	m.def("scalePhantom", &scalePhantom, "");
     m.def("rayTrace", &rayTrace, "");
     m.def("rebin_curved", &rebin_curved, "");
 	m.def("rebin_parallel", &rebin_parallel, "");
+	m.def("rebin_parallel_sinogram", &rebin_parallel_sinogram, "");
     m.def("sinogram_replacement", &sinogram_replacement, "");
     m.def("down_sample", &down_sample, "");
     m.def("up_sample", &up_sample, "");

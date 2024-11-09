@@ -22,11 +22,11 @@
  * which is also known as a half-fan or half-cone.
  */
 
-bool findCenter_cpu(float* g, parameters* params, int iRow = -1);
+bool findCenter_cpu(float* g, parameters* params, int iRow = -1, bool find_tau = false);
 
 bool findCenter_parallel_cpu(float* g, parameters* params, int iRow = -1);
-bool findCenter_fan_cpu(float* g, parameters* params, int iRow = -1);
-bool findCenter_cone_cpu(float* g, parameters* params, int iRow = -1);
+bool findCenter_fan_cpu(float* g, parameters* params, int iRow = -1, bool find_tau = false);
+bool findCenter_cone_cpu(float* g, parameters* params, int iRow = -1, bool find_tau = false);
 
 float estimateTilt(float* g, parameters* params);
 bool getConjugateDifference(float* g, parameters* params, float alpha, float centerCol, float* diff);
