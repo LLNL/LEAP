@@ -2338,6 +2338,117 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 	return true;
 }
 
+bool tomographicModels::beam_hardening_heel_effect(float* g, float* anode_normal, float* LUT, float* takeOffAngles, int numSamples, int numAngles, float sampleRate, float firstSample, bool data_on_cpu)
+{
+	if (g == NULL || params.geometryDefined() == false || anode_normal == NULL || LUT == NULL || sampleRate <= 0.0 || numSamples <= 0 || numAngles <= 1)
+	{
+		printf("Error: invalid input!\n");
+		return false;
+	}
+	else if (data_on_cpu == false)
+	{
+		printf("Error: this function is currently only supported for CPU processing.\n");
+		return false;
+	}
+	else if (params.geometry == parameters::PARALLEL || params.geometry == parameters::CONE_PARALLEL || params.geometry == parameters::FAN)
+	{
+		printf("Error: this function does not support this CT geometry\n");
+		return false;
+	}
+
+	//for (int i = 0; i < numSamples; i++)
+	//	printf("%f\n", LUT[i]);
+
+	bool normalizeConeAndFanCoordinateFunctions_save = params.normalizeConeAndFanCoordinateFunctions;
+	params.normalizeConeAndFanCoordinateFunctions = false;
+
+	float firstAngle = takeOffAngles[0];
+	float lastAngle = takeOffAngles[numAngles - 1];
+	float T_angle = takeOffAngles[1] - takeOffAngles[0];
+
+	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int i = 0; i < params.numAngles; i++)
+	{
+		float sdd_cur = params.source_to_detector_distance(i);
+		float* aProj = &g[uint64(i) * uint64(params.numRows) * uint64(params.numCols)];
+		for (int j = 0; j < params.numRows; j++)
+		{
+			float* aLine = &aProj[uint64(j) * uint64(params.numCols)];
+			for (int k = 0; k < params.numCols; k++)
+			{
+				float x = aLine[k];
+
+				// Determine takeoff angle for this ray
+				float iAngle = 0.5*float(numAngles-1);
+				int iAngle_lo = numAngles / 2;
+				int iAngle_hi = numAngles / 2;
+				float dAngle = 0.0;
+
+				float v = params.v(j,i) / sdd_cur;
+				float u = params.u(k,i) / sdd_cur;
+				float lineLength = sqrt(1.0 + u * u + v * v);
+				//float takeoffAngle = 90.0 - acos((u * anode_normal[0] + 1.0 * anode_normal[1] + v * anode_normal[2]) / lineLength) * 180.0 / PI;
+				float takeoffAngle = acos((u * anode_normal[0] + 1.0 * anode_normal[1] + v * anode_normal[2]) / lineLength) * 180.0 / PI;
+				//if (i == 0 && j == params.numRows/2)
+				//	printf("takeoffAngle = %f (u=%f)\n", takeoffAngle, u);
+
+				if (takeoffAngle <= firstAngle)
+				{
+					iAngle_lo = 0;
+					iAngle_hi = 0;
+					dAngle = 0.0;
+				}
+				else if (takeoffAngle >= lastAngle)
+				{
+					iAngle_lo = numAngles-1;
+					iAngle_hi = numAngles-1;
+					dAngle = 0.0;
+				}
+				else
+				{
+					// takeoffAngle = firstAngle + iAngle*T_angle
+					iAngle = (takeoffAngle - firstAngle) / T_angle;
+					iAngle_lo = int(floor(iAngle));
+					iAngle_hi = int(ceil(iAngle));
+					dAngle = iAngle - float(iAngle_lo);
+				}
+
+				float* LUT_phi_lo = &LUT[iAngle_lo * numSamples];
+				float* LUT_phi_hi = &LUT[iAngle_hi * numSamples];
+
+				if (x >= lastSample)
+				{
+					float slope_lo = (LUT_phi_lo[numSamples - 1] - LUT_phi_lo[numSamples - 2]) / sampleRate;
+					float slope_hi = (LUT_phi_hi[numSamples - 1] - LUT_phi_hi[numSamples - 2]) / sampleRate;
+					float x_lo = LUT_phi_lo[numSamples - 1] + slope_lo * (x - lastSample);
+					float x_hi = LUT_phi_hi[numSamples - 1] + slope_hi * (x - lastSample);
+					x = (1.0 - dAngle) * x_lo + dAngle * x_hi;
+				}
+				else if (x <= firstSample)
+					x = firstSample;
+				else
+				{
+					float ind = x / sampleRate - firstSample;
+					int ind_low = int(ind);
+					float d = ind - float(ind_low);
+					float x_lo = float((1.0 - d) * LUT_phi_lo[ind_low] + d * LUT_phi_lo[ind_low + 1]);
+					float x_hi = float((1.0 - d) * LUT_phi_hi[ind_low] + d * LUT_phi_hi[ind_low + 1]);
+					x = (1.0 - dAngle) * x_lo + dAngle * x_hi;
+				}
+
+				aLine[k] = x;
+			}
+		}
+	}
+
+	params.normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
+
+	return true;
+}
+
 bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
 {
 	if (x == NULL || y == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || LUT == NULL || sampleRate <= 0.0 || numSamples <= 0)

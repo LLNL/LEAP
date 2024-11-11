@@ -4685,6 +4685,30 @@ class tomographicModels:
             self.libprojectors.applyTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.applyTransferFunction(x, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.size, True)
     
+    def beam_hardening_heel_effect(self, g, anode_normal, LUT, takeOffAngles, sampleRate, firstSample=0.0):
+       r""" This function performs beam hardening/ beam hardening correction for variable take-off angles
+       
+       The CT geometry parameters must be set prior to running this function.
+       The anode normal is in a reference frame where the detector normal is the y-axis
+       
+       Args:
+           g (C contiguous float32 numpy array or torch tensor): 3D data of first component (input and output)
+           anode_normal (3-element array): unit vector normal to the anode
+           LUT (2D contiguous float32 numpy array or torch tensor): lookup table with transfer function values
+           takeOffAngles (1D numpy array or torch tensor): the takeoff angles (degrees) modeled in the lookup table
+           sampleRate (float): the step size between samples
+           firstSample (float): the value of the first sample in the lookup table
+       
+       """
+       if has_torch == True and type(g) is torch.Tensor:
+           print('Error: beam_hardening_heel_effect not yet implemented for torch tensors!')
+           return False
+       else:
+           self.libprojectors.beam_hardening_heel_effect.restype = ctypes.c_bool
+           self.libprojectors.beam_hardening_heel_effect.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+           self.set_model()
+           return self.libprojectors.beam_hardening_heel_effect(g, anode_normal, LUT, takeOffAngles, LUT.shape[1], LUT.shape[0], sampleRate, firstSample, True)
+    
     def applyDualTransferFunction(self, x, y,  LUT, sampleRate, firstSample=0.0):
         """Applies a 2D transfer function to arbitrary 3D data pair, i.e., x,y = LUT(x,y)
         

@@ -942,6 +942,11 @@ bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, floa
 	return tomo()->applyTransferFunction(x, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, data_on_cpu);
 }
 
+bool beam_hardening_heel_effect(float* g, float* anode_normal, float* LUT, float* takeOffAngles, int numSamples, int numAngles, float sampleRate, float firstSample, bool data_on_cpu)
+{
+	return tomo()->beam_hardening_heel_effect(g, anode_normal, LUT, takeOffAngles, numSamples, numAngles, sampleRate, firstSample, data_on_cpu);
+}
+
 bool applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
 {
 	return tomo()->applyDualTransferFunction(x, y, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, data_on_cpu);
@@ -1316,6 +1321,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("Laplacian", &Laplacian, "");
     m.def("transmissionFilter", &transmissionFilter, "");
     m.def("applyTransferFunction", &applyTransferFunction, "");
+	m.def("beam_hardening_heel_effect", &beam_hardening_heel_effect, "");
     m.def("applyDualTransferFunction", &applyDualTransferFunction, "");
     m.def("convertToRhoeZe", &convertToRhoeZe, "");
     m.def("BlurFilter", &BlurFilter, "");

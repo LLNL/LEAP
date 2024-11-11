@@ -770,6 +770,22 @@ public:
 	bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu);
 
 	/**
+	 * \fn          beam_hardening_heel_effect
+	 * \brief       applies a transfer function to projection 3D data, i.e., x = LUT(x) to apply/correct for beam hardening with the heel effect
+	 * \param[in]   g pointer to the 3D data (input and output)
+	 * \param[in]	anode_normal, unit vector normal to the anode
+	 * \param[in]   LUT pointer to lookup table with transfer function values
+	 * \param[in]	takeOffAngles the takeoff angles modeled in the lookup table
+	 * \param[in]   numSamples the number of elements in LUT
+	 * \param[in]   numAngles the number of angles
+	 * \param[in]   sampleRate the step size between samples
+	 * \param[in]   firstSample the value of the first sample in the lookup table
+	 * \param[in]   data_on_cpu true if data (x and LUT) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool beam_hardening_heel_effect(float* g, float* anode_normal, float* LUT, float* takeOffAngles, int numSamples, int numAngles, float sampleRate, float firstSample, bool data_on_cpu);
+
+	/**
 	 * \fn          applyDualTransferFunction
 	 * \brief       applies a 2D transfer function to arbitrary 3D data pair, i.e., x,y = LUT(x,y)
 	 * \param[in]   x pointer to the 3D data of first component (input and output)

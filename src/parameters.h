@@ -216,12 +216,30 @@ public:
 	float pixelWidth_normalized();
 
 	/**
+	 * \fn		col
+	 * \breif	returns the local detector column coordinate (mm for all but curved-cone which is in radians)
+	 * \param	iCol, the index of the iCol-th detector column
+	 */
+	float col(int iCol);
+
+	/**
+	 * \fn		row
+	 * \breif	returns the local detector row coordinate (mm)
+	 * \param	iRow, the index of the iRow-th detector row
+	 */
+	float row(int iRow);
+
+	bool detector_normal(int, float*);
+	float source_to_object_distance(int);
+	float source_to_detector_distance(int);
+
+	/**
 	 * \fn          u
 	 * \brief       returns the position of the i-th detector column (mm)
 	 * \param       i the index of the i-th detector column
 	 * \return      returns the position of the i-th detector column (mm)
 	 */
-	float u(int i, int iphi = -1);
+	float u(int i, int iphi = -1, bool includeModuleShift = true);
 
 	/**
 	 * \fn          u_inv
@@ -237,8 +255,9 @@ public:
 	 * \param       i the index of the i-th detector row
 	 * \return      returns the position of the i-th detector row (mm)
 	 */
-	float v(int i, int iphi = -1);
+	float v(int i, int iphi = -1, bool includeModuleShift = true);
 
+	float u_offset(int iphi = -1);
 	float v_offset(int iphi = -1);
 
 	/**

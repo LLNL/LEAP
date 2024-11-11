@@ -201,8 +201,19 @@ bool analyticRayTracing::setTrajectory(int iProj, int iRow, int iCol, double* r,
     if (r == NULL)
         return false;
 
-    double u = params->u(iCol) + du;
-    double v = params->v(iRow) + dv;
+    double u, v;
+
+    if (params->geometry != parameters::MODULAR)
+    {
+        u = params->u(iCol) + du;
+        v = params->v(iRow) + dv;
+    }
+    else
+    {
+        u = params->col(iCol) + du;
+        v = params->row(iRow) + dv;
+    }
+
 
     double phi = 0.0;
     if (params->phis != NULL)

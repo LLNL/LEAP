@@ -766,10 +766,10 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             leapct_sweep.set_centerRow(values[n])
         elif param == 'tau':
             delta_tau = values[n] - leapct_sweep.get_tau()
-            nativeVoxelSize = leapct_sweep.get_pixelWidth() * leapct_sweep.get_sod() / leapct_sweep.get_sdd()
-            new_centerCol = leapct_sweep.get_centerCol()-delta_tau/nativeVoxelSize
-            print('    and centerCol = ' + str(new_centerCol))
-            leapct_sweep.set_centerCol(new_centerCol)
+            #nativeVoxelSize = leapct_sweep.get_pixelWidth() * leapct_sweep.get_sod() / leapct_sweep.get_sdd()
+            #new_centerCol = leapct_sweep.get_centerCol()-delta_tau/nativeVoxelSize
+            #print('    and centerCol = ' + str(new_centerCol))
+            #leapct_sweep.set_centerCol(new_centerCol)
             leapct_sweep.set_tau(values[n])
         elif param == 'sod':
             leapct_sweep.set_sod(values[n])
