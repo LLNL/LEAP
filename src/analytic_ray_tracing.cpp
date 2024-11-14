@@ -221,6 +221,18 @@ bool analyticRayTracing::setTrajectory(int iProj, int iRow, int iCol, double* r,
     double cos_phi = cos(phi);
     double sin_phi = sin(phi);
 
+    double cos_tilt = 1.0;
+    double sin_tilt = 0.0;
+    if (fabs(params->tiltAngle) > 1.0e-6 && params->geometry == parameters::CONE)
+    {
+        cos_tilt = cos(params->tiltAngle * PI / 180.0);
+        sin_tilt = sin(params->tiltAngle * PI / 180.0);
+        double u_tilt = u * cos_tilt - v * sin_tilt;
+        double v_tilt = u * sin_tilt + v * cos_tilt;
+        u = u_tilt;
+        v = v_tilt;
+    }
+
     float* s = NULL;
     float* c = NULL;
     float* u_vec = NULL;

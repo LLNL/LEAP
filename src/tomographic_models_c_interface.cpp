@@ -290,9 +290,9 @@ float get_FBPscalar()
 	return tomo()->get_FBPscalar();
 }
 
-bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
+bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float tiltAngle, float helicalPitch)
 {
-	return tomo()->set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch);
+	return tomo()->set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, tiltAngle, helicalPitch);
 }
 
 bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
@@ -624,6 +624,11 @@ bool set_tau(float tau)
 	return tomo()->set_tau(tau);
 }
 
+bool set_tiltAngle(float tiltAngle)
+{
+	return tomo()->set_tiltAngle(tiltAngle);
+}
+
 bool set_helicalPitch(float h)
 {
 	return tomo()->set_helicalPitch(h);
@@ -807,6 +812,11 @@ float get_tau()
 	return tomo()->params.tau;
 }
 
+float get_tiltAngle()
+{
+	return tomo()->params.tiltAngle;
+}
+
 float get_helicalPitch()
 {
 	return tomo()->get_helicalPitch();
@@ -902,12 +912,12 @@ float get_z0()
 	return tomo()->params.z_0();
 }
 
-bool find_centerCol(float* g, int iRow, bool data_on_cpu)
+float find_centerCol(float* g, int iRow, bool data_on_cpu)
 {
 	return tomo()->find_centerCol(g, iRow, data_on_cpu);
 }
 
-bool find_tau(float* g, int iRow, bool data_on_cpu)
+float find_tau(float* g, int iRow, bool data_on_cpu)
 {
 	return tomo()->find_tau(g, iRow, data_on_cpu);
 }
@@ -1295,6 +1305,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("get_centerRow", &get_centerRow, "");
     m.def("get_centerCol", &get_centerCol, "");
     m.def("get_tau", &get_tau, "");
+	m.def("get_tiltAngle", &get_tiltAngle, "");
     m.def("get_helicalPitch", &get_helicalPitch, "");
     m.def("get_normalizedHelicalPitch", &get_normalizedHelicalPitch, "");
     m.def("get_z_source_offset", &get_z_source_offset, "");

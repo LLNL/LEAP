@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation as R
 from leapctype import *
+leapct_sweep = tomographicModels() # used in parameter_sweep function
 
 def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=None, badPixelMap=None, flux_response=None):
     r""" Performs gain correction
@@ -677,15 +678,8 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     
     The CT geometry parameters and the CT volume parameters must be set prior to running this function.
     
-    The parameters to sweep are all standard LEAP CT geometry parameter names, except 'tilt'
-    The 'tilt' parameter is swept by converting the geometry to modular-beam (see the convert_to_modularbeam function).
-    Then the tilt is achieved by rotating the colVecs and rowVecs parameters (note that the data g is not rotated, 
-    just the model of the detector orientation which is better because no interpolation is necessary).  This rotation
-    is achieved with the rotate_detector function.
-    
-    When sweeping the tau parameter, the centerCol parameter is also adjusted because these both apply to the location
-    and the center of rotation of the scanner.  This additional adjustment of centerCol keeps the center of rotation
-    in the same place and thus has the effect of rotating the detector around the axis pointing across the detector rows.
+    The parameters to sweep are all standard LEAP CT geometry parameter names, except 'tilt' which is only available for cone- and modular-beam data.
+    (note that the data g is not rotated, just the model of the detector orientation which is better because no interpolation is necessary).
     
     Args:
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
@@ -727,11 +721,12 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         f_stack = np.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=np.float32)
 
     g_sweep = g
-    leapct_sweep = tomographicModels()
+    #leapct_sweep = tomographicModels()
     leapct_sweep.copy_parameters(leapct)
 
     if param == 'tilt':
-        leapct_sweep.convert_to_modularbeam()
+        if leapct.get_geometry() != 'CONE':
+            leapct_sweep.convert_to_modularbeam()
     elif leapct_sweep.get_geometry() == 'FAN' or leapct_sweep.get_geometry() == 'PARALLEL':
         leapct_sweep.set_numRows(1)
         if has_torch == True and type(g) is torch.Tensor:

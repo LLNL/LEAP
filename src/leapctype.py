@@ -476,7 +476,7 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_coneparallel(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
-    def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+    def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0, tiltAngle=0.0):
         r"""Sets the parameters for a cone-beam CT geometry
         
         The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
@@ -517,11 +517,12 @@ class tomographicModels:
             sdd (float): source to detector distance, measured in mm
             tau (float): center of rotation offset
             helicalPitch (float): the helical pitch (mm/radians)
+            tiltAngle (float) the rotation of the detector around the optical axis (degrees)
             
         Returns:
             True if the parameters were valid, false otherwise
         """
-        self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_conebeam.restype = ctypes.c_bool
         if has_torch and type(phis) is torch.Tensor:
             phis = phis.cpu().detach().numpy()
@@ -534,7 +535,7 @@ class tomographicModels:
             return False
             
         self.set_model()
-        return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
+        return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, tiltAngle, helicalPitch)
     
     def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
         """Alias for set_conebeam
@@ -745,6 +746,20 @@ class tomographicModels:
         self.libprojectors.set_tau.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_tau(tau)
+        
+    def set_tiltAngle(self, tiltAngle):
+        """Set the tiltAngle parameter
+        
+        Args:
+            tiltAngle (float): the rotation of the detector around the optical axis (degrees)
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
+        self.libprojectors.set_tiltAngle.argtypes = [ctypes.c_float]
+        self.libprojectors.set_tiltAngle.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_tiltAngle(tiltAngle)
     
     def set_helicalPitch(self, helicalPitch):
         r"""Set the helicalPitch parameter
@@ -855,20 +870,19 @@ class tomographicModels:
             iRow (int): The detector row index to be used for the estimation, if no value is given, uses the row closest to the centerRow parameter
             
         Returns:
-            g, the same as the input
+            the error metric value
         
         """
         if iRow is None:
             iRow = -1
-        self.libprojectors.find_centerCol.restype = ctypes.c_bool
+        self.libprojectors.find_centerCol.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.find_centerCol.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.find_centerCol(g.data_ptr(), iRow, g.is_cuda == False)
+            return self.libprojectors.find_centerCol(g.data_ptr(), iRow, g.is_cuda == False)
         else:
             self.libprojectors.find_centerCol.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.find_centerCol(g, iRow, True)
-        return g
+            return self.libprojectors.find_centerCol(g, iRow, True)
         
     def find_tau(self, g, iRow=-1):
         r"""Find the tau parameter
@@ -896,20 +910,19 @@ class tomographicModels:
             iRow (int): The detector row index to be used for the estimation, if no value is given, uses the row closest to the centerRow parameter
             
         Returns:
-            g, the same as the input
+            the error metric value
         
         """
         if iRow is None:
             iRow = -1
-        self.libprojectors.find_tau.restype = ctypes.c_bool
+        self.libprojectors.find_tau.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
             self.libprojectors.find_tau.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.find_tau(g.data_ptr(), iRow, g.is_cuda == False)
+            return self.libprojectors.find_tau(g.data_ptr(), iRow, g.is_cuda == False)
         else:
             self.libprojectors.find_tau.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.find_tau(g, iRow, True)
-        return g
+            return self.libprojectors.find_tau(g, iRow, True)
         
     def estimate_tilt(self, g):
         """Estimates the tilt angle (around the optical axis) of the detector
@@ -923,9 +936,8 @@ class tomographicModels:
         See also the conjugate_difference function.
         
         Example Usage:
-        alpha = leapct.estimate_tilt(g)
-        leapct.convert_to_modularbeam()
-        leapct.rotate_detector(alpha)
+        gamma = leapct.estimate_tilt(g)
+        leapct.set_tiltAngle(gamma)
 
         Note that it only works for parallel-beam, fan-beam, cone-beam, and cone-parallel CT geometry types (i.e., everything but modular-beam)
         and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
@@ -1111,11 +1123,17 @@ class tomographicModels:
             True if the operation was successful, False overwise
         
         """
-        if self.get_geometry() != 'MODULAR':
-            print('Error: can only rotate modular-beam detectors')
+        geom_str = self.get_geometry()
+        
+        if geom_str != 'MODULAR' and geom_str != 'CONE':
+            print('Error: can only rotate cone- and modular-beam detectors')
             print('Use convert_to_modularbeam() first')
             return False
         if type(alpha) is np.ndarray:
+            if geom_str != 'MODULAR':
+                print('Error: can only perform arbitrary rotations with modular-beam geometries')
+                print('Use convert_to_modularbeam() first')
+                return False
             if alpha.size == 3:
                 from scipy.spatial.transform import Rotation as R
                 A = R.from_euler('xyz', alpha, degrees=True).as_matrix()
@@ -1150,9 +1168,12 @@ class tomographicModels:
             
         else:
             self.set_model()
-            self.libprojectors.rotate_detector.restype = ctypes.c_bool
-            self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
-            return self.libprojectors.rotate_detector(alpha)
+            if geom_str == 'MODULAR':
+                self.libprojectors.rotate_detector.restype = ctypes.c_bool
+                self.libprojectors.rotate_detector.argtypes = [ctypes.c_float]
+                return self.libprojectors.rotate_detector(alpha)
+            else:
+                return self.set_tiltAngle(self.get_tiltAngle()+alpha)
         
     def rotate_coordinate_system(self, R):
         """Rotates the coordinate system
@@ -5989,6 +6010,12 @@ class tomographicModels:
         self.libprojectors.get_tau.restype = ctypes.c_float
         self.set_model()
         return self.libprojectors.get_tau()
+        
+    def get_tiltAngle(self):
+        """Get the tiltAngle parameter"""
+        self.libprojectors.get_tiltAngle.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_tiltAngle()
         
     def get_sourcePositions(self):
         """Get the sourcePositions parameter (modular-beam only)"""

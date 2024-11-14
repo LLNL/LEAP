@@ -71,7 +71,7 @@ leapct.print_parameters()
 #leapct.sketch_system()
 
 # Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
-leapct.set_projector('VD')
+#leapct.set_projector('VD')
 
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience

@@ -56,7 +56,7 @@ leapct.set_offsetScan(True)
 # It is best to do this after the CT geometry is set
 leapct.set_default_volume()
 #leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX())
-leapct.convert_to_modularbeam()
+#leapct.convert_to_modularbeam()
 
 # Trouble-Shooting Functions
 leapct.print_parameters()

@@ -46,12 +46,12 @@ __global__ void zeroPadForOffsetScanKernel(float* g, float* g_pad, const int3 N,
         if (k < N_add)
             g_pad[ind_pad + k + N_add] = 0.0f;
         else
-            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k - N_add)] * 2.0f * offsetScanWeights[i * numCols + k-N_add];
+            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k - N_add)] * 2.0f * offsetScanWeights[j * numCols + k-N_add];
     }
     else
     {
         if (k < numCols)
-            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k)] * 2.0f * offsetScanWeights[i * numCols + k];
+            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k)] * 2.0f * offsetScanWeights[j * numCols + k];
         else
             g_pad[ind_pad + uint64(k)] = 0.0f;
     }
@@ -2117,7 +2117,7 @@ float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out, bool
                 return NULL;
             }
         }
-        float* dev_offsetScanWeights = copy1DdataToGPU(offsetScanWeights, params->numAngles * params->numCols, params->whichGPU);
+        float* dev_offsetScanWeights = copy1DdataToGPU(offsetScanWeights, params->numRows * params->numCols, params->whichGPU);
         free(offsetScanWeights);
 
         int3 N_g = make_int3(params->numAngles, params->numRows, params->numCols + N_add);

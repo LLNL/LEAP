@@ -37,6 +37,8 @@ __constant__ int d_CURVED;
 __constant__ float d_sod;
 __constant__ float d_sdd;
 __constant__ float d_tau;
+__constant__ float d_cos_tilt;
+__constant__ float d_sin_tilt;
 __constant__ int4 d_N_g;
 __constant__ float4 d_T_g;
 __constant__ float4 d_startVal_g;
@@ -115,6 +117,14 @@ __device__ float3 setTrajectory(const float phi, const int iProj, const int iRow
     const float cos_phi = cos(phi);
     const float sin_phi = sin(phi);
 
+	float u_tilt = u_val;
+	float v_tilt = v_val;
+	if (d_sin_tilt != 0.0f)
+	{
+		u_tilt = u_val * d_cos_tilt - v_val * d_sin_tilt;
+		v_tilt = u_val * d_sin_tilt + v_val * d_cos_tilt;
+	}
+
     if (d_geometry == d_PARALLEL)
     {
         const float3 r = make_float3(-cos_phi, -sin_phi, 0.0f);
@@ -137,7 +147,7 @@ __device__ float3 setTrajectory(const float phi, const int iProj, const int iRow
         }
         else
         {
-			const float3 r = make_float3(-(cos_phi + u_val * sin_phi), -(sin_phi - u_val * cos_phi), v_val);
+			const float3 r = make_float3(-(cos_phi + u_tilt * sin_phi), -(sin_phi - u_tilt * cos_phi), v_tilt);
 			const float r_mag_inv = rsqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
 			return make_float3(r.x * r_mag_inv, r.y * r_mag_inv, r.z * r_mag_inv);
         }
@@ -838,9 +848,18 @@ void setConstantMemoryGeometryParameters(parameters* params, int oversampling)
     float sod = params->sod;
     float sdd = params->sdd;
     float tau = params->tau;
+	float cos_tilt = 1.0;
+	float sin_tilt = 0.0;
+	if (params->geometry == parameters::CONE)
+	{
+		cos_tilt = cos(params->tiltAngle * PI / 180.0);
+		sin_tilt = sin(params->tiltAngle * PI / 180.0);
+	}
     cudaMemcpyToSymbol(d_sod, &sod, sizeof(float));
     cudaMemcpyToSymbol(d_sdd, &sdd, sizeof(float));
     cudaMemcpyToSymbol(d_tau, &tau, sizeof(float));
+	cudaMemcpyToSymbol(d_cos_tilt, &cos_tilt, sizeof(float));
+	cudaMemcpyToSymbol(d_sin_tilt, &sin_tilt, sizeof(float));
 	cudaStatus = cudaMemcpyToSymbol(d_N_g, &N_g, sizeof(int4));
     cudaMemcpyToSymbol(d_T_g, &T_g, sizeof(float4));
     cudaMemcpyToSymbol(d_startVal_g, &startVal_g, sizeof(float4));

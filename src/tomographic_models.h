@@ -297,10 +297,11 @@ public:
 	 * \param[in]   sod source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
 	 * \param[in]   sdd source to detector distance, measured in mm
 	 * \param[in]   tau the center of rotation horizontal translation (mm)
+	 * \param[in]	tiltAngle the rotation of the detector around the optical axis (degrees)
 	 * \param[in]   helicalPitch the helical pitch (mm/radians)
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
+	bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float tiltAngle = 0.0, float helicalPitch = 0.0);
 
 	/**
 	 * \fn          set_fanbeam
@@ -573,6 +574,21 @@ public:
 	bool set_normalizedHelicalPitch(float h_normalized);
 
 	/**
+	 * \fn          set_tiltAngle
+	 * \brief       sets tiltAngle
+	 * \param[in]   tiltAngle the value for tiltAngle (degrees)
+	 * \return      true if the value is valid, false otherwise
+	 */
+	bool set_tiltAngle(float tiltAngle_in);
+
+	/**
+	 * \fn          get_tiltAngle
+	 * \brief       gets tiltAngle
+	 * \return      tiltAngle
+	 */
+	float get_tiltAngle();
+
+	/**
 	 * \fn          get_helicalPitch
 	 * \brief       gets the helicalPitch
 	 * \return      returns the helicalPitch parameter
@@ -673,7 +689,7 @@ public:
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool find_centerCol(float* g, int iRow, bool data_on_cpu);
+	float find_centerCol(float* g, int iRow, bool data_on_cpu);
 
 	/**
 	 * \fn          find_tau
@@ -683,7 +699,7 @@ public:
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool find_tau(float* g, int iRow, bool data_on_cpu);
+	float find_tau(float* g, int iRow, bool data_on_cpu);
 
 	/**
 	 * \fn          estimate_tilt

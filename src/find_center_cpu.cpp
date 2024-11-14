@@ -256,7 +256,8 @@ float estimateTilt(float* g, parameters* params)
 	//*/
 	//for (int itilt = 0; itilt < N_tilt; itilt++)
 	//	printf("error[%f] = %f\n", itilt * T_tilt + tilt_0, errors[itilt]);
-	float retVal = T_tilt*findMinimum(errors, 0, N_tilt) + tilt_0;
+	float minValue;
+	float retVal = T_tilt*findMinimum(errors, 0, N_tilt, minValue) + tilt_0;
 
 	// for loop over [centerCol-?, centerCol+?] in 1 pixel steps
 	//	for loop over [tiltAngle-4.9, tiltAngle+4.9] in 0.1 degree steps
@@ -317,10 +318,10 @@ float interpolate2D(float* data, float ind_1, float ind_2, int N_1, int N_2)
 		d_1 * ((1.0 - d_2) * data[ind_1_hi * N_2 + ind_2_lo] + d_2 * data[ind_1_hi * N_2 + ind_2_hi]);
 }
 
-bool findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
+float findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
 {
 	if (g == NULL || params == NULL)
-		return false;
+		return 0.0;
 	if (params->offsetScan == true)
 	{
 		if (find_tau)
@@ -333,7 +334,7 @@ bool findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
 		if (find_tau)
 		{
 			printf("Error: find_tau only works for fan- or cone-beam data\n");
-			return false;
+			return 0.0;
 		}
 		else
 			return findCenter_parallel_cpu(g, params, iRow);
@@ -349,16 +350,16 @@ bool findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
     else
     {
         printf("Error: currently find_centerCol/find_tau only works for parallel-, fan-, or cone-beam data\n");
-        return false;
+        return 0.0;
     }
 }
 
-bool findCenter_fan_cpu(float* g, parameters* params, int iRow, bool find_tau)
+float findCenter_fan_cpu(float* g, parameters* params, int iRow, bool find_tau)
 {
 	return findCenter_cone_cpu(g, params, iRow, find_tau);
 }
 
-bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
+float findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 {
     if (iRow < 0 || iRow > params->numRows - 1)
         iRow = max(0, min(params->numRows-1, int(floor(0.5 + params->centerRow))));
@@ -369,7 +370,7 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 	if (params->angularRange + 2.0*fabs(params->T_phi()) * 180.0 / PI < 180.0)
 	{
 		printf("Error: angular range insufficient to estimate centerCol\n");
-		return false;
+		return 0.0;
 	}
 	else if (params->angularRange > 225.0)
 	{
@@ -464,13 +465,14 @@ bool findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 			shiftCosts[i] = 1e12;
 	}
 
-	params->centerCol = findMinimum(shiftCosts, centerCol_low, centerCol_high);
+	float retVal = 0.0;
+	params->centerCol = findMinimum(shiftCosts, centerCol_low, centerCol_high, retVal);
 	free(shiftCosts);
 
-	return true;
+	return retVal;
 }
 
-bool findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
+float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 {
     if (iRow < 0 || iRow > params->numRows - 1)
         iRow = max(0, min(params->numRows - 1, int(floor(0.5 + params->centerRow))));
@@ -479,6 +481,8 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 
 	rowStart = iRow;
 	rowEnd = iRow;
+
+	float* sino = get_rotated_sinogram(g, params, iRow);
 
 	int conj_ind = 0;
 	if (params->T_phi() > 0.0)
@@ -539,10 +543,12 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 		for (int i = 0; i <= conj_ind - 1; i++)
 		{
 			float phi = params->phis[i];
-			float* projA = &g[uint64(i) * uint64(params->numRows * params->numCols)];
+			//float* projA = &g[uint64(i) * uint64(params->numRows * params->numCols)];
+			float* projA = &sino[uint64(i) * uint64(params->numCols)];
 			for (int j = rowStart; j <= rowEnd; j++)
 			{
-				float* lineA = &projA[j * params->numCols];
+				//float* lineA = &projA[j * params->numCols];
+				float* lineA = projA;
 				for (int k = 0; k < params->numCols; k++)
 				{
 					//float u = params->u(k);
@@ -563,7 +569,8 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 							u_conj_ind = int(0.5 + (tan(u_conj) - u_0) / atanTu);
 
 						float val = lineA[k];
-						float val_conj = g[uint64(phi_conj_ind) * uint64(params->numRows * params->numCols) + uint64(j * params->numCols + u_conj_ind)];
+						//float val_conj = g[uint64(phi_conj_ind) * uint64(params->numRows * params->numCols) + uint64(j * params->numCols + u_conj_ind)];
+						float val_conj = sino[uint64(phi_conj_ind) * uint64(params->numCols) + uint64(u_conj_ind)];
 						//if (val != 0.0 || val_conj != 0.0)
 						//	printf("%f and %f\n", val, val_conj);
 
@@ -584,6 +591,8 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 #endif
 	}
 
+	delete[] sino;
+
 	for (int i = centerCol_low; i <= centerCol_high; i++)
 	{
 		//printf("%f\n", shiftCosts[i]);
@@ -593,17 +602,18 @@ bool findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 
 	params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
 
-	float new_center = findMinimum(shiftCosts, centerCol_low, centerCol_high);
+	float retVal = 0.0;
+	float new_center = findMinimum(shiftCosts, centerCol_low, centerCol_high, retVal);
 	if (find_tau)
 		params->tau = tau_shift * (new_center - 0.5 * float(params->numCols - 1));
 	else
 		params->centerCol = new_center;
 	free(shiftCosts);
 
-    return true;
+    return retVal;
 }
 
-float findMinimum(double* costVec, int startInd, int endInd, bool findOnlyLocalMin/* = true*/)
+float findMinimum(double* costVec, int startInd, int endInd, float& minValue)
 {
 	int localMin_ind = -1;
 	double localMin_value = 1e12;
@@ -629,14 +639,27 @@ float findMinimum(double* costVec, int startInd, int endInd, bool findOnlyLocalM
 
 	if ((minCost_ind == startInd || minCost_ind == endInd) && localMin_ind != -1)
 	{
-		// min cost is at the end of estimation region and these does exist a local minimum
+		// min cost is at the end of estimation region and there does not exist a local minimum
 		// so min cost is likely just an edge effect and thus the local minimum should be used instead
 		minCost_ind = localMin_ind;
+		minValue = localMin_value;
 	}
+	else
+		minValue = minCost;
 
 	float retVal = float(minCost_ind);
 	if (minCost_ind > startInd && minCost_ind < endInd && costVec[minCost_ind - 1] != 1.0e12 && costVec[minCost_ind + 1] != 1.0e12 && costVec[minCost_ind - 1] > 0.0 && costVec[minCost_ind + 1] > 0.0)
+	{
+		// assume error function is locally quadratic and update the minimum location accordingly
 		retVal += 0.5 * (costVec[minCost_ind - 1] - costVec[minCost_ind + 1]) / (costVec[minCost_ind - 1] + costVec[minCost_ind + 1] - 2.0 * costVec[minCost_ind]);
+
+		float a = 0.5 * (costVec[minCost_ind + 1] + costVec[minCost_ind - 1]) - costVec[minCost_ind];
+		float b = 0.5 * (costVec[minCost_ind + 1] - costVec[minCost_ind - 1]);
+		float c = costVec[minCost_ind];
+
+		if (a > 0.0)
+			minValue = c - b * b / (4.0 * a);
+	}
 	return retVal;
 }
 
@@ -671,4 +694,54 @@ bool setDefaultRange_centerCol(parameters* params, int& centerCol_low, int& cent
 		centerCol_high = params->numCols - 1 - 5;
 	}
 	return true;
+}
+
+float* get_rotated_sinogram(float* g, parameters* params, int iRow)
+{
+	if (g == NULL || params == NULL)
+		return NULL;
+	if (iRow < 0 || iRow > params->numRows - 1)
+		iRow = max(0, min(params->numRows - 1, int(floor(0.5 + params->centerRow))));
+
+	float row_0_centered = -0.5 * float(params->numRows - 1) * params->pixelHeight;
+	float col_0_centered = -0.5 * float(params->numCols - 1) * params->pixelWidth;
+
+	float row_0 = -params->centerRow * params->pixelHeight;
+	float col_0 = -params->centerCol * params->pixelWidth;
+
+	float tiltAngle = params->tiltAngle;
+	float cos_alpha = cos(PI / 180.0 * tiltAngle);
+	float sin_alpha = sin(PI / 180.0 * tiltAngle);
+
+	float* sino = new float[params->numAngles*params->numCols];
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
+	for (int i = 0; i < params->numAngles; i++)
+	{
+		float* aProj = &g[uint64(i) * uint64(params->numRows) * uint64(params->numCols)];
+		float* sino_line = &sino[uint64(i) * uint64(params->numCols)];
+		if (params->tiltAngle == 0.0)
+		{
+			for (int iCol = 0; iCol < params->numCols; iCol++)
+				sino_line[iCol] = aProj[uint64(iRow)*uint64(params->numRows) + uint64(iCol)];
+		}
+		else
+		{
+			float row = iRow * params->pixelHeight + row_0_centered;
+			for (int iCol = 0; iCol < params->numCols; iCol++)
+			{
+				//float col = iCol * params->pixelWidth + col_0;
+				float col = iCol * params->pixelWidth + col_0_centered;
+
+				float col_A = cos_alpha * col + sin_alpha * row - col_0 + col_0_centered;
+				float row_A = -sin_alpha * col + cos_alpha * row;
+				float col_A_ind = (col_A - col_0) / params->pixelWidth;
+				float row_A_ind = (row_A - row_0_centered) / params->pixelHeight;
+
+				float proj_cur = interpolate2D(aProj, row_A_ind, col_A_ind, params->numRows, params->numCols);
+				sino_line[iCol] = proj_cur;
+			}
+		}
+	}
+	return sino;
 }

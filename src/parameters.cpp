@@ -79,6 +79,7 @@ void parameters::initialize()
 	centerCol = 0.0;
 	centerRow = 0.0;
 	tau = 0.0;
+	tiltAngle = 0.0;
 	helicalPitch = 0.0;
 	z_source_offset = 0.0;
 	rFOVspecified = 0.0;
@@ -182,6 +183,7 @@ void parameters::assign(const parameters& other)
     this->centerCol = other.centerCol;
     this->centerRow = other.centerRow;
     this->tau = other.tau;
+	this->tiltAngle = other.tiltAngle;
 	this->helicalPitch = other.helicalPitch;
 	this->z_source_offset = other.z_source_offset;
     this->rFOVspecified = other.rFOVspecified;
@@ -673,6 +675,12 @@ bool parameters::geometryDefined(bool doPrint)
 			printf("Error: curved detector only defined for cone-beam geometries\n");
 		return false;
 	}
+	if ((geometry != CONE || detectorType == CURVED) && tiltAngle != 0.0) // not: flat cone or tiltAngle==0
+	{
+		if (doPrint)
+			printf("Error: tiltAngle only defined for flat panel cone-beam geometries\n");
+		return false;
+	}
 
 	return true;
 }
@@ -933,6 +941,8 @@ void parameters::printAll()
 		printf("sdd = %f mm\n", sdd);
 		if (tau != 0.0)
 			printf("tau = %f mm\n", tau);
+		if (geometry == CONE)
+			printf("gamma = %f degrees\n", tiltAngle);
 	}
 	else if (geometry == MODULAR)
 	{
@@ -1491,8 +1501,9 @@ float parameters::row(int i)
 	return (i - (centerRow + rowShiftFromFilter)) * pixelHeight;
 }
 
-float parameters::u(int i, int iphi, bool includeModuleShift)
+float parameters::u(int i, int iphi)
 {
+	bool includeModuleShift = true;
 	if (modularbeamIsAxiallyAligned())
 	{
 		float u_val = 0.0;
@@ -1524,8 +1535,9 @@ float parameters::u_inv(float val)
 		return (val - u_0()) / pixelWidth;
 }
 
-float parameters::v(int i, int iphi, bool includeModuleShift)
+float parameters::v(int i, int iphi)
 {
+	bool includeModuleShift = true;
 	if (modularbeamIsAxiallyAligned() /*&& iphi >= 0 && iphi < numAngles*/)
 	{
 		if (includeModuleShift)
@@ -1723,6 +1735,32 @@ bool parameters::set_helicalPitch(float h)
 	}
 }
 
+bool parameters::set_tiltAngle(float tiltAngle_in)
+{
+	if (fabs(tiltAngle_in) < 1.0e-6)
+		tiltAngle_in = 0.0;
+	if (tiltAngle_in == 0.0)
+	{
+		tiltAngle = 0.0;
+		return true;
+	}
+	else if (geometry != CONE || detectorType != FLAT)
+	{
+		printf("Error: CT geometry must be CONE for tilted detector\n");
+		return false;
+	}
+	else if (fabs(tiltAngle_in) > 5.0)
+	{
+		printf("Error: tilt angle cannot exceed five degrees\n");
+		return false;
+	}
+	else
+	{
+		tiltAngle = tiltAngle_in;
+		return true;
+	}
+}
+
 float parameters::normalizedHelicalPitch()
 {
 	//helicalPitch = normalizedHelicalPitch*pzsize*nslices*(sod/sdd)/(2pi)
@@ -1907,8 +1945,12 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 			rowsNeeded[1] = numRows - 1;
 		}
 	}
-	else
+	else // CONE || CONE_PARALLEL
 	{
+		//float accountForClocking = fabs(sin(tiltAngle*PI/180.0) * pixelWidth * 0.5 * float(numCols - 1)) / sdd;
+		float u_max = std::max(fabs(col(0)), fabs(col(numCols - 1)));
+		float accountForClocking = fabs(sin(tiltAngle * PI / 180.0) * u_max) / sdd;
+
 		float z_lo = float(firstSlice) * voxelHeight + z_0() - 0.5 * voxelHeight;
 		float z_hi = float(lastSlice) * voxelHeight + z_0() + 0.5 * voxelHeight;
 
@@ -1917,8 +1959,8 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 		float T_v = pixelHeight / sdd;
 		float v_denom_min = sod - radiusFOV - voxelWidth;
 		float v_denom_max = sod + radiusFOV + voxelWidth;
-		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5 * pixelHeight / sdd;
-		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5 * pixelHeight / sdd;
+		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5 * pixelHeight / sdd - accountForClocking;
+		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5 * pixelHeight / sdd + accountForClocking;
 
 		rowsNeeded[0] = min(numRows - 1, max(0, int(floor((v_lo - row(0) / sdd) / T_v))));
 		rowsNeeded[1] = max(0, min(numRows - 1, int(ceil((v_hi - row(0) / sdd) / T_v))));
@@ -2108,10 +2150,16 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 			slicesNeeded[1] = numZ - 1;
 		}
 	}
-	else
+	else // CONE || CONE_PARALLEL
 	{
 		float v_lo = (float(firstRow) * pixelHeight + row(0) - 0.5 * pixelHeight) / sdd;
 		float v_hi = (float(lastRow) * pixelHeight + row(0) + 0.5 * pixelHeight) / sdd;
+
+		//float accountForClocking = fabs(sin(tiltAngle * PI / 180.0) * pixelWidth * 0.5 * float(numCols - 1)) / sdd;
+		float u_max = std::max(fabs(col(0)), fabs(col(numCols - 1)));
+		float accountForClocking = fabs(sin(tiltAngle * PI / 180.0) * u_max) / sdd;
+		v_lo -= accountForClocking;
+		v_hi += accountForClocking;
 
 		// v = z / (R - <x, theta>)
 		// v = z / (R - rFOV())
@@ -2300,6 +2348,14 @@ bool parameters::convert_conebeam_to_modularbeam()
 	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + row(0);
 	//printf("horizontalDetectorShift = %f\n", horizontalDetectorShift);
 
+	float cos_tilt = cos(tiltAngle * PI / 180.0);
+	float sin_tilt = sin(tiltAngle * PI / 180.0);
+	if (fabs(tiltAngle) < 1.0e-6)
+	{
+		cos_tilt = 1.0;
+		sin_tilt = 0.0;
+	}
+
 	float* s_pos = new float[3 * numAngles];
 	float* d_pos = new float[3 * numAngles];
 	float* v_vec = new float[3 * numAngles];
@@ -2317,13 +2373,13 @@ bool parameters::convert_conebeam_to_modularbeam()
 		d_pos[3 * iphi + 1] = (sod - sdd) * sin_phi;
 		d_pos[3 * iphi + 2] = z_source(iphi);
 
-		v_vec[3 * iphi + 0] = 0.0;
-		v_vec[3 * iphi + 1] = 0.0;
-		v_vec[3 * iphi + 2] = 1.0;
+		v_vec[3 * iphi + 0] = sin_phi * sin_tilt;
+		v_vec[3 * iphi + 1] = -cos_phi * sin_tilt;
+		v_vec[3 * iphi + 2] = cos_tilt;
 
-		u_vec[3 * iphi + 0] = -sin_phi;
-		u_vec[3 * iphi + 1] = cos_phi;
-		u_vec[3 * iphi + 2] = 0.0;
+		u_vec[3 * iphi + 0] = -sin_phi * cos_tilt;
+		u_vec[3 * iphi + 1] = cos_phi * cos_tilt;
+		u_vec[3 * iphi + 2] = sin_tilt;
 
 		d_pos[3 * iphi + 0] += horizontalDetectorShift * u_vec[3 * iphi + 0];
 		d_pos[3 * iphi + 1] += horizontalDetectorShift * u_vec[3 * iphi + 1];
@@ -2335,6 +2391,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 	}
 	centerRow = 0.5 * float(numRows - 1);
 	centerCol = 0.5 * float(numCols - 1);
+	tiltAngle = 0.0;
 	if (set_sourcesAndModules(s_pos, d_pos, v_vec, u_vec, numAngles))
 		geometry = MODULAR;
 	delete[] s_pos;

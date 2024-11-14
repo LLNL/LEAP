@@ -30,12 +30,14 @@ angularRanges = [200.0, 360.0]
 projection_methods = ['VD', 'SF']
 angularRange = 360.0
 tau = 0.0
+tiltAngle = 1.0
 pitch = 0.0
 
 #voxelScales = [1.0]
 #voxelScales = [2.0]
+#projection_methods = ['SF']
 #projection_methods = ['VD']
-#geometries = [3]
+#geometries = []
 
 for ii in range(len(geometries)):
     igeom = geometries[ii]
@@ -49,12 +51,12 @@ for ii in range(len(geometries)):
     elif igeom == 2:
         leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, sod/sdd*pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch)
     elif igeom == 3:
-        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch)
+        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch, tiltAngle)
     elif igeom == 4:
         leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch)
         leapct.set_curvedDetector()
     elif igeom == 5:
-        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau)
+        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, 0.0, tiltAngle)
         leapct.convert_to_modularbeam()
 
     #leapct.set_offsetScan(True)
@@ -118,4 +120,88 @@ for ii in range(len(geometries)):
             plt.show()
             #"""
             #quit()
-            
+
+#quit()
+
+# Now compare cone and modular to make sure they match
+leapct.reset()
+leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch, tiltAngle)
+leapct_mod = tomographicModels()
+leapct_mod.copy_parameters(leapct)
+leapct_mod.convert_to_modularbeam()
+#leapct_mod.rotate_detector(1.0)
+#leapct.set_offsetScan(True)
+
+# Set true projection data
+g_true = leapct.allocate_projections()
+leapct.set_FORBILD(None, includeEar)
+st = time.time()
+leapct.rayTrace(g_true)
+print('ray trace time: ' + str(time.time()-st) + ' sec')
+
+for iscale in range(len(voxelScales)):
+    # Set true phantom
+    leapct.set_default_volume(voxelScales[iscale])
+    leapct_mod.copy_parameters(leapct)
+    leapct_mod.convert_to_modularbeam()
+    f_true = leapct.allocate_volume()
+    leapct.set_FORBILD(f_true, includeEar)
+    
+    leapct.print_parameters()
+    #leapct.display(f_true)
+    #leapct.sketch_system()
+    #quit()
+    
+    # Set true projection data
+    g_mod = leapct_mod.allocate_projections()
+    st = time.time()
+    leapct_mod.project(g_mod, f_true)
+    print('modular-beam project time: ' + str(time.time()-st) + ' sec')
+
+    # Test projection
+    g = leapct.allocate_projections()
+    st = time.time()
+    leapct.project(g, f_true)
+    print('cone-beam project time: ' + str(time.time()-st) + ' sec')
+
+    #leapct.display(g_true)
+    #leapct.display(f_true)
+
+    for imethod in range(len(projection_methods)):
+
+        leapct.set_projector(projection_methods[imethod])
+        
+        f_mod = leapct_mod.allocate_volume()
+        st = time.time()
+        leapct_mod.backproject(g_true, f_mod)
+        print('modular-beam FBP time: ' + str(time.time()-st) + ' sec')
+        
+        # Test FBP
+        f = leapct.allocate_volume()
+        st = time.time()
+        leapct.backproject(g_true, f)
+        print('cone-beam FBP time: ' + str(time.time()-st) + ' sec')
+        
+        #diff_g = g
+        #diff_f = f
+        diff_g = np.clip(100.0*(g-g_mod)/g_true, -10.0, 10.0)
+        diff_f = np.clip(100.0*(f-f_mod)/f_mod, -10.0, 10.0)
+
+        
+        #"""
+        plt.figure()
+        plt.subplot(2, 2, 1)
+        plt.title('projection')
+        plt.imshow(np.squeeze(diff_g[0,:,:]), cmap='gray')
+        plt.subplot(2, 2, 2)
+        plt.title('sinogram')
+        plt.imshow(np.squeeze(diff_g[:,numRows//2,:]), cmap='gray')
+        plt.subplot(2, 2, 3)
+        plt.title('z-slice')
+        plt.imshow(np.squeeze(diff_f[diff_f.shape[0]//2,:,:]), cmap='gray')
+        plt.subplot(2, 2, 4)
+        plt.title('x-slice')
+        plt.imshow(np.squeeze(diff_f[:,diff_f.shape[1]//2,:]), cmap='gray')
+        plt.show()
+        #"""
+        #quit()

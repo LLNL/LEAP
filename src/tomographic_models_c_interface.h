@@ -87,7 +87,7 @@ extern "C" PROJECTOR_API bool sensitivity(float* f, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool windowFOV(float* f, bool data_on_cpu);
 
-extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch);
+extern "C" PROJECTOR_API bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float tiltAngle, float helicalPitch);
 extern "C" PROJECTOR_API bool set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau);
 extern "C" PROJECTOR_API bool set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis);
 extern "C" PROJECTOR_API bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float*, float*, float*, float*);
@@ -169,6 +169,7 @@ extern "C" PROJECTOR_API int get_rampID();
 extern "C" PROJECTOR_API bool set_FBPlowpass(float W);
 extern "C" PROJECTOR_API float get_FBPlowpass();
 extern "C" PROJECTOR_API bool set_tau(float tau);
+extern "C" PROJECTOR_API bool set_tiltAngle(float tiltAngle);
 extern "C" PROJECTOR_API bool set_helicalPitch(float h);
 extern "C" PROJECTOR_API bool set_normalizedHelicalPitch(float h_normalized);
 extern "C" PROJECTOR_API bool set_attenuationMap(float*);
@@ -190,6 +191,7 @@ extern "C" PROJECTOR_API float get_pixelHeight();
 extern "C" PROJECTOR_API float get_centerRow();
 extern "C" PROJECTOR_API float get_centerCol();
 extern "C" PROJECTOR_API float get_tau();
+extern "C" PROJECTOR_API float get_tiltAngle();
 extern "C" PROJECTOR_API float get_helicalPitch();
 extern "C" PROJECTOR_API float get_normalizedHelicalPitch();
 extern "C" PROJECTOR_API float get_z_source_offset();
@@ -213,8 +215,8 @@ extern "C" PROJECTOR_API float get_offsetY();
 extern "C" PROJECTOR_API float get_offsetZ();
 extern "C" PROJECTOR_API float get_z0();
 
-extern "C" PROJECTOR_API bool find_centerCol(float* g, int iRow, bool data_on_cpu);
-extern "C" PROJECTOR_API bool find_tau(float* g, int iRow, bool data_on_cpu);
+extern "C" PROJECTOR_API float find_centerCol(float* g, int iRow, bool data_on_cpu);
+extern "C" PROJECTOR_API float find_tau(float* g, int iRow, bool data_on_cpu);
 extern "C" PROJECTOR_API float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu);
 extern "C" PROJECTOR_API float estimate_tilt(float* g, bool data_on_cpu);
 extern "C" PROJECTOR_API float conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu);

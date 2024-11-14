@@ -1627,7 +1627,7 @@ float tomographicModels::get_FBPscalar()
 	return FBPscalar(&params);
 }
 
-bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float helicalPitch)
+bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float tiltAngle, float helicalPitch)
 {
 	params.geometry = parameters::CONE;
 	params.detectorType = parameters::FLAT;
@@ -1643,6 +1643,7 @@ bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, fl
 	params.tau = tau;
 	params.set_angles(phis, numAngles);
 	params.set_helicalPitch(helicalPitch);
+	params.set_tiltAngle(tiltAngle);
 	if (params.geometryDefined())
 	{
 		params.set_offsetScan(params.offsetScan);
@@ -1656,6 +1657,7 @@ bool tomographicModels::set_coneparallel(int numAngles, int numRows, int numCols
 {
 	params.geometry = parameters::CONE_PARALLEL;
 	params.detectorType = parameters::FLAT;
+	params.tiltAngle = 0.0;
 	params.sod = sod;
 	params.sdd = sdd;
 	params.pixelWidth = pixelWidth;
@@ -1670,6 +1672,7 @@ bool tomographicModels::set_coneparallel(int numAngles, int numRows, int numCols
 	params.set_helicalPitch(helicalPitch);
 	if (params.geometryDefined())
 	{
+		params.set_tiltAngle(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1680,6 +1683,7 @@ bool tomographicModels::set_coneparallel(int numAngles, int numRows, int numCols
 bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau)
 {
 	params.detectorType = parameters::FLAT;
+	params.tiltAngle = 0.0;
 
 	params.geometry = parameters::FAN;
 	params.sod = sod;
@@ -1696,6 +1700,7 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 	if (params.geometryDefined())
 	{
 		params.set_helicalPitch(0.0);
+		params.set_tiltAngle(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1706,6 +1711,7 @@ bool tomographicModels::set_fanbeam(int numAngles, int numRows, int numCols, flo
 bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis)
 {
 	params.detectorType = parameters::FLAT;
+	params.tiltAngle = 0.0;
 
 	params.geometry = parameters::PARALLEL;
 	params.pixelWidth = pixelWidth;
@@ -1719,6 +1725,7 @@ bool tomographicModels::set_parallelbeam(int numAngles, int numRows, int numCols
 	if (params.geometryDefined())
 	{
 		params.set_helicalPitch(0.0);
+		params.set_tiltAngle(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1730,6 +1737,7 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 {
 	params.detectorType = parameters::FLAT;
 	params.tau = 0.0;
+	params.tiltAngle = 0.0;
 	params.helicalPitch = 0.0;
 
 	params.geometry = parameters::MODULAR;
@@ -1744,6 +1752,7 @@ bool tomographicModels::set_modularbeam(int numAngles, int numRows, int numCols,
 	if (params.geometryDefined())
 	{
 		params.set_helicalPitch(0.0);
+		params.set_tiltAngle(0.0);
 		params.set_offsetScan(params.offsetScan);
 		return true;
 	}
@@ -1767,6 +1776,7 @@ bool tomographicModels::set_curvedDetector()
 	else
 	{
 		params.detectorType = parameters::CURVED;
+		params.tiltAngle = 0.0;
 		return true;
 	}
 }
@@ -2200,6 +2210,16 @@ bool tomographicModels::set_helicalPitch(float h)
 bool tomographicModels::set_normalizedHelicalPitch(float h_normalized)
 {
 	return params.set_normalizedHelicalPitch(h_normalized);
+}
+
+bool tomographicModels::set_tiltAngle(float tiltAngle)
+{
+	return params.set_tiltAngle(tiltAngle);
+}
+
+float tomographicModels::get_tiltAngle()
+{
+	return params.tiltAngle;
 }
 
 float tomographicModels::get_helicalPitch()
@@ -3894,25 +3914,25 @@ bool tomographicModels::synthesize_symmetry(float* f_radial, float* f)
 	return symObject.synthesizeSymmetry(f_radial, f);
 }
 
-bool tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
+float tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
 {
 	if (data_on_cpu)
 		return findCenter_cpu(g, &params, iRow);
 	else
 	{
 		printf("Error: find_centerCol not yet implemented for data on the GPU\n");
-		return false;
+		return 0.0;
 	}
 }
 
-bool tomographicModels::find_tau(float* g, int iRow, bool data_on_cpu)
+float tomographicModels::find_tau(float* g, int iRow, bool data_on_cpu)
 {
 	if (data_on_cpu)
 		return findCenter_cpu(g, &params, iRow, true);
 	else
 	{
 		printf("Error: find_tau not yet implemented for data on the GPU\n");
-		return false;
+		return 0.0;
 	}
 }
 

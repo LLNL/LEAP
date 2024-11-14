@@ -239,7 +239,7 @@ public:
 	 * \param       i the index of the i-th detector column
 	 * \return      returns the position of the i-th detector column (mm)
 	 */
-	float u(int i, int iphi = -1, bool includeModuleShift = true);
+	float u(int i, int iphi = -1);
 
 	/**
 	 * \fn          u_inv
@@ -255,7 +255,7 @@ public:
 	 * \param       i the index of the i-th detector row
 	 * \return      returns the position of the i-th detector row (mm)
 	 */
-	float v(int i, int iphi = -1, bool includeModuleShift = true);
+	float v(int i, int iphi = -1);
 
 	float u_offset(int iphi = -1);
 	float v_offset(int iphi = -1);
@@ -309,6 +309,14 @@ public:
 	bool set_normalizedHelicalPitch(float h_normalized);
 
 	/**
+	 * \fn          set_tiltAngle
+	 * \brief       sets tiltAngle
+	 * \param[in]   tiltAngle the value for tiltAngle (degrees)
+	 * \return      true if the value is valid, false otherwise
+	 */
+	bool set_tiltAngle(float tiltAngle_in);
+
+	/**
 	 * \fn          convert_conebeam_to_modularbeam
 	 * \brief       sets modular-beam parameters from a cone-beam specification
 	 * \return      true is successful, false otherwise
@@ -335,7 +343,7 @@ public:
 	int numCols, numRows, numAngles;
 	float centerCol, centerRow;
 	float* phis;
-	float tau;
+	float tau, tiltAngle;
 	float helicalPitch;
 	float z_source_offset;
 	float helicalFBPWeight;

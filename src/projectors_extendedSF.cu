@@ -226,9 +226,6 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(cudaTextureOb
     }
 
     const float Tv_inv = 1.0f / T_g.y;
-    const float Tu_inv = 1.0f / T_g.z;
-
-    const float vox_half = 0.5f * T_f.x;
     const float voxz_half = 0.5f * T_f.z;
 
     const float asin_tau_over_R = asin(tau / R);
@@ -397,9 +394,6 @@ __global__ void coneParallelBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
     }
 
     const float Tv_inv = 1.0f / T_g.y;
-    const float Tu_inv = 1.0f / T_g.z;
-
-    const float vox_half = 0.5f * T_f.x;
     const float voxz_half = 0.5f * T_f.z;
 
     const float asin_tau_over_R = asin(tau / R);
@@ -1289,7 +1283,7 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
         f[ind] = val;
 }
 
-__global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1327,6 +1321,9 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
     const float vox_half = 0.5f * T_f.x;
     const float voxz_half = 0.5f * T_f.z;
 
+    const float cos_tilt = cos(tiltAngle);
+    const float sin_tilt = sin(tiltAngle);
+
     float val = 0.0;
     for (int l = 0; l < N_g.x; l++)
     {
@@ -1338,10 +1335,11 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
         const float R_minus_x_dot_theta = R - x * cos_phi - y * sin_phi;
         const float R_minus_x_dot_theta_inv = 1.0f / R_minus_x_dot_theta;
 
-        const float u_c = x_dot_theta_perp * R_minus_x_dot_theta_inv;
+        const float u_c_num = x_dot_theta_perp * cos_tilt + z * sin_tilt;
+        const float u_c = u_c_num * R_minus_x_dot_theta_inv;
         const float x_denom = fabs(u_c * cos_phi - sin_phi);
         const float y_denom = fabs(u_c * sin_phi + cos_phi);
-        const float v_c = (z - z_source) * R_minus_x_dot_theta_inv;
+        const float v_c = ((z*cos_tilt - x_dot_theta_perp*sin_tilt) - z_source) * R_minus_x_dot_theta_inv;
         const float l_phi = T_f.x * sqrtf(1.0f + u_c * u_c) / max(x_denom, y_denom) * sqrtf(1.0f + v_c * v_c);
 
         //const int iv_c = (v_c - startVals_g.y) / T_g.y;
@@ -1362,8 +1360,8 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
         {
             //const float z_A = ((v - 0.5f * T_g.y) * rayParam_inv - startVals_f.z) * T_z_inv;
             //const float z_B = ((v + 0.5f * T_g.y) * rayParam_inv - startVals_f.z) * T_z_inv;
-            const float u_A = ((x_dot_theta_perp + sin_phi * vox_half) / (R_minus_x_dot_theta + vox_half * cos_phi) - startVals_g.z) * Tu_inv;
-            const float u_B = ((x_dot_theta_perp - sin_phi * vox_half) / (R_minus_x_dot_theta - vox_half * cos_phi) - startVals_g.z) * Tu_inv;
+            const float u_A = ((u_c_num + sin_phi * vox_half) / (R_minus_x_dot_theta + vox_half * cos_phi) - startVals_g.z) * Tu_inv;
+            const float u_B = ((u_c_num - sin_phi * vox_half) / (R_minus_x_dot_theta - vox_half * cos_phi) - startVals_g.z) * Tu_inv;
 
             const float u_min = min(u_A, u_B);
             const float u_max = max(u_A, u_B);
@@ -1400,8 +1398,8 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g,
         else
         {
             // use y_lo, y_hi
-            const float u_A = ((x_dot_theta_perp - cos_phi * vox_half) / (R_minus_x_dot_theta + vox_half * sin_phi) - startVals_g.z) * Tu_inv;
-            const float u_B = ((x_dot_theta_perp + cos_phi * vox_half) / (R_minus_x_dot_theta - vox_half * sin_phi) - startVals_g.z) * Tu_inv;
+            const float u_A = ((u_c_num - cos_phi * vox_half) / (R_minus_x_dot_theta + vox_half * sin_phi) - startVals_g.z) * Tu_inv;
+            const float u_B = ((u_c_num + cos_phi * vox_half) / (R_minus_x_dot_theta - vox_half * sin_phi) - startVals_g.z) * Tu_inv;
 
             const float u_min = min(u_A, u_B);
             const float u_max = max(u_A, u_B);
@@ -1661,7 +1659,7 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
     }
 }
 
-__global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const float4 T_g, const float4 startVals_g, cudaTextureObject_t f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1669,25 +1667,45 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, floa
     if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
         return;
 
+    const float T_u_inv = 1.0f / T_g.z;
+    const float T_v_inv = 1.0f / T_g.y;
+
+    const float cos_tilt = cos(tiltAngle);
+    const float sin_tilt = sin(tiltAngle);
+
+    /*
     const float v = m * T_g.y + startVals_g.y;
     const float u = n * T_g.z + startVals_g.z;
-
-    const float z_source = phis[l] * T_g.w + startVals_g.w;
 
     const float u_lo = n - 0.5f;
     const float u_hi = n + 0.5f;
 
     const float v_lo = m - 0.5f;
     const float v_hi = m + 0.5f;
+    //*/
+
+    //*
+    const float v_no_tilt = m * T_g.y + startVals_g.y;
+    const float u_no_tilt = n * T_g.z + startVals_g.z;
+
+    const float u = cos_tilt * u_no_tilt - sin_tilt * v_no_tilt;
+    const float v = sin_tilt * u_no_tilt + cos_tilt * v_no_tilt;
+
+    //const float n_tilt = (u - startVals_g.z) / T_g.z;
+    //const float m_tilt = (v - startVals_g.y) / T_g.y;
+
+    const float u_lo = (u - startVals_g.z) * T_u_inv - 0.5f;
+    const float u_hi = (u - startVals_g.z) * T_u_inv + 0.5f;
+    const float v_lo = (v - startVals_g.y) * T_v_inv - 0.5f;
+    const float v_hi = (v - startVals_g.y) * T_v_inv + 0.5f;
+    //*/
 
     const float T_x_inv = 1.0f / T_f.x;
     const float T_z_inv = 1.0f / T_f.z;
 
-    const float T_u_inv = 1.0f / T_g.z;
-    const float T_v_inv = 1.0f / T_g.y;
-
     const float vox_half = 0.5f * T_f.x;
 
+    const float z_source = phis[l] * T_g.w + startVals_g.w;
     const float sin_phi = sin(phis[l]);
     const float cos_phi = cos(phis[l]);
 
@@ -2054,7 +2072,7 @@ bool project_eSF(float*& g, float* f, parameters* params, bool data_on_cpu, bool
     if (params->geometry == parameters::CONE)
     {
         if (params->detectorType == parameters::FLAT)
-            coneBeamProjectorKernel_eSF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, accum);
+            coneBeamProjectorKernel_eSF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, params->tiltAngle*PI/180.0, rFOVsq, dev_phis, params->volumeDimensionOrder, accum);
         else
             curvedConeBeamProjectorKernel_eSF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, accum);
     }
@@ -2228,7 +2246,7 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu, 
         else
         {
             if (params->detectorType == parameters::FLAT)
-                coneBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, accum);
+                coneBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, params->tiltAngle*PI/180.0, rFOVsq, dev_phis, params->volumeDimensionOrder, accum);
             else
                 curvedConeBeamBackprojectorKernel_eSF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, accum);
         }

@@ -726,7 +726,7 @@ float* zeroPadForOffsetScan(float* g, parameters* params, float* g_out)
                     float* aLine = &aProj[j*params->numCols];
                     float* aLine_pad = &aProj_pad[j * (params->numCols+N_add)];
                     for (int k = 0; k < params->numCols; k++)
-                        aLine_pad[k + N_add] = aLine[k] * 2.0 * offsetScanWeights[i * params->numCols + k];
+                        aLine_pad[k + N_add] = aLine[k] * 2.0 * offsetScanWeights[j * params->numCols + k];
                     if (g_out != NULL)
                     {
                         for (int k = 0; k < N_add; k++)
@@ -750,7 +750,7 @@ float* zeroPadForOffsetScan(float* g, parameters* params, float* g_out)
                     float* aLine = &aProj[j * params->numCols];
                     float* aLine_pad = &aProj_pad[j * (params->numCols + N_add)];
                     for (int k = 0; k < params->numCols; k++)
-                        aLine_pad[k] = aLine[k] *2.0 * offsetScanWeights[i * params->numCols + k];
+                        aLine_pad[k] = aLine[k] *2.0 * offsetScanWeights[j * params->numCols + k];
                     if (g_out != NULL)
                     {
                         for (int k = 0; k < N_add; k++)

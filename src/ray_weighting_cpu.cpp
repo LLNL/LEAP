@@ -219,34 +219,72 @@ float* setOffsetScanWeights(parameters* params)
 			float delta = min(abs_minVal, abs_maxVal);
 			float s_arg;
 
-			float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
-			for (int j = 0; j < params->numCols; j++)
+			float* retVal = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
+			if (params->geometry == parameters::CONE && params->detectorType == parameters::FLAT && params->tiltAngle != 0.0)
 			{
-				s_arg = params->u(j);
-				if (params->detectorType == parameters::FLAT)
-					s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
-				else
-					s_arg = params->sod * sin(s_arg) - params->tau * cos(s_arg);
-
-				float theWeight = 1.0;
-				if (fabs(s_arg) <= delta)
+				float cos_tilt = cos(params->tiltAngle * PI / 180.0);
+				float sin_tilt = sin(params->tiltAngle * PI / 180.0);
+				for (int i = 0; i < params->numRows; i++)
 				{
-					theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
-					theWeight = theWeight * theWeight;
+					float v = params->v(i);
+					for (int j = 0; j < params->numCols; j++)
+					{
+						s_arg = params->u(j);
+						//s_arg = cos_tilt * s_arg - sin_tilt * v;
+						s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
+						s_arg = cos_tilt * s_arg - sin_tilt * v;
+
+						float theWeight = 1.0;
+						if (fabs(s_arg) <= delta)
+						{
+							theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
+							theWeight = theWeight * theWeight;
+						}
+						else if (s_arg < -delta)
+							theWeight = 0.0;
+						else
+							theWeight = 1.0;
+
+						if (abs_maxVal < abs_minVal)
+							theWeight = 1.0 - theWeight;
+
+						if (theWeight < 1e-12)
+							theWeight = float(1e-12);
+
+						retVal[i * params->numCols + j] = theWeight;
+					}
 				}
-				else if (s_arg < -delta)
-					theWeight = 0.0;
-				else
-					theWeight = 1.0;
+			}
+			else
+			{
+				for (int j = 0; j < params->numCols; j++)
+				{
+					s_arg = params->u(j);
+					if (params->detectorType == parameters::FLAT)
+						s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
+					else
+						s_arg = params->sod * sin(s_arg) - params->tau * cos(s_arg);
 
-				if (abs_maxVal < abs_minVal)
-					theWeight = 1.0 - theWeight;
+					float theWeight = 1.0;
+					if (fabs(s_arg) <= delta)
+					{
+						theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
+						theWeight = theWeight * theWeight;
+					}
+					else if (s_arg < -delta)
+						theWeight = 0.0;
+					else
+						theWeight = 1.0;
 
-				if (theWeight < 1e-12)
-					theWeight = float(1e-12);
+					if (abs_maxVal < abs_minVal)
+						theWeight = 1.0 - theWeight;
 
-				for (int i = 0; i < params->numAngles; i++)
-					retVal[i * params->numCols + j] = theWeight;
+					if (theWeight < 1e-12)
+						theWeight = float(1e-12);
+
+					for (int i = 0; i < params->numRows; i++)
+						retVal[i * params->numCols + j] = theWeight;
+				}
 			}
 			params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
 			return retVal;

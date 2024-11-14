@@ -31,7 +31,7 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
     if (l >= N_g.x || m >= N_g.y || n >= N_g.z)
         return;
 
-    float* moduleCenter = &moduleCenters[3 * l];
+    const float3 moduleCenter = make_float3(moduleCenters[3 * l + 0], moduleCenters[3 * l + 1], moduleCenters[3 * l + 2]);
     const float3 p = make_float3(sourcePositions[3 * l + 0], sourcePositions[3 * l + 1], sourcePositions[3 * l + 2]);
     const float3 u_vec = make_float3(colVectors[3 * l + 0], colVectors[3 * l + 1], colVectors[3 * l + 2]);
     const float3 v_vec = make_float3(rowVectors[3 * l + 0], rowVectors[3 * l + 1], rowVectors[3 * l + 2]);
@@ -58,11 +58,11 @@ __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, fl
     const float T_y_inv = 1.0f / T_f.y;
     const float T_z_inv = 1.0f / T_f.z;
 
-    const float3 detPos = make_float3(moduleCenter[0] + u_vec.x * s + v_vec.x * t, moduleCenter[1] + u_vec.y * s + v_vec.y * t, moduleCenter[2] + u_vec.z * s + v_vec.z * t);
+    const float3 detPos = make_float3(moduleCenter.x + u_vec.x * s + v_vec.x * t, moduleCenter.y + u_vec.y * s + v_vec.y * t, moduleCenter.z + u_vec.z * s + v_vec.z * t);
     const float3 r = make_float3(detPos.x - p.x, detPos.y - p.y, detPos.z - p.z);
     const float D = sqrtf(r.x * r.x + r.y * r.y + r.z * r.z);
 
-    const float3 p_minus_c = make_float3(p.x - moduleCenter[0], p.y - moduleCenter[1], p.z - moduleCenter[2]);
+    const float3 p_minus_c = make_float3(p.x - moduleCenter.x, p.y - moduleCenter.y, p.z - moduleCenter.z);
 
     const float p_minus_c_dot_u = p_minus_c.x * u_vec.x + p_minus_c.y * u_vec.y + p_minus_c.z * u_vec.z;
     const float p_minus_c_dot_v = p_minus_c.x * v_vec.x + p_minus_c.y * v_vec.y + p_minus_c.z * v_vec.z;
@@ -470,33 +470,35 @@ __global__ void modularBeamBackprojectorKernel_SF_stack(cudaTextureObject_t g, i
     {
         const float L = (float)iphi + 0.5f;
 
-        float* sourcePosition = &sourcePositions[3 * iphi];
-        float* moduleCenter = &moduleCenters[3 * iphi];
-        float* v_vec = &rowVectors[3 * iphi];
-        float* u_vec = &colVectors[3 * iphi];
-        const float3 detNormal = make_float3(u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1],
-            u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
-            u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
+        const float3 sourcePosition = make_float3(sourcePositions[3 * iphi + 0], sourcePositions[3 * iphi + 1], sourcePositions[3 * iphi + 2]);
+        const float3 moduleCenter = make_float3(moduleCenters[3 * iphi + 0], moduleCenters[3 * iphi + 1], moduleCenters[3 * iphi + 2]);
+        const float3 v_vec = make_float3(rowVectors[3 * iphi + 0], rowVectors[3 * iphi + 1], rowVectors[3 * iphi + 2]);
+        const float3 u_vec = make_float3(colVectors[3 * iphi + 0], colVectors[3 * iphi + 1], colVectors[3 * iphi + 2]);
 
-        const float c_minus_s_dot_u = (moduleCenter[0] - sourcePosition[0]) * u_vec[0] + (moduleCenter[1] - sourcePosition[1]) * u_vec[1] + (moduleCenter[2] - sourcePosition[2]) * u_vec[2];
-        const float c_minus_s_dot_v = (moduleCenter[0] - sourcePosition[0]) * v_vec[0] + (moduleCenter[1] - sourcePosition[1]) * v_vec[1] + (moduleCenter[2] - sourcePosition[2]) * v_vec[2];
-        const float c_minus_s_dot_n = (moduleCenter[0] - sourcePosition[0]) * detNormal.x + (moduleCenter[1] - sourcePosition[1]) * detNormal.y + (moduleCenter[2] - sourcePosition[2]) * detNormal.z;
-        if (fabs(x - sourcePosition[0]) > fabs(y - sourcePosition[1]))
+        const float3 n_vec = make_float3(u_vec.y * v_vec.z - u_vec.z * v_vec.y,
+            u_vec.z * v_vec.x - u_vec.x * v_vec.z,
+            u_vec.x * v_vec.y - u_vec.y * v_vec.x);
+
+        const float c_minus_s_dot_u = (moduleCenter.x - sourcePosition.x) * u_vec.x + (moduleCenter.y - sourcePosition.y) * u_vec.y + (moduleCenter.z - sourcePosition.z) * u_vec.z;
+        const float c_minus_s_dot_v = (moduleCenter.x - sourcePosition.x) * v_vec.x + (moduleCenter.y - sourcePosition.y) * v_vec.y + (moduleCenter.z - sourcePosition.z) * v_vec.z;
+        const float c_minus_s_dot_n = (moduleCenter.x - sourcePosition.x) * n_vec.x + (moduleCenter.y - sourcePosition.y) * n_vec.y + (moduleCenter.z - sourcePosition.z) * n_vec.z;
+        if (fabs(x - sourcePosition.x) > fabs(y - sourcePosition.y))
         {
             for (int k_offset = 0; k_offset < numZ; k_offset++)
             {
                 const float z = float(k+k_offset) * T_f.z + startVals_f.z;
+                const float3 x_minus_s = make_float3(x - sourcePosition.x, y - sourcePosition.y, z - sourcePosition.z);
 
-                const float denom = (x - sourcePosition[0]) * detNormal.x + (y - sourcePosition[1]) * detNormal.y + (z - sourcePosition[2]) * detNormal.z;
+                const float denom = x_minus_s.x * n_vec.x + x_minus_s.y * n_vec.y + x_minus_s.z * n_vec.z;
                 const float t_C = c_minus_s_dot_n / denom;
-                const float t_A = c_minus_s_dot_n / (denom - half_T_x * detNormal.y);
-                const float t_B = c_minus_s_dot_n / (denom + half_T_x * detNormal.y);
+                const float t_A = c_minus_s_dot_n / (denom - half_T_x * n_vec.y);
+                const float t_B = c_minus_s_dot_n / (denom + half_T_x * n_vec.y);
 
-                const float u_arg_A = t_A * ((x - sourcePosition[0]) * u_vec[0] + (y - half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
-                const float u_arg_B = t_B * ((x - sourcePosition[0]) * u_vec[0] + (y + half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
+                const float u_arg_A = t_A * (x_minus_s.x * u_vec.x + (x_minus_s.y - half_T_x) * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u;
+                const float u_arg_B = t_B * (x_minus_s.x * u_vec.x + (x_minus_s.y + half_T_x) * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u;
 
                 //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
-                const float l_phi = sqrtf(((x - sourcePosition[0]) * (x - sourcePosition[0]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((x - sourcePosition[0]) * (x - sourcePosition[0]));
+                const float l_phi = sqrtf((x_minus_s.x * x_minus_s.x + x_minus_s.z * x_minus_s.z) * (x_minus_s.x * x_minus_s.x + x_minus_s.y * x_minus_s.y)) / (x_minus_s.x * x_minus_s.x);
                 //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) / fabs(x - sourcePosition[0]);
 
                 // Weights for u
@@ -515,8 +517,8 @@ __global__ void modularBeamBackprojectorKernel_SF_stack(cudaTextureObject_t g, i
                 //const float vWeight = sqrtf(1.0f + v_val*v_val);
 
                 //const float v_phi_x = (v_val - startVals_g.y) * Tv_inv;
-                const float v_phi_x = (t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v - startVals_g.y) * Tv_inv;
-                const float v_phi_x_step_A = t_C * (T_f.z * v_vec[2]) * Tv_inv;
+                const float v_phi_x = (t_C * (x_minus_s.x * v_vec.x + x_minus_s.y * v_vec.y + x_minus_s.z * v_vec.z) - c_minus_s_dot_v - startVals_g.y) * Tv_inv;
+                const float v_phi_x_step_A = t_C * (T_f.z * v_vec.z) * Tv_inv;
 
                 const float row_high_A = floor(v_phi_x - 0.5f * v_phi_x_step_A + 0.5f) + 0.5f;
                 const float z_high_A = v_phi_x + 0.5f * v_phi_x_step_A - row_high_A;
@@ -545,17 +547,18 @@ __global__ void modularBeamBackprojectorKernel_SF_stack(cudaTextureObject_t g, i
             for (int k_offset = 0; k_offset < numZ; k_offset++)
             {
                 const float z = float(k + k_offset) * T_f.z + startVals_f.z;
+                const float3 x_minus_s = make_float3(x - sourcePosition.x, y - sourcePosition.y, z - sourcePosition.z);
 
-                const float denom = (x - sourcePosition[0]) * detNormal.x + (y - sourcePosition[1]) * detNormal.y + (z - sourcePosition[2]) * detNormal.z;
+                const float denom = x_minus_s.x * n_vec.x + x_minus_s.y * n_vec.y + x_minus_s.z * n_vec.z;
                 const float t_C = c_minus_s_dot_n / denom;
-                const float t_A = c_minus_s_dot_n / (denom - half_T_x * detNormal.x);
-                const float t_B = c_minus_s_dot_n / (denom + half_T_x * detNormal.x);
+                const float t_A = c_minus_s_dot_n / (denom - half_T_x * n_vec.x);
+                const float t_B = c_minus_s_dot_n / (denom + half_T_x * n_vec.x);
 
-                const float u_arg_A = t_A * ((x - half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
-                const float u_arg_B = t_B * ((x + half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u;
+                const float u_arg_A = t_A * ((x_minus_s.x - half_T_x) * u_vec.x + x_minus_s.y * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u;
+                const float u_arg_B = t_B * ((x_minus_s.x + half_T_x) * u_vec.x + x_minus_s.y * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u;
 
                 //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
-                const float l_phi = sqrtf(((y - sourcePosition[1]) * (y - sourcePosition[1]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((y - sourcePosition[1]) * (y - sourcePosition[1]));
+                const float l_phi = sqrtf((x_minus_s.y * x_minus_s.y + x_minus_s.z * x_minus_s.z) * (x_minus_s.x * x_minus_s.x + x_minus_s.y * x_minus_s.y)) / (x_minus_s.y * x_minus_s.y);
 
                 // Weights for u
                 const float tau_low = (min(u_arg_A, u_arg_B) - startVals_g.z) * Tu_inv;
@@ -573,8 +576,8 @@ __global__ void modularBeamBackprojectorKernel_SF_stack(cudaTextureObject_t g, i
                 //const float vWeight = sqrtf(1.0f + v_val*v_val);
 
                 //const float v_phi_x = (v_val - startVals_g.y) * Tv_inv;
-                const float v_phi_x = (t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v - startVals_g.y) * Tv_inv;
-                const float v_phi_x_step_A = t_C * (T_f.z * v_vec[2]) * Tv_inv;
+                const float v_phi_x = (t_C * (x_minus_s.x * v_vec.x + x_minus_s.y * v_vec.y + x_minus_s.z * v_vec.z) - c_minus_s_dot_v - startVals_g.y) * Tv_inv;
+                const float v_phi_x_step_A = t_C * (T_f.z * v_vec.z) * Tv_inv;
 
                 const float row_high_A = floor(v_phi_x - 0.5f * v_phi_x_step_A + 0.5f) + 0.5f;
                 const float z_high_A = v_phi_x + 0.5f * v_phi_x_step_A - row_high_A;
@@ -958,39 +961,40 @@ __global__ void modularBeamBackprojectorKernel_eSF_stack(cudaTextureObject_t g, 
     {
         //const float L = (float)iphi + 0.5f;
 
-        float* sourcePosition = &sourcePositions[3 * iphi];
-        float* moduleCenter = &moduleCenters[3 * iphi];
-        float* v_vec = &rowVectors[3 * iphi];
-        float* u_vec = &colVectors[3 * iphi];
-        const float3 detNormal = make_float3(u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1],
-            u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
-            u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
+        const float3 sourcePosition = make_float3(sourcePositions[3 * iphi + 0], sourcePositions[3 * iphi + 1], sourcePositions[3 * iphi + 2]);
+        const float3 moduleCenter = make_float3(moduleCenters[3 * iphi + 0], moduleCenters[3 * iphi + 1], moduleCenters[3 * iphi + 2]);
+        const float3 v_vec = make_float3(rowVectors[3 * iphi + 0], rowVectors[3 * iphi + 1], rowVectors[3 * iphi + 2]);
+        const float3 u_vec = make_float3(colVectors[3 * iphi + 0], colVectors[3 * iphi + 1], colVectors[3 * iphi + 2]);
 
-        const float c_minus_s_dot_u = (moduleCenter[0] - sourcePosition[0]) * u_vec[0] + (moduleCenter[1] - sourcePosition[1]) * u_vec[1] + (moduleCenter[2] - sourcePosition[2]) * u_vec[2];
-        const float c_minus_s_dot_v = (moduleCenter[0] - sourcePosition[0]) * v_vec[0] + (moduleCenter[1] - sourcePosition[1]) * v_vec[1] + (moduleCenter[2] - sourcePosition[2]) * v_vec[2];
-        const float c_minus_s_dot_n = (moduleCenter[0] - sourcePosition[0]) * detNormal.x + (moduleCenter[1] - sourcePosition[1]) * detNormal.y + (moduleCenter[2] - sourcePosition[2]) * detNormal.z;
+        const float3 n_vec = make_float3(u_vec.y * v_vec.z - u_vec.z * v_vec.y,
+            u_vec.z * v_vec.x - u_vec.x * v_vec.z,
+            u_vec.x * v_vec.y - u_vec.y * v_vec.x);
 
-        if (fabs(x - sourcePosition[0]) > fabs(y - sourcePosition[1]))
+        const float c_minus_s_dot_u = (moduleCenter.x - sourcePosition.x) * u_vec.x + (moduleCenter.y - sourcePosition.y) * u_vec.y + (moduleCenter.z - sourcePosition.z) * u_vec.z;
+        const float c_minus_s_dot_v = (moduleCenter.x - sourcePosition.x) * v_vec.x + (moduleCenter.y - sourcePosition.y) * v_vec.y + (moduleCenter.z - sourcePosition.z) * v_vec.z;
+        const float c_minus_s_dot_n = (moduleCenter.x - sourcePosition.x) * n_vec.x + (moduleCenter.y - sourcePosition.y) * n_vec.y + (moduleCenter.z - sourcePosition.z) * n_vec.z;
+        if (fabs(x - sourcePosition.x) > fabs(y - sourcePosition.y))
         {
             for (int k_offset = 0; k_offset < numZ; k_offset++)
             {
                 const float z = float(k + k_offset) * T_f.z + startVals_f.z;
-                const float denom = (x - sourcePosition[0]) * detNormal.x + (y - sourcePosition[1]) * detNormal.y + (z - sourcePosition[2]) * detNormal.z;
+                const float3 x_minus_s = make_float3(x - sourcePosition.x, y - sourcePosition.y, z - sourcePosition.z);
+
+                const float denom = x_minus_s.x * n_vec.x + x_minus_s.y * n_vec.y + x_minus_s.z * n_vec.z;
                 const float t_C = c_minus_s_dot_n / denom;
+                const float v_c = t_C * (x_minus_s.x * v_vec.x + x_minus_s.y * v_vec.y + x_minus_s.z * v_vec.z) - c_minus_s_dot_v;
+                const int div = max(1, int(ceil(half_T_z * v_vec.z * t_C * Tv_inv)));
 
-                const float v_c = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
-                const int div = max(1, int(ceil(half_T_z * v_vec[2] * t_C * Tv_inv)));
-
-                const float v_A = (v_c - half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
-                const float v_B = (v_c + half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
+                const float v_A = (v_c - half_T_z * v_vec.z * t_C - startVals_g.y) * Tv_inv;
+                const float v_B = (v_c + half_T_z * v_vec.z * t_C - startVals_g.y) * Tv_inv;
                 const int iv_min = int(ceil(v_A - 0.5f));
                 const int iv_max = int(floor(v_B + 0.5f));
 
-                const float t_A = c_minus_s_dot_n / (denom - half_T_x * detNormal.y);
-                const float t_B = c_minus_s_dot_n / (denom + half_T_x * detNormal.y);
+                const float t_A = c_minus_s_dot_n / (denom - half_T_x * n_vec.y);
+                const float t_B = c_minus_s_dot_n / (denom + half_T_x * n_vec.y);
 
-                const float u_A = (t_A * ((x - sourcePosition[0]) * u_vec[0] + (y - half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
-                const float u_B = (t_B * ((x - sourcePosition[0]) * u_vec[0] + (y + half_T_x - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+                const float u_A = (t_A * (x_minus_s.x * u_vec.x + (x_minus_s.y - half_T_x) * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+                const float u_B = (t_B * (x_minus_s.x * u_vec.x + (x_minus_s.y + half_T_x) * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
 
                 const float u_min = min(u_A, u_B);
                 const float u_max = max(u_A, u_B);
@@ -1000,7 +1004,8 @@ __global__ void modularBeamBackprojectorKernel_eSF_stack(cudaTextureObject_t g, 
                 const int iu_max = int(floor(u_max + 0.5f));
 
                 //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(x - sourcePosition[0]);
-                const float l_phi = sqrtf(((x - sourcePosition[0]) * (x - sourcePosition[0]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((x - sourcePosition[0]) * (x - sourcePosition[0]));
+                //const float l_phi = sqrtf(((x - sourcePosition[0]) * (x - sourcePosition[0]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((x - sourcePosition[0]) * (x - sourcePosition[0]));
+                const float l_phi = sqrtf((x_minus_s.x * x_minus_s.x + x_minus_s.z * x_minus_s.z) * (x_minus_s.x * x_minus_s.x + x_minus_s.y * x_minus_s.y)) / (x_minus_s.x * x_minus_s.x);
 
                 for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
@@ -1032,22 +1037,24 @@ __global__ void modularBeamBackprojectorKernel_eSF_stack(cudaTextureObject_t g, 
             for (int k_offset = 0; k_offset < numZ; k_offset++)
             {
                 const float z = float(k + k_offset) * T_f.z + startVals_f.z;
-                const float denom = (x - sourcePosition[0]) * detNormal.x + (y - sourcePosition[1]) * detNormal.y + (z - sourcePosition[2]) * detNormal.z;
+                const float3 x_minus_s = make_float3(x - sourcePosition.x, y - sourcePosition.y, z - sourcePosition.z);
+
+                const float denom = x_minus_s.x * n_vec.x + x_minus_s.y * n_vec.y + x_minus_s.z * n_vec.z;
                 const float t_C = c_minus_s_dot_n / denom;
 
-                const float v_c = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
-                const int div = max(1, int(ceil(half_T_z * v_vec[2] * t_C * Tv_inv)));
+                const float v_c = t_C * (x_minus_s.x * v_vec.x + x_minus_s.y * v_vec.y + x_minus_s.z * v_vec.z) - c_minus_s_dot_v;
+                const int div = max(1, int(ceil(half_T_z * v_vec.z * t_C * Tv_inv)));
 
-                const float v_A = (v_c - half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
-                const float v_B = (v_c + half_T_z * v_vec[2] * t_C - startVals_g.y) * Tv_inv;
+                const float v_A = (v_c - half_T_z * v_vec.z * t_C - startVals_g.y) * Tv_inv;
+                const float v_B = (v_c + half_T_z * v_vec.z * t_C - startVals_g.y) * Tv_inv;
                 const int iv_min = int(ceil(v_A - 0.5f));
                 const int iv_max = int(floor(v_B + 0.5f));
 
-                const float t_A = c_minus_s_dot_n / (denom - half_T_x * detNormal.x);
-                const float t_B = c_minus_s_dot_n / (denom + half_T_x * detNormal.x);
+                const float t_A = c_minus_s_dot_n / (denom - half_T_x * n_vec.x);
+                const float t_B = c_minus_s_dot_n / (denom + half_T_x * n_vec.x);
 
-                const float u_A = (t_A * ((x - half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
-                const float u_B = (t_B * ((x + half_T_x - sourcePosition[0]) * u_vec[0] + (y - sourcePosition[1]) * u_vec[1] + (z - sourcePosition[2]) * u_vec[2]) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+                const float u_A = (t_A * ((x_minus_s.x - half_T_x) * u_vec.x + x_minus_s.y * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
+                const float u_B = (t_B * ((x_minus_s.x + half_T_x) * u_vec.x + x_minus_s.y * u_vec.y + x_minus_s.z * u_vec.z) - c_minus_s_dot_u - startVals_g.z) * Tu_inv;
 
                 const float u_min = min(u_A, u_B);
                 const float u_max = max(u_A, u_B);
@@ -1057,7 +1064,8 @@ __global__ void modularBeamBackprojectorKernel_eSF_stack(cudaTextureObject_t g, 
                 const int iu_max = int(floor(u_max + 0.5f));
 
                 //const float l_phi = sqrtf((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1])) / fabs(y - sourcePosition[1]);
-                const float l_phi = sqrtf(((y - sourcePosition[1]) * (y - sourcePosition[1]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((y - sourcePosition[1]) * (y - sourcePosition[1]));
+                //const float l_phi = sqrtf(((y - sourcePosition[1]) * (y - sourcePosition[1]) + (z - sourcePosition[2]) * (z - sourcePosition[2])) * ((x - sourcePosition[0]) * (x - sourcePosition[0]) + (y - sourcePosition[1]) * (y - sourcePosition[1]))) / ((y - sourcePosition[1]) * (y - sourcePosition[1]));
+                const float l_phi = sqrtf((x_minus_s.y * x_minus_s.y + x_minus_s.z * x_minus_s.z) * (x_minus_s.x * x_minus_s.x + x_minus_s.y * x_minus_s.y)) / (x_minus_s.y * x_minus_s.y);
 
                 for (int iu = iu_min; iu <= iu_max; iu += 2)
                 {
