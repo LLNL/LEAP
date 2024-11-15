@@ -3914,10 +3914,10 @@ bool tomographicModels::synthesize_symmetry(float* f_radial, float* f)
 	return symObject.synthesizeSymmetry(f_radial, f);
 }
 
-float tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
+float tomographicModels::find_centerCol(float* g, int iRow, float* searchBounds, bool data_on_cpu)
 {
 	if (data_on_cpu)
-		return findCenter_cpu(g, &params, iRow);
+		return findCenter_cpu(g, &params, iRow, false, searchBounds);
 	else
 	{
 		printf("Error: find_centerCol not yet implemented for data on the GPU\n");
@@ -3925,10 +3925,10 @@ float tomographicModels::find_centerCol(float* g, int iRow, bool data_on_cpu)
 	}
 }
 
-float tomographicModels::find_tau(float* g, int iRow, bool data_on_cpu)
+float tomographicModels::find_tau(float* g, int iRow, float* searchBounds, bool data_on_cpu)
 {
 	if (data_on_cpu)
-		return findCenter_cpu(g, &params, iRow, true);
+		return findCenter_cpu(g, &params, iRow, true, searchBounds);
 	else
 	{
 		printf("Error: find_tau not yet implemented for data on the GPU\n");

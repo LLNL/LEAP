@@ -843,7 +843,7 @@ class tomographicModels:
         self.libprojectors.set_centerCol.argtypes = [ctypes.c_float]
         return self.libprojectors.set_centerCol(centerCol)
         
-    def find_centerCol(self, g, iRow=-1):
+    def find_centerCol(self, g, iRow=-1, searchBounds=None):
         r"""Find the centerCol parameter
 
         This function works by minimizing the difference of conjugate rays, by changing the detector column sample locations. The cost functions
@@ -875,16 +875,20 @@ class tomographicModels:
         """
         if iRow is None:
             iRow = -1
+        if searchBounds is None:
+            searchBounds = -1.0*np.ones(2, dtype=np.float32)
+        else:
+            searchBounds = np.array(searchBounds, dtype=np.float32)
         self.libprojectors.find_centerCol.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.find_centerCol.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.find_centerCol(g.data_ptr(), iRow, g.is_cuda == False)
+            self.libprojectors.find_centerCol.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            return self.libprojectors.find_centerCol(g.data_ptr(), iRow, searchBounds, g.is_cuda == False)
         else:
-            self.libprojectors.find_centerCol.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.find_centerCol(g, iRow, True)
+            self.libprojectors.find_centerCol.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            return self.libprojectors.find_centerCol(g, iRow, searchBounds, True)
         
-    def find_tau(self, g, iRow=-1):
+    def find_tau(self, g, iRow=-1, searchBounds=None):
         r"""Find the tau parameter
 
         This function works by minimizing the difference of conjugate rays, by changing the horizontal source position shift (equivalent to rotation stage shifts).
@@ -915,14 +919,18 @@ class tomographicModels:
         """
         if iRow is None:
             iRow = -1
+        if searchBounds is None:
+            searchBounds = -1.0*np.ones(2, dtype=np.float32)
+        else:
+            searchBounds = np.array(searchBounds, dtype=np.float32)
         self.libprojectors.find_tau.restype = ctypes.c_float
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.find_tau.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.find_tau(g.data_ptr(), iRow, g.is_cuda == False)
+            self.libprojectors.find_tau.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            return self.libprojectors.find_tau(g.data_ptr(), iRow, searchBounds, g.is_cuda == False)
         else:
-            self.libprojectors.find_tau.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.find_tau(g, iRow, True)
+            self.libprojectors.find_tau.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            return self.libprojectors.find_tau(g, iRow, searchBounds, True)
         
     def estimate_tilt(self, g):
         """Estimates the tilt angle (around the optical axis) of the detector

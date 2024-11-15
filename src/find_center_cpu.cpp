@@ -318,7 +318,7 @@ float interpolate2D(float* data, float ind_1, float ind_2, int N_1, int N_2)
 		d_1 * ((1.0 - d_2) * data[ind_1_hi * N_2 + ind_2_lo] + d_2 * data[ind_1_hi * N_2 + ind_2_hi]);
 }
 
-float findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
+float findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau, float* searchBounds)
 {
 	if (g == NULL || params == NULL)
 		return 0.0;
@@ -337,15 +337,15 @@ float findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
 			return 0.0;
 		}
 		else
-			return findCenter_parallel_cpu(g, params, iRow);
+			return findCenter_parallel_cpu(g, params, iRow, searchBounds);
 	}
     else if (params->geometry == parameters::FAN)
-        return findCenter_fan_cpu(g, params, iRow, find_tau);
+        return findCenter_fan_cpu(g, params, iRow, find_tau, searchBounds);
 	else if (params->geometry == parameters::CONE)
 	{
 		if (params->helicalPitch != 0.0)
 			printf("Warning: find_centerCol/find_tau will likely not work for helical data\n");
-		return findCenter_cone_cpu(g, params, iRow, find_tau);
+		return findCenter_cone_cpu(g, params, iRow, find_tau, searchBounds);
 	}
     else
     {
@@ -354,12 +354,12 @@ float findCenter_cpu(float* g, parameters* params, int iRow, bool find_tau)
     }
 }
 
-float findCenter_fan_cpu(float* g, parameters* params, int iRow, bool find_tau)
+float findCenter_fan_cpu(float* g, parameters* params, int iRow, bool find_tau, float* searchBounds)
 {
-	return findCenter_cone_cpu(g, params, iRow, find_tau);
+	return findCenter_cone_cpu(g, params, iRow, find_tau, searchBounds);
 }
 
-float findCenter_parallel_cpu(float* g, parameters* params, int iRow)
+float findCenter_parallel_cpu(float* g, parameters* params, int iRow, float* searchBounds)
 {
     if (iRow < 0 || iRow > params->numRows - 1)
         iRow = max(0, min(params->numRows-1, int(floor(0.5 + params->centerRow))));
@@ -386,7 +386,13 @@ float findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 
 	int centerCol_low, centerCol_high;
 
-	setDefaultRange_centerCol(params, centerCol_low, centerCol_high);
+	if (searchBounds != NULL && 0.0 <= searchBounds[0] && searchBounds[1] <= params->numCols-1 && searchBounds[0] <= searchBounds[1])
+	{
+		centerCol_low = int(0.5+searchBounds[0]);
+		centerCol_high = int(0.5+searchBounds[1]);
+	}
+	else
+		setDefaultRange_centerCol(params, centerCol_low, centerCol_high);
 
 	double* shiftCosts = (double*)malloc(sizeof(double) * params->numCols);
 
@@ -395,8 +401,8 @@ float findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 	float phi_min = min(phi_0, phi_end);
 	float phi_max = max(phi_0, phi_end);
 
-	float u_0 = params->u(0);
-	float u_end = params->u(params->numCols - 1);
+	//float u_0 = params->u(0);
+	//float u_end = params->u(params->numCols - 1);
 
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for
@@ -406,6 +412,7 @@ float findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 		//double denom = 0.0;
 
 		float u_0 = -(float(n) + params->colShiftFromFilter) * params->pixelWidth;
+		float u_end = params->pixelWidth * (params->numCols - 1) + u_0;
 
 		double num = 0.0;
 		double count = 0.0;
@@ -472,7 +479,7 @@ float findCenter_parallel_cpu(float* g, parameters* params, int iRow)
 	return retVal;
 }
 
-float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
+float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau, float* searchBounds)
 {
     if (iRow < 0 || iRow > params->numRows - 1)
         iRow = max(0, min(params->numRows - 1, int(floor(0.5 + params->centerRow))));
@@ -482,6 +489,8 @@ float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 	rowStart = iRow;
 	rowEnd = iRow;
 
+	//printf("iRow = %d, tiltAngle = %f\n", iRow, params->tiltAngle);
+
 	float* sino = get_rotated_sinogram(g, params, iRow);
 
 	int conj_ind = 0;
@@ -490,9 +499,21 @@ float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 	else
 		conj_ind = int(floor(0.5 + params->phi_inv(params->phis[0] - PI)));
 
+	float tau_shift = params->pixelWidth * params->sod / params->sdd;
 	int centerCol_low, centerCol_high;
 
-	setDefaultRange_centerCol(params, centerCol_low, centerCol_high);
+	if (searchBounds != NULL && find_tau == true)
+	{
+		searchBounds[0] = searchBounds[0]/tau_shift;
+		searchBounds[1] = searchBounds[1]/tau_shift;
+	}
+	if (searchBounds != NULL && 0.0 <= searchBounds[0] && searchBounds[1] <= params->numCols-1 && searchBounds[0] <= searchBounds[1])
+	{
+		centerCol_low = searchBounds[0];
+		centerCol_high = searchBounds[1];
+	}
+	else
+		setDefaultRange_centerCol(params, centerCol_low, centerCol_high);
 	
 	double* shiftCosts = (double*)malloc(sizeof(double) * params->numCols);
 
@@ -501,18 +522,16 @@ float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 	bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 	params->normalizeConeAndFanCoordinateFunctions = true;
 
-	float tau_shift = params->pixelWidth * params->sod / params->sdd;
-
 	float phi_0 = params->phis[0];
 	float phi_end = params->phis[params->numAngles - 1];
 	float phi_min = min(phi_0, phi_end);
 	float phi_max = max(phi_0, phi_end);
 
-	float u_0 = params->u(0);
-	float u_end = params->u(params->numCols-1);
+	//float u_0 = params->u(0);
+	//float u_end = params->u(params->numCols-1);
 
-	float atanTu = atan(params->pixelWidth / params->sdd);
-	float T_u = params->pixelWidth;
+	float atanTu = atan(params->pixelWidth / params->sdd); // radians
+	float T_u = params->pixelWidth / params->sdd;
 	if (params->detectorType == parameters::CURVED)
 		T_u = atanTu;
 
@@ -537,6 +556,7 @@ float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 		{
 			u_0 = -(float(n) + params->colShiftFromFilter) * T_u;
 		}
+		float u_end = T_u*(params->numCols-1) + u_0;
 
 		double num = 0.0;
 		double count = 0.0;
@@ -552,9 +572,9 @@ float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 				for (int k = 0; k < params->numCols; k++)
 				{
 					//float u = params->u(k);
-					float u = (k * params->pixelWidth + u_0) / params->sdd;
+					float u = k * T_u + u_0;
 					if (params->detectorType == parameters::CURVED)
-						u = atan((k * atanTu + u_0));
+						u = tan((k * atanTu + u_0));
 
 					float u_conj = (-u + A) / (1.0 + u*A);
 					float phi_conj = phi - 2.0 * atan(u) + atanA + PI;
@@ -564,9 +584,10 @@ float findCenter_cone_cpu(float* g, parameters* params, int iRow, bool find_tau)
 					{
 						int phi_conj_ind = int(0.5 + params->phi_inv(phi_conj));
 
-						int u_conj_ind = int(0.5 + ((u_conj * params->sdd) - u_0) / params->pixelWidth);
+						//int u_conj_ind = int(0.5 + ((u_conj * params->sdd) - u_0) / params->pixelWidth);
+						int u_conj_ind = int(0.5 + (u_conj - u_0) / T_u);
 						if (params->detectorType == parameters::CURVED)
-							u_conj_ind = int(0.5 + (tan(u_conj) - u_0) / atanTu);
+							u_conj_ind = int(0.5 + (atan(u_conj) - u_0) / atanTu);
 
 						float val = lineA[k];
 						//float val_conj = g[uint64(phi_conj_ind) * uint64(params->numRows * params->numCols) + uint64(j * params->numCols + u_conj_ind)];
@@ -723,7 +744,7 @@ float* get_rotated_sinogram(float* g, parameters* params, int iRow)
 		if (params->tiltAngle == 0.0)
 		{
 			for (int iCol = 0; iCol < params->numCols; iCol++)
-				sino_line[iCol] = aProj[uint64(iRow)*uint64(params->numRows) + uint64(iCol)];
+				sino_line[iCol] = aProj[uint64(iRow)*uint64(params->numCols) + uint64(iCol)];
 		}
 		else
 		{

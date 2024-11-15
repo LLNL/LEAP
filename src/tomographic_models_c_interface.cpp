@@ -912,14 +912,14 @@ float get_z0()
 	return tomo()->params.z_0();
 }
 
-float find_centerCol(float* g, int iRow, bool data_on_cpu)
+float find_centerCol(float* g, int iRow, float* searchBounds, bool data_on_cpu)
 {
-	return tomo()->find_centerCol(g, iRow, data_on_cpu);
+	return tomo()->find_centerCol(g, iRow, searchBounds, data_on_cpu);
 }
 
-float find_tau(float* g, int iRow, bool data_on_cpu)
+float find_tau(float* g, int iRow, float* searchBounds, bool data_on_cpu)
 {
-	return tomo()->find_tau(g, iRow, data_on_cpu);
+	return tomo()->find_tau(g, iRow, searchBounds, data_on_cpu);
 }
 
 float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu)

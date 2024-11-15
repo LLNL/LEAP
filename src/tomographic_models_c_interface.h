@@ -215,8 +215,8 @@ extern "C" PROJECTOR_API float get_offsetY();
 extern "C" PROJECTOR_API float get_offsetZ();
 extern "C" PROJECTOR_API float get_z0();
 
-extern "C" PROJECTOR_API float find_centerCol(float* g, int iRow, bool data_on_cpu);
-extern "C" PROJECTOR_API float find_tau(float* g, int iRow, bool data_on_cpu);
+extern "C" PROJECTOR_API float find_centerCol(float* g, int iRow, float* searchBounds, bool data_on_cpu);
+extern "C" PROJECTOR_API float find_tau(float* g, int iRow, float* searchBounds, bool data_on_cpu);
 extern "C" PROJECTOR_API float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu);
 extern "C" PROJECTOR_API float estimate_tilt(float* g, bool data_on_cpu);
 extern "C" PROJECTOR_API float conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu);

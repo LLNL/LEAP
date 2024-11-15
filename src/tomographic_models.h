@@ -686,20 +686,22 @@ public:
 	 * \brief       finds centerCol of parallel-, fan-, or cone-beam data using conjugate rays
 	 * \param[in]   g pointer to the projection data
 	 * \param[in]   iRow the detector row index to use the estimate centerCol
+	 * \param[in]	searchBounds 2-element array specifying the search bounds
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	float find_centerCol(float* g, int iRow, bool data_on_cpu);
+	float find_centerCol(float* g, int iRow, float* searchBounds, bool data_on_cpu);
 
 	/**
 	 * \fn          find_tau
 	 * \brief       finds tau of fan- or cone-beam data using conjugate rays
 	 * \param[in]   g pointer to the projection data
 	 * \param[in]   iRow the detector row index to use the estimate centerCol
+	 * \param[in]	searchBounds 2-element array specifying the search bounds
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	float find_tau(float* g, int iRow, bool data_on_cpu);
+	float find_tau(float* g, int iRow, float* searchBounds, bool data_on_cpu);
 
 	/**
 	 * \fn          estimate_tilt
