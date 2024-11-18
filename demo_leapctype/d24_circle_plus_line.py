@@ -42,8 +42,10 @@ numRows = numCols
 ct_circular.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1)+10, ct_circular.setAngleArray(numAngles, 360.0), sod, sdd)
 
 # Now we define the line cone-beam data which requires that we use the modular-beam geometry
-numShifts = numRows//16
-shiftSpacing = pixelSize*16
+L = 16
+#L = 32
+numShifts = numRows//L
+shiftSpacing = pixelSize*L
 sourcePositions = np.ascontiguousarray(np.zeros((numShifts,3)).astype(np.float32), dtype=np.float32)
 moduleCenters = np.ascontiguousarray(np.zeros((numShifts,3)).astype(np.float32), dtype=np.float32)
 colVectors = np.ascontiguousarray(np.zeros((numShifts,3)).astype(np.float32), dtype=np.float32)
@@ -83,8 +85,11 @@ f_true = ct_circular.allocateVolume()
 
 
 # Specify simplified FORBILD head phantom
-ct_circular.set_FORBILD(f_true,True)
-
+#ct_circular.set_FORBILD(f_true,True)
+for i in range(11):
+    ct_circular.addObject(f_true, 4, [0.0, 0.0, 20.0*(i-5)], [100.0, 100.0, 5.0], 0.02)
+#ct_circular.display(f_true)
+#quit()
 
 # "Simulate" projection data
 ct_circular.project(g_circular,f_true)
@@ -95,11 +100,12 @@ f = ct_circular.allocateVolume()
 
 # Reconstruct the axial cone-beam data with FBP (FDK)
 ct_circular.FBP(g_circular, f)
+#ct_circular.display(f)
 
 # Now refine the reconstruction with the "line" CT data
 # This reconstruction should have no cone-beam artifacts
 # Try commenting out this line to see cone-beam artfiact in the reconstruction
-ct_line.LS(g_line, f, 10, True)
+ct_line.LS(g_line, f, 10)#, 'SQS', True)
 
 # Display the result
 ct_circular.display(f)

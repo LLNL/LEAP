@@ -942,7 +942,7 @@ void parameters::printAll()
 		if (tau != 0.0)
 			printf("tau = %f mm\n", tau);
 		if (geometry == CONE)
-			printf("gamma = %f degrees\n", tiltAngle);
+			printf("tiltAngle = %f degrees\n", tiltAngle);
 	}
 	else if (geometry == MODULAR)
 	{

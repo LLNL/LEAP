@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.24"
+#define LEAP_VERSION "1.25"
 
 /*
 #include <iostream>
@@ -35,7 +35,7 @@
 /**
  *  tomographicModels class
  * This is the main interface for LEAP.  All calls to forward project, backproject, FBP, filtering, noise filters come through this class.
- * The main job of this class is to set/get parameters, do error checks, and dispath jobs.  It contains almost no algorithm logic.
+ * The main job of this class is to set/get parameters, do error checks, and dispatch jobs.  It contains almost no algorithm logic.
  * In addition to the jobs listed above, this class is also responsible for divide jobs across multiple GPUs or dividing up GPU jobs so that
  * they fit into the available GPU memory.  Functions called from this class are either CPU based or single GPU based.
  */

@@ -1512,6 +1512,11 @@ bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
 			params.offsetScan = false;
 	}
 	//*/
+	if (params.helicalPitch != 0.0 && params.tiltAngle != 0.0)
+	{
+		printf("Error: current implementation of helical FBP cannot handle detector tilt!\n");
+		return false;
+	}
 
 	//printf("v range: %f to %f\n", params.v(0), params.v(params.numRows-1));
 	if (data_on_cpu == true && FBP_multiGPU(g, f) == true)
@@ -2410,8 +2415,8 @@ bool tomographicModels::beam_hardening_heel_effect(float* g, float* anode_normal
 				float v = params.v(j,i) / sdd_cur;
 				float u = params.u(k,i) / sdd_cur;
 				float lineLength = sqrt(1.0 + u * u + v * v);
-				//float takeoffAngle = 90.0 - acos((u * anode_normal[0] + 1.0 * anode_normal[1] + v * anode_normal[2]) / lineLength) * 180.0 / PI;
-				float takeoffAngle = acos((u * anode_normal[0] + 1.0 * anode_normal[1] + v * anode_normal[2]) / lineLength) * 180.0 / PI;
+				float takeoffAngle = 90.0 - acos((u * anode_normal[0] + 1.0 * anode_normal[1] + v * anode_normal[2]) / lineLength) * 180.0 / PI;
+				//float takeoffAngle = acos((u * anode_normal[0] + 1.0 * anode_normal[1] + v * anode_normal[2]) / lineLength) * 180.0 / PI;
 				//if (i == 0 && j == params.numRows/2)
 				//	printf("takeoffAngle = %f (u=%f)\n", takeoffAngle, u);
 

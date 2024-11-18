@@ -857,7 +857,7 @@ class tomographicModels:
            
         respectively.  For rays near the mid-plane, one can also use these cost functions for cone-parallel and cone-beam coordinates as well.
 
-        Note that it only works for parallel-, fan-, and cone-beam CT geometry types (i.e., everything but modular-beam)
+        Note that this only works for parallel-, fan-, and cone-beam CT geometry types (i.e., everything but modular-beam)
         and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
         If you have any bad edge detectors, these must be cropped out before running this algorithm.
         If this function does not return a good estimate, try changing the iRow parameter value or try using the
@@ -868,6 +868,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             iRow (int): The detector row index to be used for the estimation, if no value is given, uses the row closest to the centerRow parameter
+            searchBounds (2-element array): optional argument to specify the interval for which to perform the search
             
         Returns:
             the error metric value
@@ -901,7 +902,7 @@ class tomographicModels:
            
         For rays near the mid-plane, one can also use these cost functions for cone-beam coordinates as well.
 
-        Note that it only works for fan- and cone-beam CT geometry types
+        Note that this only works for fan- and cone-beam CT geometry types
         and one may not get an accurate estimate if the projections are truncated on the right and/or left sides.
         If you have any bad edge detectors, these must be cropped out before running this algorithm.
         If this function does not return a good estimate, try changing the iRow parameter value or try using the
@@ -912,6 +913,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             iRow (int): The detector row index to be used for the estimation, if no value is given, uses the row closest to the centerRow parameter
+            searchBounds (2-element array): optional argument to specify the interval for which to perform the search
             
         Returns:
             the error metric value

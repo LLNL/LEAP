@@ -37,7 +37,7 @@ pitch = 0.0
 #voxelScales = [2.0]
 #projection_methods = ['SF']
 #projection_methods = ['VD']
-#geometries = []
+geometries = []
 
 for ii in range(len(geometries)):
     igeom = geometries[ii]
