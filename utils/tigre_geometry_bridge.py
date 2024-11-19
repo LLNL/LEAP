@@ -32,15 +32,20 @@ def set_leap_from_tigre(geo, leapct=None):
     sdd = geo.DSD
     leapct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd)
     
-    if np.any(geo.rotDetector != 0.0):
+    if geo.rotDetector[1] != 0.0:
         leapct.convert_to_modularbeam()
         dRoll = geo.rotDetector[2]
         dPitch = geo.rotDetector[0]
         dYaw = geo.rotDetector[1]
         from scipy.spatial.transform import Rotation as R
         A = R.from_euler('zxy', [dRoll, dYaw, dPitch], degrees=False).as_matrix()
-        
         leapct.rotate_detector(A)
+    else:
+        leapct.set_tiltAngle(geo.rotDetector[0]*180.0/np.pi)
+        if geo.rotDetector[2] != 0.0: # requires tau
+            yaw = geo.rotDetector[2]
+            print('Error: not implemented yet!')
+            return None
     
     # Set CT volume
     stageShift = (centerRow-0.5*(numRows-1))*pixelHeight*sod/sdd
@@ -83,6 +88,8 @@ def set_tigre_from_leap(leapct, geo=None):
     centerCol = leapct.get_centerCol()
     sod = leapct.get_sod()
     sdd = leapct.get_sdd()
+    tau = leapct.get_tau()
+    tiltAngle = leapct.get_tiltAngle()
     
     stageShift = (centerRow-0.5*(numRows-1))*pixelHeight*sod/sdd
     
@@ -94,6 +101,18 @@ def set_tigre_from_leap(leapct, geo=None):
     geo.offDetector = np.array([0.0, 0.0])
     geo.offDetector[0] = -(centerRow - 0.5*(numRows-1)) * pixelHeight
     geo.offDetector[1] = -(centerCol - 0.5*(numCols-1)) * pixelWidth
+    geo.rotDetector = np.array([tiltAngle*np.pi/180.0, 0.0, 0.0])
+    if tau != 0.0:
+        yaw = np.arctan(tau/sod)
+        sod_new = sod / np.cos(yaw)
+        sdd_new = sdd / np.cos(yaw)
+        geo.DSO = sod_new
+        geo.DSD = sdd_new
+        geo.offDetector[1] -= tau*sdd/sod
+        geo.rotDetector[2] = yaw
+    else:
+        yaw = 0.0
+    
     geo.dVoxel = np.array([leapct.get_voxelHeight(), leapct.get_voxelWidth(), leapct.get_voxelWidth()])
     geo.nVoxel = np.array([leapct.get_numZ(), leapct.get_numY(), leapct.get_numX()])
     geo.sVoxel = geo.dVoxel * geo.nVoxel
@@ -102,7 +121,8 @@ def set_tigre_from_leap(leapct, geo=None):
     geo.offOrigin[1] = leapct.get_offsetY()
     geo.offOrigin[0] = leapct.get_offsetZ()
     #geo.offOrigin[0] = leapct.get_offsetZ()+stageShift
-    geo.angles = phis
+    geo.angles = phis - yaw
+    
         
     return geo
     

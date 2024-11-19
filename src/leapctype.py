@@ -4698,7 +4698,7 @@ class tomographicModels:
         """Applies a transfer function to arbitrary 3D data, i.e., x = LUT(x)
         
         Args:
-            x (C contiguous float32 numpy array or torch tensor): 3D data (input and output)
+            x (2D or 3D C contiguous float32 numpy array or torch tensor): 3D data (input and output)
             LUT (C contiguous float32 numpy array or torch tensor): lookup table with transfer function values
             sampleRate (float): the step size between samples
             firstSample (float): the value of the first sample in the lookup table
@@ -4706,15 +4706,22 @@ class tomographicModels:
         Returns:            
             true if operation  was sucessful, false otherwise
         """
+        
+        if len(x.shape) == 2:
+            numAngles = 1
+            numRows, numCols = x.shape
+        else:
+            numAngles, numRows, numCols = x.shape
+        
         #bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
         self.libprojectors.applyTransferFunction.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(x) is torch.Tensor:
             self.libprojectors.applyTransferFunction.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.applyTransferFunction(x.data_ptr(), x.shape[0], x.shape[1], x.shape[2], LUT.data_ptr(), firstSample, sampleRate, LUT.size, f.is_cuda == False)
+            return self.libprojectors.applyTransferFunction(x.data_ptr(), numAngles, numRows, numCols, LUT.data_ptr(), firstSample, sampleRate, LUT.size, f.is_cuda == False)
         else:
             self.libprojectors.applyTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.applyTransferFunction(x, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.size, True)
+            return self.libprojectors.applyTransferFunction(x, numAngles, numRows, numCols, LUT, firstSample, sampleRate, LUT.size, True)
     
     def beam_hardening_heel_effect(self, g, anode_normal, LUT, takeOffAngles, sampleRate, firstSample=0.0):
        r""" This function performs beam hardening/ beam hardening correction for variable take-off angles
@@ -4744,8 +4751,8 @@ class tomographicModels:
         """Applies a 2D transfer function to arbitrary 3D data pair, i.e., x,y = LUT(x,y)
         
         Args:
-            x (C contiguous float32 numpy array or torch tensor): 3D data of first component (input and output)
-            y (C contiguous float32 numpy array or torch tensor): 3D data of second component (input and output)
+            x (2D or 3D C contiguous float32 numpy array or torch tensor): 3D data of first component (input and output)
+            y (2D or 3D C contiguous float32 numpy array or torch tensor): 3D data of second component (input and output)
             LUT (C contiguous float32 numpy array or torch tensor): lookup table with transfer function values
             sampleRate (float): the step size between samples
             firstSample (float): the value of the first sample in the lookup table
@@ -4764,22 +4771,28 @@ class tomographicModels:
             LUT[0,:,:] = LUT_2d[:,:]
             LUT[1,:,:] = LUT_2d[:,:]
         
+        if len(x.shape) == 2:
+            numAngles = 1
+            numRows, numCols = x.shape
+        else:
+            numAngles, numRows, numCols = x.shape
+        
         #bool applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
         self.libprojectors.applyDualTransferFunction.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(x) is torch.Tensor:
             self.libprojectors.applyDualTransferFunction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.applyDualTransferFunction(x.data_ptr(), y.data_ptr(), x.shape[0], x.shape[1], x.shape[2], LUT.data_ptr(), firstSample, sampleRate, LUT.shape[1], x.is_cuda == False)
+            return self.libprojectors.applyDualTransferFunction(x.data_ptr(), y.data_ptr(), numAngles, numRows, numCols, LUT.data_ptr(), firstSample, sampleRate, LUT.shape[1], x.is_cuda == False)
         else:
             self.libprojectors.applyDualTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.applyDualTransferFunction(x, y, x.shape[0], x.shape[1], x.shape[2], LUT, firstSample, sampleRate, LUT.shape[1], True)
+            return self.libprojectors.applyDualTransferFunction(x, y, numAngles, numRows, numCols, LUT, firstSample, sampleRate, LUT.shape[1], True)
     
     def convertToRhoeZe(self, f_L, f_H, sigma_L, sigma_H):
         """transforms a low and high energy pair to electron density and effective atomic number
         
         Args:
-            f_L (3D C contiguous float32 numpy array or torch tensor): low energy volume in LAC units
-            f_H (3D C contiguous float32 numpy array or torch tensor): high energy volume in LAC units
+            f_L (2D or 3D C contiguous float32 numpy array or torch tensor): low energy volume in LAC units
+            f_H (2D or 3D C contiguous float32 numpy array or torch tensor): high energy volume in LAC units
             sigma_L (3D C contiguous float32 numpy array or torch tensor): mass cross section values for elements 1-100 at the low energy
             sigma_H (3D C contiguous float32 numpy array or torch tensor): mass cross section values for elements 1-100 at the high energy
         
@@ -4787,15 +4800,22 @@ class tomographicModels:
             the Ze and rho volumes
         
         """
+        
+        if len(f_L.shape) == 2:
+            numZ = 1
+            numY, numX = f_L.shape
+        else:
+            numZ, numY, numX = f_L.shape
+        
         #bool convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu)
         self.libprojectors.convertToRhoeZe.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f_L) is torch.Tensor:
             self.libprojectors.convertToRhoeZe.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.convertToRhoeZe(f_L.data_ptr(), f_H.data_ptr(), f_L.shape[0], f_L.shape[1], f_L.shape[2], sigma_L.data_ptr(), sigma_H.data_ptr(), f_L.is_cuda == False)
+            self.libprojectors.convertToRhoeZe(f_L.data_ptr(), f_H.data_ptr(), numZ, numY, numX, sigma_L.data_ptr(), sigma_H.data_ptr(), f_L.is_cuda == False)
         else:
             self.libprojectors.convertToRhoeZe.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.convertToRhoeZe(f_L, f_H, f_L.shape[0], f_L.shape[1], f_L.shape[2], sigma_L, sigma_H, True)
+            self.libprojectors.convertToRhoeZe(f_L, f_H, numZ, numY, numX, sigma_L, sigma_H, True)
         return f_L, f_H
     
     def synthesize_symmetry(self, f_radial):
