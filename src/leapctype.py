@@ -6286,33 +6286,52 @@ class tomographicModels:
         numRows = self.get_numRows()
         centerRow = self.get_centerRow()
         centerCol = self.get_centerCol()
+        tau = 0.0
+        tiltAngle = 0.0
         
         geometryText = self.get_geometry()
         
         if geometryText == 'CONE' or geometryText == 'FAN':
+            if geometryText == 'CONE':
+                tiltAngle = self.get_tiltAngle()
             sod = self.get_sod()
             sdd = self.get_sdd()
             tau = self.get_tau()
-            #R = np.sqrt(sod*sod - tau*tau)
-            #D = np.sqrt(sdd*sdd - tau*tau)
             R = sod
             D = sdd
             odd = D-R
             detectorWidth = numCols*pixelWidth
             detectorHeight = numRows*pixelHeight
-            detectorLeft = -centerCol*pixelWidth + tau
-            detectorRight = (numCols-1-centerCol)*pixelWidth + tau
+            detectorLeft = -centerCol*pixelWidth
+            detectorRight = (numCols-1-centerCol)*pixelWidth
+            detectorLeft *= -1.0
+            detectorRight *= -1.0
             detectorBottom = -centerRow*pixelHeight
             detectorTop = (numRows-1-centerRow)*pixelHeight
-            xs = [detectorLeft, detectorRight, detectorRight, detectorLeft, detectorLeft]
-            ys = [-odd, -odd, -odd, -odd, -odd]
-            zs = [detectorBottom, detectorBottom, detectorTop, detectorTop, detectorBottom]
+            xs = np.array([detectorLeft, detectorRight, detectorRight, detectorLeft, detectorLeft])
+            ys = np.array([-odd, -odd, -odd, -odd, -odd])
+            zs = np.array([detectorBottom, detectorBottom, detectorTop, detectorTop, detectorBottom])
+            
+            if tiltAngle != 0.0:
+                tiltAngle *= np.pi/180.0
+                A = np.zeros((2,2))
+                A[0,0] = np.cos(tiltAngle)
+                A[0,1] = np.sin(tiltAngle)
+                A[1,0] = -np.sin(tiltAngle)
+                A[1,1] = np.cos(tiltAngle)
+                xs_rot = A[0,0]*xs + A[0,1]*zs
+                zs_rot = A[1,0]*xs + A[1,1]*zs
+                xs = xs_rot
+                zs = zs_rot
+            xs += tau
+            
             ax.plot(xs,ys,zs,color='black')
 
             if geometryText == 'CONE':
                 ax.plot([tau, tau], [R, -odd], [0, 0], color='green') # pxcenter line
                 #ax.plot([tau, tau-tau*(R+odd)/R], [R, -odd], [0, 0], color='green') # pxmidoff line
-                ax.plot([tau, detectorLeft, tau, detectorRight, tau, detectorLeft, tau, detectorRight], [R, -odd, R, -odd, R, -odd, R, -odd], [0, detectorBottom, 0, detectorBottom, 0, detectorTop, 0, detectorTop],color='red')
+                #ax.plot([tau, detectorLeft, tau, detectorRight, tau, detectorLeft, tau, detectorRight], [R, -odd, R, -odd, R, -odd, R, -odd], [0, detectorBottom, 0, detectorBottom, 0, detectorTop, 0, detectorTop],color='red')
+                ax.plot([tau, xs[0], tau, xs[1], tau, xs[3], tau, xs[2]], [R, -odd, R, -odd, R, -odd, R, -odd], [0, zs[0], 0, zs[1], 0, zs[3], 0, zs[2]],color='red')
             else:
                 ax.plot([tau, tau], [R, -odd], [0, 0], color='green')  # pxcenter line
                 #ax.plot([tau, tau - tau * (R + odd) / R], [R, -odd], [0, 0], color='green')  # pxmidoff line
@@ -6320,10 +6339,16 @@ class tomographicModels:
                 ax.plot([tau, detectorLeft, detectorRight, tau], [R, -odd, -odd, R], [0, 0, 0, 0], color='red')
                 ax.plot([tau, detectorLeft, detectorRight, tau], [R, -odd, -odd, R], [detectorTop, detectorTop, detectorTop, detectorTop], color='red')
 
-            topLeft = np.array([detectorLeft, ys[0], detectorTop])
-            topRight = np.array([detectorRight, ys[1], detectorTop])
-            bottomLeft = np.array([detectorLeft, ys[2], detectorBottom])
-            bottomRight = np.array([detectorRight, ys[3], detectorBottom])
+            #topLeft = np.array([detectorLeft, ys[0], detectorTop])
+            #topRight = np.array([detectorRight, ys[1], detectorTop])
+            #bottomLeft = np.array([detectorLeft, ys[2], detectorBottom])
+            #bottomRight = np.array([detectorRight, ys[3], detectorBottom])
+            
+            topLeft = np.array([xs[3], ys[0], zs[3]])
+            topRight = np.array([xs[2], ys[1], zs[2]])
+            bottomLeft = np.array([xs[0], ys[2], zs[0]])
+            bottomRight = np.array([xs[1], ys[3], zs[1]])
+            
             Z = np.squeeze(np.array([topLeft.tolist(), topRight.tolist(), bottomRight.tolist(), bottomLeft.tolist(), bottomLeft.tolist(), bottomRight.tolist(), topRight.tolist(), topLeft.tolist()]))
             ax.scatter3D(Z[:,0], Z[:,1], Z[:,2])
             verts = [[Z[0],Z[1],Z[2],Z[3]],
@@ -6423,7 +6448,7 @@ class tomographicModels:
                 z_source_offset = 0.0
                 
             phis = np.pi/180.0*self.get_angles() - 0.5*np.pi
-            ax.plot(sod*np.cos(phis), sod*np.sin(phis), (pitch*phis+z_source_offset), '.', color='green')
+            ax.plot(sod*np.cos(phis) + tau*np.sin(phis), sod*np.sin(phis)-tau*np.cos(phis), (pitch*phis+z_source_offset), '.', color='green')
     
     def drawVolume(self, ax):
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection

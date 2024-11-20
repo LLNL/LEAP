@@ -2344,7 +2344,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 		return false;
 	}
 
-	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + col(0) - tau;
+	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + col(0);// -tau;
 	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + row(0);
 	//printf("horizontalDetectorShift = %f\n", horizontalDetectorShift);
 
@@ -2381,8 +2381,8 @@ bool parameters::convert_conebeam_to_modularbeam()
 		u_vec[3 * iphi + 1] = cos_phi * cos_tilt;
 		u_vec[3 * iphi + 2] = sin_tilt;
 
-		d_pos[3 * iphi + 0] += horizontalDetectorShift * u_vec[3 * iphi + 0];
-		d_pos[3 * iphi + 1] += horizontalDetectorShift * u_vec[3 * iphi + 1];
+		d_pos[3 * iphi + 0] += horizontalDetectorShift * u_vec[3 * iphi + 0] + tau * sin_phi;
+		d_pos[3 * iphi + 1] += horizontalDetectorShift * u_vec[3 * iphi + 1] - tau * cos_phi;
 		d_pos[3 * iphi + 2] += horizontalDetectorShift * u_vec[3 * iphi + 2];
 
 		d_pos[3 * iphi + 0] += verticalDetectorShift * v_vec[3 * iphi + 0];
@@ -2392,6 +2392,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 	centerRow = 0.5 * float(numRows - 1);
 	centerCol = 0.5 * float(numCols - 1);
 	tiltAngle = 0.0;
+	tau = 0.0;
 	if (set_sourcesAndModules(s_pos, d_pos, v_vec, u_vec, numAngles))
 		geometry = MODULAR;
 	delete[] s_pos;
