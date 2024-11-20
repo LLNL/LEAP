@@ -5660,7 +5660,16 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_rFOV(0.5*d)
         
-    def get_diameterFOV(self):
+    def get_diameterFOV_min(self):
+        """Gets the diameter of the reconstructable field of view for non offset scans
+
+        """
+        #self.libprojectors.get_rFOV_min.argtypes = [ctypes.c_float]
+        self.libprojectors.get_rFOV_min.restype = ctypes.c_float
+        self.set_model()
+        return 2.0*self.libprojectors.get_rFOV_min()
+        
+    def get_diameterFOV_min(self):
         """Gets the diameterFOV parameter
 
         """
@@ -6174,6 +6183,8 @@ class tomographicModels:
         
     def z_samples(self,centerCoords=False):
         """Returns an array of the z sample locations"""
+        if self.ct_volume_defined() == False:
+            return None
         if centerCoords:
             z_0 = -0.5*(self.get_numZ()-1)*self.get_voxelHeight()
         else:

@@ -1137,7 +1137,11 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory(extraCols, numProjectionData, numVolumeData) <= params.chunkingMemorySizeThreshold)
-		return false;
+	{
+		// in this case one is only using one GPU and the whole operation can fit on the GPU, so no reason to chunk the data
+		if (params.numZ > 1) // well if we are just reconstructing one slice, then we don't want to filter and copy over unnecessary detector rows
+			return false;
+	}
 	else
 	{
 		numSlicesPerChunk = int(ceil(float(params.numZ) / float(params.whichGPUs.size())));

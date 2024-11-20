@@ -363,6 +363,36 @@ float parameters::phi_inv(float angle)
 	}
 }
 
+float parameters::rFOV_min()
+{
+	float rFOVspecified_save = rFOVspecified;
+	bool offsetScan_save = offsetScan;
+
+	rFOVspecified = 0.0;
+	offsetScan = false;
+	float retVal = rFOV();
+
+	rFOVspecified = rFOVspecified_save;
+	offsetScan = offsetScan_save;
+
+	return retVal;
+}
+
+float parameters::rFOV_max()
+{
+	float rFOVspecified_save = rFOVspecified;
+	bool offsetScan_save = offsetScan;
+
+	rFOVspecified = 0.0;
+	offsetScan = true;
+	float retVal = rFOV();
+
+	rFOVspecified = rFOVspecified_save;
+	offsetScan = offsetScan_save;
+
+	return retVal;
+}
+
 float parameters::rFOV()
 {
 	if (rFOVspecified > 0.0)
@@ -407,28 +437,9 @@ float parameters::rFOV()
 	}
 	else if (geometry == FAN || geometry == CONE)
 	{
-		/*
-		double alpha_right = lateral(0);
-		double alpha_left = lateral(N_lateral-1);
-		if (isFlatPanel == true)
-		{
-			alpha_right = atan(alpha_right);
-			alpha_left = atan(alpha_left);
-		}
-		//return R_tau*sin(min(fabs(alpha_right+atan(tau/R)), fabs(alpha_left+atan(tau/R))));
-		double retVal = R_tau*sin(min(fabs(alpha_right-atan(tau/R)), fabs(alpha_left-atan(tau/R))));
 
-		//sid/sdd * c / sqrt(1+(c/sdd)*(c/sdd))
-		//return R*u_max()/sqrt(1.0+u_max()*u_max());
-		if (theSCT->dxfov.unknown == false && theSCT->dxfov.value > 0.0)
-			retVal = min(retVal, 0.5*theSCT->dxfov.value);
-		return retVal;
-		//*/
-
-		//float R_tau = sqrt(sod * sod + tau * tau);
 		float alpha_right = col(0);
 		float alpha_left = col(numCols - 1);
-		//float alpha_left = u(numCols - 1);
 		if (detectorType == FLAT)
 		{
 			alpha_right = atan(alpha_right / sdd);

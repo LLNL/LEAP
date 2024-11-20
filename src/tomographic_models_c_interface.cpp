@@ -573,6 +573,16 @@ float get_rFOV()
 	return tomo()->params.rFOV();
 }
 
+float get_rFOV_min()
+{
+	return tomo()->params.rFOV_min();
+}
+
+float get_rFOV_max()
+{
+	return tomo()->params.rFOV_max();
+}
+
 bool set_offsetScan(bool aFlag)
 {
 	return tomo()->params.set_offsetScan(aFlag);
@@ -1275,6 +1285,8 @@ PYBIND11_MODULE(leapct, m) {
 	m.def("get_projector", &get_projector, "");
     m.def("set_rFOV", &set_rFOV, "");
 	m.def("get_rFOV", &get_rFOV, "");
+	m.def("get_rFOV_min", &get_rFOV_min, "");
+	m.def("get_rFOV_max", &get_rFOV_max, "");
     m.def("set_offsetScan", &set_offsetScan, "");
 	m.def("get_offsetScan", &get_offsetScan, "");
     m.def("set_truncatedScan", &set_truncatedScan, "");

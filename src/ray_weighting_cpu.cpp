@@ -199,6 +199,9 @@ float* setOffsetScanWeights(parameters* params)
 	}
 	else
 	{
+		bool doHardCut = false;
+		//doHardCut = true; // JUST FOR TESTING
+
 		//printf("applying offsetScan weights\n");
 		if (params->geometry == parameters::CONE || params->geometry == parameters::FAN || params->geometry == parameters::MODULAR)
 		{
@@ -237,8 +240,13 @@ float* setOffsetScanWeights(parameters* params)
 						float theWeight = 1.0;
 						if (fabs(s_arg) <= delta)
 						{
-							theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
-							theWeight = theWeight * theWeight;
+							if (delta == 0.0 || doHardCut)
+								theWeight = 0.5;
+							else
+							{
+								theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
+								theWeight = theWeight * theWeight;
+							}
 						}
 						else if (s_arg < -delta)
 							theWeight = 0.0;
@@ -268,8 +276,13 @@ float* setOffsetScanWeights(parameters* params)
 					float theWeight = 1.0;
 					if (fabs(s_arg) <= delta)
 					{
-						theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
-						theWeight = theWeight * theWeight;
+						if (delta == 0.0 || doHardCut)
+							theWeight = 0.5;
+						else
+						{
+							theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
+							theWeight = theWeight * theWeight;
+						}
 					}
 					else if (s_arg < -delta)
 						theWeight = 0.0;

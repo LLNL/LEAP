@@ -673,7 +673,7 @@ def transmission_shift(leapct, g, shift, isAttenuationData=True):
         leapct.negLog(t)
     return True
     
-def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP'):
+def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP', set_optimal=False):
     r"""Performs single-slice reconstructions of several values of a given parameter
     
     The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -688,10 +688,19 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt', 'vertical_shift', 'horizontal_shift'
         iz (integer): the z-slice index to perform the reconstruction; if not given, uses the central slice
         algorithmName (string): the name of the algorithm to use for reconstruction; can be 'FBP' or 'inconsistencyReconstruction'
+        set_optimal (bool): if true, sets the given parameter to the value that optimizes the metric
         
     Returns:
         stack of single-slice reconstructions (i.e., 3D numpy array or torch tensor) for all parameter values
+        if set_optimal is True, then also returns the value of the metric at the optimal value
     """
+    
+    values = np.array(values)
+    values = np.unique(values)
+    
+    if leapct.ct_geometry_defined() == False or leapct.ct_volume_defined() == False:
+        print('Error: CT geometry and CT volume parameters must be set before running this function!')
+        return None
     valid_params = ['centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt', 'vertical_shift', 'horizontal_shift']
     if param == None:
         param = 'centerCol'
@@ -699,7 +708,8 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         print('Error: Invalid parameter, must be one of: ' + str(valid_params))
         return None
     if iz is None:
-        iz = int(leapct.get_numZ()//2)
+        iz = np.argmin(np.abs(leapct.z_samples()))
+        #iz = int(leapct.get_numZ()//2)
     if iz < 0 or iz >= leapct.get_numZ():
         print('Error: Slice index is out of bounds for current volume specification.')
         return None
@@ -714,19 +724,37 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             print('Error: centerCol, centerRow, and tau do not apply to modular-beam data.')
             return None
         
-    if has_torch == True and type(g) is torch.Tensor:
-        f_stack = torch.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=torch.float32)
-        f_stack = f_stack.to(f.get_device())
-    else:
-        f_stack = np.zeros((len(values), leapct.get_numY(), leapct.get_numX()), dtype=np.float32)
-
     g_sweep = g
     #leapct_sweep = tomographicModels()
     leapct_sweep.copy_parameters(leapct)
+    if set_optimal == True and leapct_sweep.get_offsetScan() == True:
+        leapct_sweep.set_offsetScan(False)
+        dFOV = leapct_sweep.get_diameterFOV_min()
+        
+        if param == 'centerCol':
+            leapct_sweep.set_centerCol(values[0])
+            dFOV = min(dFOV, leapct_sweep.get_diameterFOV_min())
+            leapct_sweep.set_centerCol(values[-1])
+            dFOV = min(dFOV, leapct_sweep.get_diameterFOV_min())
+            leapct_sweep.set_centerCol(leapct.get_centerCol())
+        elif param == 'tau':
+            leapct_sweep.set_tau(values[0])
+            dFOV = min(dFOV, leapct_sweep.get_diameterFOV_min())
+            leapct_sweep.set_tau(values[-1])
+            dFOV = min(dFOV, leapct_sweep.get_diameterFOV_min())
+            leapct_sweep.set_tau(leapct.get_tau())
+        
+        leapct_sweep.set_diameterFOV(dFOV)
+        leapct_sweep.set_offsetX(0.0)
+        leapct_sweep.set_offsetY(0.0)
+        leapct_sweep.set_numX(int(dFOV/leapct_sweep.get_pixelWidth()))
+        leapct_sweep.set_numY(int(dFOV/leapct_sweep.get_pixelWidth()))
 
     if param == 'tilt':
         if leapct.get_geometry() != 'CONE':
             leapct_sweep.convert_to_modularbeam()
+        if leapct.get_geometry() == 'CONE':
+            leapct_sweep.set_tiltAngle(0.0)
     elif leapct_sweep.get_geometry() == 'FAN' or leapct_sweep.get_geometry() == 'PARALLEL':
         leapct_sweep.set_numRows(1)
         if has_torch == True and type(g) is torch.Tensor:
@@ -742,6 +770,11 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     offsetZ = z[iz]
     leapct_sweep.set_offsetZ(offsetZ)
     
+    if has_torch == True and type(g) is torch.Tensor:
+        f_stack = torch.zeros((len(values), leapct_sweep.get_numY(), leapct_sweep.get_numX()), dtype=torch.float32)
+        f_stack = f_stack.to(f.get_device())
+    else:
+        f_stack = np.zeros((len(values), leapct_sweep.get_numY(), leapct_sweep.get_numX()), dtype=np.float32)
     f = leapct_sweep.allocate_volume()
     
     metrics = np.zeros(len(values))
@@ -789,7 +822,54 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         f_stack[n,:,:] = f[0,:,:]
         last_value = values[n]
     
-    return f_stack
+    if set_optimal:
+        if algorithmName ==' FBP':
+            ind_best = np.argmax(metrics)
+            optimal_value = values[ind_best]
+        else:
+            ind_best = np.argmin(metrics)
+            optimal_value = values[ind_best]
+        metric_value = metrics[ind_best]
+        
+        if 0 < ind_best and ind_best < metrics.size-1:
+            x_0 = values[ind_best-1]
+            x_1 = values[ind_best]
+            x_2 = values[ind_best+1]
+            y_0 = metrics[ind_best-1]
+            y_1 = metrics[ind_best]
+            y_2 = metrics[ind_best+1]
+            
+            a = y_0/((x_0-x_1)*(x_0-x_2)) + y_1/((x_1-x_0)*(x_1-x_2)) + y_2/((x_2-x_0)*(x_2-x_1))
+            b = y_0*(-x_1-x_2)/((x_0-x_1)*(x_0-x_2)) + y_1*(-x_0-x_2)/((x_1-x_0)*(x_1-x_2)) + y_2*(-x_0-x_1)/((x_2-x_0)*(x_2-x_1))
+            c = y_0*x_1*x_2/((x_0-x_1)*(x_0-x_2)) + y_1*x_0*x_2/((x_1-x_0)*(x_1-x_2)) + y_2*x_0*x_1/((x_2-x_0)*(x_2-x_1))
+            if a != 0.0:
+                optimal_value_interp = -b/(2.0*a)
+                if x_0 <= optimal_value_interp and optimal_value_interp <= x_2:
+                    optimal_value = optimal_value_interp
+                metric_value = a*optimal_value**2 + b*optimal_value + c
+                
+        if param == 'centerCol':
+            leapct.set_centerCol(optimal_value)
+        elif param == 'centerRow':
+            leapct.set_centerRow(optimal_value)
+        elif param == 'tau':
+            leapct.set_tau(optimal_value)
+        elif param == 'sod':
+            leapct.set_sod(optimal_value)
+        elif param == 'sdd':
+            leapct.set_sdd(optimal_value)
+        elif param == 'vertical_shift':
+            leapct.shift_detector(optimal_value, 0.0)
+        elif param == 'horizontal_shift':
+            leapct.shift_detector(0.0, optimal_value)
+        elif param == 'tilt':
+            if leapct.get_geometry() == 'CONE':
+                leapct.set_tiltAngle(optimal_value)
+            elif leapct.get_geometry() == 'MODULAR':
+                leapct.rotate_detector(optimal_value)
+        return f_stack, metric_value
+    else:
+        return f_stack
     
 def entropy(x):
     marg = np.histogramdd(np.ravel(x), bins = int(np.sqrt(x.size)))[0]/x.size

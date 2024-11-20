@@ -455,10 +455,21 @@ public:
 
 	/**
 	 * \fn          rFOV
-	 * \brief       returns the radius of the field of view of the CT system
 	 * \return      returns the radius of the field of view of the CT system
 	 */
     float rFOV();
+
+	/**
+	 * \fn          rFOV_min
+	 * \return      returns the radius of the reconstructable field of view for non offset scans
+	 */
+	float rFOV_min();
+
+	/**
+	 * \fn          rFOV_max
+	 * \return      returns the radius of the reconstructable field of view for offset scans
+	 */
+	float rFOV_max();
 	
 	/**
 	 * \fn          isSymmetric
