@@ -156,6 +156,9 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 			if (params->hasSufficientGPUmemory(false, 0, numProjectionData, numVolumeData) == false)
 			{
 				printf("Error: insufficient GPU memory\n");
+				printf("available memory: %f\n", getAvailableGPUmemory(params->whichGPU));
+				printf("required memory: %f\n", params->requiredGPUmemory(0, numProjectionData, numVolumeData));
+
 				return false;
 			}
 		}

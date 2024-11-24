@@ -383,9 +383,13 @@ int rebin::rebin_parallel_singleSinogram(float* g, parameters* params_in, float*
     float* sino_input = new float[params->numCols * params->numAngles];
     if (params->geometry == parameters::CONE && params->detectorType == parameters::FLAT && params->numRows > 1)
     {
+        float cos_tilt = cos(params->tiltAngle * PI / 180.0);
+        float sin_tilt = sin(params->tiltAngle * PI / 180.0);
+
         LOG(logDEBUG, "rebin", "rebin_parallel_singleSinogram") << "performing detector column stretching..." << std::endl;
         double T_v = params->v(1) - params->v(0);
         double v_0 = params->v(0);
+        double T_u = params->u(1) - params->u(0);
 
         //*
         omp_set_num_threads(omp_get_num_procs());
@@ -395,13 +399,26 @@ int rebin::rebin_parallel_singleSinogram(float* g, parameters* params_in, float*
             float* aProj = &g[uint64(i) * uint64(params->numRows * params->numCols)];
             for (int k = 0; k < params->numCols; k++)
             {
-                float lineLength = sqrt(1.0 + params->u(k) * params->u(k));
+                double u = params->u(k);
+                double u_centered = T_u * (double(k) - 0.5 * double(params->numCols - 1));
+                float lineLength = sqrt(1.0 + u * u);
 
                 int j = desiredRow;
                 //for (int j = 0; j < params->numRows; j++)
                 {
-                    //double v_new = params->v(j) / lineLength;
-                    double v_new = params->v(j) * lineLength;
+                    double v_new = params->v(j);
+                    double v_centered = T_v * (double(j) - 0.5 * double(params->numRows - 1));
+
+                    v_new = -sin_tilt * u_centered + cos_tilt * v_centered + v_new-v_centered;
+                    //v_new = sin_tilt * u_centered + cos_tilt * v_centered + v_new-v_centered;
+
+                    //v_new = v_new / lineLength;
+                    v_new = v_new * lineLength;
+                    
+                    /*
+                    float col_A = cos_alpha * col + sin_alpha * row - col_0 + col_0_centered;
+                    float row_A = -sin_alpha * col + cos_alpha * row;
+                    //*/
 
                     double ind = (v_new - v_0) / T_v;
                     int ind_closest = int(floor(0.5 + ind));
@@ -572,8 +589,10 @@ int rebin::rebin_parallel_singleSinogram(float* g, parameters* params_in, float*
         uint64 offs = uint64(N_phi_new) * uint64(params->numCols);
         float* g_crop = &g[offs];
         if (reduce180 == false)
+        {
             params->setToZero(g_crop, uint64(N_phi - N_phi_new) * uint64(params->numCols));
-        LOG(logWARNING, "rebin", "rebin_parallel") << "WARNING: Reducing number of angles from " << N_phi << " to " << N_phi_new << std::endl;
+            LOG(logWARNING, "rebin", "rebin_parallel") << "WARNING: Reducing number of angles from " << N_phi << " to " << N_phi_new << std::endl;
+        }
         //LOG(logWARNING, "rebin", "rebin_parallel") << "New angular coverage: " << params->angularRange << " degrees" << std::endl;
     }
 

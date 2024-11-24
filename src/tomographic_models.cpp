@@ -817,7 +817,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 			// make a copy of the relavent rows
 			float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numRows);
 
-			float memNeeded = params.projectionDataSize() * float(numRows) / float(params.numRows) + params.volumeDataSize() * float(numSlices) / float(params.numZ);
+			float memNeeded = params.projectionDataSize() * float(numRows) / float(params.numRows) + params.volumeDataSize() * float(numSlices) / float(params.numZ) + params.get_extraMemoryReserved();
 			if (memNeeded < memAvailable)
 			{
 				float* f_chunk = &f[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
@@ -846,7 +846,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 			{
 				// Further reduce number of volume slices
 				// memAvailable => params.projectionDataSize() * float(numRows) / float(params.numRows) + params.volumeDataSize() * float(numSlices_stage2) / float(params.numZ)
-				int numSlices_stage2 = std::max(1, int(floor((memAvailable - params.projectionDataSize() * float(numRows) / float(params.numRows)) * float(params.numZ) / params.volumeDataSize())));
+				int numSlices_stage2 = std::max(1, int(floor((memAvailable - params.get_extraMemoryReserved() - params.projectionDataSize() * float(numRows) / float(params.numRows)) * float(params.numZ) / params.volumeDataSize())));
 				int numChunks_z = std::max(1, int(ceil(float(numSlices) / float(numSlices_stage2))));
 				numSlices_stage2 = std::max(1, int(ceil(float(numSlices) / float(numChunks_z)))); // make each chunk approximately equal in size
 
@@ -1202,7 +1202,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		float memForVolume = numVolumeData * params.volumeDataSize() * float(numSlices) / float(params.numZ);
 		float memForOneProjection = numProjectionData * params.projectionDataSize(extraCols) * (chunk_params.numRows / float(params.numRows)) / float(params.numAngles);
 		// memAvailable > memForVolume + numViewsPerChunk * memForOneProjection
-		int numViewsPerChunk = std::max(1, std::min(params.numAngles, int(floor((memAvailable - memForVolume) / memForOneProjection))));
+		int numViewsPerChunk = std::max(1, std::min(params.numAngles, int(floor((memAvailable - memForVolume - params.get_extraMemoryReserved()) / memForOneProjection))));
 		int numViewChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
 		if (numViewsPerChunk == params.numAngles)
 		{

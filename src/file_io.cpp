@@ -46,6 +46,7 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	std::string sdd = "proj_sdd";
 	std::string tau = "proj_tau";
 	std::string helicalPitch = "proj_helicalpitch";
+	std::string tiltAngle = "proj_tiltAngle";
 	std::string axisOfSymmetry = "proj_axisofsymmetry";
 
 	std::string sourcePositions = "proj_srcpos";
@@ -79,6 +80,7 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	std::string sdd = "sdd";
 	std::string tau = "tau";
 	std::string helicalPitch = "helicalPitch";
+	std::string tiltAngle = "tiltAngle";
 	std::string axisOfSymmetry = "axisOfSymmetry";
 
 	std::string sourcePositions = "sourcePositions";
@@ -167,6 +169,14 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL || params->geometry == parameters::FAN)
 	{
 		param_file << tau << " = " << params->tau << std::endl;
+	}
+	if (params->geometry == parameters::CONE && params->detectorType == parameters::FLAT)
+	{
+		param_file << tiltAngle << " = " << params->tiltAngle << std::endl;
+	}
+	else
+	{
+		param_file << tiltAngle << " = " << 0.0 << std::endl;
 	}
 	if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL)
 	{

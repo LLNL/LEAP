@@ -29,6 +29,7 @@ https://github.com/LLNL/LEAP/blob/main/documentation/LEAP.pdf
 numCols = 512
 numAngles = 4*int(360*numCols/1024)
 pixelSize = 0.65*512/numCols
+centerCol = 0.5*(numCols-1)
 
 # Set the number of detector rows
 numRows = numCols

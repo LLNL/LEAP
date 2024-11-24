@@ -102,6 +102,7 @@ void parameters::initialize()
 	offsetZ = 0.0;
 
 	extraMemoryReserved = 0.25;
+	//extraMemoryReserved = 0.0;
 	phi_start = 0.0;
 	phi_end = 0.0;
 	numAngles_full = 0;

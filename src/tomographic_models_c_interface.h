@@ -65,6 +65,9 @@ extern "C" PROJECTOR_API bool project_with_mask(float* g, float* f, float* mask,
 extern "C" PROJECTOR_API bool backproject(float* g, float* f, bool data_on_cpu);
 extern "C" PROJECTOR_API bool weightedBackproject(float* g, float* f, bool data_on_cpu);
 
+extern "C" PROJECTOR_API bool negLog(float* g, int, int, int, float gray_value);
+extern "C" PROJECTOR_API bool expNeg(float* g, int, int, int);
+
 extern "C" PROJECTOR_API bool HilbertFilterProjections(float* g, bool data_on_cpu, float scalar);
 extern "C" PROJECTOR_API bool rampFilterProjections(float* g, bool data_on_cpu, float scalar);
 extern "C" PROJECTOR_API bool filterProjections(float* g, float* g_out, bool data_on_cpu);

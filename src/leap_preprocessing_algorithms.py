@@ -664,15 +664,48 @@ def transmission_shift(leapct, g, shift, isAttenuationData=True):
     """
     if not isinstance(shift, float):
         raise TypeError
+    if shift >= 1.0:
+        return False
     minTransmission = 2.0**-16
     if isAttenuationData:
         leapct.expNeg(g)
+    scale = 1.0 / (1.0 - shift)
+    #g = (g - shift) / (1.0 - shift)
     g -= shift
+    g *= scale
     g[g<minTransmission] = minTransmission
+    
     if isAttenuationData:
-        leapct.negLog(t)
+        leapct.negLog(g)
     return True
     
+def bowtie_alignment_metric(leapct, g, iRow=-1):
+    if leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'FAN':
+        if leapct.get_offsetScan():
+            sino_180 = leapct.rebin_parallel_sinogram(g, 6, iRow)
+            sino = np.concatenate((sino_180, np.flip(sino_180, axis=1)))
+        else:
+            sino = leapct.rebin_parallel_sinogram(g, 6, iRow)
+    else:
+        if iRow < 0:
+            iRow = leapct.get_numRows()//2
+        sino = np.squeeze(g[:,iRow,:])
+    bowtie = np.abs(np.fft.fftshift(np.fft.fft2(sino)))
+        
+    nu = 0.05
+    slope = (1.0/np.pi)*sino.shape[0]/sino.shape[1]
+    phi = np.array(range(sino.shape[0]),dtype=np.float32)
+    s = np.array(range(sino.shape[1]),dtype=np.float32)
+    phi -= np.mean(phi)
+    s -= np.mean(s)
+    phi /= np.max(phi)
+    s /= np.max(s)
+    s,phi = np.meshgrid(s,phi)
+    mask = np.zeros_like(bowtie)
+    mask[np.logical_and(np.abs(phi)>nu, (1.0-2.0*nu)*slope*np.abs(phi)>np.abs(s))] = 1.0
+
+    return np.sum(mask*bowtie)/np.sum(mask)
+
 def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP', set_optimal=False):
     r"""Performs single-slice reconstructions of several values of a given parameter
     
@@ -695,6 +728,8 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         if set_optimal is True, then also returns the value of the metric at the optimal value
     """
     
+    if param == 'tiltAngle':
+        param = 'tilt'
     values = np.array(values)
     values = np.unique(values)
     
@@ -727,7 +762,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     g_sweep = g
     #leapct_sweep = tomographicModels()
     leapct_sweep.copy_parameters(leapct)
-    if set_optimal == True and leapct_sweep.get_offsetScan() == True:
+    if set_optimal == True:
         leapct_sweep.set_offsetScan(False)
         dFOV = leapct_sweep.get_diameterFOV_min()
         
@@ -807,8 +842,11 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             leapct_sweep.shift_detector(values[n]-last_value, 0.0)
         elif param == 'horizontal_shift':
             leapct_sweep.shift_detector(0.0, values[n]-last_value)
-        if param == 'tilt':
-            leapct_sweep.rotate_detector(values[n]-last_value)
+        elif param == 'tilt':
+            if leapct_sweep.get_geometry() == 'CONE':
+                leapct_sweep.set_tiltAngle(values[n])
+            else:
+                leapct_sweep.rotate_detector(values[n]-last_value)
         
         if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
             leapct_sweep.inconsistencyReconstruction(g_sweep, f)
@@ -825,10 +863,9 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     if set_optimal:
         if algorithmName ==' FBP':
             ind_best = np.argmax(metrics)
-            optimal_value = values[ind_best]
         else:
             ind_best = np.argmin(metrics)
-            optimal_value = values[ind_best]
+        optimal_value = values[ind_best]
         metric_value = metrics[ind_best]
         
         if 0 < ind_best and ind_best < metrics.size-1:
@@ -866,7 +903,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             if leapct.get_geometry() == 'CONE':
                 leapct.set_tiltAngle(optimal_value)
             elif leapct.get_geometry() == 'MODULAR':
-                leapct.rotate_detector(optimal_value)
+                leapct.rotate_detector(optimal_value-last_value)
         return f_stack, metric_value
     else:
         return f_stack

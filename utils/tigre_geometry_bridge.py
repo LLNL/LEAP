@@ -50,6 +50,7 @@ def set_leap_from_tigre(geo, leapct=None):
     centerRow = 0.5*(numRows-1) - row_offs/pixelHeight
     centerCol = 0.5*(numCols-1) - col_offs/pixelWidth
     
+    #if np.abs(geo.rotDetector[1]) > 0.5 or np.abs(tiltAngle*180.0/np.pi) > 5.0:
     if geo.rotDetector[1] != 0.0 or np.abs(tiltAngle*180.0/np.pi) > 5.0:
         # LEAP cone-beam coordinates do not handle this type of rotation, so have to use modular-beam
         leapct.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau)

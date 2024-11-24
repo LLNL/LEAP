@@ -16,6 +16,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <omp.h>
 //#include "Log.h"
 //#include <torch/torch.h>
 //#include <torch/extension.h>
@@ -204,6 +205,51 @@ bool FBP_gpu(float* g, float* f)
 bool weightedBackproject(float* g, float* f, bool data_on_cpu)
 {
 	return tomo()->weightedBackproject(g, f, data_on_cpu);
+}
+
+bool negLog(float* g, int N_1, int N_2, int N_3, float gray_value)
+{
+	if (g == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0)
+		return false;
+	else
+	{
+		float lowerBound = pow(2.0,-16);
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
+		for (int i = 0; i < N_1; i++)
+		{
+			float* aProj = &g[uint64(i)*uint64(N_2*N_3)];
+			for (int j = 0; j < N_2; j++)
+			{
+				for (int k = 0; k < N_3; k++)
+				{
+					aProj[j*N_3+k] = -log(std::max(lowerBound, aProj[j*N_3+k]/gray_value));
+				}
+			}
+		}
+		return true;
+	}
+}
+
+bool expNeg(float* g, int N_1, int N_2, int N_3)
+{
+	if (g == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0)
+		return false;
+	else
+	{
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
+		for (int i = 0; i < N_1; i++)
+		{
+			float* aProj = &g[uint64(i)*uint64(N_2*N_3)];
+			for (int j = 0; j < N_2; j++)
+			{
+				for (int k = 0; k < N_3; k++)
+					aProj[j*N_3+k] = exp(-aProj[j*N_3+k]);
+			}
+		}
+		return true;
+	}
 }
 
 bool filterProjections(float* g, float* g_out, bool data_on_cpu)
@@ -1216,6 +1262,8 @@ PYBIND11_MODULE(leapct, m) {
     m.def("project", &project, "");
     m.def("backproject", &backproject, "");
     m.def("weightedBackproject", &weightedBackproject, "");
+	m.def("negLog", &negLog, "");
+	m.def("expNeg", &expNeg, "");
     m.def("HilbertFilterProjections", &HilbertFilterProjections, "");
     m.def("rampFilterProjections", &rampFilterProjections, "");
     m.def("filterProjections", &filterProjections, "");

@@ -537,10 +537,10 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, tiltAngle, helicalPitch)
     
-    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0):
+    def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0, tiltAngle=0.0):
         """Alias for set_conebeam
         """
-        return self.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
+        return self.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch, tiltAngle)
     
     def set_fanbeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0):
         r"""Sets the parameters for a fan-beam CT geometry
@@ -3488,16 +3488,52 @@ class tomographicModels:
         if has_torch == True and type(x) is torch.Tensor:
             torch.exp(-x, out=x)
         else:
-            np.exp(-x, out=x)
+            if len(x.shape) == 1:
+                N_1 = 1
+                N_2 = 1
+                N_3 = x.shape[0]
+            elif len(x.shape) == 2:
+                N_1 = 1
+                N_2, N_3 = x.shape
+            elif len(x.shape) == 3:
+                N_1, N_2, N_3 = x.shape
+            else:
+                np.exp(-x, out=x)
+                return x
+
+            self.libprojectors.expNeg.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.expNeg.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            self.libprojectors.expNeg(x, N_1, N_2, N_3)
+
         return x
             
-    def negLog(self, x):
+    def negLog(self, x, gray_value = 1.0):
         """ Returns -log(x), converting transmission data to attenuation data """
         if has_torch == True and type(x) is torch.Tensor:
-            torch.log(x, out=x)
+            torch.log(x/gray_value, out=x)
+            x *= -1.0
         else:
-            np.log(x, out=x)
-        x *= -1.0
+
+            if len(x.shape) == 1:
+                N_1 = 1
+                N_2 = 1
+                N_3 = x.shape[0]
+            elif len(x.shape) == 2:
+                N_1 = 1
+                N_2, N_3 = x.shape
+            elif len(x.shape) == 3:
+                N_1, N_2, N_3 = x.shape
+            else:
+                np.log(x/gray_value, out=x)
+                x *= -1.0
+                return x
+
+            self.libprojectors.negLog.restype = ctypes.c_bool
+            self.set_model()
+            self.libprojectors.negLog.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+            self.libprojectors.negLog(x, N_1, N_2, N_3, gray_value)
+
         return x
     
     def breakIntoSubsets(self, g, numSubsets):
@@ -6577,7 +6613,7 @@ class tomographicModels:
             self.set_conebeam(int(pdic['numAngles']), int(pdic['numRows']), int(pdic['numCols']), 
                                pdic['pixelHeight'], pdic['pixelWidth'], 
                                pdic['centerRow'], pdic['centerCol'], 
-                               phis, pdic['sod'], pdic['sdd'], pdic['tau'], pdic['helicalPitch'])
+                               phis, pdic['sod'], pdic['sdd'], pdic['tau'], pdic['helicalPitch'], pdic['tiltAngle'])
         elif pdic['geometry'] == 'modular':
         
             sourcePositions = np.array([float(x.strip()) for x in pdic['sourcePositions'].split(',')]).astype(np.float32)
