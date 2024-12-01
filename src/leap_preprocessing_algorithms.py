@@ -687,9 +687,8 @@ def bowtie_alignment_metric(leapct, g, iRow=-1):
         else:
             sino = leapct.rebin_parallel_sinogram(g, 6, iRow)
     else:
-        if iRow < 0:
-            iRow = leapct.get_numRows()//2
-        sino = np.squeeze(g[:,iRow,:])
+        print('Error: not yet implemented for parallel-beam!')
+        return None
     bowtie = np.abs(np.fft.fftshift(np.fft.fft2(sino)))
         
     nu = 0.05
@@ -782,8 +781,8 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         leapct_sweep.set_diameterFOV(dFOV)
         leapct_sweep.set_offsetX(0.0)
         leapct_sweep.set_offsetY(0.0)
-        leapct_sweep.set_numX(int(dFOV/leapct_sweep.get_pixelWidth()))
-        leapct_sweep.set_numY(int(dFOV/leapct_sweep.get_pixelWidth()))
+        leapct_sweep.set_numX(int(dFOV/leapct_sweep.get_voxelWidth()))
+        leapct_sweep.set_numY(int(dFOV/leapct_sweep.get_voxelWidth()))
 
     if param == 'tilt':
         if leapct.get_geometry() != 'CONE':
@@ -804,6 +803,10 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     leapct_sweep.set_numZ(1)
     offsetZ = z[iz]
     leapct_sweep.set_offsetZ(offsetZ)
+    
+    if (param == 'tau' or param == 'centerCol') and (leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'MODULAR'):
+        rowRange = leapct_sweep.rowRangeNeededForBackprojection(0)
+        g_sweep = leapct_sweep.cropProjections(rowRange, None, g_sweep)
     
     if has_torch == True and type(g) is torch.Tensor:
         f_stack = torch.zeros((len(values), leapct_sweep.get_numY(), leapct_sweep.get_numX()), dtype=torch.float32)
@@ -1081,6 +1084,11 @@ class ball_phantom_calibration:
         psi = x[4]
         theta = x[5]
         phi = x[6]
+        
+        #psi = np.clip(psi, -5.0, 5.0)
+        #theta = np.clip(theta, -5.0, 5.0)
+        #phi = np.clip(phi, -5.0, 5.0)
+        
         A = R.from_euler('xyz', [psi, theta, phi], degrees=True).as_matrix()
         detNormal = A[:,1]
         u_vec = A[:,0]
@@ -1161,6 +1169,7 @@ class ball_phantom_calibration:
                 self.leapct.convert_to_modularbeam()
                 #self.leapct.rotate_detector(-res.x[5])
                 self.leapct.rotate_detector(A.T)
+                #self.leapct.set_tiltAngle(np.clip(res.x[4], -5.0, 5.0))
         return res
 
     def connected_components(self, g, threshold=None, FWHM=0.0, connectivity=2):
@@ -1176,6 +1185,17 @@ class ball_phantom_calibration:
             
             # perform connected component analysis, connectivity=2 includes diagonals
             labeled_image, count = ski.measure.label(binary_mask, connectivity=connectivity, return_num=True)
+            
+            # Filter out small objects
+            count = 0
+            min_size = 10  # Minimum desired object size (in pixels)
+            filtered_image = np.zeros_like(labeled_image)
+            for region in ski.measure.regionprops(labeled_image):
+                if region.area >= min_size:
+                    count += 1
+                    filtered_image[labeled_image == region.label] = count
+            labeled_image = filtered_image
+            
             if i > 0:
                 if count != count_last:
                     print('Error: inconsistent number of balls found across projections!')
