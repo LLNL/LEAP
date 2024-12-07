@@ -1395,10 +1395,11 @@ class tomographicModels:
         if has_torch == True and type(I) is torch.Tensor:
             if type(factors) is torch.Tensor:
                 factors = factors.cpu().detach().numpy()
-            elif type(factors) is not np.ndarray:
-                factors = np.array(factors, dtype=np.float32)
+            #elif type(factors) is not np.ndarray:
+            #    factors = np.array(factors, dtype=np.float32)
             if factors.size != 3:
                 return None
+            factors = np.array(factors, dtype=np.float32)
             
             if dims is None:
                 I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
@@ -1407,10 +1408,11 @@ class tomographicModels:
             device = torch.device("cuda:" + str(self.get_gpu()))
             I_dn = torch.from_numpy(I_dn).to(device)
             self.libprojectors.down_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.down_sample(I.data_ptr(), np.array(I.shape), I_dn.data_ptr(), np.array(I_dn.shape), factors, I.is_cuda == False)
+            self.libprojectors.down_sample(I.data_ptr(), np.array(I.shape), I_dn.data_ptr(), np.array(I_dn.shape, dtype=np.int32), factors, I.is_cuda == False)
         else:
-            if type(factors) is not np.ndarray:
-                factors = np.array(factors, dtype=np.float32)
+            #if type(factors) is not np.ndarray:
+            #    factors = np.array(factors, dtype=np.float32)
+            factors = np.array(factors, dtype=np.float32)
             if factors.size != 3:
                 return None
                 
@@ -1419,7 +1421,7 @@ class tomographicModels:
             else:
                 I_dn = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
             self.libprojectors.down_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.down_sample(I, np.array(I.shape), I_dn, np.array(I_dn.shape), factors, True)
+            self.libprojectors.down_sample(I, np.array(I.shape), I_dn, np.array(I_dn.shape, dtype=np.int32), factors, True)
         return I_dn
         
     def up_sample(self, factors, I, dims=None):
