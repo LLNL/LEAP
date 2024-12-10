@@ -1154,8 +1154,8 @@ class ball_phantom_calibration:
         if set_parameters:
             self.leapct.set_centerRow(res.x[0])
             self.leapct.set_centerCol(res.x[1])
-            self.leapct.set_sod(res.x[2])
-            self.leapct.set_sdd(res.x[2]+res.x[3])
+            self.leapct.set_sod(np.abs(res.x[2]))
+            self.leapct.set_sdd(np.abs(res.x[2]+res.x[3]))
             """
             if np.abs(res.x[4]) < 0.1:
                 res.x[4] = 0.0
@@ -1166,10 +1166,10 @@ class ball_phantom_calibration:
             #"""
             if res.x[4] != 0.0 or res.x[5] != 0.0 or res.x[6] != 0.0:
                 A = R.from_euler('xyz', [res.x[4], res.x[5], res.x[6]], degrees=True).as_matrix()
-                self.leapct.convert_to_modularbeam()
+                #self.leapct.convert_to_modularbeam()
                 #self.leapct.rotate_detector(-res.x[5])
-                self.leapct.rotate_detector(A.T)
-                #self.leapct.set_tiltAngle(np.clip(res.x[4], -5.0, 5.0))
+                #self.leapct.rotate_detector(A.T)
+                self.leapct.set_tiltAngle(np.clip(res.x[4], -5.0, 5.0))
         return res
 
     def connected_components(self, g, threshold=None, FWHM=0.0, connectivity=2):
@@ -1200,6 +1200,8 @@ class ball_phantom_calibration:
                 if count != count_last:
                     print('Error: inconsistent number of balls found across projections!')
                     print('Try running connected_components segmentation with different parameters or inspect your data.')
+                    print(count)
+                    print(count_last)
                     return None
             if count == 0:
                 print('Error: no balls found!')
