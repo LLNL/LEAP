@@ -70,6 +70,9 @@ def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=
             print('Error: invalid ROI')
             return False
     
+    if leapct is None:
+        leapct = leapct_sweep
+
     # Subtract off dark
     if isinstance(dark_scan, int) or isinstance(dark_scan, float):
         g[:] = g[:] - dark_scan
@@ -219,6 +222,9 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
             print('Error: invalid ROI')
             return False
     
+    if leapct is None:
+        leapct = leapct_sweep
+
     #"""
     if has_torch == True and type(air_scan) is torch.Tensor:
         minAir = torch.min(air_scan[air_scan>0.0])
@@ -235,7 +241,7 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         if ROI is None:
             return True
         else:
-            leapct.expNeg(self.g)
+            leapct.expNeg(g)
     
     # Perform Flat Fielding
     
@@ -302,6 +308,9 @@ def badPixelCorrection(leapct, g, air_scan=None, dark_scan=None, badPixelMap=Non
     if g is None:
         return False
     
+    if leapct is None:
+        leapct = leapct_sweep
+
     # This algorithm processes each transmission
     if isAttenuationData:
         leapct.expNeg(g)
@@ -350,6 +359,8 @@ def outlierCorrection(leapct, g, threshold=0.03, windowSize=3, isAttenuationData
     
     if g is None:
         return False
+    if leapct is None:
+        leapct = leapct_sweep
     
     # This algorithm processes each transmission
     if isAttenuationData:
@@ -379,6 +390,9 @@ def outlierCorrection_highEnergy(leapct, g, isAttenuationData=True):
     Returns:
         True if successful, False otherwise
     """
+    
+    if leapct is None:
+        leapct = leapct_sweep
     
     if isAttenuationData:
         leapct.expNeg(g)
@@ -411,7 +425,9 @@ def LowSignalCorrection(leapct, g, threshold=0.03, windowSize=3, signalThreshold
     
     if g is None:
         return False
-    
+    if leapct is None:
+        leapct = leapct_sweep
+
     # This algorithm processes each transmission
     if isAttenuationData:
         leapct.expNeg(g)
@@ -432,6 +448,9 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
     Returns:
         True if successful, False otherwise
     """
+    if leapct is None:
+        print('Error: must provide leapct object')
+        return False
     if has_torch == True and type(H) is torch.Tensor:
         H = H.cpu().detach().numpy()
     if np.min(np.abs(H)) < 1.0/100.0:
@@ -465,6 +484,9 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
     Returns:
         True if successful, False otherwise
     """
+    if leapct is None:
+        print('Error: must provide leapct object')
+        return False
     H = H / H[0,0]
     if isAttenuationData:
         leapct.expNeg(g)
@@ -481,7 +503,7 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
         leapct.negLog(t)
     return True
 
-def ringRemoval_fast(leapct, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.05):
+def ringRemoval_fast(leapct, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.05, average_in_transmission_space=False):
     r"""Removes detector pixel-to-pixel gain variations that cause ring artifacts in reconstructed images
     
     This algorithm estimates the rings by first averaging all projections.  Then denoises this
@@ -523,10 +545,18 @@ def ringRemoval_fast(leapct, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.
         g_sum = np.zeros((1,g.shape[1],g.shape[2]), dtype=np.float32)
         g_sum[0,:] = np.mean(g,axis=0)
     """
+    if leapct is None:
+        leapct = leapct_sweep
+
+    if average_in_transmission_space:
+        leapct.expNeg(g)
     if has_torch == True and type(g) is torch.Tensor:
         g_sum = torch.mean(g,axis=0)
     else:
         g_sum = np.mean(g,axis=0)
+    if average_in_transmission_space:
+        leapct.negLog(g_sum)
+        leapct.negLog(g)
     g_sum_save = leapct.copyData(g_sum)
     minValue = np.min(g_sum_save)
     minValue = min(minValue, 0.0)
@@ -570,6 +600,8 @@ def ringRemoval_median(leapct, g, threshold=0.0, windowSize=5, numIter=1):
         True if successful, False otherwise
     """
     
+    if leapct is None:
+        leapct = leapct_sweep
     Dg = leapct.copyData(g)
     for n in range(numIter):
         if n > 0:
@@ -616,6 +648,8 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
     Returns:
         True if successful, False otherwise
     """
+    if leapct is None:
+        leapct = leapct_sweep
     numNeighbors = leapct.get_numTVneighbors()
     leapct.set_numTVneighbors(6)
     """
@@ -662,6 +696,8 @@ def transmission_shift(leapct, g, shift, isAttenuationData=True):
         True is successful, False otherwise
     
     """
+    if leapct is None:
+        leapct = leapct_sweep
     if not isinstance(shift, float):
         raise TypeError
     if shift >= 1.0:
@@ -679,7 +715,129 @@ def transmission_shift(leapct, g, shift, isAttenuationData=True):
         leapct.negLog(g)
     return True
     
-def bowtie_alignment_metric(leapct, g, iRow=-1):
+def quadratic_extrema(x_0, x_1, x_2, y_0, y_1, y_2):
+    optimal_value = x_1
+    metric_value = y_1
+    a = y_0/((x_0-x_1)*(x_0-x_2)) + y_1/((x_1-x_0)*(x_1-x_2)) + y_2/((x_2-x_0)*(x_2-x_1))
+    b = y_0*(-x_1-x_2)/((x_0-x_1)*(x_0-x_2)) + y_1*(-x_0-x_2)/((x_1-x_0)*(x_1-x_2)) + y_2*(-x_0-x_1)/((x_2-x_0)*(x_2-x_1))
+    c = y_0*x_1*x_2/((x_0-x_1)*(x_0-x_2)) + y_1*x_0*x_2/((x_1-x_0)*(x_1-x_2)) + y_2*x_0*x_1/((x_2-x_0)*(x_2-x_1))
+    if a != 0.0:
+        optimal_value_interp = -b/(2.0*a)
+        if x_0 <= optimal_value_interp and optimal_value_interp <= x_2:
+            optimal_value = optimal_value_interp
+        metric_value = a*optimal_value**2 + b*optimal_value + c
+    return optimal_value, metric_value
+
+def find_centerCol_and_tiltAngle(leapct, g, centerCols, tilts, method=None, iz=None):
+    return geometric_calibration(leapct, g, centerCols, tilts, 'centerCol', method, iz)
+
+def find_tau_and_tiltAngle(leapct, g, taus, tilts, method=None, iz=None):
+    return geometric_calibration(leapct, g, taus, tilts, 'tau', method, iz)
+
+def geometric_calibration(leapct, g, shifts, tilts, param='centerCol', method=None, iz=None):
+    r"""Automatic estimation of tiltAngle and centerCol or tau
+    
+    The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        shifts (list of floats): the values of centerCol or tau to consider
+        tilts (list of floats): the values of tiltAngle to consider
+        param (string): specify centerCol or tau
+        method (string): which metric to use: can be inconsistency or bowtie 
+        iz (integer): the z-slice index to perform the reconstruction; if not given, uses the central slice
+        
+    Returns:
+        the value of the metric at the optimal value
+    """
+    if param != 'centerCol' and param != 'tau':
+        print('Error: please specify centerCol or tau')
+        return None
+
+    if method is None:
+        s_max = leapct.get_pixelWidth()*0.5*(leapct.get_numCols()-1)
+        dFOV_nominal = 2.0*leapct.get_sod()/leapct.get_sdd()*s_max / np.sqrt(1.0 + (s_max/leapct.get_sdd())**2)
+        dFOV_min = leapct.get_diameterFOV_min()
+        if dFOV_min <= 0.1*dFOV_nominal:
+            method = 'bowtie'
+        else:
+            method = 'inconsistency'
+
+    metrics = np.zeros_like(tilts)
+    centerCol_est = np.zeros_like(tilts)
+    for m in range(tilts.size):
+        print('tiltAngle = ' + str(tilts[m]))
+        leapct.set_tiltAngle(tilts[m])
+        if method == 'inconsistency':
+            dont_care, opt = parameter_sweep(leapct, g, shifts, param, iz, algorithmName='inconsistency', set_optimal=True)
+        else:
+            opt = find_centerCol_or_tau_bowtie(leapct, g, shifts, iRow=iz)
+        metrics[m] = opt
+        if param == 'centerCol':
+            centerCol_est[m] = leapct.get_centerCol()
+            print('estimated centerCol = ' + str(leapct.get_centerCol()))
+        else:
+            centerCol_est[m] = leapct.get_tau()
+            print('estimated tau = ' + str(leapct.get_tau()))
+        print('optimal error = ' + str(opt))
+        
+    values = tilts
+    ind_best = np.argmin(metrics)
+    optimal_value = values[ind_best]
+    metric_value = metrics[ind_best]
+
+    if 0 < ind_best and ind_best < metrics.size-1:
+        optimal_value, metric_value = quadratic_extrema(values[ind_best-1], values[ind_best], values[ind_best+1], metrics[ind_best-1], metrics[ind_best], metrics[ind_best+1])
+
+        best_tilt = optimal_value
+        leapct.set_tiltAngle(best_tilt)
+        if method == 'inconsistency':
+            dont_care, opt = parameter_sweep(leapct, g, shifts, param, iz, algorithmName='inconsistency', set_optimal=True)
+        else:
+            opt = find_centerCol_or_tau_bowtie(leapct, g, shifts, param, iRow=iz)
+        return opt
+    else:
+        best_tilt = tilts[ind_best]
+        best_centerCol = centerCol_est[ind_best]
+        if param == 'centerCol':
+            leapct.set_centerCol(best_centerCol)
+        else:
+            leapct.set_tau(best_centerCol)
+        leapct.set_tiltAngle(best_tilt)
+        return metric_value
+    
+def find_centerCol_or_tau_bowtie(leapct, g, values, param='centerCol', iRow=-1):
+    if param != 'centerCol' and param != 'tau':
+        print('Error: please specify centerCol or tau')
+        return None
+    if iRow is None:
+        iRow = max(0, min(leapct.get_numRows()-1, int(leapct.get_centerRow()+0.5)))
+    #centerCol_best = leapct.get_centerCol()
+    #metric_best = bowtie_alignment_metric(leapct, g, iRow)
+    metrics = np.zeros(len(values))
+    for i in range(len(values)):
+        if param == 'centerCol':
+            leapct.set_centerCol(values[i])
+        else:
+            leapct.set_tau(values[i])
+        metrics[i] = bowtie_alignment_metric(leapct, g, iRow)
+    
+    ind_best = np.argmin(metrics)
+    optimal_value = values[ind_best]
+    metric_value = metrics[ind_best]
+    
+    if 0 < ind_best and ind_best < metrics.size-1:
+        optimal_value, metric_value = quadratic_extrema(values[ind_best-1], values[ind_best], values[ind_best+1], metrics[ind_best-1], metrics[ind_best], metrics[ind_best+1])
+            
+    if param == 'centerCol':
+        leapct.set_centerCol(optimal_value)
+    else:
+        leapct.set_tau(optimal_value)
+
+    return metric_value
+
+def bowtie_alignment_metric(leapct, g, iRow=-1, doPlot=False):
     if leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'FAN':
         if leapct.get_offsetScan():
             sino_180 = leapct.rebin_parallel_sinogram(g, 6, iRow)
@@ -687,8 +845,9 @@ def bowtie_alignment_metric(leapct, g, iRow=-1):
         else:
             sino = leapct.rebin_parallel_sinogram(g, 6, iRow)
     else:
-        print('Error: not yet implemented for parallel-beam!')
-        return None
+        if iRow < 0:
+            iRow = leapct.get_numRows()//2
+        sino = np.squeeze(g[:,iRow,:])
     bowtie = np.abs(np.fft.fftshift(np.fft.fft2(sino)))
         
     nu = 0.05
@@ -703,9 +862,14 @@ def bowtie_alignment_metric(leapct, g, iRow=-1):
     mask = np.zeros_like(bowtie)
     mask[np.logical_and(np.abs(phi)>nu, (1.0-2.0*nu)*slope*np.abs(phi)>np.abs(s))] = 1.0
 
+    if doPlot:
+        print(iRow)
+        plt.imshow(sino, cmap='gray')
+        plt.show()
+
     return np.sum(mask*bowtie)/np.sum(mask)
 
-def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP', set_optimal=False):
+def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP', set_optimal=False, isFiltered=False):
     r"""Performs single-slice reconstructions of several values of a given parameter
     
     The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -777,6 +941,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
             leapct_sweep.set_tau(values[-1])
             dFOV = min(dFOV, leapct_sweep.get_diameterFOV_min())
             leapct_sweep.set_tau(leapct.get_tau())
+        dFOV -= leapct.get_voxelWidth()
         
         leapct_sweep.set_diameterFOV(dFOV)
         leapct_sweep.set_offsetX(0.0)
@@ -804,9 +969,20 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     offsetZ = z[iz]
     leapct_sweep.set_offsetZ(offsetZ)
     
-    if (param == 'tau' or param == 'centerCol') and (leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'MODULAR'):
+    if (param == 'tau' or param == 'centerCol') and (leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'MODULAR' or leapct.get_geometry() == 'CONE_PARALLEL'):
         rowRange = leapct_sweep.rowRangeNeededForBackprojection(0)
-        g_sweep = leapct_sweep.cropProjections(rowRange, None, g_sweep)
+        if 0 < rowRange[0] or rowRange[1] < leapct_sweep.get_numRows()-1:
+            g_sweep = leapct_sweep.cropProjections(rowRange, None, g_sweep)
+        else:
+            g_sweep = g_sweep.copy()
+
+        """ This improves speed, but not sure it is a good idea
+        if algorithmName == 'inconsistency':
+            leapct_sweep.filterProjections(g_sweep, g_sweep, True)
+        else:
+            leapct_sweep.filterProjections(g_sweep, g_sweep, False)
+        isFiltered = True
+        #"""
     
     if has_torch == True and type(g) is torch.Tensor:
         f_stack = torch.zeros((len(values), leapct_sweep.get_numY(), leapct_sweep.get_numX()), dtype=torch.float32)
@@ -852,11 +1028,17 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
                 leapct_sweep.rotate_detector(values[n]-last_value)
         
         if algorithmName == 'inconsistencyReconstruction' or algorithmName == 'inconsistency':
-            leapct_sweep.inconsistencyReconstruction(g_sweep, f)
+            if isFiltered:
+                leapct_sweep.weightedBackproject(g_sweep, f)
+            else:
+                leapct_sweep.inconsistencyReconstruction(g_sweep, f)
             metrics[n] = leapct_sweep.sum(f**2)
             print('   inconsistency metric: ' + str(metrics[n]))
         else:
-            leapct_sweep.FBP(g_sweep, f)
+            if isFiltered:
+                leapct_sweep.weightedBackproject(g_sweep, f)
+            else:
+                leapct_sweep.FBP(g_sweep, f)
             metrics[n] = entropy(f)
             print('   entropy metric: ' + str(metrics[n]))
                 
@@ -872,22 +1054,8 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         metric_value = metrics[ind_best]
         
         if 0 < ind_best and ind_best < metrics.size-1:
-            x_0 = values[ind_best-1]
-            x_1 = values[ind_best]
-            x_2 = values[ind_best+1]
-            y_0 = metrics[ind_best-1]
-            y_1 = metrics[ind_best]
-            y_2 = metrics[ind_best+1]
-            
-            a = y_0/((x_0-x_1)*(x_0-x_2)) + y_1/((x_1-x_0)*(x_1-x_2)) + y_2/((x_2-x_0)*(x_2-x_1))
-            b = y_0*(-x_1-x_2)/((x_0-x_1)*(x_0-x_2)) + y_1*(-x_0-x_2)/((x_1-x_0)*(x_1-x_2)) + y_2*(-x_0-x_1)/((x_2-x_0)*(x_2-x_1))
-            c = y_0*x_1*x_2/((x_0-x_1)*(x_0-x_2)) + y_1*x_0*x_2/((x_1-x_0)*(x_1-x_2)) + y_2*x_0*x_1/((x_2-x_0)*(x_2-x_1))
-            if a != 0.0:
-                optimal_value_interp = -b/(2.0*a)
-                if x_0 <= optimal_value_interp and optimal_value_interp <= x_2:
-                    optimal_value = optimal_value_interp
-                metric_value = a*optimal_value**2 + b*optimal_value + c
-                
+            optimal_value, metric_value = quadratic_extrema(values[ind_best-1], values[ind_best], values[ind_best+1], metrics[ind_best-1], metrics[ind_best], metrics[ind_best+1])
+                   
         if param == 'centerCol':
             leapct.set_centerCol(optimal_value)
         elif param == 'centerRow':
