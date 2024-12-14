@@ -1395,9 +1395,9 @@ class tomographicModels:
         if has_torch == True and type(I) is torch.Tensor:
             if type(factors) is torch.Tensor:
                 factors = factors.cpu().detach().numpy()
+            factors = np.array(factors, dtype=np.float32)
             #elif type(factors) is not np.ndarray:
             #    factors = np.array(factors, dtype=np.float32)
-            factors = np.array(factors, dtype=np.float32)
             if factors.size != 3:
                 return None
             
@@ -1442,9 +1442,9 @@ class tomographicModels:
         if has_torch == True and type(I) is torch.Tensor:
             if type(factors) is torch.Tensor:
                 factors = factors.cpu().detach().numpy()
+            factors = np.array(factors, dtype=np.float32)
             #elif type(factors) is not np.ndarray:
             #    factors = np.array(factors, dtype=np.float32)
-            factors = np.array(factors, dtype=np.float32)
             if factors.size != 3:
                 return None
             
@@ -5709,7 +5709,7 @@ class tomographicModels:
         self.set_model()
         return 2.0*self.libprojectors.get_rFOV_min()
         
-    def get_diameterFOV_min(self):
+    def get_diameterFOV(self):
         """Gets the diameterFOV parameter
 
         """
@@ -7045,11 +7045,17 @@ class tomographicModels:
         return self.load_data(fileName, x, fileRange, rowRange, colRange, axis_split)
         
     def get_file_list(self, fileName, fileRange=None):
-        if fileName.find('*') != -1:
+        asterisk_ind = fileName.find('*')
+        if asterisk_ind != -1:
             fileList = glob.glob(fileName)
-            if fileRange is not None:
-                fileList = fileList[fileRange[0]:fileRange[1]+1]
-            return fileList
+            if len(fileList) == 0:
+                print(fileName)
+                print('file sequence does not exist')
+                return None
+            _, fileExt = os.path.splitext(fileName)
+            baseFileName = fileName[0:asterisk_ind]
+            sequence_separator = ""
+
         else:
             
             sequence_separator = "_"
@@ -7066,22 +7072,22 @@ class tomographicModels:
                     print('file sequence does not exist')
                     return None
                 
-            if fileRange is not None:
-                # prune fileList
-                fileList_pruned = []
-                for i in range(len(fileList)):
-                    digit = int(fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,''))
-                    if fileRange[0] <= digit and digit <= fileRange[1]:
-                        fileList_pruned.append(fileList[i])
-                fileList = fileList_pruned
-                
-            justDigits = []
+        if fileRange is not None:
+            # prune fileList
+            fileList_pruned = []
             for i in range(len(fileList)):
-                digitStr = fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,'')
-                justDigits.append(int(digitStr))
-            ind = np.argsort(justDigits)
-            fileList = [fileList[i] for i in ind]
-            return fileList
+                digit = int(fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,''))
+                if fileRange[0] <= digit and digit <= fileRange[1]:
+                    fileList_pruned.append(fileList[i])
+            fileList = fileList_pruned
+            
+        justDigits = []
+        for i in range(len(fileList)):
+            digitStr = fileList[i].replace(baseFileName+sequence_separator,'').replace(fileExt,'')
+            justDigits.append(int(digitStr))
+        ind = np.argsort(justDigits)
+        fileList = [fileList[i] for i in ind]
+        return fileList
     
     def load_data(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None, axis_split=0):
         """Load 3D data from file (tif sequence, nrrd, or npy)
