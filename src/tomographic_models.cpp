@@ -3340,7 +3340,7 @@ bool tomographicModels::PriorBilateralFilter(float* f, int N_1, int N_2, int N_3
 #endif
 }
 
-bool tomographicModels::GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu)
+bool tomographicModels::GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, int numIter, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (f == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || r <= 0 || epsilon <= 0.0)
@@ -3365,7 +3365,7 @@ bool tomographicModels::GuidedFilter(float* f, int N_1, int N_2, int N_3, int r,
 		return false;
 	}
 	else
-		return guidedFilter(f, N_1, N_2, N_3, r, epsilon, data_on_cpu, params.whichGPU);
+		return guidedFilter(f, N_1, N_2, N_3, r, epsilon, numIter, data_on_cpu, params.whichGPU);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;

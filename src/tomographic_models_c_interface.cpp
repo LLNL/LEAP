@@ -1073,9 +1073,9 @@ bool PriorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM
 	return tomo()->PriorBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, prior, data_on_cpu);
 }
 
-bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu)
+bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, int numIter, bool data_on_cpu)
 {
-	return tomo()->GuidedFilter(f, N_1, N_2, N_3, r, epsilon, data_on_cpu);
+	return tomo()->GuidedFilter(f, N_1, N_2, N_3, r, epsilon, numIter, data_on_cpu);
 }
 
 bool dictionaryDenoising(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int N_d1, int N_d2, int N_d3, float epsilon, int sparsityThreshold, bool data_on_cpu)

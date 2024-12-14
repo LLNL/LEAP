@@ -987,10 +987,11 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   r the window radius (in number of pixels)
 	 * \param[in]   epsilon the degree of smoothing
+	 * \param[in]	numIter the number of iteration of the algorithm to run
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu);
+	bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, int numIter, bool data_on_cpu);
 
 	/**
 	 * \fn          dictionaryDenoising

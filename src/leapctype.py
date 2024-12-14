@@ -5295,7 +5295,7 @@ class tomographicModels:
             self.libprojectors.BilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, True)
             
-    def GuidedFilter(self, f, r, epsilon):
+    def GuidedFilter(self, f, r, epsilon, numIter=1):
         """Performs 3D Guided Filter denoising method
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -5304,6 +5304,7 @@ class tomographicModels:
             f (C contiguous float32 numpy array or torch tensor): 3D array to denoise
             r (int): the window radius (in number of pixels)
             epsilon (float): the degree of smoothing
+            numIter (int): the number of iterations
         
         Returns:
             f, the same as the input
@@ -5322,11 +5323,11 @@ class tomographicModels:
         self.libprojectors.GuidedFilter.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.GuidedFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.GuidedFilter(f.data_ptr(), N_1, N_2, N_3, r, epsilon, f.is_cuda == False)
+            self.libprojectors.GuidedFilter.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.GuidedFilter(f.data_ptr(), N_1, N_2, N_3, r, epsilon, numIter, f.is_cuda == False)
         else:
-            self.libprojectors.GuidedFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
-            return self.libprojectors.GuidedFilter(f, N_1, N_2, N_3, r, epsilon, True)
+            self.libprojectors.GuidedFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            return self.libprojectors.GuidedFilter(f, N_1, N_2, N_3, r, epsilon, numIter, True)
     
     def DictionaryDenoising(self, f, dictionary, sparsityThreshold=8, epsilon=0.0):
         """Represents 3D data by a sparse representation of an overcomplete dictionary, effectively denoising the data
