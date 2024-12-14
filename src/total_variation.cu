@@ -91,52 +91,77 @@ __device__ float aTV_Huber_costTerm(float* f, const int i, const int j, const in
     const float dist_3 = 0.5773502691896258f * beta;  // 1/sqrt(3)
 
     float* f_i = &f[uint64(i) * uint64(N.y * N.z)];
-    float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
-    float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
+    
 
     //*
     const float curVal = f_i[j * N.z + k];
 
-    if (numNeighbors == 6)
+    if (N.x == 1)
     {
-        return (Huber(curVal - f_i_plus[j * N.z + k]) +
-            Huber(curVal - f_i_minus[j * N.z + k]) +
-            Huber(curVal - f_i[j_plus * N.z + k]) +
-            Huber(curVal - f_i[j_minus * N.z + k]) +
-            Huber(curVal - f_i[j * N.z + k_plus]) +
-            Huber(curVal - f_i[j * N.z + k_minus])) * dist_1;
+        if (numNeighbors == 6)
+        {
+            return (Huber(curVal - f_i[j_plus * N.z + k]) +
+                Huber(curVal - f_i[j_minus * N.z + k]) +
+                Huber(curVal - f_i[j * N.z + k_plus]) +
+                Huber(curVal - f_i[j * N.z + k_minus])) * dist_1;
+        }
+        else
+        {
+            return (Huber(curVal - f_i[j_plus * N.z + k]) +
+                Huber(curVal - f_i[j_minus * N.z + k]) +
+                Huber(curVal - f_i[j * N.z + k_plus]) +
+                Huber(curVal - f_i[j * N.z + k_minus])) * dist_1 +
+                (Huber(curVal - f_i[j_plus * N.z + k_plus]) +
+                    Huber(curVal - f_i[j_plus * N.z + k_minus]) +
+                    Huber(curVal - f_i[j_minus * N.z + k_plus]) +
+                    Huber(curVal - f_i[j_minus * N.z + k_minus])) * dist_2;
+        }
     }
     else
     {
-        return (Huber(curVal - f_i_plus[j * N.z + k]) +
-            Huber(curVal - f_i_minus[j * N.z + k]) +
-            Huber(curVal - f_i[j_plus * N.z + k]) +
-            Huber(curVal - f_i[j_minus * N.z + k]) +
-            Huber(curVal - f_i[j * N.z + k_plus]) +
-            Huber(curVal - f_i[j * N.z + k_minus])) *
-            dist_1 +
-            (Huber(curVal - f_i_plus[j_plus * N.z + k]) +
-                Huber(curVal - f_i_plus[j_minus * N.z + k]) +
-                Huber(curVal - f_i_plus[j * N.z + k_plus]) +
-                Huber(curVal - f_i_plus[j * N.z + k_minus]) +
-                Huber(curVal - f_i_minus[j_plus * N.z + k]) +
-                Huber(curVal - f_i_minus[j_minus * N.z + k]) +
-                Huber(curVal - f_i_minus[j * N.z + k_plus]) +
-                Huber(curVal - f_i_minus[j * N.z + k_minus]) +
-                Huber(curVal - f_i[j_plus * N.z + k_plus]) +
-                Huber(curVal - f_i[j_plus * N.z + k_minus]) +
-                Huber(curVal - f_i[j_minus * N.z + k_plus]) +
-                Huber(curVal - f_i[j_minus * N.z + k_minus])) *
-            dist_2 +
-            (Huber(curVal - f_i_plus[j_plus * N.z + k_plus]) +
-                Huber(curVal - f_i_plus[j_plus * N.z + k_minus]) +
-                Huber(curVal - f_i_plus[j_minus * N.z + k_plus]) +
-                Huber(curVal - f_i_plus[j_minus * N.z + k_minus]) +
-                Huber(curVal - f_i_minus[j_plus * N.z + k_plus]) +
-                Huber(curVal - f_i_minus[j_plus * N.z + k_minus]) +
-                Huber(curVal - f_i_minus[j_minus * N.z + k_plus]) +
-                Huber(curVal - f_i_minus[j_minus * N.z + k_minus])) *
-            dist_3;
+        float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
+        float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
+        if (numNeighbors == 6)
+        {
+            return (Huber(curVal - f_i_plus[j * N.z + k]) +
+                Huber(curVal - f_i_minus[j * N.z + k]) +
+                Huber(curVal - f_i[j_plus * N.z + k]) +
+                Huber(curVal - f_i[j_minus * N.z + k]) +
+                Huber(curVal - f_i[j * N.z + k_plus]) +
+                Huber(curVal - f_i[j * N.z + k_minus])) * dist_1;
+        }
+        else
+        {
+            return (Huber(curVal - f_i_plus[j * N.z + k]) +
+                Huber(curVal - f_i_minus[j * N.z + k]) +
+                Huber(curVal - f_i[j_plus * N.z + k]) +
+                Huber(curVal - f_i[j_minus * N.z + k]) +
+                Huber(curVal - f_i[j * N.z + k_plus]) +
+                Huber(curVal - f_i[j * N.z + k_minus])) *
+                dist_1 +
+                (Huber(curVal - f_i_plus[j_plus * N.z + k]) +
+                    Huber(curVal - f_i_plus[j_minus * N.z + k]) +
+                    Huber(curVal - f_i_plus[j * N.z + k_plus]) +
+                    Huber(curVal - f_i_plus[j * N.z + k_minus]) +
+                    Huber(curVal - f_i_minus[j_plus * N.z + k]) +
+                    Huber(curVal - f_i_minus[j_minus * N.z + k]) +
+                    Huber(curVal - f_i_minus[j * N.z + k_plus]) +
+                    Huber(curVal - f_i_minus[j * N.z + k_minus]) +
+                    Huber(curVal - f_i[j_plus * N.z + k_plus]) +
+                    Huber(curVal - f_i[j_plus * N.z + k_minus]) +
+                    Huber(curVal - f_i[j_minus * N.z + k_plus]) +
+                    Huber(curVal - f_i[j_minus * N.z + k_minus])) *
+                dist_2 +
+                (Huber(curVal - f_i_plus[j_plus * N.z + k_plus]) +
+                    Huber(curVal - f_i_plus[j_plus * N.z + k_minus]) +
+                    Huber(curVal - f_i_plus[j_minus * N.z + k_plus]) +
+                    Huber(curVal - f_i_plus[j_minus * N.z + k_minus]) +
+                    Huber(curVal - f_i_minus[j_plus * N.z + k_plus]) +
+                    Huber(curVal - f_i_minus[j_plus * N.z + k_minus]) +
+                    Huber(curVal - f_i_minus[j_minus * N.z + k_plus]) +
+                    Huber(curVal - f_i_minus[j_minus * N.z + k_minus])) *
+                dist_3;
+        }
     }
     //*/
 
@@ -205,89 +230,127 @@ __device__ float aTV_Huber_quadFormTerm(float* f, float* d, const int i, const i
     const float dist_3 = 0.5773502691896258f * beta;  // 1/sqrt(3)
 
     float* f_i = &f[uint64(i) * uint64(N.y * N.z)];
-    float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
-    float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
-
     float* d_i = &d[uint64(i) * uint64(N.y * N.z)];
-    float* d_i_minus = &d[uint64(i_minus) * uint64(N.y * N.z)];
-    float* d_i_plus = &d[uint64(i_plus) * uint64(N.y * N.z)];
 
     //*
     const float curVal = f_i[j * N.z + k];
     const float curVal_d = d_i[j * N.z + k];
 
-    if (numNeighbors == 6)
+    if (N.x == 1)
     {
-        return (DDHuber(curVal - f_i_plus[j * N.z + k]) *
-            square(curVal_d - d_i_plus[j * N.z + k]) +
-            DDHuber(curVal - f_i_minus[j * N.z + k]) *
-            square(curVal_d - d_i_minus[j * N.z + k]) +
-            DDHuber(curVal - f_i[j_plus * N.z + k]) *
-            square(curVal_d - d_i[j_plus * N.z + k]) +
-            DDHuber(curVal - f_i[j_minus * N.z + k]) *
-            square(curVal_d - d_i[j_minus * N.z + k]) +
-            DDHuber(curVal - f_i[j * N.z + k_plus]) *
-            square(curVal_d - d_i[j * N.z + k_plus]) +
-            DDHuber(curVal - f_i[j * N.z + k_minus]) *
-            square(curVal_d - d_i[j * N.z + k_minus])) * dist_1;
+        if (numNeighbors == 6)
+        {
+            return (DDHuber(curVal - f_i[j_plus * N.z + k]) *
+                square(curVal_d - d_i[j_plus * N.z + k]) +
+                DDHuber(curVal - f_i[j_minus * N.z + k]) *
+                square(curVal_d - d_i[j_minus * N.z + k]) +
+                DDHuber(curVal - f_i[j * N.z + k_plus]) *
+                square(curVal_d - d_i[j * N.z + k_plus]) +
+                DDHuber(curVal - f_i[j * N.z + k_minus]) *
+                square(curVal_d - d_i[j * N.z + k_minus])) * dist_1;
+        }
+        else
+        {
+            return (DDHuber(curVal - f_i[j_plus * N.z + k]) *
+                square(curVal_d - d_i[j_plus * N.z + k]) +
+                DDHuber(curVal - f_i[j_minus * N.z + k]) *
+                square(curVal_d - d_i[j_minus * N.z + k]) +
+                DDHuber(curVal - f_i[j * N.z + k_plus]) *
+                square(curVal_d - d_i[j * N.z + k_plus]) +
+                DDHuber(curVal - f_i[j * N.z + k_minus]) *
+                square(curVal_d - d_i[j * N.z + k_minus])) *
+                dist_1 +
+                (DDHuber(curVal - f_i[j_plus * N.z + k_plus]) *
+                    square(curVal_d - d_i[j_plus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i[j_plus * N.z + k_minus]) *
+                    square(curVal_d - d_i[j_plus * N.z + k_minus]) +
+                    DDHuber(curVal - f_i[j_minus * N.z + k_plus]) *
+                    square(curVal_d - d_i[j_minus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i[j_minus * N.z + k_minus]) *
+                    square(curVal_d - d_i[j_minus * N.z + k_minus])) *
+                dist_2;
+        }
     }
     else
     {
-        return (DDHuber(curVal - f_i_plus[j * N.z + k]) *
-            square(curVal_d - d_i_plus[j * N.z + k]) +
-            DDHuber(curVal - f_i_minus[j * N.z + k]) *
-            square(curVal_d - d_i_minus[j * N.z + k]) +
-            DDHuber(curVal - f_i[j_plus * N.z + k]) *
-            square(curVal_d - d_i[j_plus * N.z + k]) +
-            DDHuber(curVal - f_i[j_minus * N.z + k]) *
-            square(curVal_d - d_i[j_minus * N.z + k]) +
-            DDHuber(curVal - f_i[j * N.z + k_plus]) *
-            square(curVal_d - d_i[j * N.z + k_plus]) +
-            DDHuber(curVal - f_i[j * N.z + k_minus]) *
-            square(curVal_d - d_i[j * N.z + k_minus])) *
-            dist_1 +
-            (DDHuber(curVal - f_i_plus[j_plus * N.z + k]) *
-                square(curVal_d - d_i_plus[j_plus * N.z + k]) +
-                DDHuber(curVal - f_i_plus[j_minus * N.z + k]) *
-                square(curVal_d - d_i_plus[j_minus * N.z + k]) +
-                DDHuber(curVal - f_i_plus[j * N.z + k_plus]) *
-                square(curVal_d - d_i_plus[j * N.z + k_plus]) +
-                DDHuber(curVal - f_i_plus[j * N.z + k_minus]) *
-                square(curVal_d - d_i_plus[j * N.z + k_minus]) +
-                DDHuber(curVal - f_i_minus[j_plus * N.z + k]) *
-                square(curVal_d - d_i_minus[j_plus * N.z + k]) +
-                DDHuber(curVal - f_i_minus[j_minus * N.z + k]) *
-                square(curVal_d - d_i_minus[j_minus * N.z + k]) +
-                DDHuber(curVal - f_i_minus[j * N.z + k_plus]) *
-                square(curVal_d - d_i_minus[j * N.z + k_plus]) +
-                DDHuber(curVal - f_i_minus[j * N.z + k_minus]) *
-                square(curVal_d - d_i_minus[j * N.z + k_minus]) +
-                DDHuber(curVal - f_i[j_plus * N.z + k_plus]) *
-                square(curVal_d - d_i[j_plus * N.z + k_plus]) +
-                DDHuber(curVal - f_i[j_plus * N.z + k_minus]) *
-                square(curVal_d - d_i[j_plus * N.z + k_minus]) +
-                DDHuber(curVal - f_i[j_minus * N.z + k_plus]) *
-                square(curVal_d - d_i[j_minus * N.z + k_plus]) +
-                DDHuber(curVal - f_i[j_minus * N.z + k_minus]) *
-                square(curVal_d - d_i[j_minus * N.z + k_minus])) *
-            dist_2 +
-            (DDHuber(curVal - f_i_plus[j_plus * N.z + k_plus]) *
-                square(curVal_d - d_i_plus[j_plus * N.z + k_plus]) +
-                DDHuber(curVal - f_i_plus[j_plus * N.z + k_minus]) *
-                square(curVal_d - d_i_plus[j_plus * N.z + k_minus]) +
-                DDHuber(curVal - f_i_plus[j_minus * N.z + k_plus]) *
-                square(curVal_d - d_i_plus[j_minus * N.z + k_plus]) +
-                DDHuber(curVal - f_i_plus[j_minus * N.z + k_minus]) *
-                square(curVal_d - d_i_plus[j_minus * N.z + k_minus]) +
-                DDHuber(curVal - f_i_minus[j_plus * N.z + k_plus]) *
-                square(curVal_d - d_i_minus[j_plus * N.z + k_plus]) +
-                DDHuber(curVal - f_i_minus[j_plus * N.z + k_minus]) *
-                square(curVal_d - d_i_minus[j_plus * N.z + k_minus]) +
-                DDHuber(curVal - f_i_minus[j_minus * N.z + k_plus]) *
-                square(curVal_d - d_i_minus[j_minus * N.z + k_plus]) +
-                DDHuber(curVal - f_i_minus[j_minus * N.z + k_minus]) *
-                square(curVal_d - d_i_minus[j_minus * N.z + k_minus])) *
-            dist_3;
+        float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
+        float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
+
+        float* d_i_minus = &d[uint64(i_minus) * uint64(N.y * N.z)];
+        float* d_i_plus = &d[uint64(i_plus) * uint64(N.y * N.z)];
+        if (numNeighbors == 6)
+        {
+            return (DDHuber(curVal - f_i_plus[j * N.z + k]) *
+                square(curVal_d - d_i_plus[j * N.z + k]) +
+                DDHuber(curVal - f_i_minus[j * N.z + k]) *
+                square(curVal_d - d_i_minus[j * N.z + k]) +
+                DDHuber(curVal - f_i[j_plus * N.z + k]) *
+                square(curVal_d - d_i[j_plus * N.z + k]) +
+                DDHuber(curVal - f_i[j_minus * N.z + k]) *
+                square(curVal_d - d_i[j_minus * N.z + k]) +
+                DDHuber(curVal - f_i[j * N.z + k_plus]) *
+                square(curVal_d - d_i[j * N.z + k_plus]) +
+                DDHuber(curVal - f_i[j * N.z + k_minus]) *
+                square(curVal_d - d_i[j * N.z + k_minus])) * dist_1;
+        }
+        else
+        {
+            return (DDHuber(curVal - f_i_plus[j * N.z + k]) *
+                square(curVal_d - d_i_plus[j * N.z + k]) +
+                DDHuber(curVal - f_i_minus[j * N.z + k]) *
+                square(curVal_d - d_i_minus[j * N.z + k]) +
+                DDHuber(curVal - f_i[j_plus * N.z + k]) *
+                square(curVal_d - d_i[j_plus * N.z + k]) +
+                DDHuber(curVal - f_i[j_minus * N.z + k]) *
+                square(curVal_d - d_i[j_minus * N.z + k]) +
+                DDHuber(curVal - f_i[j * N.z + k_plus]) *
+                square(curVal_d - d_i[j * N.z + k_plus]) +
+                DDHuber(curVal - f_i[j * N.z + k_minus]) *
+                square(curVal_d - d_i[j * N.z + k_minus])) *
+                dist_1 +
+                (DDHuber(curVal - f_i_plus[j_plus * N.z + k]) *
+                    square(curVal_d - d_i_plus[j_plus * N.z + k]) +
+                    DDHuber(curVal - f_i_plus[j_minus * N.z + k]) *
+                    square(curVal_d - d_i_plus[j_minus * N.z + k]) +
+                    DDHuber(curVal - f_i_plus[j * N.z + k_plus]) *
+                    square(curVal_d - d_i_plus[j * N.z + k_plus]) +
+                    DDHuber(curVal - f_i_plus[j * N.z + k_minus]) *
+                    square(curVal_d - d_i_plus[j * N.z + k_minus]) +
+                    DDHuber(curVal - f_i_minus[j_plus * N.z + k]) *
+                    square(curVal_d - d_i_minus[j_plus * N.z + k]) +
+                    DDHuber(curVal - f_i_minus[j_minus * N.z + k]) *
+                    square(curVal_d - d_i_minus[j_minus * N.z + k]) +
+                    DDHuber(curVal - f_i_minus[j * N.z + k_plus]) *
+                    square(curVal_d - d_i_minus[j * N.z + k_plus]) +
+                    DDHuber(curVal - f_i_minus[j * N.z + k_minus]) *
+                    square(curVal_d - d_i_minus[j * N.z + k_minus]) +
+                    DDHuber(curVal - f_i[j_plus * N.z + k_plus]) *
+                    square(curVal_d - d_i[j_plus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i[j_plus * N.z + k_minus]) *
+                    square(curVal_d - d_i[j_plus * N.z + k_minus]) +
+                    DDHuber(curVal - f_i[j_minus * N.z + k_plus]) *
+                    square(curVal_d - d_i[j_minus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i[j_minus * N.z + k_minus]) *
+                    square(curVal_d - d_i[j_minus * N.z + k_minus])) *
+                dist_2 +
+                (DDHuber(curVal - f_i_plus[j_plus * N.z + k_plus]) *
+                    square(curVal_d - d_i_plus[j_plus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i_plus[j_plus * N.z + k_minus]) *
+                    square(curVal_d - d_i_plus[j_plus * N.z + k_minus]) +
+                    DDHuber(curVal - f_i_plus[j_minus * N.z + k_plus]) *
+                    square(curVal_d - d_i_plus[j_minus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i_plus[j_minus * N.z + k_minus]) *
+                    square(curVal_d - d_i_plus[j_minus * N.z + k_minus]) +
+                    DDHuber(curVal - f_i_minus[j_plus * N.z + k_plus]) *
+                    square(curVal_d - d_i_minus[j_plus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i_minus[j_plus * N.z + k_minus]) *
+                    square(curVal_d - d_i_minus[j_plus * N.z + k_minus]) +
+                    DDHuber(curVal - f_i_minus[j_minus * N.z + k_plus]) *
+                    square(curVal_d - d_i_minus[j_minus * N.z + k_plus]) +
+                    DDHuber(curVal - f_i_minus[j_minus * N.z + k_minus]) *
+                    square(curVal_d - d_i_minus[j_minus * N.z + k_minus])) *
+                dist_3;
+        }
     }
     //*/
 
@@ -392,8 +455,6 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
     const float dist_3 = 0.5773502691896258f * beta;  // 1/sqrt(3)
 
     float* f_i = &f[uint64(i) * uint64(N.y * N.z)];
-    float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
-    float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
 
     //*
     const float curVal = f_i[j * N.z + k];
@@ -401,46 +462,74 @@ __global__ void aTV_Huber_gradient(float* f, float* Df, int3 N, float delta, flo
     // dist 1: 6
     // dist 2: 12
     // dist 3: 8
-    if (numNeighbors == 6)
+    if (N.x == 1)
     {
-        Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = (DHuber(curVal - f_i_plus[j * N.z + k]) +
-            DHuber(curVal - f_i_minus[j * N.z + k]) +
-            DHuber(curVal - f_i[j_plus * N.z + k]) +
-            DHuber(curVal - f_i[j_minus * N.z + k]) +
-            DHuber(curVal - f_i[j * N.z + k_plus]) +
-            DHuber(curVal - f_i[j * N.z + k_minus])) * dist_1;
+        if (numNeighbors == 6)
+        {
+            Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = (DHuber(curVal - f_i[j_plus * N.z + k]) +
+                DHuber(curVal - f_i[j_minus * N.z + k]) +
+                DHuber(curVal - f_i[j * N.z + k_plus]) +
+                DHuber(curVal - f_i[j * N.z + k_minus])) * dist_1;
+        }
+        else
+        {
+            Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = (DHuber(curVal - f_i[j_plus * N.z + k]) +
+                DHuber(curVal - f_i[j_minus * N.z + k]) +
+                DHuber(curVal - f_i[j * N.z + k_plus]) +
+                DHuber(curVal - f_i[j * N.z + k_minus])) *
+                dist_1 +
+                (DHuber(curVal - f_i[j_plus * N.z + k_plus]) +
+                    DHuber(curVal - f_i[j_plus * N.z + k_minus]) +
+                    DHuber(curVal - f_i[j_minus * N.z + k_plus]) +
+                    DHuber(curVal - f_i[j_minus * N.z + k_minus])) *
+                dist_2;
+        }
     }
     else
     {
-        Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = (DHuber(curVal - f_i_plus[j * N.z + k]) +
-            DHuber(curVal - f_i_minus[j * N.z + k]) +
-            DHuber(curVal - f_i[j_plus * N.z + k]) +
-            DHuber(curVal - f_i[j_minus * N.z + k]) +
-            DHuber(curVal - f_i[j * N.z + k_plus]) +
-            DHuber(curVal - f_i[j * N.z + k_minus])) *
-            dist_1 +
-            (DHuber(curVal - f_i_plus[j_plus * N.z + k]) +
-                DHuber(curVal - f_i_plus[j_minus * N.z + k]) +
-                DHuber(curVal - f_i_plus[j * N.z + k_plus]) +
-                DHuber(curVal - f_i_plus[j * N.z + k_minus]) +
-                DHuber(curVal - f_i_minus[j_plus * N.z + k]) +
-                DHuber(curVal - f_i_minus[j_minus * N.z + k]) +
-                DHuber(curVal - f_i_minus[j * N.z + k_plus]) +
-                DHuber(curVal - f_i_minus[j * N.z + k_minus]) +
-                DHuber(curVal - f_i[j_plus * N.z + k_plus]) +
-                DHuber(curVal - f_i[j_plus * N.z + k_minus]) +
-                DHuber(curVal - f_i[j_minus * N.z + k_plus]) +
-                DHuber(curVal - f_i[j_minus * N.z + k_minus])) *
-            dist_2 +
-            (DHuber(curVal - f_i_plus[j_plus * N.z + k_plus]) +
-                DHuber(curVal - f_i_plus[j_plus * N.z + k_minus]) +
-                DHuber(curVal - f_i_plus[j_minus * N.z + k_plus]) +
-                DHuber(curVal - f_i_plus[j_minus * N.z + k_minus]) +
-                DHuber(curVal - f_i_minus[j_plus * N.z + k_plus]) +
-                DHuber(curVal - f_i_minus[j_plus * N.z + k_minus]) +
-                DHuber(curVal - f_i_minus[j_minus * N.z + k_plus]) +
-                DHuber(curVal - f_i_minus[j_minus * N.z + k_minus])) *
-            dist_3;
+        float* f_i_minus = &f[uint64(i_minus) * uint64(N.y * N.z)];
+        float* f_i_plus = &f[uint64(i_plus) * uint64(N.y * N.z)];
+        if (numNeighbors == 6)
+        {
+            Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = (DHuber(curVal - f_i_plus[j * N.z + k]) +
+                DHuber(curVal - f_i_minus[j * N.z + k]) +
+                DHuber(curVal - f_i[j_plus * N.z + k]) +
+                DHuber(curVal - f_i[j_minus * N.z + k]) +
+                DHuber(curVal - f_i[j * N.z + k_plus]) +
+                DHuber(curVal - f_i[j * N.z + k_minus])) * dist_1;
+        }
+        else
+        {
+            Df[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = (DHuber(curVal - f_i_plus[j * N.z + k]) +
+                DHuber(curVal - f_i_minus[j * N.z + k]) +
+                DHuber(curVal - f_i[j_plus * N.z + k]) +
+                DHuber(curVal - f_i[j_minus * N.z + k]) +
+                DHuber(curVal - f_i[j * N.z + k_plus]) +
+                DHuber(curVal - f_i[j * N.z + k_minus])) *
+                dist_1 +
+                (DHuber(curVal - f_i_plus[j_plus * N.z + k]) +
+                    DHuber(curVal - f_i_plus[j_minus * N.z + k]) +
+                    DHuber(curVal - f_i_plus[j * N.z + k_plus]) +
+                    DHuber(curVal - f_i_plus[j * N.z + k_minus]) +
+                    DHuber(curVal - f_i_minus[j_plus * N.z + k]) +
+                    DHuber(curVal - f_i_minus[j_minus * N.z + k]) +
+                    DHuber(curVal - f_i_minus[j * N.z + k_plus]) +
+                    DHuber(curVal - f_i_minus[j * N.z + k_minus]) +
+                    DHuber(curVal - f_i[j_plus * N.z + k_plus]) +
+                    DHuber(curVal - f_i[j_plus * N.z + k_minus]) +
+                    DHuber(curVal - f_i[j_minus * N.z + k_plus]) +
+                    DHuber(curVal - f_i[j_minus * N.z + k_minus])) *
+                dist_2 +
+                (DHuber(curVal - f_i_plus[j_plus * N.z + k_plus]) +
+                    DHuber(curVal - f_i_plus[j_plus * N.z + k_minus]) +
+                    DHuber(curVal - f_i_plus[j_minus * N.z + k_plus]) +
+                    DHuber(curVal - f_i_plus[j_minus * N.z + k_minus]) +
+                    DHuber(curVal - f_i_minus[j_plus * N.z + k_plus]) +
+                    DHuber(curVal - f_i_minus[j_plus * N.z + k_minus]) +
+                    DHuber(curVal - f_i_minus[j_minus * N.z + k_plus]) +
+                    DHuber(curVal - f_i_minus[j_minus * N.z + k_minus])) *
+                dist_3;
+        }
     }
     //*/
 

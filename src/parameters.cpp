@@ -2198,15 +2198,20 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 
 float parameters::requiredGPUmemory(int extraCols, int numProjectionData, int numVolumeData)
 {
+	return requiredGPUmemory(extraCols, float(numProjectionData), float(numVolumeData));
+}
+
+float parameters::requiredGPUmemory(int extraCols, float numProjectionData, float numVolumeData)
+{
 	if (mu != NULL)
 		return numProjectionData*projectionDataSize(extraCols) + 2.0* numVolumeData*volumeDataSize() + extraMemoryReserved;
 	else
 		return numProjectionData*projectionDataSize(extraCols) + numVolumeData*volumeDataSize() + extraMemoryReserved;
 }
 
-bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, int numProjectionData, int numVolumeData)
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, float numProjectionData, float numVolumeData)
 {
-#ifndef __USE_CPU
+	#ifndef __USE_CPU
 	if (useLeastGPUmemory)
 	{
 		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns, numProjectionData, numVolumeData))
@@ -2224,6 +2229,11 @@ bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns
 #else
 	return false;
 #endif
+}
+
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, int numProjectionData, int numVolumeData)
+{
+	return hasSufficientGPUmemory(useLeastGPUmemory, extraColumns, float(numProjectionData), float(numVolumeData));
 }
 
 bool parameters::removeProjections(int firstProj, int lastProj)

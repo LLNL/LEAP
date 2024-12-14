@@ -545,6 +545,7 @@ public:
 	 * \return      returns projectionDataSize() + volumeDataSize()
 	 */
 	float requiredGPUmemory(int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
+	float requiredGPUmemory(int extraCols, float numProjectionData, float numVolumeData);
 
 	/**
 	 * \fn          hasSufficientGPUmemory
@@ -554,6 +555,7 @@ public:
 	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 */
 	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory, int extraCols, float numProjectionData, float numVolumeData);
 
 	/**
 	 * \fn          rowRangeNeededForBackprojection

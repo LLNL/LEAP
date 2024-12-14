@@ -718,12 +718,8 @@ __global__ void rayTracingKernel_modular(float* g, const float* phis, geometricS
 	const float3 sourcePos = make_float3(sourcePosition[0], sourcePosition[1], sourcePosition[2]);
 	const float3 detPos = make_float3(moduleCenter[0] + u_val * u_vec[0] + v_val * v_vec[0], moduleCenter[1] + u_val * u_vec[1] + v_val * v_vec[1], moduleCenter[2] + u_val * u_vec[2] + v_val * v_vec[2]);
 
-	const float phi = phis[i];
 	if (d_oversampling <= 1)
 	{
-		const float dv = 0.0f;
-		const float du = 0.0f;
-
 		const float r_mag_inv = rsqrtf((detPos.x - sourcePos.x) * (detPos.x - sourcePos.x) + (detPos.y - sourcePos.y) * (detPos.y - sourcePos.y) + (detPos.z - sourcePos.z) * (detPos.z - sourcePos.z));
 		const float3 r = make_float3((detPos.x - sourcePos.x) * r_mag_inv, (detPos.y - sourcePos.y) * r_mag_inv, (detPos.z - sourcePos.z) * r_mag_inv);
 

@@ -91,8 +91,6 @@ __global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
     const float T_u_inv = 1.0f / T_g.z;
     const float T_v_inv = 1.0f / T_g.y;
 
-    const float vox_half = 0.5f * T_f.x;
-
     const float sin_phi = sin(phis[l]);
     const float cos_phi = cos(phis[l]);
 

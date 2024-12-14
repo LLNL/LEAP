@@ -16,8 +16,8 @@
 //#include "device_launch_parameters.h"
 #include "backprojectors_VD.cuh"
 #include "cuda_utils.h"
-#include "ray_weighting_cpu.h"
-#include "ray_weighting.cuh"
+//#include "ray_weighting_cpu.h"
+//#include "ray_weighting.cuh"
 
 //#define NUM_SLICES_PER_THREAD 1
 #define NUM_SLICES_PER_THREAD 8
@@ -260,9 +260,6 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_vox(cudaTextureOb
         return;
     }
 
-    const float v0_over_Tv = startVals_g.y / T_g.y;
-    const float Tz_over_Tv = T_f.z / T_g.y;
-    const float v_phi_x_start_num = z / T_g.y;
     const float Tv_inv = 1.0f / T_g.y;
     const float Tu_inv = 1.0f / T_g.z;
 
@@ -369,9 +366,6 @@ __global__ void curvedConeBeamWeightedHelicalBackprojectorKernel_vox(cudaTexture
         return;
     }
 
-    const float v0_over_Tv = startVals_g.y / T_g.y;
-    const float Tz_over_Tv = T_f.z / T_g.y;
-    const float v_phi_x_start_num = z / T_g.y;
     const float Tv_inv = 1.0f / T_g.y;
     const float Tu_inv = 1.0f / T_g.z;
 
@@ -481,9 +475,6 @@ __global__ void coneBeamWeightedHelicalBackprojectorKernel_vox(cudaTextureObject
         return;
     }
 
-    const float v0_over_Tv = startVals_g.y / T_g.y;
-    const float Tz_over_Tv = T_f.z / T_g.y;
-    const float v_phi_x_start_num = z / T_g.y;
     const float Tv_inv = 1.0f / T_g.y;
     const float Tu_inv = 1.0f / T_g.z;
 

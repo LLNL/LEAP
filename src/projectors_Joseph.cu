@@ -16,8 +16,8 @@
 #include "projectors.h"
 #include "projectors_Joseph.cuh"
 #include "cuda_utils.h"
-#include "ray_weighting.cuh"
-#include "ray_weighting_cpu.h"
+//#include "ray_weighting.cuh"
+//#include "ray_weighting_cpu.h"
 
 //#define NUM_SLICES_PER_THREAD 1
 #define NUM_SLICES_PER_THREAD 8

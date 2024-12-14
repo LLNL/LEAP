@@ -166,7 +166,6 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
 
     for (int iphi = 0; iphi < N_g.x; iphi++)
     {
-        float L = float(iphi) + 0.5f;
         float* sourcePosition = &sourcePositions[3 * iphi];
         float* moduleCenter = &moduleCenters[3 * iphi];
         float* v_vec = &rowVectors[3 * iphi];

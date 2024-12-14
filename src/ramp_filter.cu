@@ -35,8 +35,6 @@ __global__ void zeroPadForOffsetScanKernel(float* g, float* g_pad, const int3 N,
     if (i >= N.x || j >= N.y || k >= N.z)
         return;
 
-    const int numAngles = N.x;
-    const int numRows = N.y;
     const int numCols = N.z - N_add;
     const uint64 ind = uint64(i) * uint64(numCols * N.y) + uint64(j * numCols);
     const uint64 ind_pad = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z);
