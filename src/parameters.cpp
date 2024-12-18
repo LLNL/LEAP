@@ -1085,7 +1085,7 @@ bool parameters::phaseShift(float radians)
 	}
 }
 
-bool parameters::set_angles(float* phis_new, int numAngles_new)
+bool parameters::set_angles(float* phis_new, int numAngles_new, bool inputIsInDegrees)
 {
 	if (phis != NULL)
 		delete[] phis;
@@ -1097,7 +1097,12 @@ bool parameters::set_angles(float* phis_new, int numAngles_new)
 		numAngles = numAngles_new;
 		phis = new float[numAngles];
 		for (int i = 0; i < numAngles; i++)
-			phis[i] = phis_new[i] * PI / 180.0 - 0.5*PI;
+		{
+			if (inputIsInDegrees)
+				phis[i] = phis_new[i] * PI / 180.0 - 0.5 * PI;
+			else
+				phis[i] = phis_new[i];
+		}
 		phi_start = min(phis[0], phis[numAngles - 1]);
 		phi_end = max(phis[0], phis[numAngles - 1]);
 
@@ -1110,12 +1115,17 @@ bool parameters::set_angles(float* phis_new, int numAngles_new)
 	}
 }
 
-bool parameters::get_angles(float* phis_out)
+bool parameters::get_angles(float* phis_out, bool inDegrees)
 {
 	if (phis_out == NULL || phis == NULL || numAngles <= 0)
 		return false;
 	for (int i = 0; i < numAngles; i++)
-		phis_out[i] = (phis[i]+0.5*PI)*180.0/PI;
+	{
+		if (inDegrees)
+			phis_out[i] = (phis[i] + 0.5 * PI) * 180.0 / PI;
+		else
+			phis_out[i] = phis[i];
+	}
 	return true;
 }
 
@@ -2252,7 +2262,7 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 		if (phis_full != NULL)
 			delete[] phis_full;
 		phis_full = new float[numAngles];
-		get_angles(phis_full);
+		get_angles(phis_full, false);
 		phis_new = new float[numAngles_new];
 		for (int i = firstProj; i <= lastProj; i++)
 			phis_new[i - firstProj] = phis_full[i];
@@ -2289,7 +2299,7 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 	{
 		float phi_start_save = phi_start;
 		float phi_end_save = phi_end;
-		set_angles(phis_new, numAngles_new);
+		set_angles(phis_new, numAngles_new, false);
 		phi_start = phi_start_save;
 		phi_end = phi_end_save;
 		angularRange = angularRange_save;

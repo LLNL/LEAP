@@ -970,12 +970,20 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     leapct_sweep.set_offsetZ(offsetZ)
     
     if (param == 'tau' or param == 'centerCol') and (leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'MODULAR' or leapct.get_geometry() == 'CONE_PARALLEL'):
-        rowRange = leapct_sweep.rowRangeNeededForBackprojection(0)
-        if 0 < rowRange[0] or rowRange[1] < leapct_sweep.get_numRows()-1:
-            g_sweep = leapct_sweep.cropProjections(rowRange, None, g_sweep)
+        if leapct_sweep.get_helicalPitch() == 0.0:
+            rowRange = leapct_sweep.rowRangeNeededForBackprojection(0)
+            if 0 < rowRange[0] or rowRange[1] < leapct_sweep.get_numRows()-1:
+                g_sweep = leapct_sweep.cropProjections(rowRange, None, g_sweep)
+            else:
+                g_sweep = g_sweep.copy()
         else:
+            viewRange = leapct_sweep.viewRangeNeededForBackprojection()
+            #if 0 < viewRange[0] or viewRange[1] < leapct_sweep.get_numAngles()-1:
+            #    g_sweep = leapct_sweep.cropProjections(rowRange, None, g_sweep)
+            #else:
+            #    g_sweep = g_sweep.copy()
             g_sweep = g_sweep.copy()
-
+            
         """ This improves speed, but not sure it is a good idea
         if algorithmName == 'inconsistency':
             leapct_sweep.filterProjections(g_sweep, g_sweep, True)
@@ -1032,7 +1040,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
                 leapct_sweep.weightedBackproject(g_sweep, f)
             else:
                 leapct_sweep.inconsistencyReconstruction(g_sweep, f)
-            metrics[n] = leapct_sweep.sum(f**2)
+            metrics[n] = leapct_sweep.sum(f**2)/float(f.size)
             print('   inconsistency metric: ' + str(metrics[n]))
         else:
             if isFiltered:

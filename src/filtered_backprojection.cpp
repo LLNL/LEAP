@@ -301,7 +301,15 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 			parallelRay_derivative(g, params, false);
 			applyPostRampFilterWeights(g, params, false);
 			if (params->inconsistencyReconstruction == true && params->offsetScan_has_adequate_angular_range() == true)
+			{
+				//*
+				if (data_on_cpu)
+					scale_cpu(g, FBPscalar(params), params->numAngles, params->numRows, params->numCols);
+				else
+					scale(g, FBPscalar(params), make_int3(params->numAngles, params->numRows, params->numCols), params->whichGPU);
 				return true;
+				//*/
+			}
 			else
 				return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
 			#else
@@ -326,9 +334,9 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 			else if (params->inconsistencyReconstruction == true && params->offsetScan_has_adequate_angular_range() == true)
 			{
 				if (params->whichGPU < 0)
-					ray_derivative_cpu(g, params);
+					ray_derivative_cpu(g, params, 0.0, FBPscalar(params));
 				else
-					ray_derivative(g, params, data_on_cpu);
+					ray_derivative(g, params, data_on_cpu, FBPscalar(params));
 			}
 			else
 				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
@@ -346,7 +354,7 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 			}
 			else if (params->inconsistencyReconstruction == true && params->offsetScan_has_adequate_angular_range() == true)
 			{
-				ray_derivative_cpu(g, params);
+				ray_derivative_cpu(g, params, 0.0, FBPscalar(params));
 			}
 			else
 				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));

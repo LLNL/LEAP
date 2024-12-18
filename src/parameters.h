@@ -127,7 +127,7 @@ public:
 	 * \param[in]   numPhis the number of elements in the input array
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_angles(float* phis_in, int numPhis);
+	bool set_angles(float* phis_in, int numPhis, bool inputIsInDegrees = true);
 
 	/**
 	 * \fn          set_angles
@@ -142,7 +142,7 @@ public:
 	 * \param[in]   phis_in an array (degrees) of the projection angles
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool get_angles(float* phis_in);
+	bool get_angles(float* phis_in, bool inDegrees = true);
 
 	/**
 	 * \fn          phaseShift
