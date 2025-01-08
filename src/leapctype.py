@@ -1329,7 +1329,10 @@ class tomographicModels:
             self.libprojectors.rebin_parallel_sinogram.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
             numRays = self.libprojectors.rebin_parallel_sinogram(g.data_ptr(), sino.data_ptr(), order, iRow)
             if numRays != self.get_numCols():
-                sino = torch.reshape(sino, (self.get_numAngles()//2, 2*self.get_numCols()))
+                numEl = self.get_numAngles()//2 * 2*self.get_numCols()
+                sino_crop = torch.zeros(numEl, dtype=np.float32)
+                sino_crop[:] = sino.ravel()[0:numEl]
+                sino = torch.reshape(sino_crop, (self.get_numAngles()//2, 2*self.get_numCols()))
             return sino
         else:
             sino = np.zeros((self.get_numAngles(), self.get_numCols()), dtype=np.float32)
@@ -1337,7 +1340,10 @@ class tomographicModels:
             self.libprojectors.rebin_parallel_sinogram.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int]
             numRays = self.libprojectors.rebin_parallel_sinogram(g, sino, order, iRow)
             if numRays != self.get_numCols():
-                sino = np.reshape(sino, (self.get_numAngles()//2, 2*self.get_numCols()))
+                numEl = self.get_numAngles()//2 * 2*self.get_numCols()
+                sino_crop = np.zeros(numEl, dtype=np.float32)
+                sino_crop[:] = sino.ravel()[0:numEl]
+                sino = np.reshape(sino_crop, (self.get_numAngles()//2, 2*self.get_numCols()))
             return sino
 
     def sinogram_replacement(self, g, priorSinogram, metalTrace, windowSize=None):
