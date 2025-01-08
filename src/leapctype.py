@@ -2440,7 +2440,37 @@ class tomographicModels:
             self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
             self.libprojectors.Laplacian(g, numDims, smoothLaplacian, True)
         return g
+      
+    def ring_removal(self, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.05):
+        """Correct for detector pixel gain corrections that cause ring artifacts in the reconstruction
         
+        The CT geometry parameters must be set prior to running this function.
+        
+        Args:
+            g (contiguous float32 numpy array or torch tensor): attenuation projection data
+            delta (float): The delta parameter of the Total Variation Functional
+            numIter (int): Number of iterations
+            maxChange (float): An upper limit on the maximum difference that can be applied to a detector pixels
+            beta (float): The strength of the regularization
+        
+        Returns:
+            g, the same as the input
+        
+        """
+        self.libprojectors.ring_removal.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            if g.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+        
+            self.libprojectors.ring_removal.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float]
+            self.libprojectors.ring_removal(g.data_ptr(), delta, beta, numIter, maxChange)
+        else:
+            self.libprojectors.ring_removal.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float]
+            self.libprojectors.ring_removal(g, delta, beta, numIter, maxChange)
+        return g
+      
     def transmission_filter(self, g, H, isAttenuationData=True):
         """Applies a 2D Filter to each transmission projection
         

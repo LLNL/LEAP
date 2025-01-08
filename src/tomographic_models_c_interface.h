@@ -227,6 +227,7 @@ extern "C" PROJECTOR_API float estimate_tilt(float* g, bool data_on_cpu);
 extern "C" PROJECTOR_API float conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu);
+extern "C" PROJECTOR_API bool ring_removal(float* g, float delta, float beta, int numIter, float maxChange);
 extern "C" PROJECTOR_API bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu);
 
 extern "C" PROJECTOR_API bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu);

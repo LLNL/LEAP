@@ -43,6 +43,7 @@ cpp_files=[
     'sinogram_replacement.cpp', 
     'tomographic_models_c_interface.cpp', 
     'tomographic_models.cpp', 
+    'ring_removal.cpp',
 ]
 
 cuda_files=[
@@ -113,7 +114,7 @@ else:
 
 setup(
     name='leapct',
-    version='1.26', 
+    version='1.27', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 

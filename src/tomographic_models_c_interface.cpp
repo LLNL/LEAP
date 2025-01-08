@@ -13,6 +13,7 @@
 #include "phantom.h"
 #include "rebin.h"
 #include "file_io.h"
+#include "ring_removal.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -998,6 +999,13 @@ bool Laplacian(float* g, int numDims, bool smooth, bool data_on_cpu)
 	return tomo()->Laplacian(g, numDims, smooth, data_on_cpu);
 }
 
+bool ring_removal(float* g, float delta, float beta, int numIter, float maxChange)
+{
+	parameters* params = &(tomo()->params);
+	ringRemoval ringo;
+	return ringo.execute(g, params->numAngles, params->numRows, params->numCols, delta, beta, numIter, maxChange);
+}
+
 bool transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)
 {
 	return tomo()->transmissionFilter(g, H, N_H1, N_H2, isAttenuationData, data_on_cpu);
@@ -1390,6 +1398,7 @@ PYBIND11_MODULE(leapct, m) {
 	m.def("estimate_tilt", &estimate_tilt, "");
 	m.def("conjugate_difference", &conjugate_difference, "");
     m.def("Laplacian", &Laplacian, "");
+	m.def("ring_removal", &ring_removal, "");
     m.def("transmissionFilter", &transmissionFilter, "");
     m.def("applyTransferFunction", &applyTransferFunction, "");
 	m.def("beam_hardening_heel_effect", &beam_hardening_heel_effect, "");

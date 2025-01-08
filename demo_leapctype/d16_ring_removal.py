@@ -45,7 +45,8 @@ leapct.project(g,f_true)
 
 
 # Add random detector gain to each pixel which will create ring artifacts in the reconstruction
-detectorGain = np.random.uniform(1.0-0.04,1.0+0.04,(numRows,numCols))
+max_gain = 0.04
+detectorGain = np.random.uniform(1.0-max_gain,1.0+max_gain,(numRows,numCols))
 g[:] = g[:] - np.log(detectorGain[None,:,:])
 
 # Add noise to the data (just for demonstration purposes)
@@ -58,9 +59,10 @@ g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 # the one called ringRemoval_fast sometimes creates new ring artifacts.
 # The called ringRemoval is slower, but it is more robust
 startTime = time.time()
-#ringRemoval_fast(leapct, g, 1.0-0.99, 1.0e3, 30, 0.05)
+leapct.ring_removal(g, 0.02, 1.0e3, 30, max_gain)
+#ringRemoval_fast(leapct, g, 1.0-0.99, 1.0e3, 30, max_gain)
 #ringRemoval_median(leapct, g, threshold=0.0, windowSize=7, numIter=1)
-ringRemoval(leapct, g, 1.0-0.99, 1.0e1, 30, 0.05)
+#ringRemoval(leapct, g, 1.0-0.99, 1.0e1, 30, 0.05)
 print('Ring Removal Elapsed Time: ' + str(time.time()-startTime))
 
 # Reconstruct the data
