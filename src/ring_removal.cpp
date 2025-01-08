@@ -35,6 +35,9 @@ bool ringRemoval::execute(float* projectionData, int N_1, int N_2, int N_3, floa
 	if (delta < 1.0e-8)
 		delta = float(1.0e-8);
 
+	int angle_downsampling_factor = 2;
+	angle_downsampling_factor = max(1, min(angle_downsampling_factor, N_1/10));
+
 	omp_set_num_threads(omp_get_num_procs());
 	#pragma omp parallel for schedule(dynamic)
 	for (int iRow = 0; iRow < N_2; iRow++)
@@ -62,7 +65,8 @@ bool ringRemoval::execute(float* projectionData, int N_1, int N_2, int N_3, floa
 		for (int n = 0; n < numIter; n++)
 		{
 			memset(d, 0, N_3 * sizeof(float));
-			for (int i = 0; i < N_1; i++)
+			int count = 0;
+			for (int i = 0; i < N_1; i += angle_downsampling_factor)
 			{
 				float* aLine_0 = &g_0[i * N_3];
 
@@ -91,13 +95,17 @@ bool ringRemoval::execute(float* projectionData, int N_1, int N_2, int N_3, floa
 						d[j] += Sf1_cur / float(N_1);
 					d[j] += gainMap[j];
 					//*/
-					d[j] += (gainMap[j] + Sf1_cur) / float(N_1);
+					d[j] += (gainMap[j] + Sf1_cur);// / float(N_1) * float(angle_downsampling_factor);
 				}
+				count += 1;
 			}
+
+			for (int j = 0; j < N_3; j++)
+				d[j] = d[j] / float(count);
 
 			double num = 0.0;
 			double denom = 0.0;
-			for (int i = 0; i < N_1; i++)
+			for (int i = 0; i < N_1; i+= angle_downsampling_factor)
 			{
 				float* aLine_0 = &g_0[i * N_3];
 
