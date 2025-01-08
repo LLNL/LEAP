@@ -208,8 +208,11 @@ float* setOffsetScanWeights(parameters* params)
 			bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 			params->normalizeConeAndFanCoordinateFunctions = true;
 
-			float alpha_min = params->u(0);
-			float alpha_max = params->u(params->numCols - 1);
+			float u_0 = params->u(0);
+			float u_end = params->u(params->numCols - 1);
+
+			float alpha_min = u_0;
+			float alpha_max = u_end;
 
 			if (params->detectorType == parameters::FLAT)
 			{
@@ -227,15 +230,30 @@ float* setOffsetScanWeights(parameters* params)
 			{
 				float cos_tilt = cos(params->tiltAngle * PI / 180.0);
 				float sin_tilt = sin(params->tiltAngle * PI / 180.0);
+
 				for (int i = 0; i < params->numRows; i++)
 				{
 					float v = params->v(i);
+
+					//*
+					alpha_min = cos_tilt * u_0 - sin_tilt * v;
+					alpha_max = cos_tilt * u_end - sin_tilt * v;
+					if (params->detectorType == parameters::FLAT)
+					{
+						alpha_min = atan(alpha_min);
+						alpha_max = atan(alpha_max);
+					}
+					abs_minVal = fabs(params->sod * sin(alpha_min) - params->tau * cos(alpha_min));
+					abs_maxVal = fabs(params->sod * sin(alpha_max) - params->tau * cos(alpha_max));
+					delta = min(abs_minVal, abs_maxVal);
+					//*/
+
 					for (int j = 0; j < params->numCols; j++)
 					{
 						s_arg = params->u(j);
-						//s_arg = cos_tilt * s_arg - sin_tilt * v;
-						s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
 						s_arg = cos_tilt * s_arg - sin_tilt * v;
+						s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
+						//s_arg = cos_tilt * s_arg - sin_tilt * v;
 
 						float theWeight = 1.0;
 						if (fabs(s_arg) <= delta)

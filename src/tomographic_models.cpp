@@ -443,7 +443,7 @@ bool tomographicModels::filterProjections_multiGPU(float* g, float* g_out)
 	// Now divide numAngles further to fit on the GPUs
 	// reserve some extra memory for filtering (FFT)
 	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
-	float memNeeded = (1.0+2.0/40.0)*params.projectionDataSize()*float(params.numCols + extraCols)/float(params.numCols);
+	float memNeeded = (1.0+10.0/40.0)*params.projectionDataSize()*float(params.numCols + extraCols)/float(params.numCols);
 	if (memNeeded >= memAvailable)
 	{
 		// memNeeded*N/params.numAngles = memAvailable

@@ -64,7 +64,7 @@ leapct.ring_removal(g, 0.02, 1.0e3, 30, max_gain)
 #ringRemoval_median(leapct, g, threshold=0.0, windowSize=7, numIter=1)
 #ringRemoval(leapct, g, 1.0-0.99, 1.0e1, 30, 0.05)
 print('Ring Removal Elapsed Time: ' + str(time.time()-startTime))
-leapct.display(g)
+#leapct.display(g)
 #quit()
 
 # Reconstruct the data

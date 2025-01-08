@@ -497,6 +497,7 @@ int rebin::rebin_parallel_singleSinogram(float* g, parameters* params_in, float*
         N_s = params->numCols*2;
         s_0 = -0.5*(N_s-1)*T_s;
         N_phi_new = params->numAngles/2;
+        T_phi = PI / float(N_phi_new);
     }
 
     // Perform fan to parallel rebinning
