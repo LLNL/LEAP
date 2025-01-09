@@ -2460,7 +2460,7 @@ class tomographicModels:
             beta (float): The strength of the regularization
         
         Returns:
-            g, the same as the input
+            True if successful, False otherwise
         
         """
         self.libprojectors.ring_removal.restype = ctypes.c_bool
@@ -2471,12 +2471,39 @@ class tomographicModels:
                 return None
         
             self.libprojectors.ring_removal.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float]
-            self.libprojectors.ring_removal(g.data_ptr(), delta, beta, numIter, maxChange)
+            return self.libprojectors.ring_removal(g.data_ptr(), delta, beta, numIter, maxChange)
         else:
             self.libprojectors.ring_removal.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float]
-            self.libprojectors.ring_removal(g, delta, beta, numIter, maxChange)
-        return g
-      
+            return self.libprojectors.ring_removal(g, delta, beta, numIter, maxChange)
+    
+    def inpaint(self, I):
+        r"""Performs 2D Telea inpainting
+        
+        This function may be applied to 2D or 3D data.
+        If 3D data is given, inpaining will be performed on each 2D slice individually.
+        Specify which pixels to inpaint by assigning them a NaN value (float("nan")).
+        
+        Args:
+            I (2D or 3D contiguous float32 numpy array or torch tensor): data to inpaint
+        
+        Returns:
+            True if successful, False otherwise
+        
+        """
+        
+        if len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return False
+    
+        self.set_model()
+        self.libprojectors.inpaint.restype = ctypes.c_bool
+        self.libprojectors.inpaint.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
+        return self.libprojectors.inpaint(I, N_1, N_2, N_3)
+    
     def transmission_filter(self, g, H, isAttenuationData=True):
         """Applies a 2D Filter to each transmission projection
         

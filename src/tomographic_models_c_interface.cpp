@@ -14,6 +14,7 @@
 #include "rebin.h"
 #include "file_io.h"
 #include "ring_removal.h"
+#include "inpainting.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -1188,6 +1189,11 @@ bool AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 	return tomo()->AzimuthalBlur(f, FWHM, data_on_cpu);
 }
 
+bool inpaint(float* I, int N_1, int N_2, int N_3)
+{
+	return inpaint3D(I, N_1, N_2, N_3);
+}
+
 bool saveParamsToFile(const char* param_fn)
 {
 	return saveParametersToFile(param_fn, &(tomo()->params));
@@ -1435,6 +1441,7 @@ PYBIND11_MODULE(leapct, m) {
     m.def("scatter_model", &scatter_model, "");
     m.def("synthesize_symmetry", &synthesize_symmetry, "");
     m.def("AzimuthalBlur", &AzimuthalBlur, "");
+	m.def("inpaint", &inpaint, "");
     m.def("saveParamsToFile", &saveParamsToFile, "");
 	m.def("save_tif", &save_tif, "");
 	m.def("read_tif_header", &read_tif_header, "");

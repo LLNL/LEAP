@@ -68,6 +68,7 @@ set(HEADER
   analytic_ray_tracing_gpu.cuh
   rebin.h
   ring_removal.h
+  inpainting.h
   file_io.h
   leap_defines.h
   log.h
@@ -95,6 +96,7 @@ set(SRC_CPP
   analytic_ray_tracing.cpp
   rebin.cpp
   ring_removal.cpp
+  inpainting.cpp
   file_io.cpp
 )
 

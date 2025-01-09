@@ -671,7 +671,9 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
         
         g[:] = g[:] - stepSize*Dg[:]
     """
-    leapct.TV_denoise(g, delta, beta, numIter, p=1.0, meanOverFirstDim=True)
+    #leapct.TV_denoise(g, delta, beta, numIter, p=1.0, meanOverFirstDim=True)
+    leapct.set_numTVneighbors(numNeighbors)
+    leapct.ring_removal(g, delta, beta, numIter, maxChange)
     
     '''
     gainMap = g - g_0
@@ -679,7 +681,6 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
     gainMap[gainMap<-maxChange] = -maxChange
     g = g_0 + gainMap
     #'''
-    leapct.set_numTVneighbors(numNeighbors)
     
     return True
 

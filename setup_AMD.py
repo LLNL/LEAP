@@ -44,6 +44,7 @@ cpp_files=[
     'tomographic_models_c_interface.cpp', 
     'tomographic_models.cpp', 
     'ring_removal.cpp',
+    'inpainting.cpp',
 ]
 
 cuda_files=[

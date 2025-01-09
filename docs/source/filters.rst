@@ -20,3 +20,4 @@ Filters Applied to Arbitrary 3D Arrays
 .. autofunction:: leapctype.tomographicModels.PriorBilateralFilter
 .. autofunction:: leapctype.tomographicModels.GuidedFilter
 .. autofunction:: leapctype.tomographicModels.DictionaryDenoising
+.. autofunction:: leapctype.tomographicModels.inpaint
