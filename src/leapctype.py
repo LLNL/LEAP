@@ -2481,7 +2481,7 @@ class tomographicModels:
         
         This function may be applied to 2D or 3D data.
         If 3D data is given, inpaining will be performed on each 2D slice individually.
-        Specify which pixels to inpaint by assigning them a NaN value (float("nan")).
+        Specify which pixels to inpaint by assigning them a NaN value, i.e., float("nan").
         
         Args:
             I (2D or 3D contiguous float32 numpy array or torch tensor): data to inpaint
@@ -2501,8 +2501,15 @@ class tomographicModels:
     
         self.set_model()
         self.libprojectors.inpaint.restype = ctypes.c_bool
-        self.libprojectors.inpaint.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
-        return self.libprojectors.inpaint(I, N_1, N_2, N_3)
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.inpaint.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.inpaint(I.data_ptr(), N_1, N_2, N_3)
+        else:
+            self.libprojectors.inpaint.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.inpaint(I, N_1, N_2, N_3)
     
     def transmission_filter(self, g, H, isAttenuationData=True):
         """Applies a 2D Filter to each transmission projection
