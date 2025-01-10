@@ -8,8 +8,15 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "inpainting.h"
-#include "leap_defines.h"
+
+#include <stdlib.h>
+#include <math.h>
+#include <stdio.h>
+#include <algorithm>
 #include <omp.h>
+#include "log.h"
+#include "leap_defines.h"
+
 #define INF_PIXEL 1.0e16
 
 using namespace std;

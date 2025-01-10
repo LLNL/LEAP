@@ -33,6 +33,7 @@ def set_leap_from_tigre(geo, leapct=None):
     tau = 0.0
     
     yaw = geo.rotDetector[2]
+    col_offs /= np.cos(geo.rotDetector[2])
     if yaw != 0.0:
         sod = sod*np.cos(yaw)
         sdd = sdd*np.cos(yaw)
@@ -130,6 +131,7 @@ def set_tigre_from_leap(leapct, geo=None):
         geo.DSO = sod_new
         geo.DSD = sdd_new
         geo.offDetector[1] -= tau*sdd/sod
+        geo.offDetector[1] *= np.cos(yaw)
         geo.rotDetector[2] = yaw
         phis -= yaw
     
