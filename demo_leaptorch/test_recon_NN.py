@@ -250,7 +250,6 @@ proj.print_param()
 dimz, dimy, dimx = proj.leapct.get_volume_dim()
 views, rows, cols = proj.leapct.get_projection_dim()
 
-
 # initialize model (NN + projector)
 if network_mode == 0:
     model = None

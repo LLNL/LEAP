@@ -16,6 +16,8 @@
 #include <iostream>
 #include <vector>
 
+
+#ifndef __USE_NOTEX
 __device__ float innerProduct(cudaTextureObject_t f, const float* patches, const int3 voxelIndices,
                               const int whichPatch, const int3 patchSize)
 {
@@ -365,6 +367,7 @@ __global__ void OMP(cudaTextureObject_t f, const float* patches, const float* in
         }
     }
 }
+#endif
 
 bool calcInnerProductPairs(float* dictionary, int numElements, int num1, int num2, int num3, float* innerProductPairs)
 {
@@ -426,6 +429,10 @@ double matchingPursuit_memory(int N_1, int N_2, int N_3, int numElements, int nu
 
 bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int num1, int num2, int num3, float epsilon, int sparsityThreshold, bool data_on_cpu, int whichGPU)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
     if (f == NULL) return false;
 
     //printf("data size: %d x %d x %d\n", N_1, N_2, N_3);
@@ -441,6 +448,8 @@ bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int
         return matchingPursuit_basis(f, N_1, N_2, N_3, dictionary, numElements, num1, num2, num3, epsilon, sparsityThreshold, data_on_cpu, whichGPU);
     }
     //*/
+
+    cudaSetDevice(whichGPU);
 
     // Calculate the number of non-overlapping patches across the whole volume
     int3 N_tiles = make_int3(int(ceil(float(N_1) / float(num1))), int(ceil(float(N_2) / float(num2))), int(ceil(float(N_3) / float(num3))));
@@ -501,7 +510,6 @@ bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int
         return false;
     //*/
 
-    cudaSetDevice(whichGPU);
     //cudaError_t cudaStatus;
 
     // Copy volume to GPU
@@ -588,10 +596,15 @@ bool matchingPursuit(float* f, int N_1, int N_2, int N_3, float* dictionary, int
     //cudaFree(dev_patchWeights);
 
     return true;
+#endif
 }
 
 bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionary, int numElements, int num1, int num2, int num3, float epsilon, int sparsityThreshold, bool data_on_cpu, int whichGPU)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
     //printf("using basis version\n");
     if (f == NULL) return false;
 
@@ -605,6 +618,8 @@ bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionar
 
     // Number of pixels in a patch
     int numPatchPixels = num1 * num2 * num3;
+
+    cudaSetDevice(whichGPU);
 
     // Allocate space for temporary arrays
     //int* indexMap = (int*)malloc(size_t(numPatches) * sizeof(int));
@@ -639,7 +654,6 @@ bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionar
         return false;
     //*/
 
-    cudaSetDevice(whichGPU);
     //cudaError_t cudaStatus;
 
     // Copy volume to GPU
@@ -723,4 +737,5 @@ bool matchingPursuit_basis(float* f, int N_1, int N_2, int N_3, float* dictionar
     cudaFree(dev_patchWeights);
 
     return true;
+#endif
 }

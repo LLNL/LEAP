@@ -13,6 +13,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <vector>
+#include <algorithm>
 #include "sinogram_replacement.h"
 
 using namespace std;

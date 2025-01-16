@@ -49,7 +49,7 @@ moduleCenters[:,2] *= -1.0
 # Set LEAP CT geometry parameters
 pixelSize = 0.149600
 leapct.set_modularbeam(numAngles, 972, 768, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
-
+#leapct.set_conebeam(numAngles, 972, 768, pixelSize, pixelSize, 972/2, 768/2, leapct.setAngleArray(numAngles, 360.0), 66.010880, 199.011551)
 
 # Set LEAP CT volume parameters
 #leapct.set_default_volume()
@@ -89,16 +89,18 @@ leapct.set_rampFilter(10)
 # If we set inplaceProcessing to true, the filtering operations in FBP are
 # done in-place.  This runs faster, but you are not able to recover the 
 # original projection data.
-inplaceProcessing = True
+#inplaceProcessing = True
+#leapct.set_projector('VD')
 f = leapct.allocate_volume()
 print('FBP reconstruction...')
 startTime = time.time()
-leapct.FBP(g,f,inplaceProcessing)
+leapct.FBP(g,f)
+#leapct.backproject(g,f)
 print('FBP time: ' + str(time.time()-startTime))
 
 # Flip the reconstruction so that it is aligned with the ASTRA reconstruction
 f = np.flip(f,axis=0)
-f = np.flip(f,axis=2)
+f = np.ascontiguousarray(np.flip(f,axis=2), dtype=np.float32)
 
 
 # Display result with napari

@@ -22,13 +22,20 @@
  * which is also known as a half-fan or half-cone.
  */
 
-bool findCenter_cpu(float* g, parameters* params, int iRow = -1);
+float findCenter_cpu(float* g, parameters* params, int iRow = -1, bool find_tau = false, float* searchBounds = NULL);
 
-bool findCenter_parallel_cpu(float* g, parameters* params, int iRow = -1);
-bool findCenter_fan_cpu(float* g, parameters* params, int iRow = -1);
-bool findCenter_cone_cpu(float* g, parameters* params, int iRow = -1);
+float findCenter_parallel_cpu(float* g, parameters* params, int iRow = -1, float* searchBounds = NULL);
+float findCenter_fan_cpu(float* g, parameters* params, int iRow = -1, bool find_tau = false, float* searchBounds = NULL);
+float findCenter_cone_cpu(float* g, parameters* params, int iRow = -1, bool find_tau = false, float* searchBounds = NULL);
 
-bool setDefaultRange_centerCol(int numCols, int& centerCol_low, int& centerCol_high);
-float findMinimum(double* costVec, int startInd, int endInd, bool findOnlyLocalMin = true);
+float estimateTilt(float* g, parameters* params);
+bool getConjugateDifference(float* g, parameters* params, float alpha, float centerCol, float* diff);
+bool getConjugateProjections(float* g, parameters* params, float*& proj_A, float*& proj_B);
+float interpolate2D(float*, float ind_1, float ind_2, int N_1, int N_2);
+
+bool setDefaultRange_centerCol(parameters* params, int& centerCol_low, int& centerCol_high);
+float findMinimum(double* costVec, int startInd, int endInd, float& minValue);
+
+float* get_rotated_sinogram(float* g, parameters* params, int iRow);
 
 #endif

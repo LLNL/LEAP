@@ -46,6 +46,10 @@
 	typedef unsigned long int uint64;
 #endif
 
+typedef unsigned int uint32;
+typedef unsigned short uint16;
+typedef unsigned char uint8;
+
 /**
  * LEAP Error Codes
  */

@@ -19,7 +19,7 @@
 #include "phantom.h"
 
 /**
- * This class provides CPU-based implementations (accelerated by OpenMP) to perform analytic ray tracing simulation.
+ * This class provides CPU-based implementations (accelerated by OpenMP) to perform analytic ray tracing simulation through geometric solids.
  */
 
 class analyticRayTracing

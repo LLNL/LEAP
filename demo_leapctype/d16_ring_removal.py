@@ -8,9 +8,6 @@ from leap_preprocessing_algorithms import *
 
 '''
 The script demonstrates two different methods to mitigate ring artifacts in reconstructions
-
-Note that this uses python code in the "utils" directory of the LEAP repo which are not installed with pip, so
-you'll have to copy this file to a python folder or add this folder to your path
 '''
 
 # Specify the number of detector columns which is used below
@@ -61,9 +58,9 @@ g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
 # the one called ringRemoval_fast sometimes creates new ring artifacts.
 # The called ringRemoval is slower, but it is more robust
 startTime = time.time()
-#g = ringRemoval_fast(leapct, g, 1.0-0.99, 30, 0.05)
-g = ringRemoval_median(leapct, g, threshold=0.0, windowSize=7, numIter=1)
-#g = ringRemoval(leapct, g, 1.0-0.99, 1.0e3, 30)
+#ringRemoval_fast(leapct, g, 1.0-0.99, 1.0e3, 30, 0.05)
+#ringRemoval_median(leapct, g, threshold=0.0, windowSize=7, numIter=1)
+ringRemoval(leapct, g, 1.0-0.99, 1.0e1, 30, 0.05)
 print('Ring Removal Elapsed Time: ' + str(time.time()-startTime))
 
 # Reconstruct the data

@@ -119,6 +119,7 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
     const float scalar = (T_f.x * T_f.x / T_g.z) * (T_f.z / T_g.y);
 
     float val = 0.0;
+    /*
     for (int l = 0; l < N_g.x; l++)
     {
         float* sourcePosition = &sourcePositions[3 * l];
@@ -129,6 +130,11 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
             u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
             u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
 
+        const float3 sourceToVoxel = make_float3(x - sourcePosition[0], y - sourcePosition[1], z - sourcePosition[2]);
+
+        const float l_phi_denom = (fabs(sourceToVoxel.x) >= fabs(sourceToVoxel.y)) ? fabs(sourceToVoxel.x) : fabs(sourceToVoxel.y);
+        const float l_phi = sqrtf(sourceToVoxel.x * sourceToVoxel.x + sourceToVoxel.y * sourceToVoxel.y + sourceToVoxel.z * sourceToVoxel.z) / l_phi_denom;
+
         const float3 c_minus_s = make_float3(moduleCenter[0] - sourcePosition[0], moduleCenter[1] - sourcePosition[1], moduleCenter[2] - sourcePosition[2]);
         //const float D = sqrtf(c_minus_s.x * c_minus_s.x + c_minus_s.y * c_minus_s.y);
 
@@ -138,7 +144,7 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
 
         //const float R = sourcePosition[0] * cos_phi + sourcePosition[1] * sin_phi;
         const float D_sq = c_minus_s.x * c_minus_s.x + c_minus_s.y * c_minus_s.y + c_minus_s.z * c_minus_s.z;
-        const float one_over_D = rsqrtf(D_sq);
+        //const float one_over_D = rsqrtf(D_sq);
         //const float scalar = (T_f.x * T_f.x / (one_over_D * T_g.z)) * (T_f.z / (one_over_D * T_g.y));
 
         const float c_minus_s_dot_u = c_minus_s.x * u_vec[0] + c_minus_s.y * u_vec[1] + c_minus_s.z * u_vec[2];
@@ -153,8 +159,48 @@ __global__ void modularBeamSensitivityKernel(const int4 N_g, const float4 T_g, c
         const float v_arg = t_C * ((x - sourcePosition[0]) * v_vec[0] + (y - sourcePosition[1]) * v_vec[1] + (z - sourcePosition[2]) * v_vec[2]) - c_minus_s_dot_v;
 
         if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-            val += sqrtf(D_sq + u_arg * u_arg + v_arg * v_arg) * one_over_D * t_C * t_C;
+            val += l_phi * t_C * t_C;
+            //val += sqrtf(D_sq + u_arg * u_arg + v_arg * v_arg) * one_over_D * t_C * t_C;
     }
+    //*/
+
+    for (int iphi = 0; iphi < N_g.x; iphi++)
+    {
+        float* sourcePosition = &sourcePositions[3 * iphi];
+        float* moduleCenter = &moduleCenters[3 * iphi];
+        float* v_vec = &rowVectors[3 * iphi];
+        float* u_vec = &colVectors[3 * iphi];
+        const float3 detNormal = make_float3(u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1],
+            u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2],
+            u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0]);
+
+        float3 r = make_float3(x - sourcePosition[0], y - sourcePosition[1], z - sourcePosition[2]);
+
+        const float3 p_minus_c = make_float3(sourcePosition[0] - moduleCenter[0], sourcePosition[1] - moduleCenter[1], sourcePosition[2] - moduleCenter[2]);
+        const float p_minus_c_dot_n = p_minus_c.x * detNormal.x + p_minus_c.y * detNormal.y + p_minus_c.z * detNormal.z;
+        const float r_dot_d_inv = 1.0f / (r.x * detNormal.x + r.y * detNormal.y + r.z * detNormal.z);
+        const float D = -p_minus_c_dot_n * r_dot_d_inv;
+
+        const float p_minus_c_dot_u = p_minus_c.x * u_vec[0] + p_minus_c.y * u_vec[1] + p_minus_c.z * u_vec[2];
+        const float p_minus_c_dot_v = p_minus_c.x * v_vec[0] + p_minus_c.y * v_vec[1] + p_minus_c.z * v_vec[2];
+
+        const float r_dot_u = r.x * u_vec[0] + r.y * u_vec[1] + r.z * u_vec[2];
+        const float r_dot_v = r.x * v_vec[0] + r.y * v_vec[1] + r.z * v_vec[2];
+
+        const float u_val = p_minus_c_dot_u + D * r_dot_u;
+        const float v_val = p_minus_c_dot_v + D * r_dot_v;
+
+        //const float num = p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n );
+        //const float backprojectionWeight = p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n )*r_dot_d_inv*r_dot_d_inv;
+
+        //const float u_arg = (u_val - startVals_g.z) * T_u_inv + 0.5f;
+        //const float v_arg = (v_val - startVals_g.y) * T_v_inv + 0.5f;
+        //val += tex3D<float>(g, u_arg, v_arg, L) * backprojectionWeight;
+
+        if (u_min <= u_val && u_val <= u_max && v_min <= v_val && v_val <= v_max)
+            val += p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n )*r_dot_d_inv*r_dot_d_inv;
+    }
+
     if (val == 0.0f)
         val = 1.0f;
     else
@@ -231,16 +277,90 @@ __global__ void coneBeamSensitivityKernel(const int4 N_g, const float4 T_g, cons
             const float dist_from_source_components_y = fabs(R * sin_phi - tau * cos_phi - y);
             const float v_denom_inv = rsqrtf(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
             const float v_arg = (z - z_source) * v_denom_inv;
-            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            if (T_g.w == 0.0f)
+            {
+                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                    val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
+            else
+            {
+                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                    val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
         }
         else
         {
             const float v_denom_inv = 1.0f / (R - x * cos_phi - y * sin_phi);
             const float u_arg = (-sin_phi * x + cos_phi * y + tau) * v_denom_inv;
             const float v_arg = (z - z_source) * v_denom_inv;
+            if (T_g.w == 0.0f)
+            {
+                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                    val += sqrtf(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
+            else
+            {
+                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                    val += sqrtf(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+            }
+        }
+    }
+    if (val == 0.0f)
+        val = 1.0f / scalar;
+    f[ind] = val * scalar;
+}
+
+__global__ void coneParallelSensitivityKernel(const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, const bool isCurved)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N_f.x || j >= N_f.y || k >= N_f.z)
+        return;
+
+    const float x = i * T_f.x + startVals_f.x;
+    const float y = j * T_f.y + startVals_f.y;
+    const float z = k * T_f.z + startVals_f.z;
+
+    uint64 ind;
+    if (volumeDimensionOrder == 0)
+        ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
+    else
+        ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
+
+    const float u_min = startVals_g.z;
+    const float u_max = float(N_g.z - 1) * T_g.z + u_min;
+
+    const float v_min = startVals_g.y;
+    const float v_max = float(N_g.y - 1) * T_g.y + startVals_g.y;
+
+    const float scalar = (T_f.x * T_f.x / (T_g.z)) * (T_f.z / (R * T_g.y)) * R;
+
+    float val = 0.0;
+    for (int l = 0; l < N_g.x; l++)
+    {
+        const float cos_phi = cos(phis[l]);
+        const float sin_phi = sin(phis[l]);
+
+        const float x_dot_theta_perp = cos_phi * y - sin_phi * x;
+        const float x_dot_theta = x * cos_phi + y * sin_phi;
+        const float alpha = asin(x_dot_theta_perp / R) + asin(tau / R);
+
+        const float z_source = (phis[l] + alpha) * T_g.w + startVals_g.w;
+
+        const float v_denom_inv = 1.0f / (sqrtf(R * R - x_dot_theta_perp * x_dot_theta_perp) - x_dot_theta);
+        //const float v_denom_inv = 1.0f / (R - x * cos_phi - y * sin_phi);
+        const float u_arg = x_dot_theta_perp;
+        const float v_arg = (z - z_source) * v_denom_inv;
+        if (T_g.w == 0.0f)
+        {
+            if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv;
+        }
+        else
+        {
             if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                val += sqrtf(1.0f + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                val += sqrtf(1.0f + v_arg * v_arg) * v_denom_inv;
         }
     }
     if (val == 0.0f)
@@ -296,6 +416,10 @@ bool sensitivity_gpu(float*& f, parameters* params, bool data_on_cpu)
     else if (params->geometry == parameters::CONE)
     {
         coneBeamSensitivityKernel <<< dimGrid, dimBlock >>> (N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, bool(params->detectorType == parameters::CURVED));
+    }
+    else if (params->geometry == parameters::CONE_PARALLEL)
+    {
+        coneParallelSensitivityKernel <<< dimGrid, dimBlock >>> (N_g, T_g, startVal_g, dev_f, N_f, T_f, startVal_f, params->sod, params->sdd, params->tau, rFOVsq, dev_phis, params->volumeDimensionOrder, bool(params->detectorType == parameters::CURVED));
     }
 
     // pull result off GPU

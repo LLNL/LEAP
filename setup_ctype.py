@@ -22,7 +22,7 @@ if _platform == "linux" or _platform == "linux2":
     
 elif _platform == "win32":
     lib_fname = r'win_build\bin\Release\libleapct.dll'
-    retVal = os.system(r'.\etc\win_build.bat')
+    retVal = os.system(r'.\etc\win_build_agn.bat')
     if retVal != 0:
         print('Failed to compile!')
         quit()
@@ -40,7 +40,7 @@ elif _platform == "darwin":
 
 setup(
     name='leapct',
-    version='1.13', 
+    version='1.26', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 

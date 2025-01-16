@@ -17,6 +17,8 @@
 #include "cuda_utils.h"
 //using namespace std;
 
+
+#ifndef __USE_NOTEX
 __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float4 pos, float4 traj)
 {
 	float val = 0.0;
@@ -1457,12 +1459,17 @@ __global__ void modularBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float
 	else
 		g[i * N_g.y * N_g.z + j * N_g.z + k] = projectLine_ZYX(f, N_f, T_f, startVals_f, sourcePos, traj);
 }
+#endif
 
 
 //#########################################################################################
 //#########################################################################################
 bool project_Siddon(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+	fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+	return false;
+#else
 	if (params == NULL)
 		return false;
 	if (params->geometry == parameters::MODULAR)
@@ -1496,14 +1503,22 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool data_on_cpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
+	bool useLinearInterpolation = false;
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = NULL;
+	/*
 	if (data_on_cpu)
 		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
 	else
 		dev_f = f;
-
-	bool useLinearInterpolation = false;
-	cudaTextureObject_t d_data_txt = NULL;
-	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	//*/
+	//*
+	if (data_on_cpu)
+		d_data_array = loadTexture_from_cpu(d_data_txt, f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	else
+		d_data_array = loadTexture(d_data_txt, f, N_f, false, useLinearInterpolation, bool(params->volumeDimensionOrder == 1));
+	//*/
 
 	// Call Kernel
 	dim3 dimBlock = setBlockSize(N_g);
@@ -1543,10 +1558,15 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool data_on_cpu)
 	}
 
 	return true;
+#endif
 }
 
 bool backproject_Siddon(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (params == NULL)
 		return false;
 	if (params->geometry == parameters::MODULAR)
@@ -1565,16 +1585,6 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool data_on_cp
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-	if (data_on_cpu)
-	{
-		if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
-		{
-			fprintf(stderr, "cudaMalloc(volume) failed!\n");
-		}
-	}
-	else
-		dev_f = f;
-
 	float* dev_phis = copyAngleArrayToGPU(params);
 
 	int4 N_g; float4 T_g; float4 startVal_g;
@@ -1590,6 +1600,19 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool data_on_cp
 	bool useLinearInterpolation = false;
 	cudaTextureObject_t d_data_txt = NULL;
 	cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, useLinearInterpolation);
+
+	if (data_on_cpu)
+	{
+		if (dev_g != 0)
+			cudaFree(dev_g);
+		dev_g = 0;
+		if ((cudaStatus = cudaMalloc((void**)&dev_f, N_f.x * N_f.y * N_f.z * sizeof(float))) != cudaSuccess)
+		{
+			fprintf(stderr, "cudaMalloc(volume) failed!\n");
+		}
+	}
+	else
+		dev_f = f;
 
 	// Call Kernel
 	dim3 dimBlock = setBlockSize(N_f);
@@ -1628,6 +1651,7 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool data_on_cp
 	}
 
 	return true;
+#endif
 }
 
 bool project_fan(float*& g, float* f, parameters* params, bool data_on_cpu)
@@ -1662,6 +1686,10 @@ bool backproject_parallel(float* g, float *&f, parameters* params, bool data_on_
 
 bool project_modular(float *&g, float* f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
 
@@ -1712,13 +1740,21 @@ bool project_modular(float *&g, float* f, parameters* params, bool data_on_cpu)
 	int4 N_f; float4 T_f; float4 startVal_f;
 	setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
+	cudaTextureObject_t d_data_txt = NULL;
+	cudaArray* d_data_array = NULL;
+	/*
 	if (data_on_cpu)
 		dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
 	else
 		dev_f = f;
-
-	cudaTextureObject_t d_data_txt = NULL;
-	cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	//*/
+	//*
+	if (data_on_cpu)
+		d_data_array = loadTexture_from_cpu(d_data_txt, f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	else
+		d_data_array = loadTexture(d_data_txt, f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+	//*/
 
 	// Call Kernel
 	dim3 dimBlock = setBlockSize(N_g);
@@ -1756,10 +1792,15 @@ bool project_modular(float *&g, float* f, parameters* params, bool data_on_cpu)
 	}
 
 	return true;
+#endif
 }
 
 bool backproject_modular(float* g, float *&f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
 
@@ -1854,4 +1895,5 @@ bool backproject_modular(float* g, float *&f, parameters* params, bool data_on_c
 	}
 
 	return true;
+#endif
 }

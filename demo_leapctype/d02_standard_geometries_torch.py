@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import imageio
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
@@ -39,9 +40,10 @@ pixelSize = 0.65*512/numCols
 numRows = 1
 
 # Set the scanner geometry
-#leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
+leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize*1100.0/1400.0, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
-leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
 
 # Set the volume parameters.
@@ -55,6 +57,9 @@ leapct.set_default_volume()
 leapct.print_parameters()
 #leapct.sketch_system()
 
+# Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
+#leapct.set_projector('VD')
+
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()
 f = leapct.allocateVolume()
@@ -62,7 +67,7 @@ f = leapct.allocateVolume()
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
 # so we implemented this feature with multi-threaded C++
-leapct.set_FORBILD(f,True)
+leapct.set_FORBILD(f,True,3)
 #leapct.display(f)
 
 
@@ -72,6 +77,11 @@ startTime = time.time()
 leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
+
+print(g.shape, g.dtype)
+g_slice = g[:,0,:]
+print("g min/max:", np.min(g_slice), np.max(g_slice))
+imageio.imsave("d02_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 5000.0
@@ -103,9 +113,14 @@ filters.append(TV(leapct, delta=0.02/20.0))
 #leapct.OSEM(g,f,10,10)
 #leapct.LS(g,f,50,'SQS')
 #leapct.RWLS(g,f,100,filters,None,'SQS')
-leapct.RDLS(g,f,100,filters,1.0,True,1)
+leapct.RWLS(g,f,1,filters,None,'SQS')
+leapct.RDLS(g,f,20,filters,1.0,True,1)
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
+
+f_slice = f[0,:,:].cpu().detach().numpy()
+print("f min/max:", np.min(f_slice), np.max(f_slice))
+imageio.imsave("d02_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
 
 
 # Post Reconstruction Smoothing (optional)

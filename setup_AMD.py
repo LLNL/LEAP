@@ -13,7 +13,7 @@ from torch.utils.cpp_extension import CUDAExtension
 from torch.utils.cpp_extension import CppExtension
 from torch.utils.cpp_extension import BuildExtension
 import os
-#import pybind11
+import pybind11
 import torch
 from sys import platform as _platform
 
@@ -63,6 +63,9 @@ cuda_files=[
     'sensitivity.cu', 
     'resample.cu', 
     'total_variation.cu',
+    'geometric_calibration.cu',
+    'analytic_ray_tracing_gpu.cu',
+    'backprojectors_VD.cu',
 ]
 
 cuda = torch.cuda.is_available()
@@ -77,17 +80,21 @@ if cuda:
     # or extra_link_args=["-std=c++11"]
     rocm = "AMD" in torch.cuda.get_device_name(0)
     if rocm: # AMD ROCM GPU
-        extra_compile_args={'cxx': ['-D__USE_GPU'], 
+        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_TEXTURE'], 
                             'nvcc': ['-D__USE_GPU', '-O3']}
+        libraries = []
     else: # CUDA GPU
-        #extra_compile_args={'cxx': ['-D__USE_GPU'], 
-        #                    'nvcc': ['-D__USE_GPU', '-O3']}
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
-                            'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
+        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_TEXTURE'], 
+                            'nvcc': ['-D__USE_GPU', '-O3']}
+        #extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
+        #                    'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
+        #libraries = ['cufft']
+        libraries = []
     ext_mod = CUDAExtension(
         name='leapct',
         sources=source_files,
         extra_compile_args=extra_compile_args,
+        libraries = libraries,
         #extra_link_args=["-lcufft"], 
         extra_cflags=['-O3'])
 else:
@@ -106,7 +113,7 @@ else:
 
 setup(
     name='leapct',
-    version='1.13', 
+    version='1.26', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 

@@ -26,6 +26,7 @@ Below is a sketch of the cone-beam geometry used in LEAP; :math:`i_c` and :math:
 
 .. autofunction:: leapctype.tomographicModels.setAngleArray
 .. autofunction:: leapctype.tomographicModels.set_conebeam
+.. autofunction:: leapctype.tomographicModels.set_coneparallel
 .. autofunction:: leapctype.tomographicModels.set_fanbeam
 .. autofunction:: leapctype.tomographicModels.set_parallelbeam
 .. autofunction:: leapctype.tomographicModels.set_modularbeam
@@ -37,9 +38,14 @@ Below is a sketch of the cone-beam geometry used in LEAP; :math:`i_c` and :math:
 .. autofunction:: leapctype.tomographicModels.set_curvedDetector
 .. autofunction:: leapctype.tomographicModels.get_detectorType
 .. autofunction:: leapctype.tomographicModels.set_centerCol
-.. autofunction:: leapctype.tomographicModels.find_centerCol
 .. autofunction:: leapctype.tomographicModels.set_centerRow
 .. autofunction:: leapctype.tomographicModels.convert_to_modularbeam
 .. autofunction:: leapctype.tomographicModels.rotate_detector
 .. autofunction:: leapctype.tomographicModels.shift_detector
 .. autofunction:: leapctype.tomographicModels.rotate_coordinate_system
+.. autofunction:: leapctype.tomographicModels.find_centerCol
+.. autofunction:: leapctype.tomographicModels.find_tau
+.. autofunction:: leapctype.tomographicModels.estimate_tilt
+.. autofunction:: leapctype.tomographicModels.conjugate_difference
+.. autofunction:: leapctype.tomographicModels.consistency_cost
+.. autofunction:: leapctype.tomographicModels.rebin_parallel_sinogram

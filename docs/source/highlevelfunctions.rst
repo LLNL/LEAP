@@ -3,6 +3,7 @@ High-Level Functions
 
 .. autofunction:: leapctype.tomographicModels.set_gpus
 .. autofunction:: leapctype.tomographicModels.copy_parameters
+.. autofunction:: leapctype.tomographicModels.copy_to_device
 .. autofunction:: leapctype.tomographicModels.reset
 .. autofunction:: leapctype.tomographicModels.about
 .. autofunction:: leapctype.tomographicModels.version

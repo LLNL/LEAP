@@ -27,6 +27,7 @@ numRows = numCols//4
 
 # Set the scanner geometry
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
+#leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0*numTurns), 1100, 1400)
 #leapct.set_curvedDetector()
 
 # Set the helical pitch.
@@ -40,6 +41,9 @@ leapct.set_default_volume()
 # Trouble-Shooting Functions
 leapct.print_parameters()
 #leapct.sketch_system()
+
+# Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
+#leapct.set_projector('VD')
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()

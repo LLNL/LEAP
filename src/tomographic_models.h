@@ -13,7 +13,7 @@
 #pragma once
 #endif
 
-#define LEAP_VERSION "1.13"
+#define LEAP_VERSION "1.26"
 
 /*
 #include <iostream>
@@ -35,7 +35,7 @@
 /**
  *  tomographicModels class
  * This is the main interface for LEAP.  All calls to forward project, backproject, FBP, filtering, noise filters come through this class.
- * The main job of this class is to set/get parameters, do error checks, and dispath jobs.  It contains almost no algorithm logic.
+ * The main job of this class is to set/get parameters, do error checks, and dispatch jobs.  It contains almost no algorithm logic.
  * In addition to the jobs listed above, this class is also responsible for divide jobs across multiple GPUs or dividing up GPU jobs so that
  * they fit into the available GPU memory.  Functions called from this class are either CPU based or single GPU based.
  */
@@ -57,6 +57,20 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool reset();
+
+	/**
+	 * \fn          allocate_volume
+	 * \brief       allocates volume data; user is responsible for freeing memory
+	 * \return      pointer to the data, NULL if CT volume parameters are not set
+	 */
+	float* allocate_volume();
+
+	/**
+	 * \fn          allocate_projections
+	 * \brief       allocates projection data; user is responsible for freeing memory
+	 * \return      pointer to the data, NULL if CT geometry parameters are not set
+	 */
+	float* allocate_projections();
 
 	/**
 	 * \fn          project_gpu
@@ -103,6 +117,19 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool project(float* g, float* f, bool data_on_cpu);
+
+	/**
+	 * \fn          project_with_mask
+	 * \brief       performs a forward projection
+	 * \param[in]   g pointer to the projection data (output)
+	 * \param[in]   f pointer to the volume data (input)
+	 * \param[in]   mask: pointer to the mask data
+	 * \param[in]   data_on_cpu true if data (f and g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool project_with_mask(float* g, float* f, float* mask, bool data_on_cpu);
+	bool project_with_mask_cpu(float* g, float* f, float* mask);
+	bool project_with_mask_gpu(float* g, float* f, float* mask);
 
 	/**
 	 * \fn          backproject
@@ -184,11 +211,46 @@ public:
 	/**
 	 * \fn          filterProjections
 	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
+	 * \param[in]   g pointer to the input projection data
+	 * \param[in]	g_out pointer to the output projection data
+	 * \param[in]   data_on_cpu true if data (g and g_out) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool filterProjections(float* g, float* g_out, bool data_on_cpu);
+
+	/**
+	 * \fn          filterProjections_cpu
+	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
+	 * \param[in]   g pointer to the projection data (input and output) on the cpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool filterProjections_cpu(float* g);
+
+	/**
+	 * \fn          filterProjections_gpu
+	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
+	 * \param[in]   g pointer to the projection data (input and output) on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool filterProjections_gpu(float* g);
+
+	/**
+	 * \fn          preRampFiltering
+	 * \brief       Applies all pre ramp filter weighting
 	 * \param[in]   g pointer to the projection data (input and output)
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool filterProjections(float* g, bool data_on_cpu);
+	bool preRampFiltering(float* g, bool data_on_cpu);
+
+	/**
+	 * \fn          postRampFiltering
+	 * \brief       Applies all post ramp filter weighting
+	 * \param[in]   g pointer to the projection data (input and output)
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool postRampFiltering(float* g, bool data_on_cpu);
 
 	/**
 	 * \fn          rampFilterVolume
@@ -235,10 +297,11 @@ public:
 	 * \param[in]   sod source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
 	 * \param[in]   sdd source to detector distance, measured in mm
 	 * \param[in]   tau the center of rotation horizontal translation (mm)
+	 * \param[in]	tiltAngle the rotation of the detector around the optical axis (degrees)
 	 * \param[in]   helicalPitch the helical pitch (mm/radians)
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
+	bool set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float tiltAngle = 0.0, float helicalPitch = 0.0);
 
 	/**
 	 * \fn          set_fanbeam
@@ -290,6 +353,25 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool set_modularbeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors);
+
+	/**
+	 * \fn          set_coneparallel
+	 * \brief       sets the cone-parallel parameters
+	 * \param[in]   numAngles number of projection angles
+	 * \param[in]   numRows number of rows in the x-ray detector
+	 * \param[in]   numCols number of columns in the x-ray detector
+	 * \param[in]   pixelHeight the detector pixel pitch (i.e., pixel size) between detector rows, measured in mm
+	 * \param[in]   pixelWidth the detector pixel pitch (i.e., pixel size) between detector columns, measured in mm
+	 * \param[in]   centerRow the detector pixel row index for the ray that passes from the source, through the origin, and hits the detector
+	 * \param[in]   centerCol the detector pixel column index for the ray that passes from the source, through the origin, and hits the detector
+	 * \param[in]   phis pointer to an array for specifying the angles of each projection, measured in degrees
+	 * \param[in]   sod source to object distance, measured in mm; this can also be viewed as the source to center of rotation distance
+	 * \param[in]   sdd source to detector distance, measured in mm
+	 * \param[in]   tau the center of rotation horizontal translation (mm)
+	 * \param[in]   helicalPitch the helical pitch (mm/radians)
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool set_coneparallel(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau = 0.0, float helicalPitch = 0.0);
 
 	/**
 	 * \fn          set_flatDetector
@@ -356,6 +438,19 @@ public:
 	 * \return      params.volumeDimensionOrder
 	 */
 	int get_volumeDimensionOrder();
+
+	/**
+	 * \fn          number_of_gpus
+	 * \return      number of GPUs on the system
+	 */
+	int number_of_gpus();
+
+	/**
+	 * \fn          get_gpus
+	 * \brief       gets a list of all gpus being used
+	 * \return      number of gpus being used
+	 */
+	int get_gpus(int* list_of_gpus);
 
 	/**
 	 * \fn          set_GPU
@@ -479,6 +574,21 @@ public:
 	bool set_normalizedHelicalPitch(float h_normalized);
 
 	/**
+	 * \fn          set_tiltAngle
+	 * \brief       sets tiltAngle
+	 * \param[in]   tiltAngle the value for tiltAngle (degrees)
+	 * \return      true if the value is valid, false otherwise
+	 */
+	bool set_tiltAngle(float tiltAngle_in);
+
+	/**
+	 * \fn          get_tiltAngle
+	 * \brief       gets tiltAngle
+	 * \return      tiltAngle
+	 */
+	float get_tiltAngle();
+
+	/**
 	 * \fn          get_helicalPitch
 	 * \brief       gets the helicalPitch
 	 * \return      returns the helicalPitch parameter
@@ -576,10 +686,56 @@ public:
 	 * \brief       finds centerCol of parallel-, fan-, or cone-beam data using conjugate rays
 	 * \param[in]   g pointer to the projection data
 	 * \param[in]   iRow the detector row index to use the estimate centerCol
+	 * \param[in]	searchBounds 2-element array specifying the search bounds
 	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool find_centerCol(float* g, int iRow, bool data_on_cpu);
+	float find_centerCol(float* g, int iRow, float* searchBounds, bool data_on_cpu);
+
+	/**
+	 * \fn          find_tau
+	 * \brief       finds tau of fan- or cone-beam data using conjugate rays
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   iRow the detector row index to use the estimate centerCol
+	 * \param[in]	searchBounds 2-element array specifying the search bounds
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	float find_tau(float* g, int iRow, float* searchBounds, bool data_on_cpu);
+
+	/**
+	 * \fn          estimate_tilt
+	 * \brief       finds the tilt angle (around the optical axis) of parallel-, fan-, or cone-beam data using conjugate rays
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      the estimated detector tilt (degrees)
+	 */
+	float estimate_tilt(float* g, bool data_on_cpu);
+
+	/**
+	 * \fn          conjugate_difference
+	 * \brief       calculates the difference of two conjugate projections with optional rotation
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]   alpha: detector rotation in degrees
+	 * \param[in]	centerCol: detector center column index
+	 * \param[in]   diff: pointer to data numRows*numCols where the difference is stored
+	 * \param[in]   data_on_cpu: true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      the estimated detector tilt (degrees)
+	 */
+	bool conjugate_difference(float* g, float alpha, float centerCol, float* diff, bool data_on_cpu);
+
+	/**
+	 * \fn          consistency_cost
+	 * \brief       calculates of geometric calibration cost with the given perturbations
+	 * \param[in]   g: pointer to the projection data
+	 * \param[in]	Delta_centerRow: detector shift (detector row pixel index) in the row direction
+	 * \param[in]	Delta_centerCol: detector shift (detector column pixel index) in the column direction
+	 * \param[in]	Delta_tau: horizonal shift (mm) of the detector; can also be used to model detector rotations along the vector pointing across the detector rows
+	 * \param[in]	Delta_tilt: rotation (degrees) of the detector around the optical axis
+	 * \param[in]   data_on_cpu: true if data (g) is on the cpu, false if they are on the gpu
+	 * \return      cost of the calibration metric
+	 */
+	float consistency_cost(float* g, float Delta_centerRow, float Delta_centerCol, float Delta_tau, float Delta_tilt, bool data_on_cpu);
 
 	/**
 	 * \fn          Laplacian
@@ -630,6 +786,22 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool applyTransferFunction(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu);
+
+	/**
+	 * \fn          beam_hardening_heel_effect
+	 * \brief       applies a transfer function to projection 3D data, i.e., x = LUT(x) to apply/correct for beam hardening with the heel effect
+	 * \param[in]   g pointer to the 3D data (input and output)
+	 * \param[in]	anode_normal, unit vector normal to the anode
+	 * \param[in]   LUT pointer to lookup table with transfer function values
+	 * \param[in]	takeOffAngles the takeoff angles modeled in the lookup table
+	 * \param[in]   numSamples the number of elements in LUT
+	 * \param[in]   numAngles the number of angles
+	 * \param[in]   sampleRate the step size between samples
+	 * \param[in]   firstSample the value of the first sample in the lookup table
+	 * \param[in]   data_on_cpu true if data (x and LUT) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool beam_hardening_heel_effect(float* g, float* anode_normal, float* LUT, float* takeOffAngles, int numSamples, int numAngles, float sampleRate, float firstSample, bool data_on_cpu);
 
 	/**
 	 * \fn          applyDualTransferFunction
@@ -704,6 +876,19 @@ public:
 	bool BlurFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
 
 	/**
+	 * \fn          HighPassFilter2D
+	 * \brief       applies a 2D high pass filter to the second two dimensions of a 3D array
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   FWHM full width at half maximum of the filter (measured in number of voxels)
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool HighPassFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, bool data_on_cpu);
+
+	/**
 	 * \fn          MedianFilter
 	 * \brief       applies a thresholded 3D median filter
 	 * \param[in]   f pointer to the 3D data (input and output)
@@ -713,10 +898,25 @@ public:
 	 * \param[in]   threshold original value is only replaced by the median value
 	 *              if the relative difference is greater than this value
 	 * \param[in]   w the window size in each dimension (must be 3 or 5)
+	 * \param[in]	signalThreshold: if greater than zero, only values less than this parameter are filtered
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool MedianFilter(float* f, int, int, int, float threshold, int w, bool data_on_cpu);
+	bool MedianFilter(float* f, int, int, int, float threshold, int w, float signalThreshold, bool data_on_cpu);
+
+	/**
+	 * \fn          MeanOrVarianceFilter
+	 * \brief       applies a 3D mean or variance filter
+	 * \param[in]   f pointer to the 3D data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   r the radius (in number of pixels) of the window
+	 * \param[in]	order 1 for mean, 2 for variance filter
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool MeanOrVarianceFilter(float* f, int, int, int, int r, int order, bool data_on_cpu);
 
 	/**
 	 * \fn          MedianFilter2D
@@ -728,10 +928,25 @@ public:
 	 * \param[in]   threshold original value is only replaced by the median value
 	 *              if the relative difference is greater than this value
 	 * \param[in]   w the window size in each dimension (must be 3, 5, or 7)
+	 * \param[in]	signalThreshold: if greater than zero, only values less than this parameter are filtered
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, bool data_on_cpu);
+	bool MedianFilter2D(float* f, int N_1, int N_2, int N_3, float FWHM, int w, float signalThreshold, bool data_on_cpu);
+
+	/**
+	 * \fn          badPixelCorrection
+	 * \brief       applies a 2D median filter to the second two dimensions of a 3D array to a specified list of pixels only
+	 * \param[in]   g: pointer to the 3D projection data (input and output)
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   badPixelMap: pointer to a 2D array of the bad pixels which are label as 1.0
+	 * \param[in]   w: the window size in each dimension (must be 3, 5, or 7)
+	 * \param[in]   data_on_cpu: true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool badPixelCorrection(float* g, int N_1, int N_2, int N_3, float* badPixelMap, int w, bool data_on_cpu);
 
 	/**
 	 * \fn          BilateralFilter
@@ -772,10 +987,11 @@ public:
 	 * \param[in]   N_3 number of samples in the third dimension
 	 * \param[in]   r the window radius (in number of pixels)
 	 * \param[in]   epsilon the degree of smoothing
+	 * \param[in]	numIter the number of iteration of the algorithm to run
 	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu);
+	bool GuidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, int numIter, bool data_on_cpu);
 
 	/**
 	 * \fn          dictionaryDenoising
@@ -825,7 +1041,7 @@ public:
 	 * \param[in]   data_on_cpu true if data (f and Df) is on the cpu, false if they are on the gpu
 	 * \return      true if operation  was sucessful, false otherwise 
 	 */
-	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool data_on_cpu);
+	bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta, float p, bool doMean, bool data_on_cpu);
 
 	/**
 	 * \fn          TVquadForm
@@ -860,13 +1076,31 @@ public:
 	bool Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu);
 
 	/**
+	 * \fn          TV_denoise
+	 * \brief       anisotropic Total Variation denoising
+	 * \param[in]   f pointer to the input/output 3D data
+	 * \param[in]   Df pointer to the output 3D data
+	 * \param[in]   N_1 number of samples in the first dimension
+	 * \param[in]   N_2 number of samples in the second dimension
+	 * \param[in]   N_3 number of samples in the third dimension
+	 * \param[in]   delta transition value of the Huber-like loss function
+	 * \param[in]	beta: the regularization strength
+	 * \param[in]	p the exponent on the Huber-like loss function
+	 * \param[in]   numIter the number of iterations
+	 * \param[in]   data_on_cpu true if data (f) is on the cpu, false if it is on the gpu
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool TV_denoise(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool doMean, bool data_on_cpu);
+
+	/**
 	 * \fn          rayTrace
 	 * \brief       analytic ray tracing simulation
 	 * \param[in]   g pointer to the projection data
 	 * \param[in]   oversampling the detector oversampling factor
+	 * \param[in]   data_on_cpu true if data (g) is on the cpu, false if it is on the gpu
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool rayTrace(float* g, int oversampling = 1);
+	bool rayTrace(float* g, int oversampling, bool data_on_cpu);
 
 	/**
 	 * \fn          rebin_curved
@@ -877,6 +1111,15 @@ public:
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
 	bool rebin_curved(float* g, float* fanAngles, int order = 6);
+
+	/**
+	 * \fn          rebin_parallel
+	 * \brief       rebin fan-beam to parallel-beam or cone-beam to cone-parallel
+	 * \param[in]   g pointer to the projection data
+	 * \param[in]	order the order of the interpolation polynomial
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool rebin_parallel(float* g, int order = 6);
 
 	/**
 	 * \fn          sinogram_replacement
@@ -957,9 +1200,27 @@ public:
 	bool projectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 	bool backprojectParallelBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ);
 
+	/**
+	 * \fn          numRowsRequiredForBackprojectingSlab
+	 * \brief       determines the maximum number of detector rows required to backproject a sub-volume with a specified number of z-slices
+	 * \param[in]   numSlicesPerChunk: number of z-slices in a subvolume
+	 * \return      number of slices required
+	 */
+	int numRowsRequiredForBackprojectingSlab(int numSlicesPerChunk);
+	int extraColumnsForOffsetScan();
+
 	parameters params;
 	phantom geometricPhantom;
 private:
+
+	/**
+	 * \fn          filterProjections_multiGPU
+	 * \brief       applies the necessary filters and ray/view weights necessary for FBP reconstruction
+	 * \param[in]   g pointer to the projection data (on CPU)
+	 * \param[in]	g_out pointer to the output projection data (can be the same as the input)
+	 * \return      true if operation  was sucessful, false otherwise
+	 */
+	bool filterProjections_multiGPU(float* g, float* g_out);
 
 	/**
 	 * \fn          project_multiGPU
@@ -1021,9 +1282,11 @@ private:
 	 * \param[in]   g pointer to the projection data (input)
 	 * \param[in]   rowStart the first index to copy
 	 * \param[in]   rowEnd the last index to copy
+	 * \param[in]	firstView the first view to copy
+	 * \param[in]	lastView the last view to copy
 	 * \return      pointer to the copy of the data for the specified indices of rows
 	 */
-	float* copyRows(float* g, int rowStart, int rowEnd);
+	float* copyRows(float* g, int rowStart, int rowEnd, int firstView = -1, int lastView = -1);
 
 	/**
 	 * \fn          combineRows
@@ -1032,9 +1295,11 @@ private:
 	 * \param[in]   g_chunk the cropped data
 	 * \param[in]   rowStart the first index to copy
 	 * \param[in]   rowEnd the last index to copy
+	 * \param[in]	firstView the first view to copy
+	 * \param[in]	lastView the last view to copy
 	 * \return      true if operation  was sucessful, false otherwise
 	 */
-	bool combineRows(float* g, float* g_chunk, int rowStart, int rowEnd);
+	bool combineRows(float* g, float* g_chunk, int rowStart, int rowEnd, int firstView = -1, int lastView = -1);
 
 	/**
 	 * \fn          project_memoryRequired
@@ -1059,7 +1324,7 @@ private:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      the number of GB of memory required
 	 */
-	float backproject_memoryRequired(int numSlicesPerChunk, int extraCols = 0);
+	float backproject_memoryRequired(int numSlicesPerChunk, int extraCols = 0, bool doFBP = true, int numViews = -1);
 
 	/**
 	 * \fn          backproject_memoryRequired
@@ -1067,9 +1332,12 @@ private:
 	 * \param[in]   numSlicesPerChunk the number of z-slice to calculate the backprojection
 	 * \return      the number of GB of memory required
 	 */
-	float backproject_memoryRequired_splitViews(int numSlicesPerChunk);
+	float backproject_memoryRequired_splitViews(int numSlicesPerChunk, bool doFBP = true);
+
+	bool copy_volume_data_to_mask(float* f, float* mask, bool data_on_cpu, bool do_forward);
 
 	int maxSlicesForChunking;
+	int minSlicesForChunking;
 
 	filteredBackprojection FBP;
 	projectors proj;

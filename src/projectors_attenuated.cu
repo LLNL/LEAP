@@ -17,6 +17,8 @@
 #include "cuda_utils.h"
 //using namespace std;
 
+
+#ifndef __USE_NOTEX
 __device__ float lineIntegral(cudaTextureObject_t mu, const int4 N, const float4 T, const float4 startVal, const float3 p, const float3 dst)
 {
     // NOTE: assumes that T.x == T.y == T.z
@@ -862,9 +864,17 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
     }
     g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = l_phi * g_output;
 }
+#endif
 
+/////////////////////////////////////////////////////////////////////////////////////////////
+// main routine
+/////////////////////////////////////////////////////////////////////////////////////////////
 bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
     if (g == NULL || f == NULL || params == NULL || params->muSpecified() == false || params->allDefined() == false)
         return false;
     if (params->voxelSizeWorksForFastSF() == false)
@@ -908,10 +918,21 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
+    cudaTextureObject_t d_data_txt = NULL;
+    cudaArray* d_data_array = NULL;
+    /*
     if (data_on_cpu)
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
     else
         dev_f = f;
+    d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+    //*/
+    //*
+    if (data_on_cpu)
+        d_data_array = loadTexture_from_cpu(d_data_txt, f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+    else
+        d_data_array = loadTexture(d_data_txt, f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
+    //*/
 
     cudaTextureObject_t d_mu_txt = NULL;
     cudaArray* d_mu_array = NULL;
@@ -924,9 +945,6 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
 
         d_mu_array = loadTexture(d_mu_txt, dev_mu, N_f, false, true, bool(params->volumeDimensionOrder == 1));
     }
-
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N_f, false, false, bool(params->volumeDimensionOrder == 1));
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_g);
@@ -971,10 +989,15 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
     }
 
     return true;
+#endif
 }
 
 bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
     if (g == NULL || f == NULL || params == NULL || params->muSpecified() == false || params->allDefined() == false)
         return false;
     if (params->geometry != parameters::PARALLEL)
@@ -1000,16 +1023,6 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
     // Allocate volume data on GPU
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
-
-    if (data_on_cpu)
-    {
-        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
-        {
-            fprintf(stderr, "cudaMalloc(volume) failed!\n");
-        }
-    }
-    else
-        dev_f = f;
 
     float* dev_phis = copyAngleArrayToGPU(params);
 
@@ -1044,6 +1057,19 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
 
     cudaTextureObject_t d_data_txt = NULL;
     cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, false, true);
+
+    if (data_on_cpu)
+    {
+        if (dev_g != 0)
+            cudaFree(dev_g);
+        dev_g = 0;
+        if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
+        {
+            fprintf(stderr, "cudaMalloc(volume) failed!\n");
+        }
+    }
+    else
+        dev_f = f;
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_f);
@@ -1092,4 +1118,5 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
     }
 
     return true;
+#endif
 }

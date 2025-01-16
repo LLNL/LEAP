@@ -86,7 +86,9 @@ class Reconstructor:
 
             # compute loss
             s.requires_grad = True
+            print("project start")
             g_pred = self.projector(s).cpu().float()
+            print("project end")
             if g_mask != None:
                 g_pred_ = g_pred * g_mask.cpu().float()
                 g_pred = g_pred_

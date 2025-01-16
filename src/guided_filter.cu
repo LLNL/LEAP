@@ -107,7 +107,7 @@ __global__ void guidedFilterSecondStep(float* f, const float* a, const float* b,
     f[ind] = mean_a * f[ind] + mean_b;
 }
 
-bool guidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, bool data_on_cpu, int whichGPU)
+bool guidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, int numIter, bool data_on_cpu, int whichGPU)
 {
     if (f == NULL) return false;
 
@@ -150,8 +150,11 @@ bool guidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, boo
     }
     else
     {
-        calcScaleAndShift <<< dimGrid, dimBlock >>> (dev_f, dev_scale, dev_shift, N, r, epsilon);
-        guidedFilterSecondStep <<< dimGrid, dimBlock >>> (dev_f, dev_scale, dev_shift, N, r);
+        for (int iter = 0; iter < numIter; iter++)
+        {
+            calcScaleAndShift <<< dimGrid, dimBlock >>> (dev_f, dev_scale, dev_shift, N, r, epsilon);
+            guidedFilterSecondStep <<< dimGrid, dimBlock >>> (dev_f, dev_scale, dev_shift, N, r);
+        }
     }
     cudaDeviceSynchronize();
 

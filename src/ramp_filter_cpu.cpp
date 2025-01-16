@@ -203,10 +203,29 @@ float* rampFilterFrequencyResponseMagnitude_cpu(int N, parameters* params)
     // forward fft
     fft(data);
 
+    float theExponent = 1.0;
+    if (params->FBPlowpass >= 2.0)
+    {
+        theExponent = 1.0 / (1.0 - log2(1.0 + cos(PI / params->FBPlowpass)));
+        //printf("theExponent = %f\n", theExponent);
+    }
+
     float* H_real = new float[N];
     for (int i = 0; i < N; i++)
     {
         H_real[i] = real(data[i]) / float(N);
+        if (params->FBPlowpass >= 2.0)
+        {
+            //float omega = float(i)*PI / N_over2;
+            float omega = float(i) * PI / N;
+            if (i > N / 2)
+                omega = float(i - N) * PI / N;
+
+            float theWeight = pow(std::max(float(0.0), float(cos(omega))), 2.0 * theExponent);
+
+            H_real[i] *= theWeight;
+            //printf("H(%f) = %f (%d)\n", omega, theWeight, i);
+        }
     }
 
     // Clean up
@@ -401,7 +420,7 @@ Complex* HilbertTransformFrequencyResponse_cpu(int N, parameters* params)
         {
             double s = timeSamples(i, N) * T / params->sod;
             double temp = s / sin(s);
-            h[i] *= temp * temp;
+            h[i] *= temp;// *temp;
         }
     }
     delete[] h_d;
@@ -613,7 +632,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
     int N_add = 0;
     float abs_minVal = 0.0;
     float abs_maxVal = 0.0;
-    if (params->geometry == parameters::CONE || params->geometry == parameters::FAN)
+    if (params->geometry == parameters::CONE || params->geometry == parameters::FAN || params->geometry == parameters::MODULAR)
     {
         bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
         params->normalizeConeAndFanCoordinateFunctions = true;
@@ -665,6 +684,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
         else
             N_add = int(ceil(params->u_inv(params->rFOV()))) - params->numCols;
     }
+    N_add = std::max(0, N_add);
     if (abs_minVal < abs_maxVal)
         padOnLeft = true;
     else
@@ -672,7 +692,7 @@ int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft)
     return N_add;
 }
 
-float* zeroPadForOffsetScan(float* g, parameters* params)
+float* zeroPadForOffsetScan(float* g, parameters* params, float* g_out)
 {
     if (g == NULL || params == NULL)
         return NULL;
@@ -687,7 +707,11 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
     float* offsetScanWeights = setOffsetScanWeights(params);
     if (N_add > 0 && offsetScanWeights != NULL)
     {
-        float* g_pad = (float*)calloc(size_t(uint64(params->numAngles)* uint64(params->numRows)* uint64(params->numCols+N_add)), sizeof(float));
+        float* g_pad = NULL;
+        if (g_out == NULL)
+            g_pad = (float*)calloc(size_t(uint64(params->numAngles) * uint64(params->numRows) * uint64(params->numCols + N_add)), sizeof(float));
+        else
+            g_pad = g_out;
         if (padOnLeft)
         {
             // zero pad on the left
@@ -702,7 +726,12 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
                     float* aLine = &aProj[j*params->numCols];
                     float* aLine_pad = &aProj_pad[j * (params->numCols+N_add)];
                     for (int k = 0; k < params->numCols; k++)
-                        aLine_pad[k + N_add] = aLine[k] * 2.0 * offsetScanWeights[i * params->numCols + k];
+                        aLine_pad[k + N_add] = aLine[k] * 2.0 * offsetScanWeights[j * params->numCols + k];
+                    if (g_out != NULL)
+                    {
+                        for (int k = 0; k < N_add; k++)
+                            aLine_pad[k] = 0.0;
+                    }
                 }
             }
             params->centerCol += N_add;
@@ -721,7 +750,12 @@ float* zeroPadForOffsetScan(float* g, parameters* params)
                     float* aLine = &aProj[j * params->numCols];
                     float* aLine_pad = &aProj_pad[j * (params->numCols + N_add)];
                     for (int k = 0; k < params->numCols; k++)
-                        aLine_pad[k] = aLine[k] * 2.0 * offsetScanWeights[i * params->numCols + k];
+                        aLine_pad[k] = aLine[k] *2.0 * offsetScanWeights[j * params->numCols + k];
+                    if (g_out != NULL)
+                    {
+                        for (int k = 0; k < N_add; k++)
+                            aLine_pad[params->numCols+k] = 0.0;
+                    }
                 }
             }
         }

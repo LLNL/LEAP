@@ -20,12 +20,16 @@
  * This header and associated source file are for generic GPU-based functions that are used in LEAP
  */
 
+#define GPU_MEMORY_SAFETY_MULTIPLIER 0.9
+
 #ifndef __USE_CPU
 #include "cuda_runtime.h"
 
 #define CUDA_CHECK(expr) cudaSafeCall((expr), __FILE__, __LINE__, #expr)
 #define CHECK_LAST_ERROR() cudaCall(cudaGetLastError(), NULL, __FILE__, __LINE__)
 
+int getSPcores(int whichGPU = 0);
+void printGPUproperties(int whichGPU = 0);
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
 extern float getAvailableGPUmemory(std::vector<int> whichGPUs);
@@ -35,6 +39,298 @@ extern dim3 setGridSize(int3 N, dim3 dimBlock);
 extern dim3 setBlockSize(int4 N);
 extern dim3 setGridSize(int4 N, dim3 dimBlock);
 
+#ifdef __USE_NOTEX
+#define TEX_DATA float*
+#define TEX_ARRAY float*
+#define TEX1D(img, img_dim, x)                  getTex1D(img, img_dim, x)
+#define TEX3D(img, img_dim, x, y, z)            getTex3D(img, img_dim, x, y, z)
+#define TEX3D_nearest(img, img_dim, x, y, z)    getTex3D_nearest(img, img_dim, x, y, z)
+#define TEX3D_linear(img, img_dim, x, y, z)     getTex3D_linear(img, img_dim, x, y, z)
+//#define TEX3Da(img, img_dim, x, y, z)   getTex3Da(img, img_dim, x, y, z)
+#else
+#define TEX_DATA cudaTextureObject_t 
+#define TEX_ARRAY cudaArray*
+#define TEX1D(img, img_dim, x)                  tex1D<float>(img, x)
+#define TEX3D(img, img_dim, x, y, z)            tex3D<float>(img, x, y, z)
+#define TEX3D_nearest(img, img_dim, x, y, z)    tex3D<float>(img, x, y, z)
+#define TEX3D_linear(img, img_dim, x, y, z)     tex3D<float>(img, x, y, z)
+//#define TEX3Da(img, img_dim, x, y, z)   tex3D<float>(img, x, y, z)
+#endif
+
+
+//// these linear interpolation functions are for GPUs with no texture memory support (e.g., AMD MI300)
+////
+#ifdef __USE_NOTEX
+
+#define __MIN__(a, b) ((a) < (b) ? (a) : (b))
+#define __MAX__(a, b) ((a) > (b) ? (a) : (b))
+template<typename T> __device__ __forceinline__ T ldg(const T* ptr) 
+{
+#if __CUDA_ARCH__ >= 350
+    return __ldg(ptr);
+#else
+    return *ptr;
+#endif
+}
+
+__device__ inline float getTex1D(const float* img, int img_dim, float x)
+{
+    int x0 = (int)x;
+    int x1 = __MIN__(x0 + 1, img_dim - 1);
+    float c0 = img[x0];
+    float c1 = img[x1];
+    
+    return c0 + ((x - x0) * (c1 - c0)) / (x1 - x0);
+}
+
+__device__ inline float getTex3D(const float* img, int4 img_dim, float x, float y, float z)
+{
+    int x0 = __MAX__((int)x, 0);
+    int y0 = __MAX__((int)y, 0);
+    int z0 = __MAX__((int)z, 0);
+    int x1 = __MIN__(x0 + 1, img_dim.x - 1);
+    int y1 = __MIN__(y0 + 1, img_dim.y - 1);
+    int z1 = __MIN__(z0 + 1, img_dim.z - 1);
+    float tx = x - (int)x;
+    float ty = y - (int)y;
+    float tz = z - (int)z;
+
+    float c000 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c100 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c010 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c110 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+    float c001 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c101 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c011 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c111 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+
+    // interpolate x-direction
+    float c00 = c000 * (1 - tx) + c100 * tx;
+    float c10 = c010 * (1 - tx) + c110 * tx;
+    float c01 = c001 * (1 - tx) + c101 * tx;
+    float c11 = c011 * (1 - tx) + c111 * tx;
+
+    // interpolate y-direction
+    float c0 = c00 * (1 - ty) + c10 * ty;
+    float c1 = c01 * (1 - ty) + c11 * ty;
+
+    // interpolate z-direction
+    float result = c0 * (1 - tz) + c1 * tz;
+
+    return result;
+}
+
+__device__ inline float getTex3D(const float* img, int3 img_dim, float x, float y, float z)
+{
+    int x0 = __MAX__((int)x, 0);
+    int y0 = __MAX__((int)y, 0);
+    int z0 = __MAX__((int)z, 0);
+    int x1 = __MIN__(x0 + 1, img_dim.x - 1);
+    int y1 = __MIN__(y0 + 1, img_dim.y - 1);
+    int z1 = __MIN__(z0 + 1, img_dim.z - 1);
+    float tx = x - (int)x;
+    float ty = y - (int)y;
+    float tz = z - (int)z;
+
+    float c000 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c100 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c010 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c110 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+    float c001 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c101 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c011 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c111 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+
+    // interpolate x-direction
+    float c00 = c000 * (1 - tx) + c100 * tx;
+    float c10 = c010 * (1 - tx) + c110 * tx;
+    float c01 = c001 * (1 - tx) + c101 * tx;
+    float c11 = c011 * (1 - tx) + c111 * tx;
+
+    // interpolate y-direction
+    float c0 = c00 * (1 - ty) + c10 * ty;
+    float c1 = c01 * (1 - ty) + c11 * ty;
+
+    // interpolate z-direction
+    float result = c0 * (1 - tz) + c1 * tz;
+
+    return result;
+}
+
+__device__ inline float getTex3D_nearest(const float* img, int4 img_dim, float x, float y, float z)
+{
+    int x0 = (int)(x + 0.5);
+    int y0 = (int)(y + 0.5);
+    int z0 = (int)(z + 0.5);
+    if (x0 < 0 || y0 < 0 || z0 < 0 || x0 >= img_dim.x || y0 >= img_dim.y || z0 >= img_dim.z)
+        return 0;
+    
+    float result = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    return result;  
+}
+
+__device__ inline float getTex3D_nearest(const float* img, int3 img_dim, float x, float y, float z)
+{
+    int x0 = (int)(x + 0.5);
+    int y0 = (int)(y + 0.5);
+    int z0 = (int)(z + 0.5);
+    if (x0 < 0 || y0 < 0 || z0 < 0 || x0 >= img_dim.x || y0 >= img_dim.y || z0 >= img_dim.z)
+        return 0;
+    
+    float result = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    return result;   
+}
+
+__device__ inline float getTex3D_linear(const float* img, int4 img_dim, float x, float y, float z)
+{
+    x -= 0.5;
+    y -= 0.5;
+    z -= 0.5;
+    int x0 = (int)x;
+    int y0 = (int)y;
+    int z0 = (int)z;
+    int x1 = x0 + 1;
+    int y1 = y0 + 1;
+    int z1 = z0 + 1;
+    // 1. this one results in empty g and f
+    //if (x0 < 0 || y0 < 0 || z0 < 0 || x1 >= img_dim.x || y1 >= img_dim.y || z1 >= img_dim.z)
+    //    return 0;
+    
+    // 2. this gives good g, but f is weird
+    // x0 = -1, x1 = 0 -> return x1's value, instead of border color (0)
+    if (x1 < 0 || y1 < 0 || z1 < 0 || x0 >= img_dim.x || y0 >= img_dim.y || z0 >= img_dim.z)
+        return 0;
+    x0 = __MAX__(x0, 0);
+    y0 = __MAX__(y0, 0);
+    z0 = __MAX__(z0, 0);
+    x1 = __MIN__(x1, img_dim.x - 1);
+    y1 = __MIN__(y1, img_dim.y - 1);
+    z1 = __MIN__(z1, img_dim.z - 1);
+
+    // 3: gives good g but f is weird
+    //x0 = __MAX__(x0, 0);
+    //y0 = __MAX__(y0, 0);
+    //z0 = __MAX__(z0, 0);
+    //x0 = __MIN__(x0, img_dim.x - 1);
+    //y0 = __MIN__(y0, img_dim.y - 1);
+    //z0 = __MIN__(z0, img_dim.z - 1);
+    //x1 = __MAX__(x1, 0);
+    //y1 = __MAX__(y1, 0);
+    //z1 = __MAX__(z1, 0);
+    //x1 = __MIN__(x1, img_dim.x - 1);
+    //y1 = __MIN__(y1, img_dim.y - 1);
+    //z1 = __MIN__(z1, img_dim.z - 1);
+
+    float tx = x - (int)x;
+    float ty = y - (int)y;
+    float tz = z - (int)z;
+
+    float c000 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c100 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c010 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c110 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+    float c001 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c101 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c011 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c111 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+
+    // interpolate x-direction
+    float c00 = c000 * (1 - tx) + c100 * tx;
+    float c10 = c010 * (1 - tx) + c110 * tx;
+    float c01 = c001 * (1 - tx) + c101 * tx;
+    float c11 = c011 * (1 - tx) + c111 * tx;
+
+    // interpolate y-direction
+    float c0 = c00 * (1 - ty) + c10 * ty;
+    float c1 = c01 * (1 - ty) + c11 * ty;
+
+    // interpolate z-direction
+    float result = c0 * (1 - tz) + c1 * tz;
+
+    return result;
+}
+
+__device__ inline float getTex3D_linear(const float* img, int3 img_dim, float x, float y, float z)
+{
+    int x0 = (int)(x + 0);
+    int y0 = (int)(y + 0);
+    int z0 = (int)(z + 0);
+    int x1 = (int)(x + 1);
+    int y1 = (int)(y + 1);
+    int z1 = (int)(z + 1);
+    if (x1 < 0 || y1 < 0 || z1 < 0 || x0 >= img_dim.x || y0 >= img_dim.y || z0 >= img_dim.z)
+        return 0;
+    x0 = __MAX__(x0, 0);
+    y0 = __MAX__(y0, 0);
+    z0 = __MAX__(z0, 0);
+    x1 = __MIN__(x1, img_dim.x - 1);
+    y1 = __MIN__(y1, img_dim.y - 1);
+    z1 = __MIN__(z1, img_dim.z - 1);
+    float tx = x - (int)x;
+    float ty = y - (int)y;
+    float tz = z - (int)z;
+
+    float c000 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c100 = ldg(&img[z0 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c010 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c110 = ldg(&img[z0 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+    float c001 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x0]);
+    float c101 = ldg(&img[z1 * img_dim.y * img_dim.x + y0 * img_dim.x + x1]);
+    float c011 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x0]);
+    float c111 = ldg(&img[z1 * img_dim.y * img_dim.x + y1 * img_dim.x + x1]);
+
+    // interpolate x-direction
+    float c00 = c000 * (1 - tx) + c100 * tx;
+    float c10 = c010 * (1 - tx) + c110 * tx;
+    float c01 = c001 * (1 - tx) + c101 * tx;
+    float c11 = c011 * (1 - tx) + c111 * tx;
+
+    // interpolate y-direction
+    float c0 = c00 * (1 - ty) + c10 * ty;
+    float c1 = c01 * (1 - ty) + c11 * ty;
+
+    // interpolate z-direction
+    float result = c0 * (1 - tz) + c1 * tz;
+
+    return result;
+}
+
+#endif
+
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+
+extern TEX_ARRAY loadTexture1D_from_cpu(TEX_DATA& tex_object, float* data, const int N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture1D(TEX_DATA& tex_object, float* dev_data, const int N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture2D(TEX_DATA& tex_object, float* data, const int2 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+
+extern void freeTexture(TEX_ARRAY& tex_array, TEX_DATA& tex_object, bool volume_on_cpu);
+extern void freeTexture1D(TEX_ARRAY& tex_array, TEX_DATA& tex_object, bool volume_on_cpu);
+
+// temp
+//extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+//extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+//extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+//extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+//extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+//extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+//extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+//extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+// temp
+
+/*
+extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+
 extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
 extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
 extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
@@ -42,6 +338,7 @@ extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, 
 
 extern cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
 extern cudaArray* loadTexture2D(cudaTextureObject_t& tex_object, float* data, const int2 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+*/
 
 // Utility Functions for pushing/pulling data to/from CPU/GPU
 extern float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU);
@@ -66,6 +363,7 @@ extern cudaError_t add(float* dev_lhs, const float c, const int3 N, int whichGPU
 extern cudaError_t sub(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t scale(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const int3 N, int whichGPU = 0);
+extern cudaError_t mean_over_slices(float* dev_lhs, const int3 N, int whichGPU = 0);
 
 extern cudaError_t replaceZeros(float* dev_lhs, const int3 N, int whichGPU = 0, float newVal = 1.0);
 
@@ -80,6 +378,8 @@ extern float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3
 extern float weightedInnerProduct(const float* dev_lhs, const float* dev_w, const float* dev_rhs, const int3 N, int whichGPU = 0);
 
 bool windowFOV_gpu(float* f, parameters* params);
+
+bool copy_volume_data_to_mask_gpu(float* f, float* mask, parameters* params, bool do_forward);
 
 bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu);
 bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, int whichGPU, bool data_on_cpu);

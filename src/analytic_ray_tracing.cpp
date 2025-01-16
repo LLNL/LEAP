@@ -53,9 +53,12 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
     return false;
     //*/
 
+    int num_threads = omp_get_num_procs();
+    aPhantom->makeTempData(num_threads);
+
     if (oversampling == 1)
     {
-        omp_set_num_threads(omp_get_num_procs());
+        omp_set_num_threads(num_threads);
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < params->numAngles; i++)
         {
@@ -75,7 +78,7 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
 
                 for (int k = 0; k < params->numCols; k++)
                 {
-                    if (params->geometry == parameters::PARALLEL)
+                    if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
                         setSourcePosition(i, j, k, sourcePos);
                     setTrajectory(i, j, k, r);
                     aLine[k] = float(aPhantom->lineIntegral(sourcePos, r));
@@ -90,7 +93,7 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
 
         int os_radius = (oversampling - 1) / 2;
 
-        omp_set_num_threads(omp_get_num_procs());
+        omp_set_num_threads(num_threads);
         #pragma omp parallel for schedule(dynamic)
         for (int i = 0; i < params->numAngles; i++)
         {
@@ -125,7 +128,7 @@ bool analyticRayTracing::rayTrace(float* g, parameters* params_in, phantom* aPha
                         {
                             double du = k_os * T_u_os;
 
-                            if (params->geometry == parameters::PARALLEL)
+                            if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
                                 setSourcePosition(i, j, k, sourcePos, dv, du);
                             setTrajectory(i, j, k, r, dv, du);
                             accum += exp(-aPhantom->lineIntegral(sourcePos, r));
@@ -154,6 +157,8 @@ bool analyticRayTracing::setSourcePosition(int iProj, int iRow, int iCol, double
     double cos_phi = cos(phi);
     double sin_phi = sin(phi);
 
+    float s, sqrt_R2_minus_s2;
+
     switch (params->geometry)
     {
     case parameters::PARALLEL:
@@ -176,6 +181,13 @@ bool analyticRayTracing::setSourcePosition(int iProj, int iRow, int iCol, double
         sourcePos[1] = params->sourcePositions[iProj * 3 + 1];
         sourcePos[2] = params->sourcePositions[iProj * 3 + 2];
         break;
+    case parameters::CONE_PARALLEL:
+        s = params->u(iCol) + du;
+        sqrt_R2_minus_s2 = sqrt(params->sod * params->sod - s * s);
+        sourcePos[0] = -s * sin_phi + sqrt_R2_minus_s2 * cos_phi;
+        sourcePos[1] = s * cos_phi + sqrt_R2_minus_s2 * sin_phi;
+        sourcePos[2] = params->z_source(iProj, iCol);
+        break;
     default:
         sourcePos[0] = 0.0;
         sourcePos[1] = 0.0;
@@ -189,14 +201,37 @@ bool analyticRayTracing::setTrajectory(int iProj, int iRow, int iCol, double* r,
     if (r == NULL)
         return false;
 
-    double u = params->u(iCol) + du;
-    double v = params->v(iRow) + dv;
+    double u, v;
+
+    if (params->geometry != parameters::MODULAR)
+    {
+        u = params->u(iCol) + du;
+        v = params->v(iRow) + dv;
+    }
+    else
+    {
+        u = params->col(iCol) + du;
+        v = params->row(iRow) + dv;
+    }
+
 
     double phi = 0.0;
     if (params->phis != NULL)
         phi = params->phis[iProj];
     double cos_phi = cos(phi);
     double sin_phi = sin(phi);
+
+    double cos_tilt = 1.0;
+    double sin_tilt = 0.0;
+    if (fabs(params->tiltAngle) > 1.0e-6 && params->geometry == parameters::CONE)
+    {
+        cos_tilt = cos(params->tiltAngle * PI / 180.0);
+        sin_tilt = sin(params->tiltAngle * PI / 180.0);
+        double u_tilt = u * cos_tilt - v * sin_tilt;
+        double v_tilt = u * sin_tilt + v * cos_tilt;
+        u = u_tilt;
+        v = v_tilt;
+    }
 
     float* s = NULL;
     float* c = NULL;
@@ -234,9 +269,14 @@ bool analyticRayTracing::setTrajectory(int iProj, int iRow, int iCol, double* r,
         c = &(params->moduleCenters[iProj * 3]);
         u_vec = &(params->colVectors[iProj * 3]);
         v_vec = &(params->rowVectors[iProj * 3]);
-        r[0] = c[0] + u * u_vec[0] + v*v_vec[0] - s[0];
+        r[0] = c[0] + u * u_vec[0] + v * v_vec[0] - s[0];
         r[1] = c[1] + u * u_vec[1] + v * v_vec[1] - s[1];
         r[2] = c[2] + u * u_vec[2] + v * v_vec[2] - s[2];
+        break;
+    case parameters::CONE_PARALLEL:
+        r[0] = -cos_phi;
+        r[1] = -sin_phi;
+        r[2] = v;
         break;
     default:
         r[0] = 0.0;

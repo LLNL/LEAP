@@ -10,9 +10,6 @@ from leap_preprocessing_algorithms import *
 This demo script shows how LEAP can be used to model and deconvole detector blur.  Flat panel x-ray detectors
 have a point spread function (psf) with very long tails.  The strength of this blur usually gets worse with higher energies.
 If not correct for, this blur can cause reconstruction artifacts similar to those caused by beam hardening or scatter.
-
-Note that this uses python code in the "utils" directory of the LEAP repo which are not installed with pip, so
-you'll have to copy this file to a python folder or add this folder to your path
 '''
 
 # Specify the number of detector columns which is used below
@@ -95,8 +92,8 @@ print('Filtering Elapsed Time: ' + str(time.time()-startTime))
 # Deconvolve Detector Blur
 # We implement two different methods to choose
 startTime = time.time()
-g = detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True)
-#g = detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True)
+detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True)
+#detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True)
 print('Deblur Elapsed Time: ' + str(time.time()-startTime))
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations

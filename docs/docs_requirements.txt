@@ -1,3 +1,6 @@
 numpy
 torch
+imageio
+scipy
+matplotlib
 sphinx-rtd-theme

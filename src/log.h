@@ -16,6 +16,10 @@
 
 //inline std::string NowTime();
 
+/**
+ * This file provides a header-only implementation of a logging utility.
+ */
+
 enum TLogLevel {logERROR, logWARNING, logINFO, logSTATUS, logDEBUG, logDEBUG1, logDEBUG2, logDEBUG3, logDEBUG4};
 
 //*

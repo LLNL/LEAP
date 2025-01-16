@@ -20,12 +20,16 @@ using namespace std;
 
 phantom::phantom()
 {
+	floatData = NULL;
+	intData = NULL;
 	params = NULL;
 	objects.clear();
 }
 
 phantom::phantom(parameters* params_in)
 {
+	floatData = NULL;
+	intData = NULL;
 	params = params_in;
 	if (params != NULL)
 	{
@@ -44,7 +48,32 @@ phantom::phantom(parameters* params_in)
 
 phantom::~phantom()
 {
+	if (intData != NULL)
+		free(intData);
+	intData = NULL;
+	if (floatData != NULL)
+		free(floatData);
+	floatData = NULL;
 	objects.clear();
+}
+
+bool phantom::makeTempData(int num_threads)
+{
+	if (intData != NULL)
+		free(intData);
+	intData = NULL;
+	if (floatData != NULL)
+		free(floatData);
+	floatData = NULL;
+
+	if (num_threads > 0 && objects.size() > 0)
+	{
+		floatData = (double*)malloc(size_t(2 * num_threads * objects.size()) * sizeof(double));
+		intData = (int*)malloc(size_t(num_threads * objects.size()) * sizeof(int));
+		return true;
+	}
+	else
+		return false;
 }
 
 bool phantom::addObject(int type, float* c, float* r, float val, float* A, float* clip)
@@ -66,6 +95,42 @@ bool phantom::addObject(int type, float* c, float* r, float val, float* A, float
 void phantom::clearObjects()
 {
 	objects.clear();
+}
+
+bool phantom::voxelize(float* f, parameters* params_in, int oversampling)
+{
+	if (f == NULL || params_in == NULL)
+		return false;
+	else
+	{
+		for (int n = 0; n < int(objects.size()); n++)
+		{
+			float clip[4];
+			float* clip_ptr = clip;
+			if (objects[n].numClippingPlanes <= 0)
+				clip_ptr = NULL;
+			//*
+			if (CONE_X <= objects[n].type && objects[n].type <= CONE_Z)
+			{
+				objects[n].restore_cone_params();
+				clip[0] = 0.0;
+				clip[1] = 0.0;
+				clip[2] = 0.0;
+				clip[3] = 0.0;
+				clip_ptr = NULL;
+			}
+			else
+			{
+				clip[0] = -objects[n].clippingPlanes[0][0];
+				clip[1] = -objects[n].clippingPlanes[0][1];
+				clip[2] = -objects[n].clippingPlanes[0][2];
+				clip[3] = -objects[n].clippingPlanes[0][3];
+			}
+			//*/
+			addObject(f, params_in, objects[n].type, objects[n].centers, objects[n].radii, objects[n].val, objects[n].A, clip_ptr, oversampling);
+		}
+		return true;
+	}
 }
 
 bool phantom::addObject(float* f, parameters* params_in, int type, float* c, float* r, float val, float* A, float* clip, int oversampling)
@@ -400,11 +465,14 @@ double phantom::lineIntegral(double* p, double* r)
 	printf("r = (%f, %f, %f)\n", r[0], r[1], r[2]);
 	//*/
 
+	int count = 0;
 	vector<double> endPoints;
-	vector<int> objectIndices;
+	//vector<int> objectIndices;
+	int* objectIndices = &intData[omp_get_thread_num() * objects.size()];
 	//double* intersection_0 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
 	//double* intersection_1 = (double*)malloc(size_t(int(objects.size())) * sizeof(double));
-	double* intersection_0 = (double*)malloc(size_t(2*int(objects.size())) * sizeof(double));
+	double* intersection_0 = &floatData[omp_get_thread_num() * 2 * objects.size()]; // 2 * num_threads * objects.size()
+	//double* intersection_0 = (double*)malloc(size_t(2*int(objects.size())) * sizeof(double));
 	double* intersection_1 = &intersection_0[int(objects.size())];
 	for (int i = 0; i < int(objects.size()); i++)
 	{
@@ -415,7 +483,9 @@ double phantom::lineIntegral(double* p, double* r)
 			endPoints.push_back(ts[1]);
 			intersection_0[i] = ts[0];
 			intersection_1[i] = ts[1];
-			objectIndices.push_back(i);
+			//objectIndices.push_back(i);
+			objectIndices[count] = i;
+			count += 1;
 			//printf("intersection: %f to %f\n", ts[0], ts[1]);
 		}
 		else
@@ -426,7 +496,7 @@ double phantom::lineIntegral(double* p, double* r)
 		}
 	}
 	double retVal = 0.0;
-	if (endPoints.size() > 0)
+	if (count > 0)
 	{
 		sort(endPoints.begin(), endPoints.end());
 
@@ -441,7 +511,7 @@ double phantom::lineIntegral(double* p, double* r)
 			// Consider the interval (allPoints[i], allPoints[i+1])
 			double midPoint = (endPoints[i + 1] + endPoints[i]) / 2.0;
 			//for (int j = int(objects.size())-1; j >= 0; j--)
-			for (int ind = int(objectIndices.size())-1; ind >= 0; ind--)
+			for (int ind = count-1; ind >= 0; ind--)
 			{
 				int j = objectIndices[ind];
 				//if (objects[j].val != 0.0)
@@ -458,17 +528,8 @@ double phantom::lineIntegral(double* p, double* r)
 				}
 			}
 		}
-		/*
-		for (int j = 0; j < int(objects.size()); j++)
-		{
-			//if (isnan(arealDensities[j]))
-			//	arealDensities[j] = 0.0;
-			retVal += arealDensities[j];
-		}
-		free(arealDensities);
-		//*/
 	}
-	free(intersection_0);
+	//free(intersection_0);
 	//free(intersection_1);
 	return retVal;
 }
@@ -515,6 +576,15 @@ void geometricObject::reset()
 	numClippingPlanes = 0;
 }
 
+void geometricObject::restore_cone_params()
+{
+	for (int i = 0; i < 3; i++)
+	{
+		radii[i] = radii_save[i];
+		centers[i] = centers_save[i];
+	}
+}
+
 bool geometricObject::init(int type_in, float* c_in, float* r_in, float val_in, float* A_in, float* clip_in)
 {
 	reset();
@@ -535,6 +605,9 @@ bool geometricObject::init(int type_in, float* c_in, float* r_in, float val_in, 
 	{
 		centers[i] = c_in[i];
 		radii[i] = r_in[i];
+
+		centers_save[i] = c_in[i];
+		radii_save[i] = r_in[i];
 	}
 
 	if (clip_in != NULL)
@@ -1095,6 +1168,29 @@ double geometricObject::dot(double* x, double* y, int N)
 			retVal += x[i] * y[i];
 		return retVal;
 	}
+}
+
+bool phantom::scale_phantom(float scale_x, float scale_y, float scale_z)
+{
+	for (int i = 0; i < int(objects.size()); i++)
+	{
+		objects[i].centers[0] *= scale_x;
+		objects[i].centers[1] *= scale_y;
+		objects[i].centers[2] *= scale_z;
+		objects[i].radii[0] *= scale_x;
+		objects[i].radii[1] *= scale_y;
+		objects[i].radii[2] *= scale_z;
+		//objects[i].clipCone[0] *= scale_x;
+		//objects[i].clipCone[1] *= scale_x;
+		for (int n = 0; n < objects[i].numClippingPlanes; n++)
+		{
+			//objects[i].clippingPlanes[n][0] *= scale_x;
+			objects[i].clippingPlanes[n][1] *= scale_y;
+			objects[i].clippingPlanes[n][2] *= scale_z;
+			objects[i].clippingPlanes[n][3] *= scale_x;
+		}
+	}
+	return true;
 }
 
 bool phantom::synthesizeSymmetry(float* f_radial, float* f)

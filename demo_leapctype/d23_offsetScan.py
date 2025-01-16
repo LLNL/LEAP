@@ -29,6 +29,7 @@ https://github.com/LLNL/LEAP/blob/main/documentation/LEAP.pdf
 numCols = 512
 numAngles = 4*int(360*numCols/1024)
 pixelSize = 0.65*512/numCols
+centerCol = 0.5*(numCols-1)
 
 # Set the number of detector rows
 numRows = numCols
@@ -43,6 +44,7 @@ centerCol = 0.5*(numCols-1)+100
 #leapct.set_parallelbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*11.0/14.0, 0.5*(numRows-1), centerCol, leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
 
 # Set the offsetScan flag to True
@@ -55,10 +57,12 @@ leapct.set_offsetScan(True)
 # It is best to do this after the CT geometry is set
 leapct.set_default_volume()
 #leapct.set_diameterFOV(leapct.get_voxelWidth()*leapct.get_numX())
+#leapct.convert_to_modularbeam()
 
 # Trouble-Shooting Functions
 leapct.print_parameters()
-#leapct.sketch_system()
+#leapct.sketch_system(0)
+#quit()
 
 # Allocate space for the projections and the volume
 g = leapct.allocateProjections()
@@ -70,12 +74,15 @@ f = leapct.allocateVolume()
 leapct.set_FORBILD(f,True)
 #leapct.display(f)
 
+#f = leapct.copy_to_device(f)
+#g = leapct.copy_to_device(g)
 
 # "Simulate" projection data
 startTime = time.time()
 leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
+#quit()
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
@@ -85,6 +92,7 @@ I_0 = 50000.0
 # Reconstruct the data
 startTime = time.time()
 leapct.FBP(g,f)
+#leapct.backproject(g,f)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
 

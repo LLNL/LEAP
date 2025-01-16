@@ -28,7 +28,6 @@ Using voxel sizes that are significantly smaller or significantly bigger than th
 in poor computational performance.
 '''
 
-
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
@@ -49,7 +48,10 @@ numRows = numCols
 #leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
 #leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
+#leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, pixelSize*1100.0/1400.0, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 #leapct.set_curvedDetector()
+#leapct.convert_to_modularbeam()
+#leapct.rotate_detector(1.0)
 
 # Set the volume parameters.
 # It is best to do this after the CT geometry is set
@@ -58,22 +60,29 @@ leapct.set_default_volume()
 # If you want to specify the volume yourself, use this function:
 #leapct.set_volume(numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
 
+# By default, LEAP applies a circular field of view mask to the CT volume.  The diameter of this mask is determined by the 
+# CT geometry parameters, but this may be overriden (mask can be made smaller, bigger, or completely removed) by using the
+# following function where d is the diameter of the field of view measured in mm
+#leapct.set_diameterFOV(d)
+
 # Trouble-Shooting Functions
 leapct.print_parameters()
 #leapct.sketch_system()
 
+# Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
+#leapct.set_projector('VD')
+
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
 # All you need is for the data to be C contiguous float32 arrays with the right dimensions
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
 # so we implemented this feature with multi-threaded C++
 leapct.set_FORBILD(f,True)
 #leapct.display(f)
-
 
 # "Simulate" projection data
 startTime = time.time()
@@ -98,12 +107,14 @@ f[:] = 0.0
 # this trick can be used to accelerate an iterative reconstruction algorithm
 # If you want an iterative reconstruction to start from scratch, just initialize it with zeros
 startTime = time.time()
-#leapct.backproject(g,f)
-leapct.FBP(g,f)
+print("start BP/FBP")
+leapct.backproject(g,f)
+#leapct.FBP(g,f)
+print("end BP/FBP")
 #leapct.inconsistencyReconstruction(g,f)
 #leapct.print_cost = True
-filters = filterSequence(1.0e0)
-filters.append(TV(leapct, delta=0.02/20.0))
+filters = filterSequence(1.0e0) # filter strength argument must be turned to your specific application
+filters.append(TV(leapct, delta=0.02/20.0)) # the delta argument must be turned to your specific application
 #leapct.ASDPOCS(g,f,10,10,1,filters)
 #leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
@@ -113,6 +124,12 @@ filters.append(TV(leapct, delta=0.02/20.0))
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
+print(f.shape, g.shape)
+f_slice = f[256,:,:]
+g_slice = g[:,256,:]
+imageio.imsave("out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+imageio.imsave("out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
+print("image saved")
 
 # Post Reconstruction Smoothing (optional)
 # Here are some optional post reconstruction noise filters that can be applied
@@ -124,7 +141,8 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
 # Display the result with napari
-#leapct.display(f)
-import matplotlib.pyplot as plt
-plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')
-plt.show()
+leapct.display(f)
+#import matplotlib.pyplot as plt
+#plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')
+#plt.show()
+

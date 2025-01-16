@@ -15,18 +15,19 @@
 #endif
 
 #include "parameters.h"
+#include "leap_defines.h"
 //class parameters;
+
+/**
+ * This header and associated source file provide CUDA-based implementations of functions to apply
+ * Hilbert and ramp filters to the projection data and 2D ramp filter applied to the z-slices of a volume.
+ */
 
 #ifdef __INCLUDE_CUFFT
 #include <hipfft/hipfft.h>
 hipfftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float scalar = 1.0, float sampleShift = 0.0);
 float* rampFilterFrequencyResponseMagnitude(int N, parameters* params);
 #endif
-
-/**
- * This header and associated source file provide CUDA-based implementations of functions to apply
- * Hilbert and ramp filters to the projection data and 2D ramp filter applied to the z-slices of a volume.
- */
 
 float* rampImpulseResponse_modified(int N, parameters* params);
 
@@ -50,5 +51,8 @@ bool rampFilter1D_symmetric(float*& g, parameters* params, float scalar = 1.0);
 
 bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu);
 bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cpu);
+
+float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out = NULL, bool data_on_cpu = false);
+
 
 #endif

@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdio.h>
+#include <algorithm>
+#include <omp.h>
 #include "log.h"
 
 using namespace std;
@@ -25,6 +27,8 @@ float FBPscalar(parameters* params)
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight * magFactor / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
 	else if (params->geometry == parameters::FAN)
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * magFactor * params->pixelHeight / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
+	else if (params->geometry == parameters::CONE_PARALLEL)
+		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth * params->pixelHeight * magFactor / (params->voxelWidth * params->voxelWidth * params->voxelHeight));
 	else
 		return 1.0 / (2.0 * PI) * fabs(params->T_phi() * params->pixelWidth / (params->voxelWidth * params->voxelWidth));
 }
@@ -110,7 +114,8 @@ float* setParkerWeights(parameters* params)
 		//plus_or_minus = 1.0;
 		for (int i = 0; i < params->numAngles; i++)
 		{
-			beta = fabs(params->phis[i] - params->phis[0]);
+			//beta = fabs(params->phis[i] - params->phis[0]);
+			beta = fabs(params->get_phis_full(i+params->get_phi_full_ind_offset()) - params->get_phis_full(0));
 			for (int j = 0; j < params->numCols; j++)
 			{
 				if (params->detectorType == parameters::FLAT)
@@ -144,7 +149,7 @@ float* setParkerWeights(parameters* params)
 
 		return retVal;
 	}
-	else if (params->geometry == parameters::PARALLEL)
+	else if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
 	{
 		float T_phi = params->T_phi();
 		float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
@@ -194,6 +199,9 @@ float* setOffsetScanWeights(parameters* params)
 	}
 	else
 	{
+		bool doHardCut = false;
+		//doHardCut = true; // JUST FOR TESTING
+
 		//printf("applying offsetScan weights\n");
 		if (params->geometry == parameters::CONE || params->geometry == parameters::FAN || params->geometry == parameters::MODULAR)
 		{
@@ -214,39 +222,87 @@ float* setOffsetScanWeights(parameters* params)
 			float delta = min(abs_minVal, abs_maxVal);
 			float s_arg;
 
-			float* retVal = (float*)malloc(sizeof(float) * params->numAngles * params->numCols);
-			for (int j = 0; j < params->numCols; j++)
+			float* retVal = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
+			if (params->geometry == parameters::CONE && params->detectorType == parameters::FLAT && params->tiltAngle != 0.0)
 			{
-				s_arg = params->u(j);
-				if (params->detectorType == parameters::FLAT)
-					s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
-				else
-					s_arg = params->sod * sin(s_arg) - params->tau * cos(s_arg);
-
-				float theWeight = 1.0;
-				if (fabs(s_arg) <= delta)
+				float cos_tilt = cos(params->tiltAngle * PI / 180.0);
+				float sin_tilt = sin(params->tiltAngle * PI / 180.0);
+				for (int i = 0; i < params->numRows; i++)
 				{
-					theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
-					theWeight = theWeight * theWeight;
+					float v = params->v(i);
+					for (int j = 0; j < params->numCols; j++)
+					{
+						s_arg = params->u(j);
+						//s_arg = cos_tilt * s_arg - sin_tilt * v;
+						s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
+						s_arg = cos_tilt * s_arg - sin_tilt * v;
+
+						float theWeight = 1.0;
+						if (fabs(s_arg) <= delta)
+						{
+							if (delta == 0.0 || doHardCut)
+								theWeight = 0.5;
+							else
+							{
+								theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
+								theWeight = theWeight * theWeight;
+							}
+						}
+						else if (s_arg < -delta)
+							theWeight = 0.0;
+						else
+							theWeight = 1.0;
+
+						if (abs_maxVal < abs_minVal)
+							theWeight = 1.0 - theWeight;
+
+						if (theWeight < 1e-12)
+							theWeight = float(1e-12);
+
+						retVal[i * params->numCols + j] = theWeight;
+					}
 				}
-				else if (s_arg < -delta)
-					theWeight = 0.0;
-				else
-					theWeight = 1.0;
+			}
+			else
+			{
+				for (int j = 0; j < params->numCols; j++)
+				{
+					s_arg = params->u(j);
+					if (params->detectorType == parameters::FLAT)
+						s_arg = (params->sod * s_arg - params->tau) / sqrt(1.0 + s_arg * s_arg);
+					else
+						s_arg = params->sod * sin(s_arg) - params->tau * cos(s_arg);
 
-				if (abs_maxVal < abs_minVal)
-					theWeight = 1.0 - theWeight;
+					float theWeight = 1.0;
+					if (fabs(s_arg) <= delta)
+					{
+						if (delta == 0.0 || doHardCut)
+							theWeight = 0.5;
+						else
+						{
+							theWeight = cos(PI / 4.0 * (s_arg - delta) / delta);
+							theWeight = theWeight * theWeight;
+						}
+					}
+					else if (s_arg < -delta)
+						theWeight = 0.0;
+					else
+						theWeight = 1.0;
 
-				if (theWeight < 1e-12)
-					theWeight = float(1e-12);
+					if (abs_maxVal < abs_minVal)
+						theWeight = 1.0 - theWeight;
 
-				for (int i = 0; i < params->numAngles; i++)
-					retVal[i * params->numCols + j] = theWeight;
+					if (theWeight < 1e-12)
+						theWeight = float(1e-12);
+
+					for (int i = 0; i < params->numRows; i++)
+						retVal[i * params->numCols + j] = theWeight;
+				}
 			}
 			params->normalizeConeAndFanCoordinateFunctions = normalizeConeAndFanCoordinateFunctions_save;
 			return retVal;
 		}
-		else if (params->geometry == parameters::PARALLEL)
+		else if (params->geometry == parameters::PARALLEL || params->geometry == parameters::CONE_PARALLEL)
 		{
 			float abs_minVal = fabs(params->u(0));
 			float abs_maxVal = fabs(params->u(params->numCols - 1));
@@ -300,43 +356,68 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 	for (int i = 0; i < params->numAngles; i++)
 	{
 		float theWeight = 1.0;
-		if (i == 0)
+		if (params->is_partial_view_data())
 		{
-			theWeight = fabs(params->phis[1] - params->phis[0]) / T_phi;
-		}
-		else if (i == params->numAngles - 1)
-		{
-			theWeight = fabs(params->phis[params->numAngles - 1] - params->phis[params->numAngles - 2]) / T_phi;
+			int i_offs = i + params->get_phi_full_ind_offset();
+			if (i_offs == 0)
+				theWeight = fabs(params->get_phis_full(1) - params->get_phis_full(0)) / T_phi;
+			else if (i_offs == params->get_numAngles_full() - 1)
+				theWeight = fabs(params->get_phis_full(params->get_numAngles_full() - 1) - params->get_phis_full(params->get_numAngles_full() - 2)) / T_phi;
+			else
+				theWeight = 0.5 * (fabs(params->get_phis_full(i_offs + 1) - params->get_phis_full(i_offs)) + fabs(params->get_phis_full(i_offs) - params->get_phis_full(i_offs - 1))) / T_phi;
 		}
 		else
 		{
-			theWeight = 0.5 * (fabs(params->phis[i + 1] - params->phis[i]) + fabs(params->phis[i] - params->phis[i - 1])) / T_phi;
+			if (i == 0)
+				theWeight = fabs(params->phis[1] - params->phis[0]) / T_phi;
+			else if (i == params->numAngles - 1)
+				theWeight = fabs(params->phis[params->numAngles - 1] - params->phis[params->numAngles - 2]) / T_phi;
+			else
+				theWeight = 0.5 * (fabs(params->phis[i + 1] - params->phis[i]) + fabs(params->phis[i] - params->phis[i - 1])) / T_phi;
 		}
 		for (int j = 0; j < params->numCols; j++)
 			retVal[i * params->numCols + j] *= theWeight;
 	}
 
 	// Now apply weights for cases where we have redundant measurements
-	if (params->angularRange >= 359.9999)
+	if (params->angularRange >= 359.9999 && params->helicalPitch == 0.0)
 	{
 		float c = 0.5;
-		//float c = 1.0;
-		//if (params->geometry == parameters::FAN || params->geometry == parameters::CONE)
-		//	c = 0.5;
 		float T = fabs(params->T_phi());
-		for (int i = 0; i < params->numAngles; i++)
+		if (params->is_partial_view_data())
 		{
-			float viewWeight = 0.0;
-			for (int j = 0; j < params->numAngles; j++)
+			for (int i = 0; i < params->numAngles; i++)
 			{
-				double viewOffset = atan2(sin(double(j - i) * T), cos(double(j - i) * T)); // signed angular distance
-				if (fabs(viewOffset) < T)
-					viewWeight += min(0.5, viewOffset / T + 0.5) - max(-0.5, viewOffset / T - 0.5);
+				int i_offs = i + params->get_phi_full_ind_offset();
+				float viewWeight = 0.0;
+				for (int j = 0; j < params->get_numAngles_full(); j++)
+				{
+					double viewOffset = atan2(sin(double(j - i_offs) * T), cos(double(j - i_offs) * T)); // signed angular distance
+					if (fabs(viewOffset) < T)
+						viewWeight += min(0.5, viewOffset / T + 0.5) - max(-0.5, viewOffset / T - 0.5);
+				}
+				//printf("%f\n", viewWeight);
+				viewWeight = 1.0 / viewWeight;
+				for (int j = 0; j < params->numCols; j++)
+					retVal[i * params->numCols + j] *= c * viewWeight;
 			}
-			//printf("%f\n", viewWeight);
-			viewWeight = 1.0 / viewWeight;
-			for (int j = 0; j < params->numCols; j++)
-				retVal[i * params->numCols + j] *= c * viewWeight;
+		}
+		else
+		{
+			for (int i = 0; i < params->numAngles; i++)
+			{
+				float viewWeight = 0.0;
+				for (int j = 0; j < params->numAngles; j++)
+				{
+					double viewOffset = atan2(sin(double(j - i) * T), cos(double(j - i) * T)); // signed angular distance
+					if (fabs(viewOffset) < T)
+						viewWeight += min(0.5, viewOffset / T + 0.5) - max(-0.5, viewOffset / T - 0.5);
+				}
+				//printf("%f\n", viewWeight);
+				viewWeight = 1.0 / viewWeight;
+				for (int j = 0; j < params->numCols; j++)
+					retVal[i * params->numCols + j] *= c * viewWeight;
+			}
 		}
 	}
 	return retVal;
@@ -344,7 +425,7 @@ float* setRedundantAndNonEquispacedViewWeights(parameters* params, float* w)
 
 float* setInverseConeWeight(parameters* params)
 {
-	if (params->geometry == parameters::CONE || params->modularbeamIsAxiallyAligned())
+	if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL || params->modularbeamIsAxiallyAligned())
 	{
 		bool normalizeConeAndFanCoordinateFunctions_save = params->normalizeConeAndFanCoordinateFunctions;
 		params->normalizeConeAndFanCoordinateFunctions = true;
@@ -352,11 +433,11 @@ float* setInverseConeWeight(parameters* params)
 		float* retVal = (float*)malloc(sizeof(float) * params->numRows * params->numCols);
 		for (int iv = 0; iv < params->numRows; iv++)
 		{
-			float v = params->v(iv,0);
+			float v = params->v(iv,0) + params->v_offset();
 			for (int iu = 0; iu < params->numCols; iu++)
 			{
 				float u = params->u(iu,0);
-				if (params->detectorType == parameters::FLAT)
+				if (params->geometry == parameters::MODULAR || (params->detectorType == parameters::FLAT && params->geometry != parameters::CONE_PARALLEL))
 					retVal[iv * params->numCols + iu] = 1.0 / sqrt(1.0 + u * u + v * v);
 				else
 					retVal[iv * params->numCols + iu] = 1.0 / sqrt(1.0 + v * v);
@@ -401,7 +482,7 @@ float* setViewDependentPolarWeights(parameters* params)
 	{
 		for (int iv = 0; iv < params->numRows; iv++)
 		{
-			float v = params->v(iv, iphi);
+			float v = params->v(iv, iphi) + params->v_offset(iphi);
 			retVal[iphi * params->numRows + iv] = sqrt(1.0 + v * v);
 		}
 	}
@@ -441,6 +522,8 @@ bool applyPreRampFilterWeights_CPU(float* g, parameters* params)
 	if (w == NULL && w_view == NULL)
 		return true;
 
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
 	for (int iphi = 0; iphi < params->numAngles; iphi++)
 	{
 		for (int iv = 0; iv < params->numRows; iv++)
@@ -470,6 +553,8 @@ bool applyPostRampFilterWeights_CPU(float* g, parameters* params)
 		return true;
 	else
 	{
+		omp_set_num_threads(omp_get_num_procs());
+		#pragma omp parallel for
 		for (int iphi = 0; iphi < params->numAngles; iphi++)
 		{
 			for (int iv = 0; iv < params->numRows; iv++)
@@ -493,6 +578,9 @@ bool convertARTtoERT_CPU(float* g, parameters* params, bool doInverse)
 	float muCoeff = params->muCoeff;
 	if (doInverse)
 		muCoeff *= -1.0;
+
+	omp_set_num_threads(omp_get_num_procs());
+	#pragma omp parallel for
 	for (int iphi = 0; iphi < params->numAngles; iphi++)
 	{
 		for (int iv = 0; iv < params->numRows; iv++)

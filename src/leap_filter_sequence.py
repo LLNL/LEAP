@@ -191,14 +191,22 @@ class MedianFilter(denoisingFilter):
         return self.leapct.MedianFilter(f, self.threshold, self.windowSize)
 
 class TV(denoisingFilter):
-    """This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer
+    r"""This class defines a filter based on leapct anisotropic Total Variation (TV) regularizer
     
-    For more information about this filter, please see
-    
-    .. line-block::
-       leapct.tomographicModels.TVcost
-       leapct.tomographicModels.TVgradient
-       leapct.tomographicModels.TVquadForm
+    This regularization functional uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
+    One can switch between using 6 or 26 neighbors using the \"set_numTVneighbors\" function.
+    The aTV functional with Huber-like loss function is given by
+        
+    .. math::
+       \begin{eqnarray}
+         R(f) &:=& \sum_{\boldsymbol{i}} \sum_{\boldsymbol{j} \in N_{\boldsymbol{i}}} \|\boldsymbol{i} - \boldsymbol{j}\|^{-1} h(f_\boldsymbol{i} - f_\boldsymbol{j}) \\
+         h(t) &:=& \begin{cases} \frac{1}{2}t^2, & \text{if } |t| \leq delta \\ \frac{delta^{2 - p}}{p}|t|^p + delta^2\left(\frac{1}{2} - \frac{1}{p}\right), & \text{if } |t| > delta \end{cases}
+       \end{eqnarray}
+
+    where :math:`N_{\boldsymbol{i}}` is a neighborhood around the 3D voxel index :math:`\boldsymbol{i} = (i_1, i_2, i_3)`. It is recommended that one set the value of delta to be smaller than the difference of two materials that one wishes to discriminate between.
+    For example, if the reconstructed values of two materials are 0.02 and 0.04, than one should set delta to be smaller than 0.04-0.02 = 0.02.
+    The guidance of "smaller than" is rather vague; I usually start with dividing this difference by 20, i.e., set delta = (0.04-0.02)/20.0.
+    The delta parameter needs to be optimized for your specific problem, but the above strategy is a good place to start.
     
     Args:
         leapct (object of the tomographicModels class)
@@ -488,10 +496,12 @@ class histogramSparsity(denoisingFilter):
                 else:
                     curTerm *= self.Geman0(f-self.mus[l_2])
             Sp += curTerm
-            Sp *= self.weight
+        Sp *= self.weight
         return Sp
         
     def quadForm(self, f, d):
+        # This function uses an approximate second derivative
+        # Future releases should correct this
         minDiff = self.leapct.copyData(f)
         minDiff[:] = self.leapct.abs(minDiff[:] - self.mus[0])
         for l in range(1,self.mus.size):
@@ -607,6 +617,9 @@ class filterSequence:
         """
         self.filters = []
         self.beta = beta
+        
+    def count(self):
+        return len(self.filters)
 
     def append(self, newFilter):
         """Append a new filter to the list
@@ -644,6 +657,8 @@ class filterSequence:
         
     def gradient(self, f):
         """Calculates the accumulated gradient of all filters"""
+        #if len(self.filters) == 0:
+        #    return 0.0
         D = self.filters[0].leapct.copyData(f)
         D[:] = 0.0
         if self.beta > 0.0:

@@ -12,10 +12,15 @@
 #pragma once
 #endif
 
-//*
 #include <vector>
 #include <stdlib.h>
 class tomographicModels;
+
+/**
+ *  listOfTomographicModels class
+ * This class maintains several instances of the tomographicModels class in a stack, where each instance allows users to specify unique
+ * CT geometry and CT volume parameters.
+ */
 
 class listOfTomographicModels
 {
@@ -56,6 +61,5 @@ private:
     // Tracks a list (as a stack) of tomographicModels instances
     std::vector<tomographicModels*> list;
 };
-//*/
 
 #endif

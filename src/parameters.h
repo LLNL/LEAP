@@ -63,21 +63,21 @@ public:
 	 * \brief       returns whether all CT geometry and CT volume parameter values are defined and valid
 	 * \return      returns true if all CT geometry and CT volume parameter values are defined and valid, false otherwise
 	 */
-	bool allDefined();
+	bool allDefined(bool doPrint = true);
 
 	/**
-	 * \fn          allDefined
+	 * \fn          geometryDefined
 	 * \brief       returns whether all CT geometry parameter values are defined and valid
 	 * \return      returns true if all CT geometry parameter values are defined and valid, false otherwise
 	 */
-	bool geometryDefined();
+	bool geometryDefined(bool doPrint = true);
 
 	/**
-	 * \fn          allDefined
+	 * \fn          volumeDefined
 	 * \brief       returns whether all CT volume parameter values are defined and valid
 	 * \return      returns true if all CT volume parameter values are defined and valid, false otherwise
 	 */
-	bool volumeDefined();
+	bool volumeDefined(bool doPrint = true);
 
 	/**
 	 * \fn          offsetScan_has_adequate_angular_range
@@ -85,6 +85,12 @@ public:
 	 * \return      returns true if angularRange + epsilon >= 360.0, false otherwise
 	 */
 	bool offsetScan_has_adequate_angular_range();
+
+	/**
+	 * \fn          less_than_full_scan
+	 * \return      returns true if angularRange < min(359.0, 360.0 - fabs(T_phi()) * 180.0 / PI), false otherwise
+	 */
+	bool less_than_full_scan();
 
 	/**
 	 * \fn          default_voxelWidth
@@ -107,6 +113,12 @@ public:
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
 	bool set_default_volume(float scale = 1.0);
+
+	/**
+	 * \fn          angles_are_defined
+	 * \return      returns true if the angles are defined, false otherwise
+	 */
+	bool angles_are_defined();
 
 	/**
 	 * \fn          set_angles
@@ -204,6 +216,24 @@ public:
 	float pixelWidth_normalized();
 
 	/**
+	 * \fn		col
+	 * \breif	returns the local detector column coordinate (mm for all but curved-cone which is in radians)
+	 * \param	iCol, the index of the iCol-th detector column
+	 */
+	float col(int iCol);
+
+	/**
+	 * \fn		row
+	 * \breif	returns the local detector row coordinate (mm)
+	 * \param	iRow, the index of the iRow-th detector row
+	 */
+	float row(int iRow);
+
+	bool detector_normal(int, float*);
+	float source_to_object_distance(int);
+	float source_to_detector_distance(int);
+
+	/**
 	 * \fn          u
 	 * \brief       returns the position of the i-th detector column (mm)
 	 * \param       i the index of the i-th detector column
@@ -227,6 +257,9 @@ public:
 	 */
 	float v(int i, int iphi = -1);
 
+	float u_offset(int iphi = -1);
+	float v_offset(int iphi = -1);
+
 	/**
 	 * \fn          z_samples
 	 * \brief       returns the position of the k-th z-coordinate value (mm)
@@ -239,9 +272,10 @@ public:
 	 * \fn          z_source
 	 * \brief       returns the z-coordinate of the source position at the i-th rotation angle
 	 * \param[in]   i the index of the i-th rotation angle
+	 * \param[in]	k: the index of the k-th detector column
 	 * \return      returns the z-coordinate of the source position at the i-th rotation angle
 	 */
-	float z_source(int i);
+	float z_source(int i, int k = 0);
 
 	/**
 	 * \fn          set_tau
@@ -275,6 +309,14 @@ public:
 	bool set_normalizedHelicalPitch(float h_normalized);
 
 	/**
+	 * \fn          set_tiltAngle
+	 * \brief       sets tiltAngle
+	 * \param[in]   tiltAngle the value for tiltAngle (degrees)
+	 * \return      true if the value is valid, false otherwise
+	 */
+	bool set_tiltAngle(float tiltAngle_in);
+
+	/**
 	 * \fn          convert_conebeam_to_modularbeam
 	 * \brief       sets modular-beam parameters from a cone-beam specification
 	 * \return      true is successful, false otherwise
@@ -301,9 +343,10 @@ public:
 	int numCols, numRows, numAngles;
 	float centerCol, centerRow;
 	float* phis;
-	float tau;
+	float tau, tiltAngle;
 	float helicalPitch;
 	float z_source_offset;
+	float helicalFBPWeight;
 
 	// Volume Parameters
 	int volumeDimensionOrder;
@@ -377,6 +420,7 @@ public:
 	bool doExtrapolation;
 	float rFOVspecified;
 	int rampID;
+	float FBPlowpass;
 	float colShiftFromFilter;
 	float rowShiftFromFilter;
 	float axisOfSymmetry;
@@ -411,10 +455,21 @@ public:
 
 	/**
 	 * \fn          rFOV
-	 * \brief       returns the radius of the field of view of the CT system
 	 * \return      returns the radius of the field of view of the CT system
 	 */
     float rFOV();
+
+	/**
+	 * \fn          rFOV_min
+	 * \return      returns the radius of the reconstructable field of view for non offset scans
+	 */
+	float rFOV_min();
+
+	/**
+	 * \fn          rFOV_max
+	 * \return      returns the radius of the reconstructable field of view for offset scans
+	 */
+	float rFOV_max();
 	
 	/**
 	 * \fn          isSymmetric
@@ -452,7 +507,7 @@ public:
 	 * \brief       returns whether or not the voxel size is appropriate for the fast SF projectors
 	 * \return      returns true if the voxel size is appropriate for the fast SF projectors, false otherwise
 	 */
-	bool voxelSizeWorksForFastSF();
+	bool voxelSizeWorksForFastSF(int whichDirection = 0);
 
 	/**
 	 * \fn          projectionData_numberOfElements
@@ -490,6 +545,7 @@ public:
 	 * \return      returns projectionDataSize() + volumeDataSize()
 	 */
 	float requiredGPUmemory(int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
+	float requiredGPUmemory(int extraCols, float numProjectionData, float numVolumeData);
 
 	/**
 	 * \fn          hasSufficientGPUmemory
@@ -499,6 +555,7 @@ public:
 	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 */
 	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory, int extraCols, float numProjectionData, float numVolumeData);
 
 	/**
 	 * \fn          rowRangeNeededForBackprojection
@@ -560,10 +617,10 @@ public:
 	bool set_numTVneighbors(int N);
 
 	// Enums
-	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3 };
+	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3, CONE_PARALLEL = 4 };
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };
-    enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2};
+    enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2,VOXEL_DRIVEN=3};
 
 	float get_extraMemoryReserved();
 
@@ -576,6 +633,11 @@ public:
 	 */
 	void assign(const parameters& other);
 
+	float get_phis_full(int i);
+	int get_numAngles_full();
+	int get_phi_full_ind_offset();
+	bool is_partial_view_data();
+
 private:
 
 	/**
@@ -586,8 +648,14 @@ private:
 	bool clearModularBeamParameters();
 
 	float extraMemoryReserved;
+
+	// These parameters store the projection angle samples for the whole scan
+	// these are created by removeProjections
 	float phi_start;
 	float phi_end;
+	float* phis_full;
+	int numAngles_full;
+	int phi_full_ind_offset;
 };
 
 #endif

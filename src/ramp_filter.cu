@@ -8,10 +8,11 @@
 ////////////////////////////////////////////////////////////////////////////////
 #include "ramp_filter.cuh"
 #include "ramp_filter_cpu.h"
+#include "ray_weighting_cpu.h"
 #include "log.h"
 
 #include <iostream>
-
+#include <algorithm>
 #include "cuda_runtime.h"
 //#include "device_launch_parameters.h"
 #include "cuda_utils.h"
@@ -25,7 +26,37 @@
 
 #ifdef __INCLUDE_CUFFT
 #include <cufft.h>
+#endif
 
+__global__ void zeroPadForOffsetScanKernel(float* g, float* g_pad, const int3 N, const int N_add, const bool padOnLeft, const float* offsetScanWeights)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z)
+        return;
+
+    const int numCols = N.z - N_add;
+    const uint64 ind = uint64(i) * uint64(numCols * N.y) + uint64(j * numCols);
+    const uint64 ind_pad = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z);
+
+    if (padOnLeft)
+    {
+        if (k < N_add)
+            g_pad[ind_pad + k + N_add] = 0.0f;
+        else
+            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k - N_add)] * 2.0f * offsetScanWeights[j * numCols + k-N_add];
+    }
+    else
+    {
+        if (k < numCols)
+            g_pad[ind_pad + uint64(k)] = g[ind + uint64(k)] * 2.0f * offsetScanWeights[j * numCols + k];
+        else
+            g_pad[ind_pad + uint64(k)] = 0.0f;
+    }
+}
+
+#ifdef __INCLUDE_CUFFT
 __global__ void multiplyRampFilterKernel(cufftComplex* G, const float* H, int3 N)
 {
     /*
@@ -114,7 +145,8 @@ __global__ void multiply2DRampFilterKernel(cufftComplex* F, const float* H, int3
 }
 #endif
 
-__global__ void explicit_convolution(cudaTextureObject_t g, float* filtered_data, cudaTextureObject_t h, int3 N, int N_filter)
+//__global__ void explicit_convolution(cudaTextureObject_t g, float* filtered_data, cudaTextureObject_t h, int3 N, int N_filter)
+__global__ void explicit_convolution(TEX_DATA g, float* filtered_data, TEX_DATA h, int4 N, int N_filter)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -134,22 +166,42 @@ __global__ void explicit_convolution(cudaTextureObject_t g, float* filtered_data
 
     for (int j = 0; j < N.z; j+=8)
     {
-        const float x0 = tex3D<float>(g, j + 0, m, l);
-        const float x1 = tex3D<float>(g, j + 1, m, l);
-        const float x2 = tex3D<float>(g, j + 2, m, l);
-        const float x3 = tex3D<float>(g, j + 3, m, l);
-        const float x4 = tex3D<float>(g, j + 4, m, l);
-        const float x5 = tex3D<float>(g, j + 5, m, l);
-        const float x6 = tex3D<float>(g, j + 6, m, l);
-        const float x7 = tex3D<float>(g, j + 7, m, l);
+        const float x0 = TEX3D(g, N, j + 0, m, l);
+        const float x1 = TEX3D(g, N, j + 1, m, l);
+        const float x2 = TEX3D(g, N, j + 2, m, l);
+        const float x3 = TEX3D(g, N, j + 3, m, l);
+        const float x4 = TEX3D(g, N, j + 4, m, l);
+        const float x5 = TEX3D(g, N, j + 5, m, l);
+        const float x6 = TEX3D(g, N, j + 6, m, l);
+        const float x7 = TEX3D(g, N, j + 7, m, l);
+
+        //const float x0 = tex3D<float>(g, j + 0, m, l);
+        //const float x1 = tex3D<float>(g, j + 1, m, l);
+        //const float x2 = tex3D<float>(g, j + 2, m, l);
+        //const float x3 = tex3D<float>(g, j + 3, m, l);
+        //const float x4 = tex3D<float>(g, j + 4, m, l);
+        //const float x5 = tex3D<float>(g, j + 5, m, l);
+        //const float x6 = tex3D<float>(g, j + 6, m, l);
+        //const float x7 = tex3D<float>(g, j + 7, m, l);
 
         const int n_minus_j_plus_N = n - j + N.z;
         for (int s = 0; s < NUM_RAYS_PER_THREAD; s++)
         {
-            ys[s] += tex1D<float>(h, n_minus_j_plus_N + s - 0) * x0 + tex1D<float>(h, n_minus_j_plus_N + s - 1) * x1
-                  +  tex1D<float>(h, n_minus_j_plus_N + s - 2) * x2 + tex1D<float>(h, n_minus_j_plus_N + s - 3) * x3
-                  +  tex1D<float>(h, n_minus_j_plus_N + s - 4) * x4 + tex1D<float>(h, n_minus_j_plus_N + s - 5) * x5
-                  +  tex1D<float>(h, n_minus_j_plus_N + s - 6) * x6 + tex1D<float>(h, n_minus_j_plus_N + s - 7) * x7;
+            float sum = 0;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 0) * x0;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 1) * x1;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 2) * x2;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 3) * x3;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 4) * x4;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 5) * x5;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 6) * x6;
+            sum += TEX1D(h, N_filter, n_minus_j_plus_N + s - 7) * x7;
+            ys[s] += sum;
+
+            //ys[s] += tex1D<float>(h, n_minus_j_plus_N + s - 0) * x0 + tex1D<float>(h, n_minus_j_plus_N + s - 1) * x1
+            //      +  tex1D<float>(h, n_minus_j_plus_N + s - 2) * x2 + tex1D<float>(h, n_minus_j_plus_N + s - 3) * x3
+            //      +  tex1D<float>(h, n_minus_j_plus_N + s - 4) * x4 + tex1D<float>(h, n_minus_j_plus_N + s - 5) * x5
+            //      +  tex1D<float>(h, n_minus_j_plus_N + s - 6) * x6 + tex1D<float>(h, n_minus_j_plus_N + s - 7) * x7;
         }
     }
     for (int s = 0; s < min(NUM_RAYS_PER_THREAD, N.z-n); s++)
@@ -318,7 +370,8 @@ __global__ void ray_derivative_kernel(float* g, float* Dg, const int4 N, const f
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = diff;
 }
 
-__global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
+//__global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
+__global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x + iphi_offset;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -383,7 +436,8 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term1 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    //const float term1 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    const float term1 = TEX3D(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -395,7 +449,8 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
+    //const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = TEX3D(g, N, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -407,7 +462,8 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    //const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = TEX3D(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -419,12 +475,15 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
+    //const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = TEX3D(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
+    //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
 }
 
-__global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
+//__global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
+__global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, const float4 T, const float4 startVal, const float R, const float D, const float tau, const float helicalPitch, const float epsilon, const float* phis, const int iphi_offset)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x + iphi_offset;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -435,7 +494,10 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     const float v = m * T.y + startVal.y;
     const float u = n * T.z + startVal.z + 0.5f*T.z;
 
-    const float lineLength = (R + tau * u) / (1.0f + u * u);
+    //const float lineLength = (R + tau * u) / (1.0f + u * u);
+    //const float lineLength = (R + tau * u) * rsqrtf(1.0f + u * u);
+    //const float lineLength = R + tau * u;
+    const float lineLength = R + tau * u / (1.0f + u * u);
 
     const float one_over_T_v = 1.0f / T.y;
     const float one_over_T_u = 1.0f / T.z;
@@ -482,7 +544,8 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term1 = tex3D<float>(g, u_arg, v_arg, l0+0.5f);
+    //const float term1 = tex3D<float>(g, u_arg, v_arg, l0+0.5f);
+    const float term1 = TEX3D(g, N, u_arg, v_arg, l0+0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -495,7 +558,8 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
+    //const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = TEX3D(g, N, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -508,7 +572,8 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    //const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = TEX3D(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -521,9 +586,11 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
+    //const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = TEX3D(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
+    //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
 }
 
 __global__ void splitLeftAndRight(const float* g, float* g_left, float* g_right, int4 N, float4 T, float4 startVal)
@@ -730,9 +797,18 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
         h_d = HilbertTransformImpulseResponse(N, -1);
         params->colShiftFromFilter += 0.5;
     }
+    float T = params->pixelWidth * params->sod / params->sdd;
     float* h = new float[N];
     for (int i = 0; i < N; i++)
+    {
         h[i] = float(h_d[i] * scalar / float(N));
+        if (i != 0 && params->geometry == parameters::CONE && params->detectorType == parameters::CURVED)
+        {
+            double s = timeSamples(i, N) * T / params->sod;
+            double temp = s / sin(s);
+            h[i] *= temp;// *temp;
+        }
+    }
     delete[] h_d;
 
     // Make cuFFT Plans
@@ -787,6 +863,24 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
         printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
         return NULL;
     }
+
+    float theExponent = 1.0;
+    if (params->FBPlowpass >= 2.0)
+    {
+        theExponent = 1.0 / (1.0 - log2(1.0 + cos(PI / params->FBPlowpass)));
+        //printf("theExponent = %f\n", theExponent);
+        for (int i = 0; i < N_over2; i++)
+        {
+            //float omega = float(i)*PI / N_over2;
+            float omega = float(i) * PI / N;
+            float theWeight = pow(max(0.0, cos(omega)), 2.0 * theExponent);
+
+            H_Hilb[i].x *= theWeight;
+            H_Hilb[i].y *= theWeight;
+            //printf("H(%f) = %f (%d)\n", omega, theWeight, i);
+        }
+    }
+    
 
     // Clean up
     cufftDestroy(forward_plan);
@@ -855,10 +949,26 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
         return NULL;
     }
 
+    float theExponent = 1.0;
+    if (params->FBPlowpass >= 2.0)
+    {
+        theExponent = 1.0 / (1.0 - log2(1.0 + cos(PI / params->FBPlowpass)));
+        //printf("theExponent = %f\n", theExponent);
+    }
+
     float* H_real = new float[N_over2];
     for (int i = 0; i < N_over2; i++)
     {
         H_real[i] = H_ramp[i].x / float(N);
+        if (params->FBPlowpass >= 2.0)
+        {
+            //float omega = float(i)*PI / N_over2;
+            float omega = float(i) * PI / N;
+            float theWeight = pow(max(0.0, cos(omega)), 2.0 * theExponent);
+
+            H_real[i] *= theWeight;
+            //printf("H(%f) = %f (%d)\n", omega, theWeight, i);
+        }
     }
 
     // Clean up
@@ -875,6 +985,10 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
 {
     LOG(logDEBUG, "ramp_filter", "conv1D") << "GPU " << params->whichGPU << ": start" << std::endl;
     //printf("size = %d x %d x %d\n", params->numAngles, params->numRows, params->numCols);
+
+    //cudaStream_t stream;
+    //if (CUFFT_SUCCESS != cudaStreamCreate(&stream))
+    //    return false;
 
     //return true;
     bool retVal = true;
@@ -1022,6 +1136,9 @@ bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int w
             //setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
             setPaddedDataKernel <<< dimGrid_setting, dimBlock_setting >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
             //cudaDeviceSynchronize();
+
+            //cudaMemset(dev_g_pad, 0, uint64(N_viewChunk) * uint64(numRows) * uint64(N_H) * sizeof(float));
+            //cudaMemcpy2D(dev_g_pad, N_H*sizeof(float), &dev_g[uint64(startView)*uint64(params->numCols*numRows)], params->numCols * sizeof(float), params->numCols * sizeof(float), numRows * (endView - startView + 1), cudaMemcpyDeviceToDevice);
 
             // FFT
             result = cufftExecR2C(forward_plan, (cufftReal*)dev_g_pad, dev_G);
@@ -1619,6 +1736,199 @@ bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu)
 
     return retVal;
 }
+#else
+bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
+{
+    printf("Error: 2D transmission filter cannot be run without CUFFT libraries!\n");
+    return false;
+}
+
+bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
+{
+    printf("Error: 2D ramp filter cannot be run without CUFFT libraries!\n");
+    return false;
+}
+
+bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu)
+{
+    printf("Error: 2D ramp filter cannot be run without CUFFT libraries!\n");
+    return false;
+}
+
+bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
+{
+    //printf("This is the explicit convolution version!\n");
+    // This is the explicit convolution version
+    //return true;
+    bool retVal = true;
+    cudaSetDevice(params->whichGPU);
+    cudaError_t cudaStatus;
+
+    float* dev_g = 0;
+    if (data_on_cpu)
+    {
+        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+    }
+    else
+    {
+        dev_g = g;
+    }
+
+    // PUT CODE HERE
+    //int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
+    //int N_H = optimalFFTsize(2 * params->numCols);
+    int N_H = 2 * params->numCols;
+    int N_H_over2 = N_H / 2 + 1;
+
+    float* h = NULL;
+    if (which == 0)
+    {
+        h = rampImpulseResponse_modified(N_H, params);
+        for (int i = 0; i < N_H; i++)
+            h[i] *= scalar;
+    }
+    else
+    {
+        double* h_d = NULL;
+        if (sampleShift == 0.0)
+            h_d = HilbertTransformImpulseResponse(N_H, 0);
+        else if (sampleShift > 0.0)
+        {
+            h_d = HilbertTransformImpulseResponse(N_H, 1);
+            params->colShiftFromFilter -= 0.5;
+        }
+        else
+        {
+            h_d = HilbertTransformImpulseResponse(N_H, -1);
+            params->colShiftFromFilter += 0.5;
+        }
+        h = new float[N_H];
+        for (int i = 0; i < N_H; i++)
+            h[i] = h_d[i] * scalar;// / float(N_H);
+        delete[] h_d;
+    }
+    fftshift(h, N_H);
+
+    // Kyle: dev_h isn't used at all. need to remove it??
+    float* dev_h = 0;
+    if (cudaSuccess != cudaMalloc((void**)&dev_h, N_H * sizeof(float)))
+        fprintf(stderr, "cudaMalloc failed!\n");
+    if (cudaMemcpy(dev_h, h, N_H * sizeof(float), cudaMemcpyHostToDevice))
+        fprintf(stderr, "cudaMemcpy(filter) failed!\n");
+
+    //cudaTextureObject_t d_h_txt = NULL;
+    //cudaArray* d_h_array = loadTexture1D(d_h_txt, h, N_H, false, false);
+    TEX_DATA d_h_txt = NULL;
+    TEX_ARRAY d_h_array = loadTexture1D_from_cpu(d_h_txt, h, N_H, false, false); // change the function name for consistency with other loadTexture* functions
+
+    int4 N_g; float4 T_g; float4 startVal_g;
+    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
+    float helicalPitch = params->helicalPitch;
+    if (which == 0 || params->numRows == 1)
+        helicalPitch = 0.0;
+    helicalPitch = 0.0;
+    //printf("max shift = %f\n", params->helicalPitch/params->sod*(startVal_g.z));
+    //printf("pitch/R = %f\n", params->helicalPitch / params->sod);
+    //printf("T_v = %f\n", T_g.y);
+
+    int numRows = params->numRows;
+    int numAngles = params->numAngles;
+    if (numAngles == 1)
+    {
+        numRows = 1;
+        numAngles = params->numRows;
+    }
+
+    //printf("numAngles = %d\n", numAngles);
+    //printf("numRows = %d\n", numRows);
+
+    //int N_viewChunk = params->numAngles;
+    int N_viewChunk = max(1, numAngles / 40); // number of views in a chunk (needs to be optimized)
+    int numChunks = int(ceil(double(numAngles) / double(N_viewChunk)));
+
+    //int3 dataSize; dataSize.x = N_viewChunk; dataSize.y = numRows; dataSize.z = N_H_over2;
+    //int3 origSize; origSize.x = numAngles; origSize.y = numRows; origSize.z = params->numCols;
+
+    int numExtrapolate = 0;
+    if (params->truncatedScan)
+        numExtrapolate = min(N_H - params->numCols - 1, 100);
+
+    float* dev_g_chunk = 0;
+    if (cudaStatus = cudaMalloc((void**)&dev_g_chunk, uint64(N_viewChunk) * uint64(numRows) * uint64(params->numCols) * sizeof(float)))
+    {
+        fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
+        retVal = false;
+    }
+
+    if (retVal == true)
+    {
+        //dim3 dimBlock_viewChunk = setBlockSize(dataSize);
+        //dim3 dimGrid_viewChunk = setGridSize(dataSize, dimBlock_viewChunk);
+
+        for (int iChunk = 0; iChunk < numChunks; iChunk++)
+        {
+            int startView = iChunk * N_viewChunk;
+            int endView = min(numAngles - 1, startView + N_viewChunk - 1);
+            //printf("filtering %d to %d\n", startView, endView);
+
+            int3 chunkSize = make_int3(endView - startView + 1, numRows, params->numCols);
+            //printf("chunkSize = %d, %d, %d\n", chunkSize.x, chunkSize.y, chunkSize.z);
+
+            equal(dev_g_chunk, &dev_g[uint64(startView)*uint64(numRows*params->numCols)], chunkSize, params->whichGPU);
+            //setToConstant(&dev_g[uint64(startView) * uint64(numRows * params->numCols)], 0.0, chunkSize, params->whichGPU);
+            //setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
+
+            //cudaTextureObject_t d_data_txt = NULL;
+            //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_chunk, chunkSize, false, false);
+            TEX_DATA d_data_txt = NULL;
+            TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_g_chunk, chunkSize, false, false);
+
+            // Perform convolution
+            //dim3 dimBlock = setBlockSize(chunkSize);
+            //dim3 dimGrid = setGridSize(chunkSize, dimBlock);
+
+            int3 N_g_mod = make_int3(chunkSize.x, chunkSize.y, int(ceil(float(chunkSize.z) / float(NUM_RAYS_PER_THREAD))));
+            dim3 dimBlock = setBlockSize(N_g_mod);
+            dim3 dimGrid = setGridSize(N_g_mod, dimBlock);
+            //dim3 dimBlock(8, 8, 8);
+            //dim3 dimGrid(int(ceil(double(chunkSize.x) / double(dimBlock.x))), int(ceil(double(chunkSize.y) / double(dimBlock.y))), int(ceil(double(chunkSize.z) / double(NUM_RAYS_PER_THREAD*dimBlock.z))));
+
+            //explicit_convolution <<< dimGrid, dimBlock >>> (dev_g_chunk , &dev_g[uint64(startView) * uint64(numRows * params->numCols)], dev_h, chunkSize, N_H);
+            int4 chunkSize2 = make_int4(chunkSize.x, chunkSize.y, chunkSize.z, 0);
+            explicit_convolution <<< dimGrid, dimBlock >>> (d_data_txt, &dev_g[uint64(startView) * uint64(numRows * params->numCols)], d_h_txt, chunkSize2, N_H);
+
+            //cudaFreeArray(d_data_array);
+            //cudaDestroyTextureObject(d_data_txt);
+            freeTexture(d_data_array, d_data_txt, false);
+        }
+        cudaDeviceSynchronize();
+
+        if (data_on_cpu)
+        {
+            // Copy result back to host
+            cudaStatus = cudaMemcpy(g, dev_g, uint64(numAngles) * uint64(numRows) * uint64(params->numCols) * sizeof(float), cudaMemcpyDeviceToHost);
+            if (cudaSuccess != cudaStatus)
+            {
+                fprintf(stderr, "failed to copy result back to host!\n");
+                fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+                fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+            }
+        }
+    }
+
+    // Clean up
+    //cudaFreeArray(d_h_array);
+    //cudaDestroyTextureObject(d_h_txt);
+    freeTexture1D(d_h_array, d_h_txt, true);
+    //cudaFree(dev_g_pad);
+    if (data_on_cpu)
+        cudaFree(dev_g);
+    cudaFree(dev_h);
+    cudaFree(dev_g_chunk);
+    delete[] h;
+
+    return retVal;
+}
 #endif
 
 bool Laplacian_gpu(float*& g, int numDims, bool smooth, parameters* params, bool data_on_cpu, float scalar)
@@ -1727,7 +2037,8 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
 
-    float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    //float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    float epsilon = float(std::min(0.5, T_g.z / (4.0 * fabs(params->T_phi()))));
 
     float* dev_g = 0;
     float* dev_Dg = 0;
@@ -1745,8 +2056,10 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
         equal(dev_g, dev_Dg, make_int3(N_g.x, N_g.y, N_g.z), params->whichGPU);
     }
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, true, true);
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g, N_g, true, true);
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_g, N_g, true, true);
 
     float* dev_phis = copyAngleArrayToGPU(params);
 
@@ -1771,8 +2084,9 @@ bool parallelRay_derivative(float*& g, parameters* params, bool data_on_cpu)
     if (data_on_cpu)
         pullProjectionDataFromGPU(g, params, dev_Dg, params->whichGPU);
 
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, false);
 
     if (data_on_cpu == true && dev_Dg != 0)
         cudaFree(dev_Dg);
@@ -1794,7 +2108,9 @@ bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cp
     int4 N_g; float4 T_g; float4 startVal_g;
     setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
 
-    float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    //float epsilon = float(std::min(0.01, T_g.z / (4.0 * fabs(params->T_phi()))));
+    float epsilon = float(std::min(0.5, T_g.z / (4.0 * fabs(params->T_phi()))));
+    //float epsilon = T_g.z / (4.0 * fabs(params->T_phi()));
 
     int maxChunkSize = 100;
     int numChunks = int(ceil(double(params->numAngles) / double(maxChunkSize)));
@@ -1830,8 +2146,10 @@ bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cp
         float* dev_g_pad_chunk = &dev_g[uint64(iphi_pad_lo) * uint64(N_g_chunk.y * N_g_chunk.z)];
         float* dev_phis_chunk = &dev_phis[iphi_pad_lo];
 
-        cudaTextureObject_t d_data_txt = NULL;
-        cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_pad_chunk, N_g_chunk, true, true);
+        //cudaTextureObject_t d_data_txt = NULL;
+        //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_pad_chunk, N_g_chunk, true, true);
+        TEX_DATA d_data_txt = NULL;
+        TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_g_pad_chunk, N_g_chunk, true, true);
 
         dim3 dimBlock = setBlockSize(N_g_chunk);
         dim3 dimGrid = setGridSize(N_g_chunk, dimBlock);
@@ -1840,8 +2158,9 @@ bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cp
         else
             deriv_helical_NHDLH_curved <<< dimGrid, dimBlock >>> (d_data_txt, dev_Dg, N_g_chunk, T_g, startVal_g, params->sod, params->sdd, params->tau, params->helicalPitch, epsilon, dev_phis_chunk, 0);
 
-        cudaFreeArray(d_data_array);
-        cudaDestroyTextureObject(d_data_txt);
+        //cudaFreeArray(d_data_array);
+        //cudaDestroyTextureObject(d_data_txt);
+        freeTexture(d_data_array, d_data_txt, false);
 
         // Copy over what I can
         if (iphi_lo - 1 >= 0)
@@ -1992,189 +2311,67 @@ float* rampImpulseResponse_modified(int N, parameters* params)
     return h;
 }
 
-#ifndef __INCLUDE_CUFFT
-bool transmissionFilter_gpu(float*& g, parameters* params, bool data_on_cpu, float* H_full, int N_H1, int N_H2, bool isAttenuationData)
+float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out, bool data_on_cpu)
 {
-    printf("Error: 2D transmission filter cannot be run without CUFFT libraries!\n");
-    return false;
-}
+    // it is assumed that either g_out is NULL or g_out is data on the GPU
+    if (g == NULL || params == NULL)
+        return NULL;
+    else if (params->helicalPitch != 0.0 || params->offsetScan == false)
+        return NULL;
+    if (params->geometry == parameters::MODULAR && params->modularbeamIsAxiallyAligned() == false)
+        return NULL;
 
-bool rampFilter2D(float*& f, parameters* params, bool data_on_cpu)
-{
-    printf("Error: 2D ramp filter cannot be run without CUFFT libraries!\n");
-    return false;
-}
+    bool padOnLeft;
+    int N_add = zeroPadForOffsetScan_numberOfColsToAdd(params, padOnLeft);
 
-bool rampFilter2D_XYZ(float*& f, parameters* params, bool data_on_cpu)
-{
-    printf("Error: 2D ramp filter cannot be run without CUFFT libraries!\n");
-    return false;
-}
-
-bool conv1D(float*& g, parameters* params, bool data_on_cpu, float scalar, int which, float sampleShift)
-{
-    //printf("This is the explicit convolution version!\n");
-    // This is the explicit convolution version
-    //return true;
-    bool retVal = true;
-    cudaSetDevice(params->whichGPU);
-    cudaError_t cudaStatus;
-
-    float* dev_g = 0;
-    if (data_on_cpu)
+    float* offsetScanWeights = setOffsetScanWeights(params);
+    if (N_add > 0 && offsetScanWeights != NULL)
     {
-        dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
-    }
-    else
-    {
-        dev_g = g;
-    }
+        cudaSetDevice(params->whichGPU);
+        cudaError_t cudaStatus;
 
-    // PUT CODE HERE
-    //int N_H = int(pow(2.0, ceil(log2(2 * params->numCols))));
-    //int N_H = optimalFFTsize(2 * params->numCols);
-    int N_H = 2 * params->numCols;
-    int N_H_over2 = N_H / 2 + 1;
-
-    float* h = NULL;
-    if (which == 0)
-    {
-        h = rampImpulseResponse_modified(N_H, params);
-        for (int i = 0; i < N_H; i++)
-            h[i] *= scalar;
-    }
-    else
-    {
-        double* h_d = NULL;
-        if (sampleShift == 0.0)
-            h_d = HilbertTransformImpulseResponse(N_H, 0);
-        else if (sampleShift > 0.0)
-        {
-            h_d = HilbertTransformImpulseResponse(N_H, 1);
-            params->colShiftFromFilter -= 0.5;
-        }
-        else
-        {
-            h_d = HilbertTransformImpulseResponse(N_H, -1);
-            params->colShiftFromFilter += 0.5;
-        }
-        h = new float[N_H];
-        for (int i = 0; i < N_H; i++)
-            h[i] = h_d[i] * scalar;// / float(N_H);
-        delete[] h_d;
-    }
-    fftshift(h, N_H);
-
-    float* dev_h = 0;
-    if (cudaSuccess != cudaMalloc((void**)&dev_h, N_H * sizeof(float)))
-        fprintf(stderr, "cudaMalloc failed!\n");
-    if (cudaMemcpy(dev_h, h, N_H * sizeof(float), cudaMemcpyHostToDevice))
-        fprintf(stderr, "cudaMemcpy(filter) failed!\n");
-
-    cudaTextureObject_t d_h_txt = NULL;
-    cudaArray* d_h_array = loadTexture1D(d_h_txt, h, N_H, false, false);
-
-    int4 N_g; float4 T_g; float4 startVal_g;
-    setProjectionGPUparams(params, N_g, T_g, startVal_g, true);
-    float helicalPitch = params->helicalPitch;
-    if (which == 0 || params->numRows == 1)
-        helicalPitch = 0.0;
-    helicalPitch = 0.0;
-    //printf("max shift = %f\n", params->helicalPitch/params->sod*(startVal_g.z));
-    //printf("pitch/R = %f\n", params->helicalPitch / params->sod);
-    //printf("T_v = %f\n", T_g.y);
-
-    int numRows = params->numRows;
-    int numAngles = params->numAngles;
-    if (numAngles == 1)
-    {
-        numRows = 1;
-        numAngles = params->numRows;
-    }
-
-    //printf("numAngles = %d\n", numAngles);
-    //printf("numRows = %d\n", numRows);
-
-    //int N_viewChunk = params->numAngles;
-    int N_viewChunk = max(1, numAngles / 40); // number of views in a chunk (needs to be optimized)
-    int numChunks = int(ceil(double(numAngles) / double(N_viewChunk)));
-
-    //int3 dataSize; dataSize.x = N_viewChunk; dataSize.y = numRows; dataSize.z = N_H_over2;
-    //int3 origSize; origSize.x = numAngles; origSize.y = numRows; origSize.z = params->numCols;
-
-    int numExtrapolate = 0;
-    if (params->truncatedScan)
-        numExtrapolate = min(N_H - params->numCols - 1, 100);
-
-    float* dev_g_chunk = 0;
-    if (cudaStatus = cudaMalloc((void**)&dev_g_chunk, uint64(N_viewChunk) * uint64(numRows) * uint64(params->numCols) * sizeof(float)))
-    {
-        fprintf(stderr, "cudaMalloc(padded projection data) failed!\n");
-        retVal = false;
-    }
-
-    if (retVal == true)
-    {
-        //dim3 dimBlock_viewChunk = setBlockSize(dataSize);
-        //dim3 dimGrid_viewChunk = setGridSize(dataSize, dimBlock_viewChunk);
-
-        for (int iChunk = 0; iChunk < numChunks; iChunk++)
-        {
-            int startView = iChunk * N_viewChunk;
-            int endView = min(numAngles - 1, startView + N_viewChunk - 1);
-            //printf("filtering %d to %d\n", startView, endView);
-
-            int3 chunkSize = make_int3(endView - startView + 1, numRows, params->numCols);
-            //printf("chunkSize = %d, %d, %d\n", chunkSize.x, chunkSize.y, chunkSize.z);
-
-            equal(dev_g_chunk, &dev_g[uint64(startView)*uint64(numRows*params->numCols)], chunkSize, params->whichGPU);
-            //setToConstant(&dev_g[uint64(startView) * uint64(numRows * params->numCols)], 0.0, chunkSize, params->whichGPU);
-            //setPaddedDataKernel <<< endView - startView + 1, numRows >>> (dev_g_pad, dev_g, origSize, N_H, startView, endView, numExtrapolate, T_g, startVal_g, params->sod, helicalPitch);
-
-            cudaTextureObject_t d_data_txt = NULL;
-            cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_chunk, chunkSize, false, false);
-
-            // Perform convolution
-            //dim3 dimBlock = setBlockSize(chunkSize);
-            //dim3 dimGrid = setGridSize(chunkSize, dimBlock);
-
-            int3 N_g_mod = make_int3(chunkSize.x, chunkSize.y, int(ceil(float(chunkSize.z) / float(NUM_RAYS_PER_THREAD))));
-            dim3 dimBlock = setBlockSize(N_g_mod);
-            dim3 dimGrid = setGridSize(N_g_mod, dimBlock);
-            //dim3 dimBlock(8, 8, 8);
-            //dim3 dimGrid(int(ceil(double(chunkSize.x) / double(dimBlock.x))), int(ceil(double(chunkSize.y) / double(dimBlock.y))), int(ceil(double(chunkSize.z) / double(NUM_RAYS_PER_THREAD*dimBlock.z))));
-
-            //explicit_convolution <<< dimGrid, dimBlock >>> (dev_g_chunk , &dev_g[uint64(startView) * uint64(numRows * params->numCols)], dev_h, chunkSize, N_H);
-            explicit_convolution <<< dimGrid, dimBlock >>> (d_data_txt, &dev_g[uint64(startView) * uint64(numRows * params->numCols)], d_h_txt, chunkSize, N_H);
-
-            cudaFreeArray(d_data_array);
-            cudaDestroyTextureObject(d_data_txt);
-        }
-        cudaDeviceSynchronize();
-
+        float* dev_g = 0;
         if (data_on_cpu)
         {
-            // Copy result back to host
-            cudaStatus = cudaMemcpy(g, dev_g, uint64(numAngles) * uint64(numRows) * uint64(params->numCols) * sizeof(float), cudaMemcpyDeviceToHost);
-            if (cudaSuccess != cudaStatus)
+            dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
+        }
+        else
+            dev_g = g;
+
+        float* g_pad = g_out;
+        if (g_out == NULL)
+        {
+            if ((cudaStatus = cudaMalloc((void**)&g_pad, params->numAngles * params->numRows * (params->numCols + N_add) * sizeof(float))) != cudaSuccess)
             {
-                fprintf(stderr, "failed to copy result back to host!\n");
-                fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-                fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+                fprintf(stderr, "cudaMalloc(projections) failed!\n");
+                return NULL;
             }
         }
+        float* dev_offsetScanWeights = copy1DdataToGPU(offsetScanWeights, params->numRows * params->numCols, params->whichGPU);
+        free(offsetScanWeights);
+
+        int3 N_g = make_int3(params->numAngles, params->numRows, params->numCols + N_add);
+        dim3 dimBlock = setBlockSize(N_g);
+        dim3 dimGrid = setGridSize(N_g, dimBlock);
+
+        zeroPadForOffsetScanKernel <<< dimGrid, dimBlock >>> (dev_g, g_pad, N_g, N_add, padOnLeft, dev_offsetScanWeights);
+        cudaStatus = cudaDeviceSynchronize();
+
+        if (padOnLeft)
+            params->centerCol += N_add;
+        params->numCols += N_add;
+
+        if (dev_offsetScanWeights != 0)
+            cudaFree(dev_offsetScanWeights);
+        if (data_on_cpu == true && dev_g != 0)
+            cudaFree(dev_g);
+        return g_pad;
     }
-
-    // Clean up
-    cudaFreeArray(d_h_array);
-    cudaDestroyTextureObject(d_h_txt);
-    //cudaFree(dev_g_pad);
-    if (data_on_cpu)
-        cudaFree(dev_g);
-    cudaFree(dev_h);
-    cudaFree(dev_g_chunk);
-    delete[] h;
-
-    return retVal;
+    else
+    {
+        if (offsetScanWeights != NULL)
+            free(offsetScanWeights);
+        return NULL;
+    }
 }
-#endif
+

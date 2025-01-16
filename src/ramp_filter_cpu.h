@@ -50,7 +50,7 @@ bool ray_derivative_cpu(float* g, parameters* params, float sampleShift = 0.0, f
 
 int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params);
 int zeroPadForOffsetScan_numberOfColsToAdd(parameters* params, bool& padOnLeft);
-float* zeroPadForOffsetScan(float* g, parameters* params);
+float* zeroPadForOffsetScan(float* g, parameters* params, float* g_out = NULL);
 
 void fftshift(float* h, int N);
 

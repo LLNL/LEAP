@@ -16,6 +16,7 @@
 
 #include "parameters.h"
 #include "cuda_runtime.h"
+#include "cuda_utils.h"
 
 /**
  * This header and associated source file provide implementions of CUDA-based scatter simulation and correction algorithms.
@@ -51,6 +52,7 @@ struct hypercube
 // scatterDist: the CS and RS distributions sampled in 1 keV bins and 1.0 degree angular bins
 bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* params, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType);
 
-bool firstLeg(cudaTextureObject_t f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition);
+//bool firstLeg(cudaTextureObject_t f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition);
+bool firstLeg(TEX_DATA f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition);
 
 #endif

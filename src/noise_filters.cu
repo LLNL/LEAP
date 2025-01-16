@@ -101,7 +101,75 @@ __global__ void azimuthalBlurKernel(float* f, float* f_filtered, const int3 N, c
     f_filtered[uint64(k) * uint64(N.x * N.y) + uint64(j * N.x + i)] = val / ((float)N_phi);
 }
 
-__global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, const float threshold, const int windowRadius)
+__global__ void badPixelCorrectionKernel(float* g, float* badPixelMap, const int3 N, const int windowRadius)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+
+    if (badPixelMap[j*N.z+k] != 1.0f) // pixel is good; do nothing
+        return;
+
+    uint64 iProj = uint64(i) * uint64(N.y) * uint64(N.z);
+    float* aProj = &g[iProj];
+
+    float v[49];
+    int ind = 0;
+    for (int dj = -windowRadius; dj <= windowRadius; dj++)
+    {
+        const int j_shift = max(0, min(j + dj, N.y - 1));
+        for (int dk = -windowRadius; dk <= windowRadius; dk++)
+        {
+            const int k_shift = max(0, min(k + dk, N.z - 1));
+            if (badPixelMap[j_shift * N.z + k_shift] != 1.0f) // pixel is good, store it
+            {
+                v[ind] = aProj[j_shift * N.z + k_shift];
+                ind += 1;
+            }
+        }
+    }
+
+    if (ind == 1)
+    {
+        aProj[j * N.z + k] = v[0];
+    }
+    else if (ind == 2)
+    {
+        aProj[j * N.z + k] = 0.5f * (v[0] + v[1]);
+    }
+    else if (ind > 2)
+    {
+        // 3 ==> 2
+        // 4 ==> 3
+        // 5 ==> 3
+        // 6 ==> 4 (need 2 and 3)
+        // 7 ==> 4
+        // 8 ==> 5
+        // 9 ==> 5
+        const int ind_mid = (ind - (ind % 2)) / 2 + 1;
+
+        // bubble-sort for first half of samples
+        for (int i = 0; i < ind_mid; i++)
+        {
+            for (int j = i + 1; j < ind; j++)
+            {
+                if (v[i] > v[j])
+                {  // swap?
+                    const float tmp = v[i];
+                    v[i] = v[j];
+                    v[j] = tmp;
+                }
+            }
+        }
+        if (ind % 2 == 0)
+            aProj[j * N.z + k] = 0.5f * (v[ind_mid - 1] + v[ind_mid - 2]);
+        else
+            aProj[j * N.z + k] = v[ind_mid-1];
+    }
+}
+
+__global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, const float threshold, const int windowRadius, const float signalThreshold)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -125,6 +193,11 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             }
         }
         const float curVal = v[4];
+        if (signalThreshold > 0.0f && curVal > signalThreshold)
+        {
+            f_filtered[i_slice + uint64(j * N.z + k)] = curVal;
+            return;
+        }
 
         // bubble-sort for first 5 samples
         for (int i = 0; i < 5; i++)
@@ -159,6 +232,11 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             }
         }
         const float curVal = v[12];
+        if (signalThreshold > 0.0f && curVal > signalThreshold)
+        {
+            f_filtered[i_slice + uint64(j * N.z + k)] = curVal;
+            return;
+        }
 
         // bubble-sort for first 13 samples
         for (int i = 0; i < 13; i++)
@@ -193,6 +271,11 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
             }
         }
         const float curVal = v[24];
+        if (signalThreshold > 0.0f && curVal > signalThreshold)
+        {
+            f_filtered[i_slice + uint64(j * N.z + k)] = curVal;
+            return;
+        }
 
         // bubble-sort for first 25 samples
         for (int i = 0; i < 25; i++)
@@ -214,7 +297,86 @@ __global__ void medianFilter2DKernel(float* f, float* f_filtered, const int3 N, 
     }
 }
 
-__global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold, int sliceStart, int sliceEnd)
+__global__ void meanFilterKernel(float* f, float* f_filtered, int3 N, const int r, int sliceStart, int sliceEnd)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
+        return;
+    }
+
+    const int di_min = -min(i, r);
+    const int di_max = min(N.x - 1 - i, r);
+
+    const int dj_min = -min(j, r);
+    const int dj_max = min(N.y - 1 - j, r);
+
+    const int dk_min = -min(k, r);
+    const int dk_max = min(N.z - 1 - k, r);
+
+    float x = 0.0f;
+    for (int di = di_min; di <= di_max; di++)
+    {
+        for (int dj = dj_min; dj <= dj_max; dj++)
+        {
+            for (int dk = dk_min; dk <= dk_max; dk++)
+            {
+                x += f[uint64(i + di) * uint64(N.z * N.y) + uint64((j + dj) * N.z + (k + dk))];
+            }
+        }
+    }
+    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = x / float((di_max - di_min + 1) * (dj_max - dj_min + 1) * (dk_max - dk_min + 1));
+}
+
+__global__ void varianceFilterKernel(float* f, float* f_filtered, int3 N, const int r, int sliceStart, int sliceEnd)
+{
+    const int i = threadIdx.x + blockIdx.x * blockDim.x;
+    const int j = threadIdx.y + blockIdx.y * blockDim.y;
+    const int k = threadIdx.z + blockIdx.z * blockDim.z;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
+    if (i < sliceStart || i > sliceEnd)
+    {
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = 0.0f;
+        return;
+    }
+
+    const int di_min = -min(i, r);
+    const int di_max = min(N.x - 1 - i, r);
+
+    const int dj_min = -min(j, r);
+    const int dj_max = min(N.y - 1 - j, r);
+
+    const int dk_min = -min(k, r);
+    const int dk_max = min(N.z - 1 - k, r);
+
+    const float weight = 1.0f / float((di_max - di_min + 1) * (dj_max - dj_min + 1) * (dk_max - dk_min + 1));
+
+    float x = 0.0f;
+    float xx = 0.0f;
+    for (int di = di_min; di <= di_max; di++)
+    {
+        for (int dj = dj_min; dj <= dj_max; dj++)
+        {
+            for (int dk = dk_min; dk <= dk_max; dk++)
+            {
+                const float curVal = f[uint64(i + di) * uint64(N.z * N.y) + uint64((j + dj) * N.z + (k + dk))];
+                x += curVal;
+                xx += curVal * curVal;
+            }
+        }
+    }
+
+    const float meanI = x * weight;
+    const float varI = xx * weight - meanI * meanI;
+
+    f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = varI;
+}
+
+__global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float threshold, const float signalThreshold, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -243,6 +405,11 @@ __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float th
         }
     }
     const float curVal = v[13];
+    if (signalThreshold > 0.0f && curVal > signalThreshold)
+    {
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = curVal;
+        return;
+    }
 
     // bubble-sort for first 14 samples
     for (int i = 0; i < 14; i++)
@@ -264,7 +431,7 @@ __global__ void medianFilterKernel(float* f, float* f_filtered, int3 N, float th
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = curVal;
 }
 
-__global__ void medianFilterKernel_5x5(float* f, float* f_filtered, int3 N, float threshold, int sliceStart, int sliceEnd)
+__global__ void medianFilterKernel_5x5(float* f, float* f_filtered, int3 N, float threshold, const float signalThreshold, int sliceStart, int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -337,6 +504,11 @@ __global__ void medianFilterKernel_5x5(float* f, float* f_filtered, int3 N, floa
         }
     }
     const float curVal = v[37];
+    if (signalThreshold > 0.0f && curVal > signalThreshold)
+    {
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = curVal;
+        return;
+    }
 
     // bubble-sort for first 38 samples
     for (int i = 0; i < 38; i++)
@@ -410,7 +582,7 @@ __global__ void BlurFilterKernel(float* f, float* f_filtered, int3 N, float FWHM
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
-__global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FWHM)
+__global__ void BlurFilter2DKernel(float* f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -456,7 +628,7 @@ __global__ void BlurFilter2DKernel(float* f, float* f_filtered, int3 N, float FW
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
 
-__global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FWHM)
+__global__ void BlurFilter1DKernel(float* f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -470,20 +642,57 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
     const int pixelRadius = int(floor(FWHM));
     const float denom = 1.0f / FWHM;
 
-    float val = 0.0;
-    float sum = 0.0;
-    for (int di = -pixelRadius; di <= pixelRadius; di++)
+    float val = 0.0f;
+    float sum = 0.0f;
+    if (axis == 0)
     {
-        const int i_shift = max(0, min(i + di, N.x - 1));
-
-        //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
-        const float theWeight = 0.5f +
-            0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
-
-        if (theWeight > 0.0001f)
+        for (int di = -pixelRadius; di <= pixelRadius; di++)
         {
-            val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-            sum += theWeight;
+            const int i_shift = max(0, min(i + di, N.x - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                sum += theWeight;
+            }
+        }
+    }
+    else if (axis == 1)
+    {
+        for (int dj = -pixelRadius; dj <= pixelRadius; dj++)
+        {
+            const int j_shift = max(0, min(j + dj, N.y - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dj) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                val += theWeight * f[uint64(i) * uint64(N.y * N.z) + uint64(j_shift * N.z + k)];
+                sum += theWeight;
+            }
+        }
+    }
+    else //if (axis == 2)
+    {
+        for (int dk = -pixelRadius; dk <= pixelRadius; dk++)
+        {
+            const int k_shift = max(0, min(k + dk, N.z - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dk) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                val += theWeight * f[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k_shift)];
+                sum += theWeight;
+            }
         }
     }
 
@@ -494,7 +703,8 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, int3 N, float FW
 }
 
 //########################################################################################################################################################
-__global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
+//__global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
+__global__ void BlurFilterKernel_txt(TEX_DATA f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -536,20 +746,25 @@ __global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, i
                 if (theWeight > 0.0001f)
                 {
                     //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j_shift * N.z + k_shift)];
-                    val += theWeight * tex3D<float>(f, k_shift, j_shift, i_shift);
+                    //val += theWeight * tex3D<float>(f, k_shift, j_shift, i_shift);
+                    val += theWeight * TEX3D_nearest(f, N, k_shift, j_shift, i_shift);
                     sum += theWeight;
                 }
             }
         }
     }
 
-    if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-    else
+    if (d_DO_HIGH_PASS) {
+        //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_nearest(f, N, k, j, i) - val / sum;
+    }
+    else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    }
 }
 
-__global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM)
+//__global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
+__global__ void BlurFilter2DKernel_txt(TEX_DATA f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -584,19 +799,24 @@ __global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f_slice[uint64(j_shift * N.z + k_shift)];
-                val += theWeight * tex3D<float>(f, k_shift, j_shift, i);
+                //val += theWeight * tex3D<float>(f, k_shift, j_shift, i);
+                val += theWeight * TEX3D_nearest(f, N, k_shift, j_shift, i);
                 sum += theWeight;
             }
         }
     }
 
-    if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-    else
+    if (d_DO_HIGH_PASS) {
+        //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_nearest(f, N, k, j, i) - val / sum;
+    }
+    else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    }
 }
 
-__global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM)
+//__global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
+__global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -610,28 +830,73 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
     const int pixelRadius = int(floor(FWHM));
     const float denom = 1.0f / FWHM;
 
-    float val = 0.0;
-    float sum = 0.0;
-    for (int di = -pixelRadius; di <= pixelRadius; di++)
+    float val = 0.0f;
+    float sum = 0.0f;
+    if (axis == 0)
     {
-        const int i_shift = max(0, min(i + di, N.x - 1));
-
-        //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
-        const float theWeight = 0.5f +
-            0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
-
-        if (theWeight > 0.0001f)
+        for (int di = -pixelRadius; di <= pixelRadius; di++)
         {
-            //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-            val += theWeight * tex3D<float>(f, k, j, i_shift);
-            sum += theWeight;
+            const int i_shift = max(0, min(i + di, N.x - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(di) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                //val += theWeight * tex3D<float>(f, k, j, i_shift);
+                val += theWeight * TEX3D_nearest(f, N, k, j, i_shift);
+                sum += theWeight;
+            }
+        }
+    }
+    else if (axis == 1)
+    {
+        for (int dj = -pixelRadius; dj <= pixelRadius; dj++)
+        {
+            const int j_shift = max(0, min(j + dj, N.y - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dj) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                //val += theWeight * tex3D<float>(f, k, j_shift, i);
+                val += theWeight * TEX3D_nearest(f, N, k, j_shift, i);
+                sum += theWeight;
+            }
+        }
+    }
+    else //if (axis == 2)
+    {
+        for (int dk = -pixelRadius; dk <= pixelRadius; dk++)
+        {
+            const int k_shift = max(0, min(k + dk, N.z - 1));
+
+            //const float theWeight = exp(-denom * float((i - i_shift) * (i - i_shift)));
+            const float theWeight = 0.5f +
+                0.5f * cosf(3.141592653589793f * min(fabsf(dk) * denom, 1.0f));
+
+            if (theWeight > 0.0001f)
+            {
+                //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
+                //val += theWeight * tex3D<float>(f, k_shift, j, i);
+                val += theWeight * TEX3D_nearest(f, N, k_shift, j, i);
+                sum += theWeight;
+            }
         }
     }
 
-    if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-    else
+    if (d_DO_HIGH_PASS) {
+        //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_nearest(f, N, k, j, i) - val / sum;
+    }
+    else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    }
 }
 //########################################################################################################################################################
 
@@ -640,37 +905,37 @@ void setConstantMemoryParameters(const bool doHighPass)
     cudaMemcpyToSymbol(d_DO_HIGH_PASS, &doHighPass, sizeof(bool));
 }
 
-bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool blurFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(false);
-    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool blurFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(false);
-    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool highPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool highPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(true);
-    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool highPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool highPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     cudaSetDevice(whichGPU);
     setConstantMemoryParameters(true);
-    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
 }
 
-bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
-    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
+    return lowOrHighPassFilter_txt(f, N_1, N_2, N_3, FWHM, numDims, axis, data_on_cpu, whichGPU, sliceStart, sliceEnd, f_out);
     if (f == NULL) return false;
 
     if (sliceStart < 0)
@@ -713,9 +978,9 @@ bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int nu
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
                  int(ceil(double(N.z) / double(dimBlock.z))));
     if (numDims == 1)
-        BlurFilter1DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM);
+        BlurFilter1DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM, axis);
     else if (numDims == 2)
-        BlurFilter2DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM);
+        BlurFilter2DKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM, axis);
     else
         BlurFilterKernel<<<dimGrid, dimBlock>>>(dev_f, dev_Df, N, FWHM, sliceStart, sliceEnd);
 
@@ -755,7 +1020,7 @@ bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int nu
     return true;
 }
 
-bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
 
@@ -779,8 +1044,10 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
     else
         dev_f = f;
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N, false, false);
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N, false, false);
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_f, N, false, false);
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
@@ -802,9 +1069,9 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
     if (numDims == 1)
-        BlurFilter1DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM);
+        BlurFilter1DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM, axis);
     else if (numDims == 2)
-        BlurFilter2DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM);
+        BlurFilter2DKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM, axis);
     else
         BlurFilterKernel_txt <<<dimGrid, dimBlock >>> (d_data_txt, dev_Df, N, FWHM, sliceStart, sliceEnd);
 
@@ -812,8 +1079,9 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
     cudaDeviceSynchronize();
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, false);
     if (data_on_cpu)
     {
         // pull result off GPU
@@ -846,7 +1114,86 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
     return true;
 }
 
-bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+bool momentFilter(float* f, int N_1, int N_2, int N_3, int r, int order, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
+{
+    if (f == NULL) return false;
+
+    if (sliceStart < 0)
+        sliceStart = 0;
+    if (sliceEnd < 0)
+        sliceEnd = N_1 - 1;
+    sliceStart = max(0, min(N_1 - 1, sliceStart));
+    sliceEnd = max(0, min(N_1 - 1, sliceEnd));
+    if (sliceStart > sliceEnd)
+        return false;
+
+    r = max(1, min(r, 100));
+
+    cudaSetDevice(whichGPU);
+    //cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(N_1, N_2, N_3);
+    float* dev_f = 0;
+    if (data_on_cpu)
+        dev_f = copy3DdataToGPU(f, N, whichGPU);
+    else
+        dev_f = f;
+
+    // Allocate space on GPU for the gradient
+    float* dev_Df = 0;
+    if (cudaMalloc((void**)&dev_Df, uint64(N.x) * uint64(N.y) * uint64(N.z) * sizeof(float)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(volume %d x %d x %d) failed!\n", N_1, N_2, N_3);
+        return false;
+    }
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    if (order == 1)
+    {
+        meanFilterKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, r, sliceStart, sliceEnd);
+    }
+    else
+    {
+        varianceFilterKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, r, sliceStart, sliceEnd);
+    }
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        if (f_out != NULL)
+        {
+            float* dev_Df_shift = &dev_Df[uint64(sliceStart) * uint64(N.y) * uint64(N.z)];
+            int3 N_crop = make_int3(sliceEnd - sliceStart + 1, N_2, N_3);
+            pull3DdataFromGPU(f_out, N_crop, dev_Df_shift, whichGPU);
+        }
+        else
+            pull3DdataFromGPU(f, N, dev_Df, whichGPU);
+
+        if (dev_f != 0)
+            cudaFree(dev_f);
+    }
+    else
+    {
+        // copy dev_Df to dev_f
+        cudaMemcpy(dev_f, dev_Df, sizeof(float) * uint64(N.x) * uint64(N.y) * uint64(N.z), cudaMemcpyDeviceToDevice);
+    }
+    if (dev_Df != 0)
+    {
+        cudaFree(dev_Df);
+    }
+
+    return true;
+}
+
+bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
     if (f == NULL) return false;
 
@@ -886,11 +1233,11 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, b
                  int(ceil(double(N.z) / double(dimBlock.z))));
     if (windowRadius == 2)
     {
-        medianFilterKernel_5x5 <<<dimGrid, dimBlock >>> (dev_f, dev_Df, N, threshold, sliceStart, sliceEnd);
+        medianFilterKernel_5x5 <<<dimGrid, dimBlock >>> (dev_f, dev_Df, N, threshold, signalThreshold, sliceStart, sliceEnd);
     }
     else
     {
-        medianFilterKernel <<<dimGrid, dimBlock >>> (dev_f, dev_Df, N, threshold, sliceStart, sliceEnd);
+        medianFilterKernel <<<dimGrid, dimBlock >>> (dev_f, dev_Df, N, threshold, signalThreshold, sliceStart, sliceEnd);
     }
 
     // wait for GPU to finish
@@ -925,7 +1272,7 @@ bool medianFilter(float* f, int N_1, int N_2, int N_3, float threshold, int w, b
     return true;
 }
 
-bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, bool data_on_cpu, int whichGPU)
+bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w, float signalThreshold, bool data_on_cpu, int whichGPU)
 {
     if (f == NULL) return false;
 
@@ -954,7 +1301,7 @@ bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    medianFilter2DKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, threshold, windowRadius);
+    medianFilter2DKernel <<< dimGrid, dimBlock >>> (dev_f, dev_Df, N, threshold, windowRadius, signalThreshold);
 
     // wait for GPU to finish
     cudaDeviceSynchronize();
@@ -976,6 +1323,54 @@ bool medianFilter2D(float* f, int N_1, int N_2, int N_3, float threshold, int w,
     if (dev_Df != 0)
     {
         cudaFree(dev_Df);
+    }
+
+    return true;
+}
+
+bool badPixelCorrection_gpu(float* g, parameters* params, float* badPixelMap, int w, bool data_on_cpu)
+{
+    if (g  == NULL || params == NULL || badPixelMap == NULL) return false;
+
+    cudaSetDevice(params->whichGPU);
+    //cudaError_t cudaStatus;
+
+    // Copy volume to GPU
+    int3 N = make_int3(params->numAngles, params->numRows, params->numCols);
+    float* dev_g = 0;
+    float* dev_badPixelMap = 0;
+    if (data_on_cpu)
+    {
+        dev_g = copy3DdataToGPU(g, N, params->whichGPU);
+        dev_badPixelMap = copy3DdataToGPU(badPixelMap, make_int3(1, params->numRows, params->numCols), params->whichGPU);
+    }
+    else
+    {
+        dev_g = g;
+        dev_badPixelMap = badPixelMap;
+    }
+
+    int windowRadius = max(1, min(3, (w - 1) / 2));
+
+    // Call kernel
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    badPixelCorrectionKernel <<< dimGrid, dimBlock >>> (dev_g, dev_badPixelMap, N, windowRadius);
+
+    // wait for GPU to finish
+    cudaDeviceSynchronize();
+
+    // Clean up
+    if (data_on_cpu)
+    {
+        // pull result off GPU
+        pull3DdataFromGPU(g, N, dev_g, params->whichGPU);
+
+        if (dev_g != 0)
+            cudaFree(dev_g);
+        if (dev_badPixelMap != 0)
+            cudaFree(dev_badPixelMap);
     }
 
     return true;

@@ -212,16 +212,32 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
                             float dist_from_source_components_y = fabs(params->sod * sin_phi - params->tau * cos_phi - y);
                             float v_denom_inv = 1.0/sqrt(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
                             float v_arg = (z - z_source) * v_denom_inv;
-                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                                curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            if (params->helicalPitch == 0.0)
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                                    curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
+                            else
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                                    curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
                         }
                         else
                         {
                             float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
                             float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
                             float v_arg = (z - z_source) * v_denom_inv;
-                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                                curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            if (params->helicalPitch == 0.0)
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                                    curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
+                            else
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                                    curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
                         }
                     }
                     if (curVal == 0.0)
@@ -262,16 +278,32 @@ bool sensitivity_cone_CPU(float*& s, parameters* params)
                             float dist_from_source_components_y = fabs(params->sod * sin_phi - params->tau * cos_phi - y);
                             float v_denom_inv = 1.0 / sqrt(dist_from_source_components_x * dist_from_source_components_x + dist_from_source_components_y * dist_from_source_components_y);
                             float v_arg = (z - z_source) * v_denom_inv;
-                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
-                                curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            if (params->helicalPitch == 0.0)
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_arg <= v_max*/)
+                                    curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
+                            else
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_arg <= v_max)
+                                    curVal += scalar * sqrt(1.0 + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
                         }
                         else
                         {
                             float v_denom_inv = 1.0 / (params->sod - x * cos_phi - y * sin_phi);
                             float u_arg = (-sin_phi * x + cos_phi * y + params->tau) * v_denom_inv;
                             float v_arg = (z - z_source) * v_denom_inv;
-                            if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_max <= v_arg)
-                                curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            if (params->helicalPitch == 0.0)
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max /*&& v_min <= v_arg && v_max <= v_arg*/)
+                                    curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
+                            else
+                            {
+                                if (u_min <= u_arg && u_arg <= u_max && v_min <= v_arg && v_max <= v_arg)
+                                    curVal += scalar * sqrt(1.0 + u_arg * u_arg + v_arg * v_arg) * v_denom_inv * v_denom_inv;
+                            }
                         }
                     }
                     if (curVal == 0.0)

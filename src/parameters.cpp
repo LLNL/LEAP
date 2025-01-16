@@ -30,6 +30,7 @@ parameters::parameters()
 	rowVectors = NULL;
 	colVectors = NULL;
 	phis = NULL;
+	phis_full = NULL;
 	mu = NULL;
 	initialize();
 }
@@ -55,6 +56,7 @@ void parameters::initialize()
 	doExtrapolation = false;
 	volumeDimensionOrder = ZYX;
 	rampID = 2;
+	FBPlowpass = 1.0;
 	chunkingMemorySizeThreshold = float(0.1);
 	colShiftFromFilter = 0.0;
 	rowShiftFromFilter = 0.0;
@@ -77,9 +79,11 @@ void parameters::initialize()
 	centerCol = 0.0;
 	centerRow = 0.0;
 	tau = 0.0;
+	tiltAngle = 0.0;
 	helicalPitch = 0.0;
 	z_source_offset = 0.0;
 	rFOVspecified = 0.0;
+	helicalFBPWeight = 0.7;
 
 	muCoeff = 0.0;
 	muRadius = 0.0;
@@ -98,8 +102,11 @@ void parameters::initialize()
 	offsetZ = 0.0;
 
 	extraMemoryReserved = 0.25;
+	//extraMemoryReserved = 0.0;
 	phi_start = 0.0;
 	phi_end = 0.0;
+	numAngles_full = 0;
+	phi_full_ind_offset = 0;
 }
 
 float parameters::get_extraMemoryReserved()
@@ -124,6 +131,7 @@ parameters::parameters(const parameters& other)
     rowVectors = NULL;
     colVectors = NULL;
     phis = NULL;
+	phis_full = NULL;
 	initialize();
     assign(other);
 }
@@ -151,6 +159,7 @@ void parameters::assign(const parameters& other)
 	this->doWeightedBackprojection = other.doWeightedBackprojection;
 	this->doExtrapolation = other.doExtrapolation;
 	this->rampID = other.rampID;
+	this->FBPlowpass = other.FBPlowpass;
 	this->chunkingMemorySizeThreshold = other.chunkingMemorySizeThreshold;
 	this->colShiftFromFilter = other.colShiftFromFilter;
 	this->rowShiftFromFilter = other.rowShiftFromFilter;
@@ -175,11 +184,13 @@ void parameters::assign(const parameters& other)
     this->centerCol = other.centerCol;
     this->centerRow = other.centerRow;
     this->tau = other.tau;
+	this->tiltAngle = other.tiltAngle;
 	this->helicalPitch = other.helicalPitch;
 	this->z_source_offset = other.z_source_offset;
     this->rFOVspecified = other.rFOVspecified;
     this->axisOfSymmetry = other.axisOfSymmetry;
     this->volumeDimensionOrder = other.volumeDimensionOrder;
+	this->helicalFBPWeight = other.helicalFBPWeight;
     this->numX = other.numX;
     this->numY = other.numY;
     this->numZ = other.numZ;
@@ -191,14 +202,30 @@ void parameters::assign(const parameters& other)
 
 	this->phi_start = other.phi_start;
 	this->phi_end = other.phi_end;
+	this->numAngles_full = other.numAngles_full;
+	this->phi_full_ind_offset = other.phi_full_ind_offset;
 
-    if (this->phis != NULL)
-        delete [] this->phis;
+	if (this->phis != NULL)
+	{
+		delete[] this->phis;
+		this->phis = NULL;
+	}
+	if (this->phis_full != NULL)
+	{
+		delete[] this->phis_full;
+		this->phis_full = NULL;
+	}
 	if (other.phis != NULL)
 	{
-		this->phis = new float[numAngles];
-		for (int i = 0; i < numAngles; i++)
+		this->phis = new float[other.numAngles];
+		for (int i = 0; i < other.numAngles; i++)
 			this->phis[i] = other.phis[i];
+	}
+	if (other.phis_full != NULL)
+	{
+		this->phis_full = new float[other.numAngles_full];
+		for (int i = 0; i < other.numAngles_full; i++)
+			this->phis_full[i] = other.phis_full[i];
 	}
     
 	if (other.sourcePositions != NULL)
@@ -213,7 +240,16 @@ float parameters::T_phi()
     if (numAngles <= 1 || phis == NULL)
         return float(2.0*PI);
 	else
-		return (phis[numAngles-1] - phis[0]) / float(numAngles-1);
+	{
+		float* phis_local = phis;
+		int numAngles_local = numAngles;
+		if (phis_full != NULL)
+		{
+			phis_local = phis_full;
+			numAngles_local = numAngles_full;
+		}
+		return (phis_local[numAngles_local - 1] - phis_local[0]) / float(numAngles_local - 1);
+	}
 }
 
 float parameters::min_T_phi()
@@ -222,9 +258,16 @@ float parameters::min_T_phi()
 		return float(2.0 * PI);
 	else
 	{
-		double retVal = fabs(phis[1] - phis[0]);
-		for (int i = 1; i < numAngles - 1; i++)
-			retVal = std::min(retVal, double(fabs(phis[i + 1] - phis[i])));
+		float* phis_local = phis;
+		int numAngles_local = numAngles;
+		if (phis_full != NULL)
+		{
+			phis_local = phis_full;
+			numAngles_local = numAngles_full;
+		}
+		double retVal = fabs(phis_local[1] - phis_local[0]);
+		for (int i = 1; i < numAngles_local - 1; i++)
+			retVal = std::min(retVal, double(fabs(phis_local[i + 1] - phis_local[i])));
 		return float(retVal);
 	}
 }
@@ -240,46 +283,115 @@ float parameters::phi_inv(float angle)
 		if (phis[numAngles - 1] < phis[0])
 			return float(numAngles - 1);
 		else
-			return 0;
+			return 0.0;
 	}
 	else if (angle >= max(phis[numAngles - 1], phis[0]))
 	{
 		if (phis[numAngles - 1] > phis[0])
 			return float(numAngles - 1);
 		else
-			return 0;
+			return 0.0;
 	}
 	else
 	{
-		if (T_phi() > 0.0)
+		float angularStep = T_phi();
+		float firstGuess = max(float(0.0), min(float(numAngles - 1), (angle - phis[0]) / angularStep));
+		int ind_low = int(firstGuess);
+		float phi_a = phis[ind_low];
+		float phi_b = phis[ind_low + 1];
+		if ((phi_a <= angle && angle <= phi_b) || (phi_b <= angle && angle <= phi_a))
+			return (angle - phi_a) / (phi_b - phi_a) + float(ind_low);
+
+		//int firstGuess = max(0, min(numAngles - 1, int(floor(0.5 + (angle - phis[0]) / angularStep))));
+		if (angularStep > 0.0)
 		{
-			//phis[0] < angle
-			for (int i = 1; i < numAngles; i++)
+			int ind = int(firstGuess);
+			if (phis[ind] == angle)
+				return float(ind);
+			else if (phis[ind] < angle)
 			{
-				if (angle <= phis[i])
+				while (phis[ind] < angle)
 				{
-					// phis[i-1] < angle <= phis[i]
-					float d = (angle - phis[i - 1]) / (phis[i] - phis[i - 1]);
-					return float(i - 1) + d;
+					if (ind + 1 > numAngles - 1)
+						return float(numAngles - 1);
+					ind++;
 				}
+				// now phis[ind-1] < angle <= phis[ind]
+				return (angle - phis[ind - 1]) / (phis[ind] - phis[ind - 1]) + float(ind - 1);
 			}
-			return float(numAngles);
+			else //if (phis[ind] > angle)
+			{
+				while (phis[ind] > angle)
+				{
+					if (ind - 1 < 0)
+						return 0.0;
+					ind--;
+				}
+				// now phis[ind] <= angle < phis[ind+1]
+				return (angle - phis[ind]) / (phis[ind + 1] - phis[ind]) + double(ind);
+			}
 		}
 		else
 		{
-			//phis[numAngles-1] < angle
-			for (int i = numAngles-2; i >= 0; i--)
+			int ind = int(firstGuess);
+			if (phis[ind] == angle)
+				return float(ind);
+			else if (phis[ind] < angle)
 			{
-				if (angle <= phis[i])
+				while (phis[ind] < angle)
 				{
-					// phis[i+1] < angle <= phis[i]
-					float d = (angle - phis[i + 1]) / (phis[i] - phis[i + 1]);
-					return float(i+1) - d;
+					if (ind - 1 < 0)
+						return 0.0;
+					ind--;
 				}
+				// now phis[ind+1] < angle <= phis[ind]
+				//return (angle - phis[ind + 1]) / (phis[ind] - phis[ind + 1]) + float(ind);
+				return (angle - phis[ind]) / (phis[ind + 1] - phis[ind]) + double(ind);
 			}
-			return 0.0;
+			else //if (phis[ind] > angle)
+			{
+				while (phis[ind] > angle)
+				{
+					if (ind + 1 > numAngles - 1)
+						return float(numAngles - 1);
+					ind++;
+				}
+				// now phis[ind] <= angle < phis[ind-1]
+				//return (angle - phis[ind]) / (phis[ind - 1] - phis[ind]) + float(ind-1);
+				return (angle - phis[ind - 1]) / (phis[ind] - phis[ind - 1]) + float(ind - 1);
+			}
 		}
 	}
+}
+
+float parameters::rFOV_min()
+{
+	float rFOVspecified_save = rFOVspecified;
+	bool offsetScan_save = offsetScan;
+
+	rFOVspecified = 0.0;
+	offsetScan = false;
+	float retVal = rFOV();
+
+	rFOVspecified = rFOVspecified_save;
+	offsetScan = offsetScan_save;
+
+	return retVal;
+}
+
+float parameters::rFOV_max()
+{
+	float rFOVspecified_save = rFOVspecified;
+	bool offsetScan_save = offsetScan;
+
+	rFOVspecified = 0.0;
+	offsetScan = true;
+	float retVal = rFOV();
+
+	rFOVspecified = rFOVspecified_save;
+	offsetScan = offsetScan_save;
+
+	return retVal;
 }
 
 float parameters::rFOV()
@@ -295,44 +407,46 @@ float parameters::rFOV()
 	else if (geometry == MODULAR)
 	{
 		//return 1.0e16;
-		return float(furthestFromCenter()+0.5*voxelWidth);
+		if (modularbeamIsAxiallyAligned())
+		{
+			float alpha_right = u(0);
+			float alpha_left = u(numCols - 1);
+			if (normalizeConeAndFanCoordinateFunctions)
+			{
+				alpha_right = atan(alpha_right);
+				alpha_left = atan(alpha_left);
+			}
+			else
+			{
+				alpha_right = atan(alpha_right / sdd);
+				alpha_left = atan(alpha_left / sdd);
+			}
+			if (offsetScan)
+				return sod * sin(max(fabs(alpha_right), fabs(alpha_left)));
+			else
+				return sod * sin(min(fabs(alpha_right), fabs(alpha_left)));
+		}
+		else
+			return float(furthestFromCenter()+0.5*voxelWidth);
 	}
-	else if (geometry == PARALLEL)
+	else if (geometry == PARALLEL || geometry == CONE_PARALLEL)
 	{
 		if (offsetScan)
-			return float(max(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0())));
+			return float(max(fabs(col(0)), fabs(col(numCols - 1))));
 		else
-			return float(min(fabs(u_0()), fabs(pixelWidth * float(numCols - 1) + u_0())));
+			return float(min(fabs(col(0)), fabs(col(numCols - 1))));
 	}
 	else if (geometry == FAN || geometry == CONE)
 	{
-		/*
-		double alpha_right = lateral(0);
-		double alpha_left = lateral(N_lateral-1);
-		if (isFlatPanel == true)
-		{
-			alpha_right = atan(alpha_right);
-			alpha_left = atan(alpha_left);
-		}
-		//return R_tau*sin(min(fabs(alpha_right+atan(tau/R)), fabs(alpha_left+atan(tau/R))));
-		double retVal = R_tau*sin(min(fabs(alpha_right-atan(tau/R)), fabs(alpha_left-atan(tau/R))));
 
-		//sid/sdd * c / sqrt(1+(c/sdd)*(c/sdd))
-		//return R*u_max()/sqrt(1.0+u_max()*u_max());
-		if (theSCT->dxfov.unknown == false && theSCT->dxfov.value > 0.0)
-			retVal = min(retVal, 0.5*theSCT->dxfov.value);
-		return retVal;
-		//*/
-
-		//float R_tau = sqrt(sod * sod + tau * tau);
-		float alpha_right = u_0();
-		float alpha_left = pixelWidth * float(numCols - 1) + u_0();
-		//float alpha_left = u(numCols - 1);
+		float alpha_right = col(0);
+		float alpha_left = col(numCols - 1);
 		if (detectorType == FLAT)
 		{
 			alpha_right = atan(alpha_right / sdd);
 			alpha_left = atan(alpha_left / sdd);
 		}
+
 		if (offsetScan)
 			return sod * sin(max(fabs(alpha_right - float(atan(tau / sod))), fabs(alpha_left - float(atan(tau / sod)))));
 		else
@@ -366,7 +480,7 @@ float parameters::furthestFromCenter()
 	//*/
 }
 
-bool parameters::voxelSizeWorksForFastSF()
+bool parameters::voxelSizeWorksForFastSF(int whichDirection)
 {
 	float r = min(furthestFromCenter(), rFOV());
 	if (geometry == CONE || geometry == MODULAR) // || geometry == FAN)
@@ -380,15 +494,68 @@ bool parameters::voxelSizeWorksForFastSF()
 		float largestDetectorHeight = (sod + r) / sdd * pixelHeight;
 		float smallestDetectorHeight = (sod - r) / sdd * pixelHeight;
 		//printf("%f to %f\n", 0.5*largestDetectorWidth, 2.0*smallestDetectorWidth);
-		if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
+		if (whichDirection == -1) // backprojection
 		{
-			//printf("using SF projector\n");
-			return true;
+			if (voxelWidth > 2.0 * smallestDetectorWidth || voxelHeight > 2.0 * smallestDetectorHeight)
+				return false;
+			else
+				return true;
 		}
-		else
+		else if (whichDirection == 1) // forward projection
 		{
-			//printf("using Siddon projector\n");
-			return false;
+			if (0.5 * largestDetectorWidth > voxelWidth || 0.5 * largestDetectorHeight > voxelHeight)
+				return false;
+			else
+				return true;
+		}
+		else //if (whichDirection == 0)
+		{
+			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
+			{
+				//printf("using SF projector\n");
+				return true;
+			}
+			else
+			{
+				//printf("using Siddon projector\n");
+				return false;
+			}
+		}
+	}
+	else if (geometry == CONE_PARALLEL)
+	{
+		float largestDetectorWidth = pixelWidth;
+		float smallestDetectorWidth = pixelWidth;
+
+		float largestDetectorHeight = (sod + r) / sdd * pixelHeight;
+		float smallestDetectorHeight = (sod - r) / sdd * pixelHeight;
+		//printf("%f to %f\n", 0.5*largestDetectorWidth, 2.0*smallestDetectorWidth);
+		if (whichDirection == -1) // backprojection
+		{
+			if (voxelWidth > 2.0 * smallestDetectorWidth || voxelHeight > 2.0 * smallestDetectorHeight)
+				return false;
+			else
+				return true;
+		}
+		else if (whichDirection == 1) // forward projection
+		{
+			if (0.5 * sqrt(2.0) * largestDetectorWidth > voxelWidth || 0.5 * largestDetectorHeight > voxelHeight)
+				return false;
+			else
+				return true;
+		}
+		else //if (whichDirection == 0)
+		{
+			if (0.5 * sqrt(2.0) * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth && 0.5 * largestDetectorHeight <= voxelHeight && voxelHeight <= 2.0 * smallestDetectorHeight)
+			{
+				//printf("using SF projector\n");
+				return true;
+			}
+			else
+			{
+				//printf("using Siddon projector\n");
+				return false;
+			}
 		}
 	}
 	else if (geometry == FAN)
@@ -396,23 +563,51 @@ bool parameters::voxelSizeWorksForFastSF()
 		float largestDetectorWidth = (sod + r) / sdd * pixelWidth;
 		float smallestDetectorWidth = (sod - r) / sdd * pixelWidth;
 
-		if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
+		if (whichDirection == -1) // backprojection
 		{
-			//printf("using SF projector\n");
-			return true;
+			if (voxelWidth > 2.0 * smallestDetectorWidth)
+				return false;
+			else
+				return true;
+		}
+		else if (whichDirection == 1) // projection
+		{
+			if (0.5 * largestDetectorWidth > voxelWidth)
+				return false;
+			else
+				return true;
 		}
 		else
 		{
-			//printf("using Siddon projector\n");
-			return false;
+			if (0.5 * largestDetectorWidth <= voxelWidth && voxelWidth <= 2.0 * smallestDetectorWidth)
+				return true;
+			else
+				return false;
 		}
 	}
 	else //if (geometry == PARALLEL)
 	{
-		if (0.5 * pixelWidth <= voxelWidth && voxelWidth <= 2.0 * pixelWidth)
-			return true;
+		if (whichDirection == -1) // backprojection
+		{
+			if (voxelWidth > 2.0 * pixelWidth)
+				return false;
+			else
+				return true;
+		}
+		else if (whichDirection == 1) // projection
+		{
+			if (0.5*sqrt(2.0) * pixelWidth > voxelWidth)
+				return false;
+			else
+				return true;
+		}
 		else
-			return false;
+		{
+			if (0.5 * sqrt(2.0) * pixelWidth <= voxelWidth && voxelWidth <= 2.0 * pixelWidth)
+				return true;
+			else
+				return false;
+		}
 	}
 }
 
@@ -443,58 +638,74 @@ bool parameters::muSpecified()
 		return false;
 }
 
-bool parameters::allDefined()
+bool parameters::allDefined(bool doPrint)
 {
-	return geometryDefined() & volumeDefined();
+	return geometryDefined(doPrint) & volumeDefined(doPrint);
 }
 
-bool parameters::geometryDefined()
+bool parameters::geometryDefined(bool doPrint)
 {
-	if (geometry != CONE && geometry != PARALLEL && geometry != FAN && geometry != MODULAR)
+	if (geometry != CONE && geometry != PARALLEL && geometry != FAN && geometry != MODULAR && geometry != CONE_PARALLEL)
 	{
-		printf("Error: CT geometry type not defined!\n");
+		if (doPrint)
+			printf("Error: CT geometry type not defined!\n");
 		return false;
 	}
 	if (numCols <= 0 || numRows <= 0 || numAngles <= 0 || pixelWidth <= 0.0 || pixelHeight <= 0.0)
 	{
-		printf("Error: detector pixel sizes and number of data elements must be positive\n");
+		if (doPrint)
+			printf("Error: detector pixel sizes and number of data elements must be positive\n");
 		return false;
 	}
 	if (geometry == MODULAR)
 	{
 		if (sourcePositions == NULL || moduleCenters == NULL || rowVectors == NULL || colVectors == NULL)
 		{
-			printf("Error: sourcePositions, moduleCenters, rowVectors, and colVectors must be defined for modular-beam geometries\n");
+			if (doPrint)
+				printf("Error: sourcePositions, moduleCenters, rowVectors, and colVectors must be defined for modular-beam geometries\n");
 			return false;
 		}
 	}
 	else if (angularRange == 0.0 && phis == NULL)
 	{
-		printf("Error: projection angles not defined\n");
+		if (doPrint)
+			printf("Error: projection angles not defined\n");
 		return false;
 	}
-	if (geometry == CONE || geometry == FAN)
+	if (geometry == CONE || geometry == FAN || geometry == CONE_PARALLEL)
 	{
 		if (sod <= 0.0 || sdd <= sod)
 		{
-			printf("Error: sod and sdd must be positive for fan- and cone-beam geometries\n");
+			if (doPrint)
+				printf("Error: sod and sdd must be positive for fan- and cone-beam geometries (%f, %f)\n", sod, sdd);
 			return false;
 		}
 	}
 	if (detectorType == CURVED && geometry != CONE)
 	{
-		printf("Error: curved detector only defined for cone-beam geometries\n");
+		if (doPrint)
+			printf("Error: curved detector only defined for cone-beam geometries\n");
+		return false;
+	}
+	if ((geometry != CONE || detectorType == CURVED) && tiltAngle != 0.0) // not: flat cone or tiltAngle==0
+	{
+		if (doPrint)
+			printf("Error: tiltAngle only defined for flat panel cone-beam geometries\n");
 		return false;
 	}
 
 	return true;
 }
 
-bool parameters::volumeDefined()
+bool parameters::volumeDefined(bool doPrint)
 {
 	if (numX <= 0 || numY <= 0 || numZ <= 0 || voxelWidth <= 0.0 || voxelHeight <= 0.0 || volumeDimensionOrder < 0 || volumeDimensionOrder > 1)
 	{
-		printf("Error: volume voxel sizes and number of data elements must be positive\n");
+		if (doPrint)
+		{
+			printf("numZ = %d voxelHeight = %f\n", numZ, voxelHeight);
+			printf("Error: volume voxel sizes and number of data elements must be positive\n");
+		}
 		return false;
 	}
 	else
@@ -505,15 +716,19 @@ bool parameters::volumeDefined()
 			{
 				//voxelHeight = pixelHeight;
 				//printf("Warning: for parallel and fan-beam data volume voxel height must equal detector pixel height, so forcing voxel height to match pixel height!\n");
-				printf("Error: for parallel and fan-beam data volume voxel height must equal detector pixel height!\n");
-				printf("Please modify either the detector pixel height or the voxel height so they match!\n");
+				if (doPrint)
+				{
+					printf("Error: for parallel and fan-beam data volume voxel height must equal detector pixel height!\n");
+					printf("Please modify either the detector pixel height or the voxel height so they match!\n");
+				}
 				return false;
 			}
 			if (numRows != numZ)
 			{
 				//voxelHeight = pixelHeight;
 				//printf("Warning: for parallel and fan-beam data volume voxel height must equal detector pixel height, so forcing voxel height to match pixel height!\n");
-				printf("Error: for parallel and fan-beam data numZ == numRows!\n");
+				if (doPrint)
+					printf("Error: for parallel and fan-beam data numZ == numRows!\n");
 				return false;
 			}
 			offsetZ = 0.0;
@@ -521,22 +736,25 @@ bool parameters::volumeDefined()
 		}
 		if (geometry == MODULAR && voxelWidth != voxelHeight)
 		{
-			if (modularbeamIsAxiallyAligned() == false || voxelSizeWorksForFastSF() == false)
+			if (modularbeamIsAxiallyAligned() == false /*|| voxelSizeWorksForFastSF() == false*/)
 			{
 				voxelHeight = voxelWidth;
-				printf("Warning: for (non axially-aligned) modular-beam data volume voxel height must equal voxel width (voxels must be cubic), so forcing voxel height to match voxel width!\n");
+				if (doPrint)
+					printf("Warning: for (non axially-aligned) modular-beam data volume voxel height must equal voxel width (voxels must be cubic), so forcing voxel height to match voxel width!\n");
 			}
 		}
 		if (isSymmetric())
 		{
 			if (numX > 1)
 			{
-				printf("Error: symmetric objects must specify numX = 1!\n");
+				if (doPrint)
+					printf("Error: symmetric objects must specify numX = 1!\n");
 				return false;
 			}
 			if (numY % 2 == 1)
 			{
-				printf("Error: symmetric objects must specify numY as even !\n");
+				if (doPrint)
+					printf("Error: symmetric objects must specify numY as even !\n");
 				return false;
 			}
 			offsetX = 0.0;
@@ -551,7 +769,7 @@ bool parameters::volumeDefined()
 
 float parameters::default_voxelWidth()
 {
-	if (geometry == PARALLEL)
+	if (geometry == PARALLEL || geometry == CONE_PARALLEL)
 		return pixelWidth;
 	else
 		return sod / sdd * pixelWidth;
@@ -577,7 +795,7 @@ bool parameters::set_default_volume(float scale)
 
 	voxelWidth = default_voxelWidth() * scale;
 
-	if ((geometry == CONE && numRows > 1) || geometry == MODULAR)
+	if ((geometry == CONE && numRows > 1) || geometry == MODULAR || (geometry == CONE_PARALLEL && numRows > 1))
 	{
 		voxelHeight = default_voxelHeight() * scale;
 		numZ = int(ceil(float(numRows) / scale));
@@ -591,24 +809,29 @@ bool parameters::set_default_volume(float scale)
 	offsetY = 0.0;
 	offsetZ = 0.0;
 
-	if (geometry == CONE && helicalPitch != 0.0)
+	//printf("source range: %f to %f\n", z_source(0), z_source(numAngles-1));
+
+	if ((geometry == CONE || geometry == CONE_PARALLEL) && helicalPitch != 0.0)
 	{
-		int minSlices = int(sod / sdd * float(numRows) * pixelHeight / voxelHeight + 0.5);
+		float detectorHeightAtIso = sod / sdd * float(numRows) * pixelHeight;
+		int minSlices = int(detectorHeightAtIso / voxelHeight + 0.5);
 		if (fabs(angularRange) <= 180.0)
 			numZ = minSlices;
 		else if (fabs(angularRange) <= 360.0)
 		{
-			numZ = int(ceil((sod / sdd * (numRows - 1) * pixelHeight + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight));
-			numZ = max(minSlices, numZ);
+			//numZ = int(ceil((detectorHeightAtIso + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI)) / voxelHeight));
+			//numZ = max(minSlices, numZ);
+			numZ = minSlices;
 		}
 		else
 		{
-			numZ = int(ceil(fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight));
+			//numZ = int(ceil(fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - PI) / voxelHeight));
+			numZ = int(ceil((detectorHeightAtIso + fabs(helicalPitch) * (fabs(angularRange) * PI / 180.0 - 2.0*PI)) / voxelHeight));
 			numZ = max(minSlices, numZ);
 		}
 	}
 
-	if (geometry == CONE)
+	if (geometry == CONE || geometry == CONE_PARALLEL)
 	{
 		if (helicalPitch != 0.0)
 		{
@@ -662,6 +885,11 @@ void parameters::clearAll()
 	if (phis != NULL)
 		delete[] phis;
 	phis = NULL;
+	if (phis_full != NULL)
+		delete[] phis_full;
+	phis_full = NULL;
+	numAngles_full = 0;
+	phi_full_ind_offset = 0;
 
 	clearModularBeamParameters();
 }
@@ -694,6 +922,8 @@ void parameters::printAll()
 		else
 			printf("======== CT Cone-Beam Geometry ========\n");
 	}
+	if (geometry == CONE_PARALLEL)
+		printf("======== CT Cone-Parallel Geometry ========\n");
 	else if (geometry == PARALLEL)
 		printf("======== CT Parallel-Beam Geometry ========\n");
 	else if (geometry == FAN)
@@ -717,19 +947,21 @@ void parameters::printAll()
 	}
 	printf("detector pixel size: %f mm x %f mm\n", pixelHeight, pixelWidth);
 	printf("center detector pixel: %f, %f\n", centerRow, centerCol);
-	if (geometry == CONE || geometry == FAN)
+	if (geometry == CONE || geometry == FAN || geometry == CONE_PARALLEL)
 	{
 		printf("sod = %f mm\n", sod);
 		printf("sdd = %f mm\n", sdd);
 		if (tau != 0.0)
 			printf("tau = %f mm\n", tau);
+		if (geometry == CONE)
+			printf("tiltAngle = %f degrees\n", tiltAngle);
 	}
 	else if (geometry == MODULAR)
 	{
 		printf("mean sod = %f mm\n", sod);
 		printf("mean sdd = %f mm\n", sdd);
 	}
-	if (geometry == CONE && helicalPitch != 0.0)
+	if ((geometry == CONE || geometry == CONE_PARALLEL) && helicalPitch != 0.0)
 	{
 		printf("helicalPitch = %f (mm/radian)\n", helicalPitch);
 		printf("normalized helicalPitch = %f\n", normalizedHelicalPitch());
@@ -809,6 +1041,14 @@ float* parameters::setToZero(float* data, uint64 N)
 	return setToConstant(data, N, 0.0);
 }
 
+bool parameters::angles_are_defined()
+{
+	if (phis != NULL || geometryDefined(false) == true)
+		return true;
+	else
+		return false;
+}
+
 bool parameters::set_angles()
 {
 	if (phis != NULL)
@@ -881,7 +1121,7 @@ bool parameters::get_angles(float* phis_out)
 
 bool parameters::set_sod(float sod_in)
 {
-	if (sod_in > 0.0 && sod_in < sdd)
+	if (sod_in >= 0.0)// && (sod_in < sdd || sdd == 0.0))
 	{
 		sod = sod_in;
 		return true;
@@ -895,7 +1135,7 @@ bool parameters::set_sod(float sod_in)
 
 bool parameters::set_sdd(float sdd_in)
 {
-	if (sdd_in > 0.0 && sdd_in > sod)
+	if (sdd_in >= 0.0)// && sdd_in > sod)
 	{
 		sdd = sdd_in;
 		return true;
@@ -934,6 +1174,8 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 			rowVectors[i] = rowVectors_in[i];
 			colVectors[i] = colVectors_in[i];
 		}
+		int geometry_save = geometry;
+		geometry = MODULAR;
 
 		float* temp_phis = new float[numAngles];
 		bool isAxial = true;
@@ -995,9 +1237,10 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 			float d_y = moduleCenters[3 * i + 1];
 			float d_z = moduleCenters[3 * i + 2];
 
-			float sod_cur = sqrt(s_x * s_x + s_y * s_y + s_z * s_z);
-			//float odd_cur = sqrt(d_x * d_x + d_y * d_y + d_z * d_z);
-			float sdd_cur = sqrt((d_x-s_x) * (d_x-s_x) + (d_y-s_y) * (d_y-s_y) + (d_z-s_z) * (d_z-s_z));
+			//float n_vec[3];
+			//detector_normal(i, n_vec);
+			float sdd_cur = source_to_detector_distance(i);
+			float sod_cur = source_to_object_distance(i);
 
 			if (sod_cur <= 0.0 || sdd_cur <= 0.0)
 			{
@@ -1029,12 +1272,15 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 		sdd = sdd / float(numPairs);
 		//sdd += sod;
 
+		//printf("sdd = %f\n", sdd);
+
 		if (maxSourceZ - minSourceZ > 0.5 * numRows * pixelHeight)
 			isAxial = false;
 
 		if (isAxial == true && retVal == true)
 		{
 			tau = sin(temp_phis[0]) * sourcePositions[0] - cos(temp_phis[0]) * sourcePositions[1];
+			tau = 0.0; // FIXME?
 			for (int i = 0; i < numAngles; i++)
 				temp_phis[i] = (temp_phis[i] + 0.5 * PI) * 180.0 / PI;
 			set_angles(temp_phis, numAngles);
@@ -1045,9 +1291,60 @@ bool parameters::set_sourcesAndModules(float* sourcePositions_in, float* moduleC
 		temp_phis = NULL;
 
 		if (retVal == false)
+		{
+			geometry = geometry_save;
 			clearModularBeamParameters();
+		}
 
 		return retVal;
+	}
+}
+
+bool parameters::detector_normal(int i, float* n_vec)
+{
+	if (n_vec == NULL)
+		return false;
+	else if (geometry == MODULAR)
+	{
+		if (colVectors == NULL || rowVectors == NULL)
+			return false;
+		n_vec[0] = colVectors[3 * i + 1] * rowVectors[3 * i + 2] - colVectors[3 * i + 2] * rowVectors[3 * i + 1];
+		n_vec[1] = colVectors[3 * i + 2] * rowVectors[3 * i + 0] - colVectors[3 * i + 0] * rowVectors[3 * i + 2];
+		n_vec[2] = colVectors[3 * i + 0] * rowVectors[3 * i + 1] - colVectors[3 * i + 1] * rowVectors[3 * i + 0];
+		return true;
+	}
+	else
+	{
+		if (phis == NULL)
+			return false;
+		n_vec[0] = cos(phis[i]);
+		n_vec[1] = sin(phis[i]);
+		n_vec[2] = 0.0;
+		return true;
+	}
+}
+
+float parameters::source_to_object_distance(int i)
+{
+	if (geometry != MODULAR || sourcePositions == NULL || colVectors == NULL || rowVectors == NULL)
+		return sod;
+	else
+	{
+		float n_vec[3];
+		detector_normal(i, n_vec);
+		return fabs((sourcePositions[3 * i + 0] - 0.0) * n_vec[0] + (sourcePositions[3 * i + 1] - 0.0) * n_vec[1] + (sourcePositions[3 * i + 2] - 0.0) * n_vec[2]);
+	}
+}
+
+float parameters::source_to_detector_distance(int i)
+{
+	if (geometry != MODULAR || sourcePositions == NULL || colVectors == NULL || rowVectors == NULL || moduleCenters == NULL)
+		return sdd;
+	else
+	{
+		float n_vec[3];
+		detector_normal(i, n_vec);
+		return fabs((sourcePositions[3 * i + 0] - moduleCenters[3 * i + 0]) * n_vec[0] + (sourcePositions[3 * i + 1] - moduleCenters[3 * i + 1]) * n_vec[1] + (sourcePositions[3 * i + 2] - moduleCenters[3 * i + 2]) * n_vec[2]);
 	}
 }
 
@@ -1061,9 +1358,7 @@ bool parameters::rotateDetector(float alpha)
 			float* v_vec = &rowVectors[3 * i];
 
 			float u_cross_v[3];
-			u_cross_v[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
-			u_cross_v[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
-			u_cross_v[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+			detector_normal(i, u_cross_v);
 
 			//printf("normal vector: %f, %f, %f\n", u_cross_v[0], u_cross_v[1], u_cross_v[2]);
 
@@ -1117,20 +1412,32 @@ bool parameters::offsetScan_has_adequate_angular_range()
 		return true;
 }
 
+bool parameters::less_than_full_scan()
+{
+	if (angularRange < 360.0 - 0.5 * fabs(T_phi()) * 180.0 / PI)
+		return true;
+	else
+		return false;
+}
+
 bool parameters::set_offsetScan(bool aFlag)
 {
 	if (aFlag == false)
 		offsetScan = aFlag;
 	else
 	{
-		if (offsetScan_has_adequate_angular_range() == false)
+		if (geometryDefined(false))
 		{
-			printf("Error: offsetScan requires at least 360 degrees of projections!\n");
-			//printf("angularRange = %f, T_phi = %f\n", angularRange, T_phi());
-			offsetScan = false;
-			return false;
+			if (offsetScan_has_adequate_angular_range() == false)
+			{
+				if (aFlag)
+					printf("Error: offsetScan requires at least 360 degrees of projections!\n");
+				//printf("angularRange = %f, T_phi = %f\n", angularRange, T_phi());
+				offsetScan = false;
+				return false;
+			}
 		}
-		//*
+		/*
 		if (geometry == MODULAR)
 		{
 			printf("Error: offsetScan only applies to parallel-, fan-, or cone-beam data!\n");
@@ -1160,14 +1467,29 @@ bool parameters::set_truncatedScan(bool aFlag)
 float parameters::u_0()
 {
 	if (geometry == CONE && detectorType == CURVED)
-		return -(centerCol + colShiftFromFilter) * atan(pixelWidth / sdd);
+		return col(0);
+	else if (modularbeamIsAxiallyAligned())
+	{
+		float retVal = u(0, 0);
+		if (normalizeConeAndFanCoordinateFunctions)
+			retVal *= sdd;
+		return retVal;
+	}
 	else
-		return -(centerCol + colShiftFromFilter) * pixelWidth;
+		return col(0);
 }
 
 float parameters::v_0()
 {
-	return -(centerRow + rowShiftFromFilter) * pixelHeight;
+	if (modularbeamIsAxiallyAligned())
+	{
+		float retVal = v(0, 0);
+		if (normalizeConeAndFanCoordinateFunctions)
+			retVal *= sdd;
+		return retVal;
+	}
+	else
+		return -(centerRow + rowShiftFromFilter) * pixelHeight;
 }
 
 float parameters::phi_0()
@@ -1178,52 +1500,46 @@ float parameters::phi_0()
 		return phis[0];
 }
 
+float parameters::col(int i)
+{
+	if (geometry == CONE && detectorType == CURVED)
+		return (i - (centerCol + colShiftFromFilter)) * atan(pixelWidth / sdd);
+	else
+		return (i - (centerCol + colShiftFromFilter)) * pixelWidth;
+}
+
+float parameters::row(int i)
+{
+	return (i - (centerRow + rowShiftFromFilter)) * pixelHeight;
+}
+
 float parameters::u(int i, int iphi)
 {
-	/*
-	if (geometry == MODULAR && iphi >= 0 && iphi < numAngles)
+	bool includeModuleShift = true;
+	if (modularbeamIsAxiallyAligned())
 	{
-		float* s = &sourcePositions[3 * iphi];
-		float* c = &moduleCenters[3 * iphi];
-		float* u_vec = &colVectors[3 * iphi];
-		float* v_vec = &rowVectors[3 * iphi];
-
-		float detNormal[3];
-		detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
-		detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
-		detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
-
-		float t = 1.0 - (c[0] * detNormal[0] + c[1] * detNormal[1] + c[2] * detNormal[2]) / (s[0] * detNormal[0] + s[1] * detNormal[1] + s[2] * detNormal[2]);
-		float u_offs = (1 - t) * (s[0] * u_vec[0] + s[1] * u_vec[1] + s[2] * u_vec[2]);
-
+		float u_val = 0.0;
+		if (includeModuleShift)
+			u_val = u_offset(iphi);
+		//printf("u_val = %f\n", u_val);
+		u_val += col(i);
 		if (normalizeConeAndFanCoordinateFunctions)
-			return u_offs / sdd + u(i);
-		else
-			return u_offs + u(i);
-	}
-	//*/
-	if (modularbeamIsAxiallyAligned() && iphi >= 0 && iphi < numAngles)
-	{
-		float* u_vec = &colVectors[3 * iphi];
-		float colVec_dot_theta_perp = -u_vec[0] * sin(phis[iphi]) + u_vec[1] * cos(phis[iphi]);
-		if (normalizeConeAndFanCoordinateFunctions)
-			return colVec_dot_theta_perp*(i * pixelWidth + u_0()) / sdd;
-		else
-			return colVec_dot_theta_perp * (i * pixelWidth + u_0());
+			u_val = u_val / sdd;
+		return u_val;
 	}
 	else if (geometry == CONE && detectorType == CURVED)
-		return (i * atan(pixelWidth/sdd) + u_0());
+		return col(i);
 	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN || geometry == MODULAR))
-		return (i * pixelWidth + u_0()) / sdd;
+		return col(i) / sdd;
 	else
-		return i * pixelWidth + u_0();
+		return col(i);
 }
 
 float parameters::u_inv(float val)
 {
 	if (geometry == CONE && detectorType == CURVED)
 		return (val - u_0()) / atan(pixelWidth / sdd);
-	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN))
+	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN || geometry == MODULAR))
 	{
 		return (sdd*val - u_0()) / pixelWidth;
 	}
@@ -1233,45 +1549,93 @@ float parameters::u_inv(float val)
 
 float parameters::v(int i, int iphi)
 {
-	/*
-	if (geometry == MODULAR && iphi >= 0 && iphi < numAngles)
+	bool includeModuleShift = true;
+	if (modularbeamIsAxiallyAligned() /*&& iphi >= 0 && iphi < numAngles*/)
 	{
-		float* s = &sourcePositions[3 * iphi];
-		float* c = &moduleCenters[3 * iphi];
+		if (includeModuleShift)
+		{
+			iphi = max(0, min(numAngles - 1, iphi));
+
+			float* v_vec = &rowVectors[3 * iphi];
+			float rowVec_dot_z = v_vec[2];
+			if (normalizeConeAndFanCoordinateFunctions)
+				return rowVec_dot_z * row(i) / sdd;
+			else
+				return rowVec_dot_z * row(i);
+		}
+		else
+		{
+			if (normalizeConeAndFanCoordinateFunctions)
+				return row(i) / sdd;
+			else
+				return row(i);
+		}
+	}
+	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN || geometry == MODULAR || geometry == CONE_PARALLEL))
+		return row(i) / sdd;
+	else
+		return row(i);
+}
+
+float parameters::u_offset(int iphi)
+{
+	if (modularbeamIsAxiallyAligned())
+	{
+		iphi = max(0, min(numAngles - 1, iphi));
+		float* u_vec = &colVectors[3 * iphi];
+		float* moduleCenter = &moduleCenters[3 * iphi];
+		float* sourcePos = &sourcePositions[3 * iphi];
+		float n_vec[3];
+		detector_normal(iphi, n_vec);
+
+		float p_minus_c[3];
+		p_minus_c[0] = sourcePos[0] - moduleCenter[0];
+		p_minus_c[1] = sourcePos[1] - moduleCenter[1];
+		p_minus_c[2] = sourcePos[2] - moduleCenter[2];
+
+		// draw a line from source, perpendicular to the detector and calculate where this hits the detector
+		// then take the dot product with u_vec
+		float D = (p_minus_c[0] * n_vec[0] + p_minus_c[1] * n_vec[1] + p_minus_c[2] * n_vec[2]) / (sourcePos[0] * n_vec[0] + sourcePos[1] * n_vec[1] + sourcePos[2] * n_vec[2]);
+		//float D = source_to_detector_distance(iphi) / source_to_object_distance(iphi);
+		float u_val = (p_minus_c[0] - D * sourcePos[0]) * u_vec[0] + (p_minus_c[1] - D * sourcePos[1]) * u_vec[1] + (p_minus_c[2] - D * sourcePos[2]) * u_vec[2];
+		u_val *= -1.0;
+		return u_val;
+	}
+	else
+		return 0.0;
+}
+
+float parameters::v_offset(int iphi)
+{
+	if (modularbeamIsAxiallyAligned() /*&& iphi >= 0 && iphi < numAngles*/)
+	{
+		iphi = max(0, min(numAngles - 1, iphi));
 		float* u_vec = &colVectors[3 * iphi];
 		float* v_vec = &rowVectors[3 * iphi];
+		float* moduleCenter = &moduleCenters[3 * iphi];
+		float* sourcePos = &sourcePositions[3 * iphi];
+		float n_vec[3];
+		detector_normal(iphi, n_vec);
 
-		float detNormal[3];
-		detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
-		detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
-		detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
-
-		float t = 1.0 - (c[0] * detNormal[0] + c[1] * detNormal[1] + c[2] * detNormal[2]) / (s[0] * detNormal[0] + s[1] * detNormal[1] + s[2] * detNormal[2]);
-		float v_offs = (1 - t) * (s[0] * v_vec[0] + s[1] * v_vec[1] + s[2] * v_vec[2]);
+		float p_minus_c[3];
+		p_minus_c[0] = sourcePos[0] - moduleCenter[0];
+		p_minus_c[1] = sourcePos[1] - moduleCenter[1];
+		p_minus_c[2] = sourcePos[2] - moduleCenter[2];
+		float D = (p_minus_c[0] * n_vec[0] + p_minus_c[1] * n_vec[1] + p_minus_c[2] * n_vec[2]) / (sourcePos[0] * n_vec[0] + sourcePos[1] * n_vec[1] + sourcePos[2] * n_vec[2]);
+		//float D = source_to_detector_distance(iphi) / source_to_object_distance(iphi);
+		float v_val = (p_minus_c[0] - D * sourcePos[0]) * v_vec[0] + (p_minus_c[1] - D * sourcePos[1]) * v_vec[1] + (p_minus_c[2] - D * sourcePos[2]) * v_vec[2];
+		v_val *= -1.0;
 		if (normalizeConeAndFanCoordinateFunctions)
-			return v_offs / sdd + v(i);
-		else
-			return v_offs + v(i);
+			v_val = v_val / sdd;
+		return v_val;
 	}
-	else */
-	if (modularbeamIsAxiallyAligned() && iphi >= 0 && iphi < numAngles)
-	{
-		float* v_vec = &rowVectors[3 * iphi];
-		float rowVec_dot_z = v_vec[2];
-		if (normalizeConeAndFanCoordinateFunctions)
-			return rowVec_dot_z * (i * pixelHeight + v_0()) / sdd;
-		else
-			return rowVec_dot_z * (i * pixelHeight + v_0());
-	}
-	else if (normalizeConeAndFanCoordinateFunctions == true && (geometry == CONE || geometry == FAN || geometry == MODULAR))
-		return (i * pixelHeight + v_0()) / sdd;
 	else
-		return i * pixelHeight + v_0();
+		return 0.0;
 }
 
 float parameters::pixelWidth_normalized()
 {
-	if (geometry == PARALLEL)
+	if (geometry == PARALLEL || geometry == CONE_PARALLEL)
 		return pixelWidth;
 	else
 		return pixelWidth / sdd;
@@ -1319,15 +1683,21 @@ float parameters::z_samples(int iz)
 	return iz * voxelHeight + z_0();
 }
 
-float parameters::z_source(int i)
+float parameters::z_source(int i, int k)
 {
-	if (geometry != CONE || phis == NULL || helicalPitch == 0.0)
+	if ((geometry != CONE && geometry != CONE_PARALLEL) || phis == NULL || helicalPitch == 0.0)
 		return 0.0;
 	else
 	{
 		//float midAngle = 0.5 * (phis[numAngles - 1] + phis[0]);
 		//return (phis[i] - midAngle) * helicalPitch;
-		return phis[i] * helicalPitch + z_source_offset;
+		if (geometry == CONE)
+			return phis[i] * helicalPitch + z_source_offset;
+		else //if (geometry == CONE_PARALLEL)
+		{
+			float alpha = asin(u(k) / sod) + asin(tau / sod);
+			return (phis[i] + alpha) * helicalPitch + z_source_offset;
+		}
 	}
 }
 
@@ -1346,9 +1716,20 @@ bool parameters::set_normalizedHelicalPitch(float h_normalized)
 
 bool parameters::set_helicalPitch(float h)
 {
-	if (geometry != CONE || phis == NULL)
+	if (h == 0.0)
 	{
-		printf("Error: must set CT geometry before setting helicalPitch");
+		helicalPitch = 0.0;
+		z_source_offset = 0.0;
+		return true;
+	}
+	else if (phis == NULL)
+	{
+		printf("Error: must set CT geometry before setting helicalPitch\n");
+		return false;
+	}
+	else if (geometry != CONE && geometry != CONE_PARALLEL)
+	{
+		printf("Error: CT geometry must be CONE or CONE_PARALLEL for helical scans\n");
 		return false;
 	}
 	else
@@ -1366,10 +1747,36 @@ bool parameters::set_helicalPitch(float h)
 	}
 }
 
+bool parameters::set_tiltAngle(float tiltAngle_in)
+{
+	if (fabs(tiltAngle_in) < 1.0e-6)
+		tiltAngle_in = 0.0;
+	if (tiltAngle_in == 0.0)
+	{
+		tiltAngle = 0.0;
+		return true;
+	}
+	else if (geometry != CONE || detectorType != FLAT)
+	{
+		printf("Error: CT geometry must be CONE for tilted detector\n");
+		return false;
+	}
+	else if (fabs(tiltAngle_in) > 5.0)
+	{
+		printf("Error: tilt angle cannot exceed five degrees\n");
+		return false;
+	}
+	else
+	{
+		tiltAngle = tiltAngle_in;
+		return true;
+	}
+}
+
 float parameters::normalizedHelicalPitch()
 {
 	//helicalPitch = normalizedHelicalPitch*pzsize*nslices*(sod/sdd)/(2pi)
-	if (geometry != CONE)
+	if (geometry != CONE && geometry != CONE_PARALLEL)
 		return 0.0;
 	else
 		return 2.0 * PI * helicalPitch / (numRows * pixelHeight * sod / sdd);
@@ -1385,7 +1792,7 @@ bool parameters::anglesAreEquispaced()
 		for (int i = 1; i < numAngles-1; i++)
 		{
 			float curSpacing = phis[i + 1] - phis[i];
-			if (fabs(curSpacing - firstSpacing) > 1.0e-6)
+			if (fabs(curSpacing - firstSpacing) > 2.0e-5)
 			{
 				//printf("dist: %e\n", fabs(curSpacing - firstSpacing));
 				return false;
@@ -1420,6 +1827,8 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 	if (rowsNeeded == NULL || firstSlice > lastSlice)
 		return false;
 
+	float radiusFOV = min(furthestFromCenter(), rFOV());
+
 	if (geometry == PARALLEL || geometry == FAN)
 	{
 		rowsNeeded[0] = max(0, firstSlice);
@@ -1444,9 +1853,7 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 				float* v_vec = &rowVectors[3 * iphi];
 
 				float detNormal[3];
-				detNormal[0] = u_vec[1] * v_vec[2] - u_vec[2] * v_vec[1];
-				detNormal[1] = u_vec[2] * v_vec[0] - u_vec[0] * v_vec[2];
-				detNormal[2] = u_vec[0] * v_vec[1] - u_vec[1] * v_vec[0];
+				detector_normal(iphi, detNormal);
 
 				//float R = sqrt(s[0] * s[0] + s[1] * s[1] + s[2] * s[2]);
 				float R_z = sqrt(s[0] * s[0] + s[1] * s[1]);
@@ -1457,7 +1864,7 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 				float r[3];
 				float t_lo, v_lo, t_hi, v_hi;
 
-				dist = R_z - rFOV() - voxelWidth;
+				dist = R_z - radiusFOV - voxelWidth;
 				r[0] = (c[0] - s[0]) * dist / D_z;
 				r[1] = (c[1] - s[1]) * dist / D_z;
 
@@ -1491,6 +1898,13 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 				}
 
 				float accountForClockingAndPixelSize = fabs(u_vec[2] * 0.5 * pixelWidth * float(numCols - 1)) + 0.5 * pixelHeight;
+				//printf("accountForClockingAndPixelSize = %f\n", accountForClockingAndPixelSize);
+
+				//*
+				v_lo -= accountForClockingAndPixelSize;
+				v_hi += accountForClockingAndPixelSize;
+				//*/
+				/*
 				if (v_lo < 0.0)
 					v_lo -= accountForClockingAndPixelSize;
 				if (v_hi < 0.0)
@@ -1499,11 +1913,12 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 					v_lo += accountForClockingAndPixelSize;
 				if (v_hi > 0.0)
 					v_hi += accountForClockingAndPixelSize;
+				//*/
 
-				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - v_0()) / pixelHeight)))));
-				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));
+				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - row(0)) / pixelHeight)))));
+				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - row(0)) / pixelHeight)))));
 
-				dist = R_z + rFOV() + voxelWidth;
+				dist = R_z + radiusFOV + voxelWidth;
 				r[0] = (c[0] - s[0]) * dist / D_z;
 				r[1] = (c[1] - s[1]) * dist / D_z;
 
@@ -1515,6 +1930,11 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 				t_hi = ((c[0] - s[0]) * detNormal[0] + (c[1] - s[1]) * detNormal[1] + (c[2] - s[2]) * detNormal[2]) / (r[0] * detNormal[0] + r[1] * detNormal[1] + r[2] * detNormal[2]);
 				v_hi = (s[0] + t_hi * r[0] - c[0]) * v_vec[0] + (s[1] + t_hi * r[1] - c[1]) * v_vec[1] + (s[2] + t_hi * r[2] - c[2]) * v_vec[2];
 
+				//*
+				v_lo -= accountForClockingAndPixelSize;
+				v_hi += accountForClockingAndPixelSize;
+				//*/
+				/*
 				if (v_lo < 0.0)
 					v_lo -= accountForClockingAndPixelSize;
 				if (v_hi < 0.0)
@@ -1523,9 +1943,10 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 					v_lo += accountForClockingAndPixelSize;
 				if (v_hi > 0.0)
 					v_hi += accountForClockingAndPixelSize;
+				//*/
 
-				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - v_0()) / pixelHeight)))));
-				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - v_0()) / pixelHeight)))));
+				indices.push_back(max(0, min(numRows - 1, int(floor((min(v_lo, v_hi) - row(0)) / pixelHeight)))));
+				indices.push_back(max(0, min(numRows - 1, int(ceil((max(v_lo, v_hi) - row(0)) / pixelHeight)))));
 			}
 			rowsNeeded[0] = *std::min_element(std::begin(indices), std::end(indices));
 			rowsNeeded[1] = *std::max_element(std::begin(indices), std::end(indices));
@@ -1536,55 +1957,62 @@ bool parameters::rowRangeNeededForBackprojection(int firstSlice, int lastSlice, 
 			rowsNeeded[1] = numRows - 1;
 		}
 	}
-	else
+	else // CONE || CONE_PARALLEL
 	{
+		//float accountForClocking = fabs(sin(tiltAngle*PI/180.0) * pixelWidth * 0.5 * float(numCols - 1)) / sdd;
+		float u_max = std::max(fabs(col(0)), fabs(col(numCols - 1)));
+		float accountForClocking = fabs(sin(tiltAngle * PI / 180.0) * u_max) / sdd;
+
 		float z_lo = float(firstSlice) * voxelHeight + z_0() - 0.5 * voxelHeight;
 		float z_hi = float(lastSlice) * voxelHeight + z_0() + 0.5 * voxelHeight;
 
 		// v = z / (R - <x, theta>)
 		// v = z / (R - rFOV())
 		float T_v = pixelHeight / sdd;
-		float v_denom_min = sod - rFOV() - voxelWidth;
-		float v_denom_max = sod + rFOV() + voxelWidth;
-		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5 * pixelHeight / sdd;
-		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5 * pixelHeight / sdd;
+		float v_denom_min = sod - radiusFOV - voxelWidth;
+		float v_denom_max = sod + radiusFOV + voxelWidth;
+		float v_lo = min(z_lo / v_denom_min, z_lo / v_denom_max) - 0.5 * pixelHeight / sdd - accountForClocking;
+		float v_hi = max(z_hi / v_denom_min, z_hi / v_denom_max) + 0.5 * pixelHeight / sdd + accountForClocking;
 
-		rowsNeeded[0] = min(numRows - 1, max(0, int(floor((v_lo - v_0() / sdd) / T_v))));
-		rowsNeeded[1] = max(0, min(numRows - 1, int(ceil((v_hi - v_0() / sdd) / T_v))));
-
-		/*
-		if (rowsNeeded[0] > rowsNeeded[1])
-		{
-			printf("T_v = %f\n", T_v);
-			printf("v_denom_min = %f\n", v_denom_min);
-			printf("v_denom_max = %f\n", v_denom_max);
-			printf("v_lo = %f\n", v_lo);
-			printf("v_hi = %f\n", v_hi);
-			printf("(v_lo - v_0() / sdd) / T_v = %f\n", (v_lo - v_0() / sdd) / T_v);
-			printf("(v_hi - v_0() / sdd) / T_v = %f\n", (v_hi - v_0() / sdd) / T_v);
-		}
-		//*/
+		rowsNeeded[0] = min(numRows - 1, max(0, int(floor((v_lo - row(0) / sdd) / T_v))));
+		rowsNeeded[1] = max(0, min(numRows - 1, int(ceil((v_hi - row(0) / sdd) / T_v))));
 	}
 	return true;
 }
 
 bool parameters::sliceRangeNeededForProjectionRange(int firstView, int lastView, int* slicesNeeded, bool doClip)
 {
-	if (geometry == CONE && helicalPitch != 0.0)
+	float radiusFOV = min(furthestFromCenter(), rFOV());
+	if ((geometry == CONE || geometry == CONE_PARALLEL) && helicalPitch != 0.0)
 	{
-		float v_lo = (v_0() - 0.5 * pixelHeight) / sdd;
-		float v_hi = (float(numRows - 1) * pixelHeight + v_0() + 0.5 * pixelHeight) / sdd;
+		float v_lo = (row(0) - 0.5 * pixelHeight) / sdd;
+		float v_hi = (row(numRows-1) + 0.5 * pixelHeight) / sdd;
 
 		// v = z / (R - <x, theta>)
 		// v = z / (R - rFOV())
 		float T_z = voxelHeight;
-		float v_denom_min = sod - rFOV() - voxelWidth;
-		float v_denom_max = sod + rFOV() + voxelWidth;
+		float v_denom_min = sod - radiusFOV - voxelWidth;
+		float v_denom_max = sod + radiusFOV + voxelWidth;
 		//float z_lo = min(v_lo * v_denom_min, v_lo * v_denom_max) - 0.5 * voxelHeight;
 		//float z_hi = max(v_hi * v_denom_min, v_hi * v_denom_max) + 0.5 * voxelHeight;
 
 		float z_source_firstView = phis[firstView] * helicalPitch + z_source_offset;
 		float z_source_lastView = phis[lastView] * helicalPitch + z_source_offset;
+		if (geometry == CONE_PARALLEL)
+		{
+			float alpha_min = asin(u(0) / sod) + asin(tau / sod);
+			float alpha_max = asin(u(numCols-1) / sod) + asin(tau / sod);
+			if (helicalPitch > 0.0)
+			{
+				z_source_firstView += alpha_min * helicalPitch;
+				z_source_lastView += alpha_max * helicalPitch;
+			}
+			else
+			{
+				z_source_firstView += alpha_max * helicalPitch;
+				z_source_lastView += alpha_min * helicalPitch;
+			}
+		}
 
 		vector<float> slices;
 		slices.push_back(z_source_firstView + v_denom_min * v_lo);
@@ -1616,18 +2044,19 @@ bool parameters::sliceRangeNeededForProjectionRange(int firstView, int lastView,
 
 bool parameters::viewRangeNeededForBackprojection(int firstSlice, int lastSlice, int* viewsNeeded)
 {
+	float radiusFOV = min(furthestFromCenter(), rFOV());
 	viewsNeeded[0] = 0;
 	viewsNeeded[1] = numAngles - 1;
-	if (geometry == CONE && helicalPitch != 0.0)
+	if ((geometry == CONE || geometry == CONE_PARALLEL) && helicalPitch != 0.0)
 	{
-		float v_lo = (v_0() - 0.5 * pixelHeight) / sdd;
-		float v_hi = (float(numRows-1) * pixelHeight + v_0() + 0.5 * pixelHeight) / sdd;
+		float v_lo = (row(0) - 0.5 * pixelHeight) / sdd;
+		float v_hi = (row(numRows-1) + 0.5 * pixelHeight) / sdd;
 
 		// v = z / (R - <x, theta>)
 		// v = z / (R - rFOV())
 		float T_z = voxelHeight;
-		float v_denom_min = sod - rFOV() - voxelWidth;
-		float v_denom_max = sod + rFOV() + voxelWidth;
+		float v_denom_min = sod - radiusFOV - voxelWidth;
+		float v_denom_max = sod + radiusFOV + voxelWidth;
 		//float z_lo = min(v_lo * v_denom_min, v_lo * v_denom_max) - 0.5 * voxelHeight;
 		//float z_hi = max(v_hi * v_denom_min, v_hi * v_denom_max) + 0.5 * voxelHeight;
 		float z_lo = firstSlice * voxelHeight + z_0() - 0.5 * voxelHeight;
@@ -1644,6 +2073,22 @@ bool parameters::viewRangeNeededForBackprojection(int firstSlice, int lastSlice,
 		sourcePositions.push_back(z_hi - v_denom_max * v_hi);
 		float sourcePositionFloor = *std::min_element(std::begin(sourcePositions), std::end(sourcePositions));
 		float sourcePositionCeil = *std::max_element(std::begin(sourcePositions), std::end(sourcePositions));
+
+		if (geometry == CONE_PARALLEL)
+		{
+			float alpha_min = asin(u(0) / sod) + asin(tau / sod);
+			float alpha_max = asin(u(numCols - 1) / sod) + asin(tau / sod);
+			if (helicalPitch > 0.0)
+			{
+				sourcePositionFloor -= helicalPitch * alpha_max;
+				sourcePositionCeil -= helicalPitch * alpha_min;
+			}
+			else
+			{
+				sourcePositionFloor -= helicalPitch * alpha_min;
+				sourcePositionCeil -= helicalPitch * alpha_max;
+			}
+		}
 
 		float phi_ind_A = phi_inv((sourcePositionFloor - z_source_offset) / helicalPitch);
 		float phi_ind_B = phi_inv((sourcePositionCeil - z_source_offset) / helicalPitch);
@@ -1667,6 +2112,7 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 	if (slicesNeeded == NULL || firstRow > lastRow)
 		return false;
 
+	float radiusFOV = min(furthestFromCenter(), rFOV());
 	if (geometry == PARALLEL || geometry == FAN)
 	{
 		slicesNeeded[0] = max(0, firstRow);
@@ -1685,14 +2131,14 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 				float* v_vec = &rowVectors[3 * iphi];
 
 				float accountForClockingAndPixelSize = fabs(u_vec[2] * 0.5 * pixelWidth * float(numCols - 1)) + 0.5 * pixelHeight;
-				float v_lo = float(firstRow) * pixelHeight + v_0() - accountForClockingAndPixelSize;
-				float v_hi = float(lastRow) * pixelHeight + v_0() + accountForClockingAndPixelSize;
+				float v_lo = float(firstRow) * pixelHeight + row(0) - accountForClockingAndPixelSize;
+				float v_hi = float(lastRow) * pixelHeight + row(0) + accountForClockingAndPixelSize;
 
 				float R_z = sqrt(s[0] * s[0] + s[1] * s[1]);
 				float D_z = sqrt((s[0] - c[0]) * (s[0] - c[0]) + (s[1] - c[1]) * (s[1] - c[1]));
 
-				float dist_close = R_z - rFOV() - voxelWidth;
-				float dist_far = R_z + rFOV() + voxelWidth;
+				float dist_close = R_z - radiusFOV - voxelWidth;
+				float dist_far = R_z + radiusFOV + voxelWidth;
 
 				zs.push_back(s[2] + (c[2] + v_lo * v_vec[2] - s[2]) * dist_close / D_z);
 				zs.push_back(s[2] + (c[2] + v_lo * v_vec[2] - s[2]) * dist_far / D_z);
@@ -1716,16 +2162,22 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 			slicesNeeded[1] = numZ - 1;
 		}
 	}
-	else
+	else // CONE || CONE_PARALLEL
 	{
-		float v_lo = (float(firstRow) * pixelHeight + v_0() - 0.5 * pixelHeight) / sdd;
-		float v_hi = (float(lastRow) * pixelHeight + v_0() + 0.5 * pixelHeight) / sdd;
+		float v_lo = (float(firstRow) * pixelHeight + row(0) - 0.5 * pixelHeight) / sdd;
+		float v_hi = (float(lastRow) * pixelHeight + row(0) + 0.5 * pixelHeight) / sdd;
+
+		//float accountForClocking = fabs(sin(tiltAngle * PI / 180.0) * pixelWidth * 0.5 * float(numCols - 1)) / sdd;
+		float u_max = std::max(fabs(col(0)), fabs(col(numCols - 1)));
+		float accountForClocking = fabs(sin(tiltAngle * PI / 180.0) * u_max) / sdd;
+		v_lo -= accountForClocking;
+		v_hi += accountForClocking;
 
 		// v = z / (R - <x, theta>)
 		// v = z / (R - rFOV())
 		float T_z = voxelHeight;
-		float v_denom_min = sod - rFOV() - voxelWidth;
-		float v_denom_max = sod + rFOV() + voxelWidth;
+		float v_denom_min = sod - radiusFOV - voxelWidth;
+		float v_denom_max = sod + radiusFOV + voxelWidth;
 		float z_lo = min(v_lo * v_denom_min, v_lo * v_denom_max) - 0.5 * voxelHeight;
 		float z_hi = max(v_hi * v_denom_min, v_hi * v_denom_max) + 0.5 * voxelHeight;
 
@@ -1734,8 +2186,11 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 
 		if (doClip)
 		{
-			slicesNeeded[0] = max(0, slicesNeeded[0]);
-			slicesNeeded[1] = min(numZ - 1, slicesNeeded[1]);
+			//slicesNeeded[0] = max(0, slicesNeeded[0]);
+			//slicesNeeded[1] = min(numZ - 1, slicesNeeded[1]);
+
+			slicesNeeded[0] = max(0, min(numZ - 1, slicesNeeded[0]));
+			slicesNeeded[1] = max(0, min(numZ - 1, slicesNeeded[1]));
 		}
 	}
 	return true;
@@ -1743,15 +2198,20 @@ bool parameters::sliceRangeNeededForProjection(int firstRow, int lastRow, int* s
 
 float parameters::requiredGPUmemory(int extraCols, int numProjectionData, int numVolumeData)
 {
+	return requiredGPUmemory(extraCols, float(numProjectionData), float(numVolumeData));
+}
+
+float parameters::requiredGPUmemory(int extraCols, float numProjectionData, float numVolumeData)
+{
 	if (mu != NULL)
 		return numProjectionData*projectionDataSize(extraCols) + 2.0* numVolumeData*volumeDataSize() + extraMemoryReserved;
 	else
 		return numProjectionData*projectionDataSize(extraCols) + numVolumeData*volumeDataSize() + extraMemoryReserved;
 }
 
-bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, int numProjectionData, int numVolumeData)
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, float numProjectionData, float numVolumeData)
 {
-#ifndef __USE_CPU
+	#ifndef __USE_CPU
 	if (useLeastGPUmemory)
 	{
 		if (getAvailableGPUmemory(whichGPUs) < requiredGPUmemory(extraColumns, numProjectionData, numVolumeData))
@@ -1771,6 +2231,11 @@ bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns
 #endif
 }
 
+bool parameters::hasSufficientGPUmemory(bool useLeastGPUmemory, int extraColumns, int numProjectionData, int numVolumeData)
+{
+	return hasSufficientGPUmemory(useLeastGPUmemory, extraColumns, float(numProjectionData), float(numVolumeData));
+}
+
 bool parameters::removeProjections(int firstProj, int lastProj)
 {
 	if (firstProj < 0 || lastProj >= numAngles || firstProj > lastProj)
@@ -1781,14 +2246,18 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 
 	int numAngles_new = lastProj - firstProj + 1;
 	float* phis_new = NULL;
+	float angularRange_save = angularRange;
 	if (phis != NULL)
 	{
-		float* phis_cur = new float[numAngles];
-		get_angles(phis_cur);
+		if (phis_full != NULL)
+			delete[] phis_full;
+		phis_full = new float[numAngles];
+		get_angles(phis_full);
 		phis_new = new float[numAngles_new];
 		for (int i = firstProj; i <= lastProj; i++)
-			phis_new[i - firstProj] = phis_cur[i];
-		delete[] phis_cur;
+			phis_new[i - firstProj] = phis_full[i];
+		numAngles_full = numAngles;
+		phi_full_ind_offset = firstProj;
 	}
 	if (geometry == MODULAR)
 	{
@@ -1823,9 +2292,43 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 		set_angles(phis_new, numAngles_new);
 		phi_start = phi_start_save;
 		phi_end = phi_end_save;
+		angularRange = angularRange_save;
 	}
 	numAngles = numAngles_new;
 	return true;
+}
+
+float parameters::get_phis_full(int i)
+{
+	if (phis_full != NULL)
+	{
+		i = max(0, min(i, numAngles_full));
+		return phis_full[i];
+	}
+	else if (phis != NULL)
+	{
+		i = max(0, min(i, numAngles));
+		return phis[i];
+	}
+	return 0.0;
+}
+
+int parameters::get_numAngles_full()
+{
+	return numAngles_full;
+}
+
+int parameters::get_phi_full_ind_offset()
+{
+	return phi_full_ind_offset;
+}
+
+bool parameters::is_partial_view_data()
+{
+	if (numAngles_full > numAngles && phis_full != NULL)
+		return true;
+	else
+		return false;
 }
 
 bool parameters::set_numTVneighbors(int N)
@@ -1863,9 +2366,17 @@ bool parameters::convert_conebeam_to_modularbeam()
 		return false;
 	}
 
-	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + u_0();
-	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + v_0();
+	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + col(0);// -tau;
+	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + row(0);
 	//printf("horizontalDetectorShift = %f\n", horizontalDetectorShift);
+
+	float cos_tilt = cos(tiltAngle * PI / 180.0);
+	float sin_tilt = sin(tiltAngle * PI / 180.0);
+	if (fabs(tiltAngle) < 1.0e-6)
+	{
+		cos_tilt = 1.0;
+		sin_tilt = 0.0;
+	}
 
 	float* s_pos = new float[3 * numAngles];
 	float* d_pos = new float[3 * numAngles];
@@ -1884,16 +2395,16 @@ bool parameters::convert_conebeam_to_modularbeam()
 		d_pos[3 * iphi + 1] = (sod - sdd) * sin_phi;
 		d_pos[3 * iphi + 2] = z_source(iphi);
 
-		v_vec[3 * iphi + 0] = 0.0;
-		v_vec[3 * iphi + 1] = 0.0;
-		v_vec[3 * iphi + 2] = 1.0;
+		v_vec[3 * iphi + 0] = sin_phi * sin_tilt;
+		v_vec[3 * iphi + 1] = -cos_phi * sin_tilt;
+		v_vec[3 * iphi + 2] = cos_tilt;
 
-		u_vec[3 * iphi + 0] = -sin_phi;
-		u_vec[3 * iphi + 1] = cos_phi;
-		u_vec[3 * iphi + 2] = 0.0;
+		u_vec[3 * iphi + 0] = -sin_phi * cos_tilt;
+		u_vec[3 * iphi + 1] = cos_phi * cos_tilt;
+		u_vec[3 * iphi + 2] = sin_tilt;
 
-		d_pos[3 * iphi + 0] += horizontalDetectorShift * u_vec[3 * iphi + 0];
-		d_pos[3 * iphi + 1] += horizontalDetectorShift * u_vec[3 * iphi + 1];
+		d_pos[3 * iphi + 0] += horizontalDetectorShift * u_vec[3 * iphi + 0] + tau * sin_phi;
+		d_pos[3 * iphi + 1] += horizontalDetectorShift * u_vec[3 * iphi + 1] - tau * cos_phi;
 		d_pos[3 * iphi + 2] += horizontalDetectorShift * u_vec[3 * iphi + 2];
 
 		d_pos[3 * iphi + 0] += verticalDetectorShift * v_vec[3 * iphi + 0];
@@ -1902,6 +2413,8 @@ bool parameters::convert_conebeam_to_modularbeam()
 	}
 	centerRow = 0.5 * float(numRows - 1);
 	centerCol = 0.5 * float(numCols - 1);
+	tiltAngle = 0.0;
+	tau = 0.0;
 	if (set_sourcesAndModules(s_pos, d_pos, v_vec, u_vec, numAngles))
 		geometry = MODULAR;
 	delete[] s_pos;
@@ -1912,6 +2425,7 @@ bool parameters::convert_conebeam_to_modularbeam()
 	//for (int i = 0; i < numAngles; i++)
 	//	printf("%f\n", phis[i]*180.0/PI);
 
+	set_helicalPitch(0.0);
 	set_offsetScan(offsetScan);
 
 	return true;
@@ -1930,8 +2444,8 @@ bool parameters::convert_parallelbeam_to_modularbeam()
 		return false;
 	}
 
-	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + u_0();
-	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + v_0();
+	float horizontalDetectorShift = 0.5 * float(numCols - 1) * pixelWidth + col(0);
+	float verticalDetectorShift = 0.5 * float(numRows - 1) * pixelHeight + row(0);
 	//printf("horizontalDetectorShift = %f\n", horizontalDetectorShift);
 
 	double rFOV_max = max(double(furthestFromCenter()), max(double(fabs(z_0())), double(fabs(z_samples(numZ - 1)))));
@@ -1992,6 +2506,7 @@ bool parameters::convert_parallelbeam_to_modularbeam()
 	delete[] v_vec;
 	delete[] u_vec;
 
+	set_helicalPitch(0.0);
 	set_offsetScan(offsetScan);
 
 	return true;
