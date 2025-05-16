@@ -167,14 +167,14 @@ __global__ void explicit_convolution(TEX_DATA g, float* filtered_data, TEX_DATA 
 
     for (int j = 0; j < N.z; j+=8)
     {
-        const float x0 = TEX3D(g, N, j + 0, m, l);
-        const float x1 = TEX3D(g, N, j + 1, m, l);
-        const float x2 = TEX3D(g, N, j + 2, m, l);
-        const float x3 = TEX3D(g, N, j + 3, m, l);
-        const float x4 = TEX3D(g, N, j + 4, m, l);
-        const float x5 = TEX3D(g, N, j + 5, m, l);
-        const float x6 = TEX3D(g, N, j + 6, m, l);
-        const float x7 = TEX3D(g, N, j + 7, m, l);
+        const float x0 = TEX3D_L2(g, N, j + 0, m, l);
+        const float x1 = TEX3D_L2(g, N, j + 1, m, l);
+        const float x2 = TEX3D_L2(g, N, j + 2, m, l);
+        const float x3 = TEX3D_L2(g, N, j + 3, m, l);
+        const float x4 = TEX3D_L2(g, N, j + 4, m, l);
+        const float x5 = TEX3D_L2(g, N, j + 5, m, l);
+        const float x6 = TEX3D_L2(g, N, j + 6, m, l);
+        const float x7 = TEX3D_L2(g, N, j + 7, m, l);
 
         //const float x0 = tex3D<float>(g, j + 0, m, l);
         //const float x1 = tex3D<float>(g, j + 1, m, l);
@@ -438,7 +438,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term1 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
-    const float term1 = TEX3D(g, N, u_arg, v_arg, l0 + 0.5f);
+    const float term1 = TEX3D_L2(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -451,7 +451,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
-    const float term2 = TEX3D(g, N, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -464,7 +464,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
-    const float term3 = TEX3D(g, N, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = TEX3D_L2(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -477,7 +477,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
-    const float term4 = TEX3D(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
     //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
@@ -546,7 +546,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term1 = tex3D<float>(g, u_arg, v_arg, l0+0.5f);
-    const float term1 = TEX3D(g, N, u_arg, v_arg, l0+0.5f);
+    const float term1 = TEX3D_L2(g, N, u_arg, v_arg, l0+0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -560,7 +560,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
-    const float term2 = TEX3D(g, N, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -574,7 +574,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
-    const float term3 = TEX3D(g, N, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = TEX3D_L2(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -588,7 +588,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
-    const float term4 = TEX3D(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
     //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);

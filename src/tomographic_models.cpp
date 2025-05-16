@@ -3699,6 +3699,7 @@ bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float de
 
 bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
 {
+	printf("tomographicModels::Diffuse\n");
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{

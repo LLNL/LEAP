@@ -1041,8 +1041,6 @@ extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const i
     if (data == nullptr)
         return nullptr;
 
-
-
     printf("texture memory setting (from CPU): ");
     if (useExtrapolation) {
         printf("clamp ");
@@ -1302,6 +1300,9 @@ extern TEX_ARRAY loadTexture1D_from_cpu(TEX_DATA& tex_object, float* data, const
     }
     if (useLinearInterpolation) {
         printf("linear ");
+    }
+    else {
+        printf("nearest ");
     }
     printf("\n");
 

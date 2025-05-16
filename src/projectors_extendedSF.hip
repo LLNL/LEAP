@@ -143,11 +143,11 @@ __global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
 
                     if (volumeDimensionOrder == 0) {
                         //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
                     }
                     else {
                         //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
                     }
                 }
             }
@@ -194,11 +194,11 @@ __global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
 
                     if (volumeDimensionOrder == 0) {
                         //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
                     }
                     else {
                         //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
                     }
                 }
             }
@@ -333,7 +333,7 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(TEX_DATA g, i
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                                 //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
-                                val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                             }
                         }
                     }
@@ -367,7 +367,7 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(TEX_DATA g, i
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                                 //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
-                                val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                             }
                         }
                     }
@@ -468,7 +468,7 @@ __global__ void coneParallelBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                             //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
-                            val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                         }
                     }
                 }
@@ -502,7 +502,7 @@ __global__ void coneParallelBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                             //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
-                            val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                         }
                     }
                 }
@@ -574,7 +574,7 @@ __global__ void parallelBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
                     //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
-                    val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
                 }
                 //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
             }
@@ -597,7 +597,7 @@ __global__ void parallelBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
                     //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
-                    val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
                 }
                 //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
             }
@@ -683,7 +683,7 @@ __global__ void fanBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g,
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
                     //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
-                    val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
                 }
             }
         }
@@ -704,7 +704,7 @@ __global__ void fanBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g,
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
                     //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
-                    val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
                 }
             }
         }
@@ -882,7 +882,7 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(TEX_DATA g,
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                                 //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                                val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -924,7 +924,7 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(TEX_DATA g,
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                                 //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                                val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -1090,7 +1090,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(TEX_DATA g, int4 
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                                 //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                                val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -1131,7 +1131,7 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(TEX_DATA g, int4 
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                                 //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                                val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -1260,7 +1260,7 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, floa
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                             //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                            val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1299,7 +1299,7 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, floa
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                             //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                            val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1420,7 +1420,7 @@ __global__ void coneBeamBackprojectorKernel_eSF(TEX_DATA g, const int4 N_g, cons
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                             //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                            val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1459,7 +1459,7 @@ __global__ void coneBeamBackprojectorKernel_eSF(TEX_DATA g, const int4 N_g, cons
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
                             //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
-                            val += TEX3D(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1529,11 +1529,11 @@ __global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
 
                 if (volumeDimensionOrder == 0) {
                     //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                    g_output += TEX3D(f, N_f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
                 }
                 else {
                     //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
-                    g_output += TEX3D(f, N_f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
                 }
             }
         }
@@ -1561,11 +1561,11 @@ __global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
 
                 if (volumeDimensionOrder == 0) {
                     //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                    g_output += TEX3D(f, N_f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
                 }
                 else {
                     //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
-                    g_output += TEX3D(f, N_f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
                 }
             }
         }
@@ -1644,11 +1644,11 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
 
                 if (volumeDimensionOrder == 0) {
                     //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                    g_output += TEX3D(f, N_f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
                 }
                 else {
                     //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
-                    g_output += TEX3D(f, N_f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
                 }
             }
         }
@@ -1693,11 +1693,11 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
                 
                 if (volumeDimensionOrder == 0) {
                     //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                    g_output += TEX3D(f, N_f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
                 }
                 else {
                     //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
-                    g_output += TEX3D(f, N_f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
                 }
             }
         }
@@ -1815,11 +1815,11 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const floa
 
                     if (volumeDimensionOrder == 0) {
                         //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
                     }
                     else {
                         //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
                     }
                 }
             }
@@ -1878,11 +1878,11 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const floa
 
                     if (volumeDimensionOrder == 0) {
                         //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
                     }
                     else {
                         //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
                     }
                 }
             }
@@ -1985,11 +1985,11 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
 
                     if (volumeDimensionOrder == 0) {
                         //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
                     }
                     else {
                         //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
                     }
                 }
             }
@@ -2048,11 +2048,11 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
 
                     if (volumeDimensionOrder == 0) {
                         //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
                     }
                     else {
                         //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
-                        g_output += TEX3D(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
                     }
                 }
             }

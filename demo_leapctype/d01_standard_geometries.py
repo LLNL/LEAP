@@ -108,13 +108,13 @@ f[:] = 0.0
 # If you want an iterative reconstruction to start from scratch, just initialize it with zeros
 startTime = time.time()
 print("start BP/FBP")
-leapct.backproject(g,f)
-#leapct.FBP(g,f)
+#leapct.backproject(g,f)
+leapct.FBP(g,f)
 print("end BP/FBP")
 #leapct.inconsistencyReconstruction(g,f)
 #leapct.print_cost = True
-filters = filterSequence(1.0e0) # filter strength argument must be turned to your specific application
-filters.append(TV(leapct, delta=0.02/20.0)) # the delta argument must be turned to your specific application
+#filters = filterSequence(1.0e0) # filter strength argument must be turned to your specific application
+#filters.append(TV(leapct, delta=0.02/20.0)) # the delta argument must be turned to your specific application
 #leapct.ASDPOCS(g,f,10,10,1,filters)
 #leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
@@ -127,8 +127,8 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 print(f.shape, g.shape)
 f_slice = f[256,:,:]
 g_slice = g[:,256,:]
-imageio.imsave("out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
-imageio.imsave("out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
+imageio.imsave("d01_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+imageio.imsave("d01_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 print("image saved")
 
 # Post Reconstruction Smoothing (optional)

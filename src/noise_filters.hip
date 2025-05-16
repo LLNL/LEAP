@@ -748,7 +748,7 @@ __global__ void BlurFilterKernel_txt(TEX_DATA f, float* f_filtered, int3 N, floa
                 {
                     //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j_shift * N.z + k_shift)];
                     //val += theWeight * tex3D<float>(f, k_shift, j_shift, i_shift);
-                    val += theWeight * TEX3D_nearest(f, N, k_shift, j_shift, i_shift);
+                    val += theWeight * TEX3D_N1(f, N, k_shift, j_shift, i_shift);
                     sum += theWeight;
                 }
             }
@@ -757,7 +757,7 @@ __global__ void BlurFilterKernel_txt(TEX_DATA f, float* f_filtered, int3 N, floa
 
     if (d_DO_HIGH_PASS) {
         //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_nearest(f, N, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
     }
     else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
@@ -801,7 +801,7 @@ __global__ void BlurFilter2DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f_slice[uint64(j_shift * N.z + k_shift)];
                 //val += theWeight * tex3D<float>(f, k_shift, j_shift, i);
-                val += theWeight * TEX3D_nearest(f, N, k_shift, j_shift, i);
+                val += theWeight * TEX3D_N1(f, N, k_shift, j_shift, i);
                 sum += theWeight;
             }
         }
@@ -809,7 +809,7 @@ __global__ void BlurFilter2DKernel_txt(TEX_DATA f, float* f_filtered, const int3
 
     if (d_DO_HIGH_PASS) {
         //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_nearest(f, N, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
     }
     else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
@@ -847,7 +847,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
                 //val += theWeight * tex3D<float>(f, k, j, i_shift);
-                val += theWeight * TEX3D_nearest(f, N, k, j, i_shift);
+                val += theWeight * TEX3D_N1(f, N, k, j, i_shift);
                 sum += theWeight;
             }
         }
@@ -866,7 +866,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
                 //val += theWeight * tex3D<float>(f, k, j_shift, i);
-                val += theWeight * TEX3D_nearest(f, N, k, j_shift, i);
+                val += theWeight * TEX3D_N1(f, N, k, j_shift, i);
                 sum += theWeight;
             }
         }
@@ -885,7 +885,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
                 //val += theWeight * tex3D<float>(f, k_shift, j, i);
-                val += theWeight * TEX3D_nearest(f, N, k_shift, j, i);
+                val += theWeight * TEX3D_N1(f, N, k_shift, j, i);
                 sum += theWeight;
             }
         }
@@ -893,7 +893,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
 
     if (d_DO_HIGH_PASS) {
         //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_nearest(f, N, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
     }
     else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;

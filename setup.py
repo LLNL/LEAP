@@ -84,6 +84,8 @@ if cuda:
                             'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']}
         libraries = []
     else: # CUDA GPU
+        #extra_compile_args={'cxx': ['-D__USE_GPU'], 
+        #                    'nvcc': ['-D__USE_GPU', '-O3']} #, '-arch=compute_61'
         extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
                             'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']} #, '-arch=compute_61'
         libraries = []
@@ -121,7 +123,7 @@ setup(
     python_requires='>=3.6', 
     packages=find_packages("src"), 
     package_dir={'': 'src'},
-    install_requires=['numpy', 'torch'], 
+    #install_requires=['numpy', 'torch'], 
     py_modules=['leaptorch','leapctype', 'leap_filter_sequence', 'leap_preprocessing_algorithms'], 
     ext_modules=[ext_mod], 
     cmdclass={'build_ext': BuildExtension}, 

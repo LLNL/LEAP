@@ -70,6 +70,9 @@ f = leapct.allocateVolume()
 leapct.set_FORBILD(f,True,3)
 #leapct.display(f)
 
+f_slice = f[0,:,:]
+print("f min/max:", np.min(f_slice), np.max(f_slice))
+imageio.imsave("d02_in_f.png", np.uint8(f_slice/np.max(f_slice)*255))
 
 
 # "Simulate" projection data
@@ -95,6 +98,17 @@ device = torch.device("cuda:" + str(leapct.get_gpu()))
 g = torch.from_numpy(g).to(device)
 f = torch.from_numpy(f).to(device)
 #'''
+
+# temp ###
+## backproject
+print("### backproject start ###")
+leapct.backproject(g, f)
+f_slice = f[0,:,:].cpu().detach().numpy()
+print("f min/max:", np.min(f_slice), np.max(f_slice))
+imageio.imsave("d02_backproject_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+print("### backproject end ###")
+# temp ###
+
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating

@@ -1302,6 +1302,9 @@ extern TEX_ARRAY loadTexture1D_from_cpu(TEX_DATA& tex_object, float* data, const
     if (useLinearInterpolation) {
         printf("linear ");
     }
+    else {
+        printf("nearest ");
+    }
     printf("\n");
 
 
