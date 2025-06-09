@@ -703,7 +703,8 @@ __global__ void BlurFilter1DKernel(float* f, float* f_filtered, const int3 N, co
 }
 
 //########################################################################################################################################################
-__global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
+//__global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
+__global__ void BlurFilterKernel_txt(TEX_DATA f, float* f_filtered, int3 N, float FWHM, const int sliceStart, const int sliceEnd)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -745,20 +746,25 @@ __global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, i
                 if (theWeight > 0.0001f)
                 {
                     //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j_shift * N.z + k_shift)];
-                    val += theWeight * tex3D<float>(f, k_shift, j_shift, i_shift);
+                    //val += theWeight * tex3D<float>(f, k_shift, j_shift, i_shift);
+                    val += theWeight * TEX3D_N1(f, N, k_shift, j_shift, i_shift);
                     sum += theWeight;
                 }
             }
         }
     }
 
-    if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-    else
+    if (d_DO_HIGH_PASS) {
+        //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
+    }
+    else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    }
 }
 
-__global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
+//__global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
+__global__ void BlurFilter2DKernel_txt(TEX_DATA f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -793,19 +799,24 @@ __global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f_slice[uint64(j_shift * N.z + k_shift)];
-                val += theWeight * tex3D<float>(f, k_shift, j_shift, i);
+                //val += theWeight * tex3D<float>(f, k_shift, j_shift, i);
+                val += theWeight * TEX3D_N1(f, N, k_shift, j_shift, i);
                 sum += theWeight;
             }
         }
     }
 
-    if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-    else
+    if (d_DO_HIGH_PASS) {
+        //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
+    }
+    else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    }
 }
 
-__global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
+//__global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered, const int3 N, const float FWHM, const int axis)
+__global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3 N, const float FWHM, const int axis)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -834,7 +845,8 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-                val += theWeight * tex3D<float>(f, k, j, i_shift);
+                //val += theWeight * tex3D<float>(f, k, j, i_shift);
+                val += theWeight * TEX3D_N1(f, N, k, j, i_shift);
                 sum += theWeight;
             }
         }
@@ -852,7 +864,8 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-                val += theWeight * tex3D<float>(f, k, j_shift, i);
+                //val += theWeight * tex3D<float>(f, k, j_shift, i);
+                val += theWeight * TEX3D_N1(f, N, k, j_shift, i);
                 sum += theWeight;
             }
         }
@@ -870,16 +883,20 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-                val += theWeight * tex3D<float>(f, k_shift, j, i);
+                //val += theWeight * tex3D<float>(f, k_shift, j, i);
+                val += theWeight * TEX3D_N1(f, N, k_shift, j, i);
                 sum += theWeight;
             }
         }
     }
 
-    if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-    else
+    if (d_DO_HIGH_PASS) {
+        //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
+    }
+    else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
+    }
 }
 //########################################################################################################################################################
 
@@ -1027,8 +1044,10 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
     else
         dev_f = f;
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N, false, false);
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = loadTexture(d_data_txt, dev_f, N, false, false);
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_f, N, false, false);
 
     // Allocate space on GPU for the gradient
     float* dev_Df = 0;
@@ -1060,8 +1079,9 @@ bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, in
     cudaDeviceSynchronize();
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, false);
     if (data_on_cpu)
     {
         // pull result off GPU

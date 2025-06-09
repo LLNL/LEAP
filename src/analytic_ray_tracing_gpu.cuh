@@ -18,6 +18,7 @@
 #include <vector>
 #include "parameters.h"
 #include "phantom.h"
+#include "vector_types.h"
 
 /**
  * This class provides GPU-based implementations to perform analytic ray tracing simulation through geometric solids.

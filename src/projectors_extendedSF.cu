@@ -63,7 +63,8 @@ __global__ void applyInversePolarWeight2(float* g, int4 N_g, float4 T_g, float4 
     g[uint64(i) * uint64(N_g.z * N_g.y) + uint64(j * N_g.z + k)] *= sqrtf(1.0f + v * v);
 }
 
-__global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, TEX_DATA f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -139,10 +140,14 @@ __global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
 
                     const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
 
-                    if (volumeDimensionOrder == 0)
-                        g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                    else
-                        g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                    if (volumeDimensionOrder == 0) {
+                        //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                    }
+                    else {
+                        //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                    }
                 }
             }
         }
@@ -186,10 +191,14 @@ __global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
 
                     const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
 
-                    if (volumeDimensionOrder == 0)
-                        g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                    else
-                        g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                    if (volumeDimensionOrder == 0) {
+                        //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                    }
+                    else {
+                        //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                    }
                 }
             }
         }
@@ -200,7 +209,8 @@ __global__ void coneParallelProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
         g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * l_phi * g_output;
 }
 
-__global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -321,7 +331,8 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(cudaTextureOb
                             if (vWeight + vWeight_2 > 0.0f)
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                                //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                             }
                         }
                     }
@@ -354,7 +365,8 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(cudaTextureOb
                             if (vWeight + vWeight_2 > 0.0f)
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                                //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                             }
                         }
                     }
@@ -368,7 +380,8 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_eSF(cudaTextureOb
         f[ind] = val;
 }
 
-__global__ void coneParallelBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
+//__global__ void coneParallelBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
+__global__ void coneParallelBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -453,7 +466,8 @@ __global__ void coneParallelBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
                         if (vWeight + vWeight_2 > 0.0f)
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                            //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                         }
                     }
                 }
@@ -486,7 +500,8 @@ __global__ void coneParallelBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
                         if (vWeight + vWeight_2 > 0.0f)
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                            //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2) * bpWeight;
                         }
                     }
                 }
@@ -503,7 +518,8 @@ __global__ void coneParallelBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-__global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void parallelBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -556,7 +572,8 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
                 if (uWeight + uWeight_2 > 0.0f)
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
-                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                    //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
                 }
                 //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
             }
@@ -578,7 +595,8 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
                 if (uWeight + uWeight_2 > 0.0f)
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
-                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                    //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * l_phi * (uWeight + uWeight_2);
                 }
                 //val += tex3D<float>(g, iu, iv, l) * l_phi * max(0.0, min(float(iu) + 0.5f, u_B) - max(float(iu) - 0.5f, u_A));
             }
@@ -591,7 +609,8 @@ __global__ void parallelBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 
         f[ind] = val;
 }
 
-__global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
+//__global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
+__global__ void fanBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -662,7 +681,8 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
                 if (uWeight + uWeight_2 > 0.0f)
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
-                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
+                    //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
                 }
             }
         }
@@ -682,7 +702,8 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
                 if (uWeight + uWeight_2 > 0.0f)
                 {
                     const float ushift_12 = uWeight_2 / (uWeight + uWeight_2);
-                    val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
+                    //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
+                    val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * bpWeight;
                 }
             }
         }
@@ -694,7 +715,8 @@ __global__ void fanBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, 
 }
 
 //#####################################################################################################################
-__global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+//__global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+__global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(TEX_DATA g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -858,7 +880,8 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
                             if (vWeight + vWeight_2 > 0.0f)
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -899,7 +922,8 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
                             if (vWeight + vWeight_2 > 0.0f)
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -914,7 +938,8 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_eSF(cudaTexture
         f[ind] = val * (T_f.x * T_f.y * T_f.z) / (R*R*T_g.y * T_g.z);
 }
 
-__global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1063,7 +1088,8 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
                             if (vWeight + vWeight_2 > 0.0f)
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -1103,7 +1129,8 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
                             if (vWeight + vWeight_2 > 0.0f)
                             {
                                 const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                                val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                                val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                             }
                         }
                     }
@@ -1119,7 +1146,8 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_eSF(cudaTextureObject
 }
 //#####################################################################################################################
 
-__global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void curvedConeBeamBackprojectorKernel_eSF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1230,7 +1258,8 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
                         if (vWeight + vWeight_2 > 0.0f)
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1268,7 +1297,8 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
                         if (vWeight + vWeight_2 > 0.0f)
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1281,7 +1311,8 @@ __global__ void curvedConeBeamBackprojectorKernel_eSF(cudaTextureObject_t g, int
         f[ind] = val;
 }
 
-__global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, int volumeDimensionOrder, bool accum)
+__global__ void coneBeamBackprojectorKernel_eSF(TEX_DATA g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1387,7 +1418,8 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, const int
                         if (vWeight + vWeight_2 > 0.0f)
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1425,7 +1457,8 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, const int
                         if (vWeight + vWeight_2 > 0.0f)
                         {
                             const float vshift_12 = vWeight_2 / (vWeight + vWeight_2);
-                            val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            //val += tex3D<float>(g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
+                            val += TEX3D_L2(g, N_g, iu + ushift_12 + 0.5f, iv + vshift_12 + 0.5f, l + 0.5f) * (uWeight + uWeight_2) * (vWeight + vWeight_2);
                         }
                     }
                 }
@@ -1438,7 +1471,8 @@ __global__ void coneBeamBackprojectorKernel_eSF(cudaTextureObject_t g, const int
         f[ind] = val;
 }
 
-__global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, TEX_DATA f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1492,10 +1526,14 @@ __global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
                 const float x_B = (cos_phi * y - sin_phi * x + 0.5f * T_f.x * fabs(sin_phi) - startVals_g.z) * T_u_inv;
                 const float uFootprint = max(0.0f, min(x_B, u_hi) - max(x_A, u_lo));
 
-                if (volumeDimensionOrder == 0)
-                    g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                else
-                    g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                if (volumeDimensionOrder == 0) {
+                    //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
+                }
+                else {
+                    //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
+                }
             }
         }
     }
@@ -1520,10 +1558,14 @@ __global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
                 const float y_B = (cos_phi * y - sin_phi * x + 0.5f * T_f.y * fabs(cos_phi) - startVals_g.z) * T_u_inv;
                 const float uFootprint = max(0.0f, min(y_B, u_hi) - max(y_A, u_lo));
 
-                if (volumeDimensionOrder == 0)
-                    g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                else
-                    g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                if (volumeDimensionOrder == 0) {
+                    //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
+                }
+                else {
+                    //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
+                }
             }
         }
     }
@@ -1533,7 +1575,8 @@ __global__ void parallelBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, 
         g[uint64(l) * uint64(N_g.z * N_g.y) + uint64(m * N_g.z + n)] = T_f.x * l_phi * g_output;
 }
 
-__global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, TEX_DATA f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1598,10 +1641,14 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
                 const float x_B = (((x_shift - x - vox_half) * rayParam_sin_inv - cos_over_sin) - startVals_g.z) * T_u_inv;
                 const float uFootprint = max(0.0f, min(max(x_A, x_B), u_hi) - max(min(x_A, x_B), u_lo));
 
-                if (volumeDimensionOrder == 0)
-                    g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                else
-                    g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                if (volumeDimensionOrder == 0) {
+                    //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
+                }
+                else {
+                    //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
+                }
             }
         }
         if (accum)
@@ -1643,10 +1690,14 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
                 const float y_B = (((y + vox_half - y_shift) * rayParam_cos_inv + sin_over_cos) - startVals_g.z) * T_u_inv;
                 const float uFootprint = max(0.0f, min(max(y_A, y_B), u_hi) - max(min(y_A, y_B), u_lo));
                 
-                if (volumeDimensionOrder == 0)
-                    g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
-                else
-                    g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                if (volumeDimensionOrder == 0) {
+                    //g_output += tex3D<float>(f, iz, iy, ix) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, iz, iy, ix) * uFootprint;
+                }
+                else {
+                    //g_output += tex3D<float>(f, ix, iy, iz) * uFootprint;
+                    g_output += TEX3D_L1(f, N_f, ix, iy, iz) * uFootprint;
+                }
             }
         }
 
@@ -1657,7 +1708,8 @@ __global__ void fanBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float
     }
 }
 
-__global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const float4 T_g, const float4 startVals_g, cudaTextureObject_t f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+//__global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const float4 T_g, const float4 startVals_g, cudaTextureObject_t f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+__global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const float4 T_g, const float4 startVals_g, TEX_DATA f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1760,10 +1812,14 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const floa
 
                     const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
 
-                    if (volumeDimensionOrder == 0)
-                        g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                    else
-                        g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                    if (volumeDimensionOrder == 0) {
+                        //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                    }
+                    else {
+                        //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                    }
                 }
             }
         }
@@ -1819,10 +1875,14 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const floa
 
                     const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
 
-                    if (volumeDimensionOrder == 0)
-                        g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                    else
-                        g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                    if (volumeDimensionOrder == 0) {
+                        //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                    }
+                    else {
+                        //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                    }
                 }
             }
         }
@@ -1834,7 +1894,8 @@ __global__ void coneBeamProjectorKernel_eSF(float* g, const int4 N_g, const floa
     }
 }
 
-__global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g, float4 startVals_g, TEX_DATA f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
     const int m = threadIdx.y + blockIdx.y * blockDim.y;
@@ -1921,10 +1982,14 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
 
                     const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
 
-                    if (volumeDimensionOrder == 0)
-                        g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                    else
-                        g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                    if (volumeDimensionOrder == 0) {
+                        //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                    }
+                    else {
+                        //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                    }
                 }
             }
         }
@@ -1980,10 +2045,14 @@ __global__ void curvedConeBeamProjectorKernel_eSF(float* g, int4 N_g, float4 T_g
 
                     const float vFootprint = max(0.0f, min(max(z_A, z_B), v_hi) - max(min(z_A, z_B), v_lo));
 
-                    if (volumeDimensionOrder == 0)
-                        g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
-                    else
-                        g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                    if (volumeDimensionOrder == 0) {
+                        //g_output += tex3D<float>(f, iz, iy, ix) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, iz, iy, ix) * vFootprint * uFootprint;
+                    }
+                    else {
+                        //g_output += tex3D<float>(f, ix, iy, iz) * vFootprint * uFootprint;
+                        g_output += TEX3D_L1(f, N_f, ix, iy, iz) * vFootprint * uFootprint;
+                    }
                 }
             }
         }
@@ -2048,8 +2117,11 @@ bool project_eSF(float*& g, float* f, parameters* params, bool data_on_cpu, bool
     int4 N_f; float4 T_f; float4 startVal_f;
     setVolumeGPUparams(params, N_f, T_f, startVal_f);
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = NULL;
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = NULL;
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = NULL;
+
     /*
     if (data_on_cpu)
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
@@ -2096,8 +2168,9 @@ bool project_eSF(float*& g, float* f, parameters* params, bool data_on_cpu, bool
         g = dev_g;
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, data_on_cpu);
     cudaFree(dev_phis);
 
     if (data_on_cpu)
@@ -2148,8 +2221,10 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu, 
     dim3 dimGrid_g = setGridSize(N_g, dimBlock_g);
 
     bool doLinearInterpolation = true;
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = NULL;
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = NULL;
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = NULL;
 
     /*
     if (data_on_cpu)
@@ -2326,8 +2401,9 @@ bool backproject_eSF(float* g, float*& f, parameters* params, bool data_on_cpu, 
         f = dev_f;
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, data_on_cpu);
     cudaFree(dev_phis);
 
     if (data_on_cpu)

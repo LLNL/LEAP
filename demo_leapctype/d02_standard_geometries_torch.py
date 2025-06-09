@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import imageio
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
@@ -69,6 +70,9 @@ f = leapct.allocateVolume()
 leapct.set_FORBILD(f,True,3)
 #leapct.display(f)
 
+f_slice = f[0,:,:]
+print("f min/max:", np.min(f_slice), np.max(f_slice))
+imageio.imsave("d02_in_f.png", np.uint8(f_slice/np.max(f_slice)*255))
 
 
 # "Simulate" projection data
@@ -76,6 +80,11 @@ startTime = time.time()
 leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
+
+print(g.shape, g.dtype)
+g_slice = g[:,0,:]
+print("g min/max:", np.min(g_slice), np.max(g_slice))
+imageio.imsave("d02_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 5000.0
@@ -89,6 +98,17 @@ device = torch.device("cuda:" + str(leapct.get_gpu()))
 g = torch.from_numpy(g).to(device)
 f = torch.from_numpy(f).to(device)
 #'''
+
+# temp ###
+## backproject
+print("### backproject start ###")
+leapct.backproject(g, f)
+f_slice = f[0,:,:].cpu().detach().numpy()
+print("f min/max:", np.min(f_slice), np.max(f_slice))
+imageio.imsave("d02_backproject_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+print("### backproject end ###")
+# temp ###
+
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
@@ -111,6 +131,10 @@ leapct.RWLS(g,f,1,filters,None,'SQS')
 leapct.RDLS(g,f,20,filters,1.0,True,1)
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
+
+f_slice = f[0,:,:].cpu().detach().numpy()
+print("f min/max:", np.min(f_slice), np.max(f_slice))
+imageio.imsave("d02_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
 
 
 # Post Reconstruction Smoothing (optional)

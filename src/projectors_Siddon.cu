@@ -17,6 +17,8 @@
 #include "cuda_utils.h"
 //using namespace std;
 
+
+#ifndef __USE_NOTEX
 __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float4 pos, float4 traj)
 {
 	float val = 0.0;
@@ -1457,12 +1459,17 @@ __global__ void modularBeamProjectorKernel(float* g, int4 N_g, float4 T_g, float
 	else
 		g[i * N_g.y * N_g.z + j * N_g.z + k] = projectLine_ZYX(f, N_f, T_f, startVals_f, sourcePos, traj);
 }
+#endif
 
 
 //#########################################################################################
 //#########################################################################################
 bool project_Siddon(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+	fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+	return false;
+#else
 	if (params == NULL)
 		return false;
 	if (params->geometry == parameters::MODULAR)
@@ -1551,10 +1558,15 @@ bool project_Siddon(float*& g, float* f, parameters* params, bool data_on_cpu)
 	}
 
 	return true;
+#endif
 }
 
 bool backproject_Siddon(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (params == NULL)
 		return false;
 	if (params->geometry == parameters::MODULAR)
@@ -1639,6 +1651,7 @@ bool backproject_Siddon(float* g, float*& f, parameters* params, bool data_on_cp
 	}
 
 	return true;
+#endif
 }
 
 bool project_fan(float*& g, float* f, parameters* params, bool data_on_cpu)
@@ -1673,6 +1686,10 @@ bool backproject_parallel(float* g, float *&f, parameters* params, bool data_on_
 
 bool project_modular(float *&g, float* f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
 
@@ -1775,10 +1792,15 @@ bool project_modular(float *&g, float* f, parameters* params, bool data_on_cpu)
 	}
 
 	return true;
+#endif
 }
 
 bool backproject_modular(float* g, float *&f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
 		return false;
 
@@ -1873,4 +1895,5 @@ bool backproject_modular(float* g, float *&f, parameters* params, bool data_on_c
 	}
 
 	return true;
+#endif
 }

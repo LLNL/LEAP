@@ -139,8 +139,9 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 
 bool projectors::backproject(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate)
 {
-	if (params->allDefined() == false || g == NULL || f == NULL)
+	if (params->allDefined() == false || g == NULL || f == NULL) {
 		return false;
+	}
 #ifndef __USE_CPU
 	else if (params->whichGPU >= 0)
 	{
@@ -163,16 +164,21 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 			}
 		}
 
-		if (params->isSymmetric())
+		if (params->isSymmetric()) {
 			return backproject_symmetric(g, f, params, data_on_cpu);
-		else if (params->muSpecified())
+		}
+		else if (params->muSpecified()) {
 			return backproject_attenuated(g, f, params, data_on_cpu);
-		else if (params->whichProjector == parameters::VOXEL_DRIVEN /* && (params->helicalPitch == 0.0 || params->doWeightedBackprojection == false)*/)
+		}
+		else if (params->whichProjector == parameters::VOXEL_DRIVEN /* && (params->helicalPitch == 0.0 || params->doWeightedBackprojection == false)*/) {
 			return backproject_VD(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
-		else if (params->geometry == parameters::MODULAR)
+		}
+		else if (params->geometry == parameters::MODULAR) {
 			return backproject_Joseph_modular(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
-		else
+		}
+		else {
 			return backproject_SF(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
+		}
 	}
 #endif
 	else

@@ -28,7 +28,6 @@ Using voxel sizes that are significantly smaller or significantly bigger than th
 in poor computational performance.
 '''
 
-
 # Specify the number of detector columns which is used below
 # Scale the number of angles and the detector pixel size with N
 numCols = 512
@@ -85,7 +84,6 @@ f = leapct.allocate_volume() # shape is numZ, numY, numX
 leapct.set_FORBILD(f,True)
 #leapct.display(f)
 
-
 # "Simulate" projection data
 startTime = time.time()
 leapct.project(g,f)
@@ -109,12 +107,14 @@ f[:] = 0.0
 # this trick can be used to accelerate an iterative reconstruction algorithm
 # If you want an iterative reconstruction to start from scratch, just initialize it with zeros
 startTime = time.time()
+print("start BP/FBP")
 #leapct.backproject(g,f)
 leapct.FBP(g,f)
+print("end BP/FBP")
 #leapct.inconsistencyReconstruction(g,f)
 #leapct.print_cost = True
-filters = filterSequence(1.0e0) # filter strength argument must be turned to your specific application
-filters.append(TV(leapct, delta=0.02/20.0)) # the delta argument must be turned to your specific application
+#filters = filterSequence(1.0e0) # filter strength argument must be turned to your specific application
+#filters.append(TV(leapct, delta=0.02/20.0)) # the delta argument must be turned to your specific application
 #leapct.ASDPOCS(g,f,10,10,1,filters)
 #leapct.SART(g,f,10,10)
 #leapct.OSEM(g,f,10,10)
@@ -124,6 +124,12 @@ filters.append(TV(leapct, delta=0.02/20.0)) # the delta argument must be turned 
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
+print(f.shape, g.shape)
+f_slice = f[256,:,:]
+g_slice = g[:,256,:]
+imageio.imsave("d01_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+imageio.imsave("d01_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
+print("image saved")
 
 # Post Reconstruction Smoothing (optional)
 # Here are some optional post reconstruction noise filters that can be applied
@@ -139,3 +145,4 @@ leapct.display(f)
 #import matplotlib.pyplot as plt
 #plt.imshow(np.squeeze(f[f.shape[0]//2,:,:]), cmap='gray')
 #plt.show()
+

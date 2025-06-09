@@ -22,7 +22,7 @@
 //#define NUM_SLICES_PER_THREAD 1
 #define NUM_SLICES_PER_THREAD 8
 
-//*
+#ifndef __USE_NOTEX
 __global__ void modularBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4 startVals_g, cudaTextureObject_t f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOVsq, const bool accum)
 {
     const int l = threadIdx.x + blockIdx.x * blockDim.x;
@@ -2162,6 +2162,8 @@ __global__ void modularBeamJosephProjectorKernel(float* g, int4 N_g, float4 T_g,
             g[uint64(i) * uint64(N_g.y * N_g.z) + uint64(j * N_g.z + k)] = lineIntegral_Joseph_ZYX(f, N_f, T_f, startVals_f, edgePos, dst);
     }
 }
+#endif
+
 
 bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
@@ -2175,6 +2177,10 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
 
 bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accum)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
 
@@ -2302,10 +2308,15 @@ bool project_Joseph_modular(float*& g, float* f, parameters* params, bool data_o
     }
 
     return true;
+#endif
 }
 
 bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accum)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
     if (g == NULL || f == NULL || params == NULL || params->allDefined() == false)
         return false;
 
@@ -2485,4 +2496,5 @@ bool backproject_Joseph_modular(float* g, float*& f, parameters* params, bool da
         free(w_polar);
 
     return true;
+#endif
 }

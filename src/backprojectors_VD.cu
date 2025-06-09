@@ -44,7 +44,8 @@ __device__ float helicalConeWeight_vox(float v)
         return -1.0f * d_weightFcnParameter * (abs_v_hat - 1.0f) * (abs_v_hat - 1.0f);
 }
 
-__global__ void modularBeamBackprojectorKernel_vox_stack(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, bool accum)
+//__global__ void modularBeamBackprojectorKernel_vox_stack(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, bool accum)
+__global__ void modularBeamBackprojectorKernel_vox_stack(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -126,7 +127,8 @@ __global__ void modularBeamBackprojectorKernel_vox_stack(cudaTextureObject_t g, 
                 const float r_dot_v = r_dot_v_0 + k_offset * r_dot_v_inc;
                 const float backprojectionWeight = p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n )*r_dot_d_inv*r_dot_d_inv;
 
-                vals[k_offset] += tex3D<float>(g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
+                vals[k_offset] += TEX3D_L2(g, N_g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
+                //vals[k_offset] += tex3D<float>(g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
             }
         }
         else
@@ -142,7 +144,8 @@ __global__ void modularBeamBackprojectorKernel_vox_stack(cudaTextureObject_t g, 
 
                 const float backprojectionWeight = p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n )*r_dot_d_inv*r_dot_d_inv;
 
-                vals[k_offset] += tex3D<float>(g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
+                vals[k_offset] += TEX3D_L2(g, N_g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
+                //vals[k_offset] += tex3D<float>(g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
             }
         }
     }
@@ -171,7 +174,8 @@ __global__ void modularBeamBackprojectorKernel_vox_stack(cudaTextureObject_t g, 
 }
 
 // This function is not used anymore because modularBeamBackprojectorKernel_vox works faster
-__global__ void modularBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, bool accum)
+//__global__ void modularBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, bool accum)
+__global__ void modularBeamBackprojectorKernel_vox(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float* sourcePositions, float* moduleCenters, float* rowVectors, float* colVectors, int volumeDimensionOrder, const float rFOV_sq, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -227,7 +231,8 @@ __global__ void modularBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N
 
         const float backprojectionWeight = p_minus_c_dot_n * sqrtf( D * D * (r_dot_u * r_dot_u + r_dot_v * r_dot_v) + p_minus_c_dot_n * p_minus_c_dot_n )*r_dot_d_inv*r_dot_d_inv;
 
-        val += tex3D<float>(g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
+        val += TEX3D_L2(g, N_g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
+        //val += tex3D<float>(g, (p_minus_c_dot_u + D * r_dot_u) * T_u_inv + u_ind_shift, (p_minus_c_dot_v + D * r_dot_v) * T_v_inv + v_ind_shift, L) * backprojectionWeight;
     }
     if (accum)
         f[ind] += val * T_f.x * T_f.y * T_f.z / (T_g.y * T_g.z);
@@ -237,7 +242,8 @@ __global__ void modularBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N
 
 //#####################################################################################################################
 //#####################################################################################################################
-__global__ void coneParallelWeightedHelicalBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight, bool accum)
+//__global__ void coneParallelWeightedHelicalBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight, bool accum)
+__global__ void coneParallelWeightedHelicalBackprojectorKernel_vox(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -331,7 +337,8 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_vox(cudaTextureOb
             for (int iturn = N_turns_below_conj; iturn <= N_turns_above_conj; iturn++)
                 sumWeights += helicalConeWeight_vox(v_val_conj + iturn * v_val_shift_conj);
 
-            val += tex3D<float>(g, s_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
+            val += TEX3D_L2(g, N_g, s_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
+            //val += tex3D<float>(g, s_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
         }
     }
 
@@ -343,7 +350,8 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_vox(cudaTextureOb
         f[ind] = val * scalar;
 }
 
-__global__ void curvedConeBeamWeightedHelicalBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+//__global__ void curvedConeBeamWeightedHelicalBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+__global__ void curvedConeBeamWeightedHelicalBackprojectorKernel_vox(TEX_DATA g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -440,7 +448,8 @@ __global__ void curvedConeBeamWeightedHelicalBackprojectorKernel_vox(cudaTexture
             for (int iturn = N_turns_below_conj; iturn <= N_turns_above_conj; iturn++)
                 sumWeights += helicalConeWeight_vox(v_val_conj + iturn * v_val_shift_conj);
 
-            val += tex3D<float>(g, u_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
+            val += TEX3D_L2(g, N_g, u_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
+            //val += tex3D<float>(g, u_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
         }
     }
 
@@ -452,7 +461,8 @@ __global__ void curvedConeBeamWeightedHelicalBackprojectorKernel_vox(cudaTexture
         f[ind] = val * scalar;
 }
 
-__global__ void coneBeamWeightedHelicalBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+//__global__ void coneBeamWeightedHelicalBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+__global__ void coneBeamWeightedHelicalBackprojectorKernel_vox(TEX_DATA g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -539,7 +549,8 @@ __global__ void coneBeamWeightedHelicalBackprojectorKernel_vox(cudaTextureObject
             for (int iturn = N_turns_below_conj; iturn <= N_turns_above_conj; iturn++)
                 sumWeights += helicalConeWeight_vox(v_val_conj + iturn * v_val_shift_conj);
 
-            val += tex3D<float>(g, u_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
+            val += TEX3D_L2(g, N_g, u_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
+            //val += tex3D<float>(g, u_arg, v_arg, L) * backprojectionWeight * centralWeight / (centralWeight + sumWeights);
         }
     }
 
@@ -552,7 +563,8 @@ __global__ void coneBeamWeightedHelicalBackprojectorKernel_vox(cudaTextureObject
 //#####################################################################################################################
 //#####################################################################################################################
 
-__global__ void coneParallelBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight, bool accum)
+//__global__ void coneParallelBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight, bool accum)
+__global__ void coneParallelBackprojectorKernel_vox(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool doWeight, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -628,7 +640,8 @@ __global__ void coneParallelBackprojectorKernel_vox(cudaTextureObject_t g, int4 
         for (int k_offset = 0; k_offset < numZ; k_offset++)
         {
             const float v_arg = (v_phi_x_first + k_offset * v_phi_x_step_A + v0_over_Tv - 0.5f)*T_g.y;
-            vals[k_offset] += tex3D<float>(g, s_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0f + v_arg*v_arg);
+            vals[k_offset] += TEX3D_L2(g, N_g, s_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0f + v_arg*v_arg);
+            //vals[k_offset] += tex3D<float>(g, s_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0f + v_arg*v_arg);
         }
     }
 
@@ -656,7 +669,8 @@ __global__ void coneParallelBackprojectorKernel_vox(cudaTextureObject_t g, int4 
     }
 }
 
-__global__ void curvedConeBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+//__global__ void curvedConeBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+__global__ void curvedConeBeamBackprojectorKernel_vox(TEX_DATA g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -725,7 +739,8 @@ __global__ void curvedConeBeamBackprojectorKernel_vox(cudaTextureObject_t g, con
         for (int k_offset = 0; k_offset < numZ; k_offset++)
         {
             const float v_arg = (v_phi_x_first + k_offset * v_phi_x_step_A + v0_over_Tv - 0.5f)*T_g.y;
-            vals[k_offset] += tex3D<float>(g, u_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0 + v_arg * v_arg);
+            vals[k_offset] += TEX3D_L2(g, N_g, u_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0 + v_arg * v_arg);
+            //vals[k_offset] += tex3D<float>(g, u_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0 + v_arg * v_arg);
         }
     }
 
@@ -753,7 +768,8 @@ __global__ void curvedConeBeamBackprojectorKernel_vox(cudaTextureObject_t g, con
     }
 }
 
-__global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+//__global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
+__global__ void coneBeamBackprojectorKernel_vox(TEX_DATA g, const int4 N_g, const float4 T_g, const float4 startVals_g, float* f, const int4 N_f, const float4 T_f, const float4 startVals_f, const float R, const float D, const float tau, const float tiltAngle, const float rFOVsq, const float* phis, const int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -824,7 +840,8 @@ __global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int
             for (int k_offset = 0; k_offset < numZ; k_offset++)
             {
                 const float v_arg = (v_phi_x_first + k_offset * v_phi_x_step_A + v0_over_Tv - 0.5f) * T_g.y;
-                vals[k_offset] += tex3D<float>(g, u_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0f + u_val * u_val + v_arg * v_arg);
+                vals[k_offset] += TEX3D_L2(g, N_g, u_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0f + u_val * u_val + v_arg * v_arg);
+                //vals[k_offset] += tex3D<float>(g, u_arg, v_phi_x_first + k_offset * v_phi_x_step_A, L) * backprojectionWeight * sqrtf(1.0f + u_val * u_val + v_arg * v_arg);
             }
         }
         else
@@ -835,7 +852,8 @@ __global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int
                 const float u_val = (x_dot_theta_perp * cos_tilt + (z+k_offset*T_f.z) * sin_tilt) * R_minus_x_dot_theta_inv;
                 const float v_val = ((z + k_offset * T_f.z) * cos_tilt - x_dot_theta_perp * sin_tilt) * R_minus_x_dot_theta_inv;
 
-                vals[k_offset] += tex3D<float>(g, (u_val - startVals_g.z) * Tu_inv + 0.5f, (v_val - startVals_g.y) * Tv_inv + 0.5f, L) * backprojectionWeight * sqrtf(1.0f + u_val * u_val + v_val * v_val);
+                vals[k_offset] += TEX3D_L2(g, N_g, (u_val - startVals_g.z) * Tu_inv + 0.5f, (v_val - startVals_g.y) * Tv_inv + 0.5f, L) * backprojectionWeight * sqrtf(1.0f + u_val * u_val + v_val * v_val);
+                //vals[k_offset] += tex3D<float>(g, (u_val - startVals_g.z) * Tu_inv + 0.5f, (v_val - startVals_g.y) * Tv_inv + 0.5f, L) * backprojectionWeight * sqrtf(1.0f + u_val * u_val + v_val * v_val);
             }
         }
     }
@@ -864,7 +882,8 @@ __global__ void coneBeamBackprojectorKernel_vox(cudaTextureObject_t g, const int
     }
 }
 
-__global__ void fanBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
+//__global__ void fanBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
+__global__ void fanBeamBackprojectorKernel_vox(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float tau, float rFOVsq, float* phis, int volumeDimensionOrder, bool doWeight, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -921,8 +940,10 @@ __global__ void fanBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, 
         //const float bpWeight = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
         const float backprojectionWeight = doWeight ? sqrtf(1.0f + u_val * u_val) * R_minus_x_dot_theta_inv * R_minus_x_dot_theta_inv : sqrtf(1.0f + u_val * u_val) * R_minus_x_dot_theta_inv;
 
-        for (int k_offset = 0; k_offset < numZ; k_offset++)
-            vals[k_offset] += tex3D<float>(g, u_arg, iv + float(k_offset), L) * backprojectionWeight;
+        for (int k_offset = 0; k_offset < numZ; k_offset++) {
+            vals[k_offset] += TEX3D_L2(g, N_g, u_arg, iv + float(k_offset), L) * backprojectionWeight;
+            //vals[k_offset] += tex3D<float>(g, u_arg, iv + float(k_offset), L) * backprojectionWeight;
+        }
     }
 
     //const float scalar = doWeight ? T_f.x * R * R : T_f.x * R;
@@ -950,7 +971,8 @@ __global__ void fanBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, 
     }
 }
 
-__global__ void parallelBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+//__global__ void parallelBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
+__global__ void parallelBeamBackprojectorKernel_vox(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool accum)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -999,8 +1021,10 @@ __global__ void parallelBeamBackprojectorKernel_vox(cudaTextureObject_t g, int4 
 
         const float u_arg = (cos_phi * y - sin_phi * x) * Tu_inv + s_shift;
 
-        for (int k_offset = 0; k_offset < numZ; k_offset++)
-            vals[k_offset] += tex3D<float>(g, u_arg, float(k + k_offset) + 0.5f, float(l) + 0.5f);
+        for (int k_offset = 0; k_offset < numZ; k_offset++) {
+            vals[k_offset] += TEX3D_L2(g, N_g, u_arg, float(k + k_offset) + 0.5f, float(l) + 0.5f);
+            //vals[k_offset] += tex3D<float>(g, u_arg, float(k + k_offset) + 0.5f, float(l) + 0.5f);
+        }
     }
 
     const float scalar = T_f.x * T_f.y / (T_g.z);
@@ -1095,8 +1119,10 @@ bool backproject_VD(float *g, float *&f, parameters* params, bool data_on_cpu, b
     dim3 dimBlock_g = setBlockSize(N_g);
     dim3 dimGrid_g = setGridSize(N_g, dimBlock_g);
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = NULL;
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = NULL;
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = NULL;
 
     /*
     if (data_on_cpu)
@@ -1198,8 +1224,9 @@ bool backproject_VD(float *g, float *&f, parameters* params, bool data_on_cpu, b
         f = dev_f;
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, data_on_cpu);
     cudaFree(dev_phis);
 
     if (data_on_cpu)
@@ -1288,8 +1315,11 @@ bool backproject_VD_modular(float* g, float*& f, parameters* params, bool data_o
     bool doLinearInterpolation = true;
     bool modularbeamIsAxiallyAligned = params->modularbeamIsAxiallyAligned();
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = NULL;
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = NULL;
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = NULL;
+
     /*
     if (data_on_cpu)
         dev_g = copyProjectionDataToGPU(g, params, params->whichGPU);
@@ -1357,8 +1387,9 @@ bool backproject_VD_modular(float* g, float*& f, parameters* params, bool data_o
         f = dev_f;
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, data_on_cpu);
     cudaFree(dev_sourcePositions);
     cudaFree(dev_moduleCenters);
     cudaFree(dev_rowVectors);

@@ -7,9 +7,6 @@
 // cuda module scatter simulation and correction
 ////////////////////////////////////////////////////////////////////////////////
 
-//TODO - HK: check 1D and 2D texture dimension again!
-
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -20,8 +17,7 @@
 
 __constant__ int d_scatter_job_type;
 
-//__device__ float divergentBeamTransform(cudaTextureObject_t mu, const int4 N, const float4 T, const float4 startVal, const float3 p, const float3 dst)
-__device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 T, const float4 startVal, const float3 p, const float3 dst)
+__device__ float divergentBeamTransform(cudaTextureObject_t mu, const int4 N, const float4 T, const float4 startVal, const float3 p, const float3 dst)
 {
     // NOTE: assumes that T.x == T.y == T.z
     const float3 ip = make_float3((p.x - startVal.x) / T.x, (p.y - startVal.y) / T.y,
@@ -48,33 +44,27 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.x >= float(N.x) - 0.5f) return 0.0f;
             int ix_max = min(N.x - 1, int(ceil((dst.x - startVal.x) / T.x)));
 
-            val = TEX3D_L2(mu, N, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * ((float(ix_start) - 0.5f) - max(-0.5f, ip.x));
-            //val = tex3D<float>(mu, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
-            //    ((float(ix_start) - 0.5f) - max(-0.5f, ip.x));
+            val = tex3D<float>(mu, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
+                ((float(ix_start) - 0.5f) - max(-0.5f, ip.x));
 
             const float iy_offset = iy_start - ir.y * float(ix_start) + 0.5f;
             const float iz_offset = iz_start - ir.z * float(ix_start) + 0.5f;
 
-            for (int ix = ix_start; ix <= ix_max; ix++) {
-                val += TEX3D_L2(mu, N, float(ix) + 0.5f, iy_offset + ir.y * float(ix), iz_offset + ir.z * float(ix));
-                //val += tex3D<float>(mu, float(ix) + 0.5f, iy_offset + ir.y * float(ix), iz_offset + ir.z * float(ix));
-            }
+            for (int ix = ix_start; ix <= ix_max; ix++)
+                val += tex3D<float>(mu, float(ix) + 0.5f, iy_offset + ir.y * float(ix), iz_offset + ir.z * float(ix));
         }
         else
         {
             if (ip.x <= -0.5f) return 0.0f;
             int ix_min = max(0, int(floor((dst.x - startVal.x) / T.x)));
 
-            val = TEX3D_L2(mu, N, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * (min((float(N.x) - 0.5f), ip.x) - (float(ix_start) + 0.5f));
-            //val = tex3D<float>(mu, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
-            //    (min((float(N.x) - 0.5f), ip.x) - (float(ix_start) + 0.5f));
+            val = tex3D<float>(mu, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
+                (min((float(N.x) - 0.5f), ip.x) - (float(ix_start) + 0.5f));
 
             const float iy_offset = iy_start + ir.y * float(ix_start) + 0.5f;
             const float iz_offset = iz_start + ir.z * float(ix_start) + 0.5f;
-            for (int ix = ix_start; ix >= ix_min; ix--) {
-                val += TEX3D_L2(mu, N, float(ix) + 0.5f, iy_offset - ir.y * float(ix), iz_offset - ir.z * float(ix));
-                //val += tex3D<float>(mu, float(ix) + 0.5f, iy_offset - ir.y * float(ix), iz_offset - ir.z * float(ix));
-            }
+            for (int ix = ix_start; ix >= ix_min; ix--)
+                val += tex3D<float>(mu, float(ix) + 0.5f, iy_offset - ir.y * float(ix), iz_offset - ir.z * float(ix));
         }
         return val * sqrt(1.0f + ir.y * ir.y + ir.z * ir.z) * T.x;
     }
@@ -94,32 +84,26 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.y >= float(N.y) - 0.5f) return 0.0f;
             int iy_max = min(N.y - 1, int(ceil((dst.y - startVal.y) / T.y)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, float(iy_start) + 0.5f, iz_start + 0.5f) * ((float(iy_start) - 0.5f) - max(-0.5f, ip.y));
-            //val = tex3D<float>(mu, ix_start + 0.5f, float(iy_start) + 0.5f, iz_start + 0.5f) *
-            //    ((float(iy_start) - 0.5f) - max(-0.5f, ip.y));
+            val = tex3D<float>(mu, ix_start + 0.5f, float(iy_start) + 0.5f, iz_start + 0.5f) *
+                ((float(iy_start) - 0.5f) - max(-0.5f, ip.y));
 
             const float ix_offset = ix_start - ir.x * float(iy_start) + 0.5f;
             const float iz_offset = iz_start - ir.z * float(iy_start) + 0.5f;
-            for (int iy = iy_start; iy <= iy_max; iy++) {
-                val += TEX3D_L2(mu, N, ix_offset + ir.x * float(iy), float(iy) + 0.5f, iz_offset + ir.z * float(iy));
-                //val += tex3D<float>(mu, ix_offset + ir.x * float(iy), float(iy) + 0.5f, iz_offset + ir.z * float(iy));
-            }
+            for (int iy = iy_start; iy <= iy_max; iy++)
+                val += tex3D<float>(mu, ix_offset + ir.x * float(iy), float(iy) + 0.5f, iz_offset + ir.z * float(iy));
         }
         else
         {
             if (ip.y <= -0.5f) return 0.0f;
             int iy_min = max(0, int(floor((dst.y - startVal.y) / T.y)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * (min((float(N.y) - 0.5f), ip.y) - (float(iy_start) + 0.5f));
-            //val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
-            //    (min((float(N.y) - 0.5f), ip.y) - (float(iy_start) + 0.5f));
+            val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
+                (min((float(N.y) - 0.5f), ip.y) - (float(iy_start) + 0.5f));
 
             const float ix_offset = ix_start + ir.x * float(iy_start) + 0.5f;
             const float iz_offset = iz_start + ir.z * float(iy_start) + 0.5f;
-            for (int iy = iy_start; iy >= iy_min; iy--) {
-                val += TEX3D_L2(mu, N, ix_offset - ir.x * float(iy), float(iy) + 0.5f, iz_offset - ir.z * float(iy));
-                //val += tex3D<float>(mu, ix_offset - ir.x * float(iy), float(iy) + 0.5f, iz_offset - ir.z * float(iy));
-            }
+            for (int iy = iy_start; iy >= iy_min; iy--)
+                val += tex3D<float>(mu, ix_offset - ir.x * float(iy), float(iy) + 0.5f, iz_offset - ir.z * float(iy));
         }
         return val * sqrt(1.0f + ir.x * ir.x + ir.z * ir.z) * T.y;
     }
@@ -139,40 +123,32 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.z >= float(N.z) - 0.5f) return 0.0f;
             int iz_max = min(N.z - 1, int(ceil((dst.z - startVal.z) / T.z)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * ((float(iz_start) - 0.5f) - max(-0.5f, ip.z));
-            //val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
-            //    ((float(iz_start) - 0.5f) - max(-0.5f, ip.z));
+            val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
+                ((float(iz_start) - 0.5f) - max(-0.5f, ip.z));
 
             const float ix_offset = ix_start - ir.x * float(iz_start) + 0.5f;
             const float iy_offset = iy_start - ir.y * float(iz_start) + 0.5f;
-            for (int iz = iz_start; iz <= iz_max; iz++) {
-                val += TEX3D_L2(mu, N, ix_offset + ir.x * float(iz), iy_offset + ir.y * float(iz), float(iz) + 0.5f);
-                //val += tex3D<float>(mu, ix_offset + ir.x * float(iz), iy_offset + ir.y * float(iz), float(iz) + 0.5f);
-            }
+            for (int iz = iz_start; iz <= iz_max; iz++)
+                val += tex3D<float>(mu, ix_offset + ir.x * float(iz), iy_offset + ir.y * float(iz), float(iz) + 0.5f);
         }
         else
         {
             if (ip.z <= -0.5f) return 0.0f;
             int iz_min = max(0, int(floor((dst.z - startVal.z) / T.z)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, iy_start + 0.5f, float(iz_start) + 0.5f) * (min((float(N.z) - 0.5f), ip.z) - (float(iz_start) + 0.5f));
-            //val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, float(iz_start) + 0.5f) *
-            //    (min((float(N.z) - 0.5f), ip.z) - (float(iz_start) + 0.5f));
+            val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, float(iz_start) + 0.5f) *
+                (min((float(N.z) - 0.5f), ip.z) - (float(iz_start) + 0.5f));
 
             const float ix_offset = ix_start + ir.x * float(iz_start) + 0.5f;
             const float iy_offset = iy_start + ir.y * float(iz_start) + 0.5f;
-            for (int iz = iz_start; iz >= iz_min; iz--) {
-                val += TEX3D_L2(mu, N, ix_offset - ir.x * float(iz), iy_offset - ir.y * float(iz), float(iz) + 0.5f);
-                //val += tex3D<float>(mu, ix_offset - ir.x * float(iz), iy_offset - ir.y * float(iz), float(iz) + 0.5f);
-            }
+            for (int iz = iz_start; iz >= iz_min; iz--)
+                val += tex3D<float>(mu, ix_offset - ir.x * float(iz), iy_offset - ir.y * float(iz), float(iz) + 0.5f);
         }
         return val * sqrt(1.0f + ir.x * ir.x + ir.y * ir.y) * T.z;
     }
 }
 
-//__device__ float airScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies, cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt)
-__device__ float airScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies, const int maxEnergy, 
-                         TEX_DATA source_txt, TEX_DATA energies_txt, TEX_DATA detector_txt)
+__device__ float airScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies, cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt)
 {
     float val = 0.0f;
     const float3 x_f_minus_x_0 = make_float3(x_f.x - x_0.x, x_f.y - x_0.y, x_f.z - x_0.z);
@@ -181,27 +157,20 @@ __device__ float airScan(const float3 x_0, const float3 x_f, const float3 n_d, c
     const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
     for (int igamma = 0; igamma < N_energies; igamma++)
     {
-        const float spec = TEX1D(source_txt, N_energies, igamma); // spec = spectrum
-        //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
+        const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
         if (spec > 0.0f)
         {
-            const float gamma_0 = TEX1D(energies_txt, N_energies, igamma);
-            val += TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec;
-            //const float gamma_0 = tex1D<float>(energies_txt, igamma);
-            //val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec;
+            const float gamma_0 = tex1D<float>(energies_txt, igamma);
+            val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec;
         }
     }
     return val * direct_solid_angle;
 }
 
-//__device__ float PrimaryScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies, 
-//    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt,
-//    cudaTextureObject_t sigma_PE_txt, cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt,
-//    cudaTextureObject_t f, const hypercube* f_params)
-__device__ float PrimaryScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies, const int maxEnergy, 
-                             TEX_DATA source_txt, TEX_DATA energies_txt, TEX_DATA detector_txt,
-                             TEX_DATA sigma_PE_txt, TEX_DATA sigma_CS_txt, TEX_DATA sigma_RS_txt, 
-                             TEX_DATA f, const hypercube* f_params)
+__device__ float PrimaryScan(const float3 x_0, const float3 x_f, const float3 n_d, const int N_energies,
+    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt,
+    cudaTextureObject_t sigma_PE_txt, cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt,
+    cudaTextureObject_t f, const hypercube* f_params)
 {
     const float Prho = divergentBeamTransform(f, f_params->N, f_params->T, f_params->startVal, x_f, x_0);
 
@@ -212,36 +181,26 @@ __device__ float PrimaryScan(const float3 x_0, const float3 x_f, const float3 n_
     const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
     for (int igamma = 0; igamma < N_energies; igamma++)
     {
-        const float spec = TEX1D(source_txt, N_energies, igamma);
-        //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
+        const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
         if (spec > 0.0f)
         {
-            const float gamma_0 = TEX1D(energies_txt, N_energies, igamma);
-            //const float gamma_0 = tex1D<float>(energies_txt, igamma);
+            const float gamma_0 = tex1D<float>(energies_txt, igamma);
 
-            const float sigma_PE_gamma_0 = TEX1D(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-            const float sigma_CS_gamma_0 = TEX1D(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-            const float sigma_RS_gamma_0 = TEX1D(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
-            //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
-            //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
-            //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
+            const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
+            const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
+            const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
             const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-            val += TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
-            //val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
+            val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
         }
     }
     return val * direct_solid_angle;
 }
 
-//__global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_params,
-//    cudaTextureObject_t f, const hypercube* f_params, const float* Df, const float* source_and_detector,
-//    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt, cudaTextureObject_t sigma_PE_txt,
-//    cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt, cudaTextureObject_t scatterDist_txt)
 __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_params,
-    TEX_DATA f, const hypercube* f_params, const float* Df, const float* source_and_detector,  
-    TEX_DATA source_txt, TEX_DATA energies_txt, TEX_DATA detector_txt, TEX_DATA sigma_PE_txt,
-    TEX_DATA sigma_CS_txt, TEX_DATA sigma_RS_txt, TEX_DATA scatterDist_txt, const int maxEnergy)
+    cudaTextureObject_t f, const hypercube* f_params, const float* Df, const float* source_and_detector,
+    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt, cudaTextureObject_t sigma_PE_txt,
+    cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt, cudaTextureObject_t scatterDist_txt)
 {
     const int m = threadIdx.x + blockIdx.x * blockDim.x; // rows
     const int n = threadIdx.y + blockIdx.y * blockDim.y; // columns
@@ -261,10 +220,6 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
         -1.0f * (source_and_detector[11] * source_and_detector[6] - source_and_detector[9] * source_and_detector[8]),
             -1.0f * (source_and_detector[9] * source_and_detector[7] - source_and_detector[10] * source_and_detector[6]));
 
-    ////////////
-    int3 scatter_dist_dim = make_int3(2, maxEnergy, 181);
-    ////////////
-
     // Calcuate the scatter response
     float val = 0.0f;
     for (int k = 0; k < f_params->N.z; k++)
@@ -277,8 +232,7 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
             {
                 const float3 x = make_float3(i * f_params->T.x + f_params->startVal.x, x_2, x_3);
 
-                const float rho = TEX3D_L1(f, f_params->N, i + 0.5f, j + 0.5f, k + 0.5f);
-                //const float rho = tex3D<float>(f, i + 0.5f, j + 0.5f, k + 0.5f);
+                const float rho = tex3D<float>(f, i + 0.5f, j + 0.5f, k + 0.5f);
 
                 if (rho > 0.0f)
                 {
@@ -302,35 +256,25 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
                     float val_inner = 0.0f;
                     for (int igamma = 0; igamma < g_params->N.w; igamma++)
                     {
-                        const float spec = TEX1D(source_txt, g_params->N.w, igamma);
-                        //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
+                        const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
                         if (spec > 0.0f)
                         {
-                            const float gamma_0 = TEX1D(energies_txt, g_params->N.w, igamma);    
-                            //const float gamma_0 = tex1D<float>(energies_txt, igamma);
+                            const float gamma_0 = tex1D<float>(energies_txt, igamma);
                             const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
 
-                            const float sigma_PE_gamma_0 = TEX1D(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-                            const float sigma_CS_gamma_0 = TEX1D(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-                            const float sigma_RS_gamma_0 = TEX1D(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
-                            //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
-                            //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
-                            //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
+                            const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
+                            const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
+                            const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
                             const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-                            const float cur_CS = TEX1D(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                            const float cur_RS = TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
-                            //const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                            //const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
+                            const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
+                            const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
 
                             //val_inner += spec * (cur_CS + cur_RS) * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
                             //*
-                            const float sigma_PE_gamma_f = TEX1D(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
-                            const float sigma_CS_gamma_f = TEX1D(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
-                            const float sigma_RS_gamma_f = TEX1D(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
-                            //const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
-                            //const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
-                            //const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
+                            const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
+                            const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
+                            const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
                             const float sigma_total_gamma_f = sigma_PE_gamma_f + sigma_CS_gamma_f + sigma_RS_gamma_f;
                             val_inner += spec * cur_CS * expf(-sigma_total_gamma_0 * Df_firstLeg - sigma_total_gamma_f * Df_secondLeg) +
                             spec * cur_RS * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
@@ -347,12 +291,12 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
     if (d_scatter_job_type == 0)
     {
         // scatter transmission
-        const float val_airScan = airScan(x_0, x_f, n_d, g_params->N.w, maxEnergy, source_txt, energies_txt, detector_txt);
+        const float val_airScan = airScan(x_0, x_f, n_d, g_params->N.w, source_txt, energies_txt, detector_txt);
         dev_proj[m * g_params->N.z + n] = val_firstOrderScatter / val_airScan;
     }
     else
     {
-        float val_primary = PrimaryScan(x_0, x_f, n_d, g_params->N.w, maxEnergy, source_txt, energies_txt, detector_txt,
+        float val_primary = PrimaryScan(x_0, x_f, n_d, g_params->N.w, source_txt, energies_txt, detector_txt,
             sigma_PE_txt, sigma_CS_txt, sigma_RS_txt, f, f_params);
 
         if (d_scatter_job_type < 0)
@@ -368,14 +312,10 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
     }
 }
 
-//__global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_params,
-//    cudaTextureObject_t f, const hypercube* f_params, const float* Df, const float* source_and_detector,
-//    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt, cudaTextureObject_t sigma_PE_txt,
-//    cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt, cudaTextureObject_t scatterDist_txt)
 __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_params,
-    TEX_DATA f, const hypercube* f_params, const float* Df, const float* source_and_detector,
-    TEX_DATA source_txt, TEX_DATA energies_txt, TEX_DATA detector_txt, TEX_DATA sigma_PE_txt,
-    TEX_DATA sigma_CS_txt, TEX_DATA sigma_RS_txt, TEX_DATA scatterDist_txt, int maxEnergy)
+    cudaTextureObject_t f, const hypercube* f_params, const float* Df, const float* source_and_detector,
+    cudaTextureObject_t source_txt, cudaTextureObject_t energies_txt, cudaTextureObject_t detector_txt, cudaTextureObject_t sigma_PE_txt,
+    cudaTextureObject_t sigma_CS_txt, cudaTextureObject_t sigma_RS_txt, cudaTextureObject_t scatterDist_txt)
 {
     const int m = threadIdx.x + blockIdx.x * blockDim.x; // rows
     const int n = threadIdx.y + blockIdx.y * blockDim.y; // columns
@@ -394,10 +334,6 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
     const float3 n_d = make_float3(-1.0f * (source_and_detector[10] * source_and_detector[8] - source_and_detector[11] * source_and_detector[7]),
         -1.0f * (source_and_detector[11] * source_and_detector[6] - source_and_detector[9] * source_and_detector[8]),
         -1.0f * (source_and_detector[9] * source_and_detector[7] - source_and_detector[10] * source_and_detector[6]));
-
-    ////////////
-    int3 scatter_dist_dim = make_int3(2, maxEnergy, 181);
-    ////////////
 
     // Calcuate the scatter response
     float val = 0.0f;
@@ -430,8 +366,7 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
                         {
                             const float3 x = make_float3((i+di) * f_params->T.x + f_params->startVal.x, x_2, x_3);
 
-                            const float rho = TEX3D_L1(f, f_params->N, i + 0.5f, j + 0.5f, k + 0.5f);
-                            //const float rho = tex3D<float>(f, i + 0.5f, j + 0.5f, k + 0.5f);
+                            const float rho = tex3D<float>(f, i + 0.5f, j + 0.5f, k + 0.5f);
 
                             if (rho > 0.0f)
                             {
@@ -454,35 +389,25 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
                                 float val_inner = 0.0f;
                                 for (int igamma = 0; igamma < g_params->N.w; igamma++)
                                 {
-                                    const float spec = TEX1D(source_txt, g_params->N.w, igamma);
-                                    //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
+                                    const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
                                     if (spec > 0.0f)
                                     {
-                                        const float gamma_0 = TEX1D(energies_txt, g_params->N.w, igamma);
-                                        //const float gamma_0 = tex1D<float>(energies_txt, igamma);
+                                        const float gamma_0 = tex1D<float>(energies_txt, igamma);
                                         const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
 
-                                        const float sigma_PE_gamma_0 = TEX1D(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-                                        const float sigma_CS_gamma_0 = TEX1D(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-                                        const float sigma_RS_gamma_0 = TEX1D(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
-                                        //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
-                                        //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
-                                        //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
+                                        const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
+                                        const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
+                                        const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
                                         const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-                                        const float cur_CS = TEX1D(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                                        const float cur_RS = TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
-                                        //const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                                        //const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
+                                        const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
+                                        const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
 
                                         //val_inner += spec * (cur_CS + cur_RS) * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
                                         //*
-                                        const float sigma_PE_gamma_f = TEX1D(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
-                                        const float sigma_CS_gamma_f = TEX1D(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
-                                        const float sigma_RS_gamma_f = TEX1D(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
-                                        //const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
-                                        //const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
-                                        //const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
+                                        const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
+                                        const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
+                                        const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
                                         const float sigma_total_gamma_f = sigma_PE_gamma_f + sigma_CS_gamma_f + sigma_RS_gamma_f;
                                         val_inner += spec * cur_CS * expf(-sigma_total_gamma_0 * Df_firstLeg - sigma_total_gamma_f * Df_secondLeg) +
                                             spec * cur_RS * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
@@ -502,12 +427,12 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
     if (d_scatter_job_type == 0)
     {
         // scatter transmission
-        const float val_airScan = airScan(x_0, x_f, n_d, g_params->N.w, maxEnergy, source_txt, energies_txt, detector_txt);
+        const float val_airScan = airScan(x_0, x_f, n_d, g_params->N.w, source_txt, energies_txt, detector_txt);
         dev_proj[m * g_params->N.z + n] = val_firstOrderScatter / val_airScan;
     }
     else
     {
-        float val_primary = PrimaryScan(x_0, x_f, n_d, g_params->N.w, maxEnergy, source_txt, energies_txt, detector_txt,
+        float val_primary = PrimaryScan(x_0, x_f, n_d, g_params->N.w, source_txt, energies_txt, detector_txt,
             sigma_PE_txt, sigma_CS_txt, sigma_RS_txt, f, f_params);
 
         if (d_scatter_job_type < 0)
@@ -523,8 +448,7 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
     }
 }
 
-//__global__ void lineIntegralSourceToVoxels(cudaTextureObject_t f, float* Df, const int4 N_f, const float4 T_f, const float4 startVal_f, const float3 sourcePosition)
-__global__ void lineIntegralSourceToVoxels(TEX_DATA f, float* Df, const int4 N_f, const float4 T_f, const float4 startVal_f, const float3 sourcePosition)
+__global__ void lineIntegralSourceToVoxels(cudaTextureObject_t f, float* Df, const int4 N_f, const float4 T_f, const float4 startVal_f, const float3 sourcePosition)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -623,10 +547,8 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
         dev_f = copyVolumeDataToGPU(f, params, params->whichGPU);
     else
         dev_f = f;
-    //cudaTextureObject_t f_data_txt = NULL;
-    //cudaArray* f_data_array = loadTexture(f_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
-    TEX_DATA f_data_txt = NULL;
-    TEX_ARRAY f_data_array = loadTexture(f_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
+    cudaTextureObject_t f_data_txt = NULL;
+    cudaArray* f_data_array = loadTexture(f_data_txt, dev_f, N_f, false, true, bool(params->volumeDimensionOrder == 1));
 
     // Allocate data for attenuation in the first leg
     float* dev_Df;
@@ -641,46 +563,31 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     // sigma: the PE, CS, and RS cross sections sampled in 1 keV bins
     // scatterDist: the CS and RS distributions sampled in 1 keV bins and 0.1 degree angular bins
     float* dev_source = copy1DdataToGPU(source, N_energies, params->whichGPU);
-
-    //cudaTextureObject_t source_txt = NULL;
-    //cudaArray* source_array = loadTexture1D(source_txt, dev_source, N_energies, false, false);
-    TEX_DATA source_txt = NULL;
-    TEX_ARRAY source_array = loadTexture1D(source_txt, dev_source, N_energies, false, false);
+    cudaTextureObject_t source_txt = NULL;
+    cudaArray* source_array = loadTexture1D(source_txt, dev_source, N_energies, false, false);
 
     float* dev_energies = copy1DdataToGPU(energies, N_energies, params->whichGPU);
-    //cudaTextureObject_t energies_txt = NULL;
-    //cudaArray* energies_array = loadTexture1D(energies_txt, dev_energies, N_energies, false, false);
-    TEX_DATA energies_txt = NULL;
-    TEX_ARRAY energies_array = loadTexture1D(energies_txt, dev_energies, N_energies, false, false);
+    cudaTextureObject_t energies_txt = NULL;
+    cudaArray* energies_array = loadTexture1D(energies_txt, dev_energies, N_energies, false, false);
 
     int maxEnergy = int(ceil(energies[N_energies-1]));
     //printf("maxEnergy = %d\n", maxEnergy);
 
     float* dev_detector = copy1DdataToGPU(detector, maxEnergy, params->whichGPU);
-    //cudaTextureObject_t detector_txt = NULL;
-    //cudaArray* detector_array = loadTexture1D(detector_txt, dev_detector, maxEnergy, false, true);
-    TEX_DATA detector_txt = NULL;
-    TEX_ARRAY detector_array = loadTexture1D(detector_txt, dev_detector, maxEnergy, false, true);
+    cudaTextureObject_t detector_txt = NULL;
+    cudaArray* detector_array = loadTexture1D(detector_txt, dev_detector, maxEnergy, false, true);
 
     float* dev_sigma = copy1DdataToGPU(sigma, 3*maxEnergy, params->whichGPU);
-    //cudaTextureObject_t sigma_PE_txt = NULL;
-    //cudaArray* sigma_PE_array = loadTexture1D(sigma_PE_txt, &dev_sigma[0 * maxEnergy], maxEnergy, false, true);
-    //cudaTextureObject_t sigma_CS_txt = NULL;
-    //cudaArray* sigma_CS_array = loadTexture1D(sigma_CS_txt, &dev_sigma[1 * maxEnergy], maxEnergy, false, true);
-    //cudaTextureObject_t sigma_RS_txt = NULL;
-    //cudaArray* sigma_RS_array = loadTexture1D(sigma_RS_txt, &dev_sigma[2 * maxEnergy], maxEnergy, false, true);
-    TEX_DATA sigma_PE_txt = NULL;
-    TEX_ARRAY sigma_PE_array = loadTexture1D(sigma_PE_txt, &dev_sigma[0 * maxEnergy], maxEnergy, false, true);
-    TEX_DATA sigma_CS_txt = NULL;
-    TEX_ARRAY sigma_CS_array = loadTexture1D(sigma_CS_txt, &dev_sigma[1 * maxEnergy], maxEnergy, false, true);
-    TEX_DATA sigma_RS_txt = NULL;
-    TEX_ARRAY sigma_RS_array = loadTexture1D(sigma_RS_txt, &dev_sigma[2 * maxEnergy], maxEnergy, false, true);
+    cudaTextureObject_t sigma_PE_txt = NULL;
+    cudaArray* sigma_PE_array = loadTexture1D(sigma_PE_txt, &dev_sigma[0 * maxEnergy], maxEnergy, false, true);
+    cudaTextureObject_t sigma_CS_txt = NULL;
+    cudaArray* sigma_CS_array = loadTexture1D(sigma_CS_txt, &dev_sigma[1 * maxEnergy], maxEnergy, false, true);
+    cudaTextureObject_t sigma_RS_txt = NULL;
+    cudaArray* sigma_RS_array = loadTexture1D(sigma_RS_txt, &dev_sigma[2 * maxEnergy], maxEnergy, false, true);
 
     float* dev_scatterDist = copy1DdataToGPU(scatterDist, 2 * maxEnergy * 181, params->whichGPU);
-    //cudaTextureObject_t scatterDist_txt = NULL;
-    //cudaArray* scatterDist_array = loadTexture(scatterDist_txt, dev_scatterDist, make_int3(2, maxEnergy, 181), false, true);
-    TEX_DATA scatterDist_txt = NULL;
-    TEX_ARRAY scatterDist_array = loadTexture(scatterDist_txt, dev_scatterDist, make_int3(2, maxEnergy, 181), false, true);
+    cudaTextureObject_t scatterDist_txt = NULL;
+    cudaArray* scatterDist_array = loadTexture(scatterDist_txt, dev_scatterDist, make_int3(2, maxEnergy, 181), false, true);
 
     hypercube g_params;
     g_params.N = N_g;
@@ -764,7 +671,7 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
             //*/
             //*
             firstOrderScatterModel_fast <<< dimGrid, dimBlock >>> (dev_proj, dev_g_params, f_data_txt, dev_f_params, dev_Df, dev_source_and_detector,
-                source_txt, energies_txt, detector_txt, sigma_PE_txt, sigma_CS_txt, sigma_RS_txt, scatterDist_txt, maxEnergy);
+                source_txt, energies_txt, detector_txt, sigma_PE_txt, sigma_CS_txt, sigma_RS_txt, scatterDist_txt);
             //*/
             projectionCalculated[i] = true;
             if (params->phis != NULL)
@@ -799,41 +706,33 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     //    g = dev_g;
 
     // Clean up
-    //cudaFreeArray(f_data_array);
-    //cudaDestroyTextureObject(f_data_txt);
-    freeTexture(f_data_array, f_data_txt, false);
+    cudaFreeArray(f_data_array);
+    cudaDestroyTextureObject(f_data_txt);
     if (data_on_cpu)
         cudaFree(dev_f);
     
-    //cudaFreeArray(source_array);
-    //cudaDestroyTextureObject(source_txt);
-    freeTexture1D(source_array, source_txt, false);
+    cudaFreeArray(source_array);
+    cudaDestroyTextureObject(source_txt);
     cudaFree(dev_source);
 
-    //cudaFreeArray(energies_array);
-    //cudaDestroyTextureObject(energies_txt);
-    freeTexture1D(energies_array, energies_txt, false);
+    cudaFreeArray(energies_array);
+    cudaDestroyTextureObject(energies_txt);
     cudaFree(dev_energies);
 
-    //cudaFreeArray(detector_array);
-    //cudaDestroyTextureObject(detector_txt);
-    freeTexture1D(detector_array, detector_txt, false);
+    cudaFreeArray(detector_array);
+    cudaDestroyTextureObject(detector_txt);
     cudaFree(dev_detector);
 
-    //cudaFreeArray(sigma_PE_array);
-    //cudaDestroyTextureObject(sigma_PE_txt);
-    //cudaFreeArray(sigma_CS_array);
-    //cudaDestroyTextureObject(sigma_CS_txt);
-    //cudaFreeArray(sigma_RS_array);
-    //cudaDestroyTextureObject(sigma_RS_txt);
-    freeTexture1D(sigma_PE_array, sigma_PE_txt, false);
-    freeTexture1D(sigma_CS_array, sigma_CS_txt, false);
-    freeTexture1D(sigma_RS_array, sigma_RS_txt, false);
+    cudaFreeArray(sigma_PE_array);
+    cudaDestroyTextureObject(sigma_PE_txt);
+    cudaFreeArray(sigma_CS_array);
+    cudaDestroyTextureObject(sigma_CS_txt);
+    cudaFreeArray(sigma_RS_array);
+    cudaDestroyTextureObject(sigma_RS_txt);
     cudaFree(dev_sigma);
 
-    //cudaFreeArray(scatterDist_array);
-    //cudaDestroyTextureObject(scatterDist_txt);
-    freeTexture(scatterDist_array, scatterDist_txt, false);
+    cudaFreeArray(scatterDist_array);
+    cudaDestroyTextureObject(scatterDist_txt);
     cudaFree(dev_scatterDist);
 
     cudaFree(dev_Df);
@@ -844,8 +743,7 @@ bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* p
     return true;
 }
 
-//bool firstLeg(cudaTextureObject_t f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition)
-bool firstLeg(TEX_DATA f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition)
+bool firstLeg(cudaTextureObject_t f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition)
 {
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;

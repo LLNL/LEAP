@@ -53,5 +53,5 @@ bool parallelRay_derivative_chunk(float*& g, parameters* params, bool data_on_cp
 
 float* zeroPadForOffsetScan_GPU(float* g, parameters* params, float* g_out = NULL, bool data_on_cpu = false);
 
-#endif
 
+#endif

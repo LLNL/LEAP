@@ -20,7 +20,8 @@
 #include <vector>
 
 //d_data_txt, dev_cost, N, T, startVal, dev_phis, params->sod, params->sdd, params->tau, Delta_t, Delta_s, Delta_tilt
-__global__ void consistencyCostKernel(cudaTextureObject_t g, float* cost, const int3 N, const float3 T, const float3 startVal, const float* phis, const float sod, const float sdd, const float tau, const float Delta_tilt)
+//__global__ void consistencyCostKernel(cudaTextureObject_t g, float* cost, const int3 N, const float3 T, const float3 startVal, const float* phis, const float sod, const float sdd, const float tau, const float Delta_tilt)
+__global__ void consistencyCostKernel(TEX_DATA g, float* cost, const int3 N, const float3 T, const float3 startVal, const float* phis, const float sod, const float sdd, const float tau, const float Delta_tilt)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int iv = threadIdx.y + blockIdx.y * blockDim.y;
@@ -142,7 +143,8 @@ __global__ void consistencyCostKernel(cudaTextureObject_t g, float* cost, const 
                 v_arg_i = ((vox.x - tau * sin_phi_i) * Rpsi_e3.x + (vox.y + tau * cos_phi_i) * Rpsi_e3.y) * v_denom_inv_i;
             }
 
-            accum_i += integrandWeight_i * tex3D<float>(g, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
+            //accum_i += integrandWeight_i * tex3D<float>(g, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
+            accum_i += integrandWeight_i * TEX3D_L2(g, N, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
         }
 
         float accum_j = 0.0f;
@@ -168,7 +170,8 @@ __global__ void consistencyCostKernel(cudaTextureObject_t g, float* cost, const 
                 v_arg_j = ((vox.x - tau * sin_phi_j) * Rpsi_e3.x + (vox.y + tau * cos_phi_j) * Rpsi_e3.y) * v_denom_inv_j;
             }
 
-            accum_j += integrandWeight_j * tex3D<float>(g, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
+            //accum_j += integrandWeight_j * tex3D<float>(g, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
+            accum_j += integrandWeight_j * TEX3D_L2(g, N, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
         }
         cost_i += (accum_i - accum_j) * (accum_i - accum_j);
     }
@@ -272,8 +275,10 @@ float consistencyCost(float* g, parameters* params, bool data_on_cpu, float Delt
 
     // Copy to texture
     // FIXME: should copy directly from CPU to 3D array
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_subset, N, false, true);
+    //cudaTextureObject_t d_data_txt = NULL;
+    //cudaArray* d_data_array = loadTexture(d_data_txt, dev_g_subset, N, false, true);
+    TEX_DATA d_data_txt = NULL;
+    TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_g_subset, N, false, true);
     
     // Reuse dev_g_subset for cost values
     float* dev_cost = dev_g_subset;
@@ -296,8 +301,9 @@ float consistencyCost(float* g, parameters* params, bool data_on_cpu, float Delt
     }
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    //cudaFreeArray(d_data_array);
+    //cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt, false);
     cudaFree(dev_g_subset);
     cudaFree(dev_phis);
 

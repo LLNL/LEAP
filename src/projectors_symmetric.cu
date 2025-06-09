@@ -17,6 +17,8 @@
 #include "cuda_utils.h"
 //using namespace std;
 
+
+#ifndef __USE_NOTEX
 __global__ void AbelConeInverseKernel(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, int4 N_f, float4 T_f, float4 startVals_f, float R, float D, float axisOfSymmetry, float tau, int volumeDimensionOrder)
 {
 	const int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -726,9 +728,14 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 		ind = k * N_f.y + j;
 	f[ind] = curVal * sqrt(1.0f + tan_beta * tan_beta);
 }
+#endif
 
 bool project_symmetric(float*& g, float* f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (params->isSymmetric() == false)
 		return false;
 	if (params->geometry != parameters::CONE && params->geometry != parameters::PARALLEL)
@@ -803,10 +810,15 @@ bool project_symmetric(float*& g, float* f, parameters* params, bool data_on_cpu
 	}
 
 	return true;
+#endif
 }
 
 bool backproject_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (params->isSymmetric() == false)
 		return false;
 	if (params->geometry != parameters::CONE && params->geometry != parameters::PARALLEL)
@@ -882,10 +894,15 @@ bool backproject_symmetric(float* g, float*& f, parameters* params, bool data_on
 	}
 
 	return true;
+#endif
 }
 
 bool inverse_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu)
 {
+#ifdef __USE_NOTEX
+    fprintf(stderr, "This function is unavailable in __USE_NOTEX mode!\n");
+    return false;
+#else
 	if (params->isSymmetric() == false)
 		return false;
 	if (params->geometry != parameters::CONE && params->geometry != parameters::PARALLEL)
@@ -961,4 +978,5 @@ bool inverse_symmetric(float* g, float*& f, parameters* params, bool data_on_cpu
 	}
 
 	return true;
+#endif
 }
