@@ -86,11 +86,11 @@ if cuda:
     else: # CUDA GPU
         #extra_compile_args={'cxx': ['-D__USE_GPU'], 
         #                    'nvcc': ['-D__USE_GPU', '-O3']} #, '-arch=compute_61'
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
-                            'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']} #, '-arch=compute_61'
+        #extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
+        #                    'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']} #, '-arch=compute_61'
         libraries = []
-        #extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
-        #                    'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
+        extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
+                            'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
         #libraries = ['cufft']
     ext_mod = CUDAExtension(
         name='leapct',

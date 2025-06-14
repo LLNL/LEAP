@@ -80,16 +80,18 @@ if cuda:
     # or extra_link_args=["-std=c++11"]
     rocm = "AMD" in torch.cuda.get_device_name(0)
     if rocm: # AMD ROCM GPU
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_TEXTURE'], 
-                            'nvcc': ['-D__USE_GPU', '-O3']}
+        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
+                            'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']}
         libraries = []
     else: # CUDA GPU
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_TEXTURE'], 
-                            'nvcc': ['-D__USE_GPU', '-O3']}
-        #extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
-        #                    'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
-        #libraries = ['cufft']
+        #extra_compile_args={'cxx': ['-D__USE_GPU'], 
+        #                    'nvcc': ['-D__USE_GPU', '-O3']} #, '-arch=compute_61'
+        #extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
+        #                    'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']} #, '-arch=compute_61'
         libraries = []
+        extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
+                            'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
+        #libraries = ['cufft']
     ext_mod = CUDAExtension(
         name='leapct',
         sources=source_files,
@@ -121,7 +123,7 @@ setup(
     python_requires='>=3.6', 
     packages=find_packages("src"), 
     package_dir={'': 'src'},
-    install_requires=['numpy', 'torch'], 
+    #install_requires=['numpy', 'torch'], 
     py_modules=['leaptorch','leapctype', 'leap_filter_sequence', 'leap_preprocessing_algorithms'], 
     ext_modules=[ext_mod], 
     cmdclass={'build_ext': BuildExtension}, 
