@@ -166,14 +166,14 @@ __global__ void explicit_convolution(TEX_DATA g, float* filtered_data, TEX_DATA 
 
     for (int j = 0; j < N.z; j+=8)
     {
-        const float x0 = TEX3D_L2(g, N, j + 0, m, l);
-        const float x1 = TEX3D_L2(g, N, j + 1, m, l);
-        const float x2 = TEX3D_L2(g, N, j + 2, m, l);
-        const float x3 = TEX3D_L2(g, N, j + 3, m, l);
-        const float x4 = TEX3D_L2(g, N, j + 4, m, l);
-        const float x5 = TEX3D_L2(g, N, j + 5, m, l);
-        const float x6 = TEX3D_L2(g, N, j + 6, m, l);
-        const float x7 = TEX3D_L2(g, N, j + 7, m, l);
+        const float x0 = TEX3D_N2(g, N, j + 0, m, l);
+        const float x1 = TEX3D_N2(g, N, j + 1, m, l);
+        const float x2 = TEX3D_N2(g, N, j + 2, m, l);
+        const float x3 = TEX3D_N2(g, N, j + 3, m, l);
+        const float x4 = TEX3D_N2(g, N, j + 4, m, l);
+        const float x5 = TEX3D_N2(g, N, j + 5, m, l);
+        const float x6 = TEX3D_N2(g, N, j + 6, m, l);
+        const float x7 = TEX3D_N2(g, N, j + 7, m, l);
         //const float x0 = tex3D<float>(g, j + 0, m, l);
         //const float x1 = tex3D<float>(g, j + 1, m, l);
         //const float x2 = tex3D<float>(g, j + 2, m, l);
@@ -186,14 +186,14 @@ __global__ void explicit_convolution(TEX_DATA g, float* filtered_data, TEX_DATA 
         const int n_minus_j_plus_N = n - j + N.z;
         for (int s = 0; s < NUM_RAYS_PER_THREAD; s++)
         {
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 0) * x0;
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 1) * x1;
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 2) * x2;
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 3) * x3;
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 4) * x4;
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 5) * x5;
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 6) * x6;
-            ys[s] += TEX1D(h, N_filter, n_minus_j_plus_N + s - 7) * x7;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 0) * x0;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 1) * x1;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 2) * x2;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 3) * x3;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 4) * x4;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 5) * x5;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 6) * x6;
+            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 7) * x7;
             //ys[s] += tex1D<float>(h, n_minus_j_plus_N + s - 0) * x0 + tex1D<float>(h, n_minus_j_plus_N + s - 1) * x1
             //      +  tex1D<float>(h, n_minus_j_plus_N + s - 2) * x2 + tex1D<float>(h, n_minus_j_plus_N + s - 3) * x3
             //      +  tex1D<float>(h, n_minus_j_plus_N + s - 4) * x4 + tex1D<float>(h, n_minus_j_plus_N + s - 5) * x5

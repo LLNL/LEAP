@@ -42,7 +42,8 @@ extern dim3 setGridSize(int4 N, dim3 dimBlock);
 #ifdef __USE_NOTEX
 #define TEX_DATA float*
 #define TEX_ARRAY float*
-#define TEX1D(img, img_dim, x)              getTex1D(img, img_dim, x)
+#define TEX1D_N(img, img_dim, x)            getTex1D_nearest(img, img_dim, x)
+#define TEX1D_L(img, img_dim, x)            getTex1D_linear(img, img_dim, x)
 #define TEX3D_N1(img, img_dim, x, y, z)     getTex3D_nearest1(img, img_dim, x, y, z)
 #define TEX3D_N2(img, img_dim, z, y, x)     getTex3D_nearest2(img, img_dim, z, y, x)
 #define TEX3D_L1(img, img_dim, x, y, z)     getTex3D_linear1(img, img_dim, x, y, z)  // zyx order: image space in most cases
@@ -50,7 +51,8 @@ extern dim3 setGridSize(int4 N, dim3 dimBlock);
 #else
 #define TEX_DATA cudaTextureObject_t 
 #define TEX_ARRAY cudaArray*
-#define TEX1D(img, img_dim, x)              tex1D<float>(img, x)
+#define TEX1D_N(img, img_dim, x)            tex1D<float>(img, x)
+#define TEX1D_L(img, img_dim, x)            tex1D<float>(img, x)
 #define TEX3D_N1(img, img_dim, x, y, z)     tex3D<float>(img, x, y, z)
 #define TEX3D_N2(img, img_dim, x, y, z)     tex3D<float>(img, x, y, z)
 #define TEX3D_L1(img, img_dim, x, y, z)     tex3D<float>(img, x, y, z)
@@ -76,17 +78,32 @@ template<typename T> __device__ __forceinline__ T ldg(const T* ptr)
 #endif
 }
 
-__device__ inline float getTex1D(const float* img, int img_dim, float x)
+__device__ inline float getTex1D_nearest(const float* img, int img_dim, float x)
+{
+    int x0 = (int)(x - 0.5);
+    if (x0 < 0 || x0 >= img_dim)
+        return 0;
+    
+    float result = ldg(&img[x0]);
+    return result;  
+}
+
+__device__ inline float getTex1D_linear(const float* img, int img_dim, float x)
 {
     x -= 0.5;
     if (x < 0 || x >= img_dim)
         return 0;
-    int x0 = (int)x;
+        
+    int x0 = static_cast<int>(x);
     int x1 = __MIN__(x0 + 1, img_dim - 1);
-    float c0 = img[x0];
-    float c1 = img[x1];
-    
-    return c0 + ((x - x0) * (c1 - c0)) / (x1 - x0);
+    float c0 = ldg(&img[x0]);
+    float c1 = ldg(&img[x1]);
+    if (x0 == x1) {
+        return c0;
+    }
+    else {
+        return c0 + ((x - x0) * (c1 - c0)) / (x1 - x0);
+    }
 }
 
 __device__ inline float getTex3D_nearest1(const float* img, int4 img_dim, float x, float y, float z)

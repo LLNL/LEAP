@@ -127,8 +127,8 @@ print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 print(f.shape, g.shape)
 f_slice = f[256,:,:]
 g_slice = g[:,256,:]
-imageio.imsave("d01_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
-imageio.imsave("d01_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
+imageio.imsave("sample_data/d01_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+imageio.imsave("sample_data/d01_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 print("image saved")
 
 # Post Reconstruction Smoothing (optional)

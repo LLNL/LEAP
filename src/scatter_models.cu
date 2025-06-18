@@ -181,12 +181,12 @@ __device__ float airScan(const float3 x_0, const float3 x_f, const float3 n_d, c
     const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
     for (int igamma = 0; igamma < N_energies; igamma++)
     {
-        const float spec = TEX1D(source_txt, N_energies, igamma); // spec = spectrum
+        const float spec = TEX1D_N(source_txt, N_energies, igamma); // spec = spectrum
         //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
         if (spec > 0.0f)
         {
-            const float gamma_0 = TEX1D(energies_txt, N_energies, igamma);
-            val += TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec;
+            const float gamma_0 = TEX1D_N(energies_txt, N_energies, igamma);
+            val += TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec;
             //const float gamma_0 = tex1D<float>(energies_txt, igamma);
             //val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec;
         }
@@ -212,22 +212,22 @@ __device__ float PrimaryScan(const float3 x_0, const float3 x_f, const float3 n_
     const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
     for (int igamma = 0; igamma < N_energies; igamma++)
     {
-        const float spec = TEX1D(source_txt, N_energies, igamma);
+        const float spec = TEX1D_N(source_txt, N_energies, igamma);
         //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
         if (spec > 0.0f)
         {
-            const float gamma_0 = TEX1D(energies_txt, N_energies, igamma);
+            const float gamma_0 = TEX1D_N(energies_txt, N_energies, igamma);
             //const float gamma_0 = tex1D<float>(energies_txt, igamma);
 
-            const float sigma_PE_gamma_0 = TEX1D(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-            const float sigma_CS_gamma_0 = TEX1D(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-            const float sigma_RS_gamma_0 = TEX1D(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
+            const float sigma_PE_gamma_0 = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
+            const float sigma_CS_gamma_0 = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
+            const float sigma_RS_gamma_0 = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
             //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
             //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
             //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
             const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-            val += TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
+            val += TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
             //val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
         }
     }
@@ -302,32 +302,32 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
                     float val_inner = 0.0f;
                     for (int igamma = 0; igamma < g_params->N.w; igamma++)
                     {
-                        const float spec = TEX1D(source_txt, g_params->N.w, igamma);
+                        const float spec = TEX1D_N(source_txt, g_params->N.w, igamma);
                         //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
                         if (spec > 0.0f)
                         {
-                            const float gamma_0 = TEX1D(energies_txt, g_params->N.w, igamma);    
+                            const float gamma_0 = TEX1D_N(energies_txt, g_params->N.w, igamma);    
                             //const float gamma_0 = tex1D<float>(energies_txt, igamma);
                             const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
 
-                            const float sigma_PE_gamma_0 = TEX1D(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-                            const float sigma_CS_gamma_0 = TEX1D(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-                            const float sigma_RS_gamma_0 = TEX1D(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
+                            const float sigma_PE_gamma_0 = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
+                            const float sigma_CS_gamma_0 = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
+                            const float sigma_RS_gamma_0 = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
                             //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
                             //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
                             //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
                             const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-                            const float cur_CS = TEX1D(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                            const float cur_RS = TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
+                            const float cur_CS = TEX1D_L(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
+                            const float cur_RS = TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
                             //const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
                             //const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
 
                             //val_inner += spec * (cur_CS + cur_RS) * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
                             //*
-                            const float sigma_PE_gamma_f = TEX1D(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
-                            const float sigma_CS_gamma_f = TEX1D(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
-                            const float sigma_RS_gamma_f = TEX1D(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
+                            const float sigma_PE_gamma_f = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
+                            const float sigma_CS_gamma_f = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
+                            const float sigma_RS_gamma_f = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
                             //const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
                             //const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
                             //const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
@@ -454,32 +454,32 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
                                 float val_inner = 0.0f;
                                 for (int igamma = 0; igamma < g_params->N.w; igamma++)
                                 {
-                                    const float spec = TEX1D(source_txt, g_params->N.w, igamma);
+                                    const float spec = TEX1D_N(source_txt, g_params->N.w, igamma);
                                     //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
                                     if (spec > 0.0f)
                                     {
-                                        const float gamma_0 = TEX1D(energies_txt, g_params->N.w, igamma);
+                                        const float gamma_0 = TEX1D_N(energies_txt, g_params->N.w, igamma);
                                         //const float gamma_0 = tex1D<float>(energies_txt, igamma);
                                         const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
 
-                                        const float sigma_PE_gamma_0 = TEX1D(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-                                        const float sigma_CS_gamma_0 = TEX1D(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-                                        const float sigma_RS_gamma_0 = TEX1D(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
+                                        const float sigma_PE_gamma_0 = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
+                                        const float sigma_CS_gamma_0 = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
+                                        const float sigma_RS_gamma_0 = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
                                         //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
                                         //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
                                         //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
                                         const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-                                        const float cur_CS = TEX1D(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                                        const float cur_RS = TEX1D(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
+                                        const float cur_CS = TEX1D_L(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
+                                        const float cur_RS = TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
                                         //const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
                                         //const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
 
                                         //val_inner += spec * (cur_CS + cur_RS) * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
                                         //*
-                                        const float sigma_PE_gamma_f = TEX1D(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
-                                        const float sigma_CS_gamma_f = TEX1D(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
-                                        const float sigma_RS_gamma_f = TEX1D(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
+                                        const float sigma_PE_gamma_f = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
+                                        const float sigma_CS_gamma_f = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
+                                        const float sigma_RS_gamma_f = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
                                         //const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
                                         //const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
                                         //const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
