@@ -17,6 +17,7 @@ import pybind11
 import torch
 from sys import platform as _platform
 
+
 ## todo
 # compiler options (optimization flags, cufft options)
 # leapctype : libleap.so 
@@ -80,16 +81,18 @@ if cuda:
     # or extra_link_args=["-std=c++11"]
     rocm = "AMD" in torch.cuda.get_device_name(0)
     if rocm: # AMD ROCM GPU
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
-                            'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']}
+        #print("########## AMD ROCM architecture found! ##########")
+        extra_compile_args={'cxx':  ['-D__USE_GPU', '-D__USE_NOTEX', '-lcufft', '-lhipfft', '-D__INCLUDE_CUFFT'], 
+                            'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3', '-lcufft', '-lhipfft', '-D__INCLUDE_CUFFT']}
         libraries = []
     else: # CUDA GPU
+        #print("########## NVIDIA CUDA architecture found! ##########")
         #extra_compile_args={'cxx': ['-D__USE_GPU'], 
         #                    'nvcc': ['-D__USE_GPU', '-O3']} #, '-arch=compute_61'
         #extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
         #                    'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']} #, '-arch=compute_61'
         libraries = []
-        extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
+        extra_compile_args={'cxx':  ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
                             'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
         #libraries = ['cufft']
     ext_mod = CUDAExtension(

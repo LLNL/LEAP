@@ -47,8 +47,8 @@ extern dim3 setGridSize(int4 N, dim3 dimBlock);
 #define TEX1D_L(img, img_dim, x)            getTex1D_linear(img, img_dim, x)
 #define TEX3D_N1(img, img_dim, x, y, z)     getTex3D_nearest1(img, img_dim, x, y, z)
 #define TEX3D_N2(img, img_dim, z, y, x)     getTex3D_nearest2(img, img_dim, z, y, x)
-#define TEX3D_L1(img, img_dim, x, y, z)     getTex3D_linear1(img, img_dim, x, y, z)  // zyx order: image space in most cases
-#define TEX3D_L2(img, img_dim, z, y, x)     getTex3D_linear2(img, img_dim, z, y, x)  // xyz order: projection space in most cases
+#define TEX3D_L1(img, img_dim, x, y, z)     getTex3D_linear1(img, img_dim, x, y, z)  // zyx order: image space, border color in most cases
+#define TEX3D_L2(img, img_dim, z, y, x)     getTex3D_linear2(img, img_dim, z, y, x)  // xyz order: projection space, clamp in most cases
 #else
 #define TEX_DATA hipTextureObject_t 
 #define TEX_ARRAY hipArray*
@@ -203,15 +203,32 @@ __device__ inline float getTex3D_linear2(const float* img, int4 img_dim, float z
     x -= 0.5;
     y -= 0.5;
     z -= 0.5;
-    if (x < 0 || y < 0 || z < 0 || x >= img_dim.x || y >= img_dim.y || z >= img_dim.z)
-        return 0;
+
+    // for border color
+    //if (x < 0 || y < 0 || z < 0 || x >= img_dim.x || y >= img_dim.y || z >= img_dim.z)
+    //    return 0;
     
-    int x0 = static_cast<int>(x);
-    int y0 = static_cast<int>(y);
-    int z0 = static_cast<int>(z);
+    //int x0 = static_cast<int>(x);
+    //int y0 = static_cast<int>(y);
+    //int z0 = static_cast<int>(z);
+
+    // for clamp
+    x = __MIN__(x, img_dim.x-1);
+    y = __MIN__(y, img_dim.y-1);
+    z = __MIN__(z, img_dim.z-1);
+    x = __MAX__(x, 0);
+    y = __MAX__(y, 0);
+    z = __MAX__(z, 0);
+
+    int x0 = (int)x;
+    int y0 = (int)y;
+    int z0 = (int)z;
     int x1 = __MIN__(x0 + 1, img_dim.x - 1);
     int y1 = __MIN__(y0 + 1, img_dim.y - 1);
     int z1 = __MIN__(z0 + 1, img_dim.z - 1);
+    x1 = __MAX__(x1, 0);
+    y1 = __MAX__(y1, 0);
+    z1 = __MAX__(z1, 0);
 
     float tx = x - x0;
     float ty = y - y0;

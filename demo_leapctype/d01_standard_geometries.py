@@ -109,7 +109,10 @@ f[:] = 0.0
 startTime = time.time()
 print("start BP/FBP")
 #leapct.backproject(g,f)
-leapct.FBP(g,f)
+#leapct.FBP(g,f)
+filters = filterSequence(1.0e0)
+filters.append(TV(leapct, delta=0.02/20.0))
+leapct.RWLS(g,f,50,filters,None,'SQS')
 print("end BP/FBP")
 #leapct.inconsistencyReconstruction(g,f)
 #leapct.print_cost = True
