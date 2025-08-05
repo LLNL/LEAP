@@ -747,7 +747,7 @@ __global__ void BlurFilterKernel_txt(TEX_DATA f, float* f_filtered, int3 N, floa
                 {
                     //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j_shift * N.z + k_shift)];
                     //val += theWeight * tex3D<float>(f, k_shift, j_shift, i_shift);
-                    val += theWeight * TEX3D_N1(f, N, k_shift, j_shift, i_shift);
+                    val += theWeight * TEX3D_NB2(f, N, k_shift, j_shift, i_shift); //// Hyojin: the input is defined as "f", but the dimension order appears to be g. 
                     sum += theWeight;
                 }
             }
@@ -756,7 +756,7 @@ __global__ void BlurFilterKernel_txt(TEX_DATA f, float* f_filtered, int3 N, floa
 
     if (d_DO_HIGH_PASS) {
         //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_NB2(f, N, k, j, i) - val / sum;
     }
     else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
@@ -800,7 +800,7 @@ __global__ void BlurFilter2DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f_slice[uint64(j_shift * N.z + k_shift)];
                 //val += theWeight * tex3D<float>(f, k_shift, j_shift, i);
-                val += theWeight * TEX3D_N1(f, N, k_shift, j_shift, i);
+                val += theWeight * TEX3D_NB2(f, N, k_shift, j_shift, i);
                 sum += theWeight;
             }
         }
@@ -808,7 +808,7 @@ __global__ void BlurFilter2DKernel_txt(TEX_DATA f, float* f_filtered, const int3
 
     if (d_DO_HIGH_PASS) {
         //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_NB2(f, N, k, j, i) - val / sum;
     }
     else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
@@ -846,7 +846,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
                 //val += theWeight * tex3D<float>(f, k, j, i_shift);
-                val += theWeight * TEX3D_N1(f, N, k, j, i_shift);
+                val += theWeight * TEX3D_NB2(f, N, k, j, i_shift);
                 sum += theWeight;
             }
         }
@@ -865,7 +865,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
                 //val += theWeight * tex3D<float>(f, k, j_shift, i);
-                val += theWeight * TEX3D_N1(f, N, k, j_shift, i);
+                val += theWeight * TEX3D_NB2(f, N, k, j_shift, i);
                 sum += theWeight;
             }
         }
@@ -884,7 +884,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
                 //val += theWeight * tex3D<float>(f, k_shift, j, i);
-                val += theWeight * TEX3D_N1(f, N, k_shift, j, i);
+                val += theWeight * TEX3D_NB2(f, N, k_shift, j, i);
                 sum += theWeight;
             }
         }
@@ -892,7 +892,7 @@ __global__ void BlurFilter1DKernel_txt(TEX_DATA f, float* f_filtered, const int3
 
     if (d_DO_HIGH_PASS) {
         //f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_N1(f, N, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = TEX3D_NB2(f, N, k, j, i) - val / sum;
     }
     else {
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
@@ -1022,6 +1022,7 @@ bool lowOrHighPassFilter(float* f, int N_1, int N_2, int N_3, float FWHM, int nu
 
 bool lowOrHighPassFilter_txt(float* f, int N_1, int N_2, int N_3, float FWHM, int numDims, int axis, bool data_on_cpu, int whichGPU, int sliceStart, int sliceEnd, float* f_out)
 {
+    printf("lowOrHighPassFilter_txt()!!! (%d, %d, %d), FWHM=%f, axis=%d, sliceStart=%d, sliceEnd=%d\n", N_1, N_2, N_3, FWHM, axis, sliceStart, sliceEnd);
     if (f == NULL) return false;
 
     if (sliceStart < 0)

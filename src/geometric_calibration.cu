@@ -144,7 +144,7 @@ __global__ void consistencyCostKernel(TEX_DATA g, float* cost, const int3 N, con
             }
 
             //accum_i += integrandWeight_i * tex3D<float>(g, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
-            accum_i += integrandWeight_i * TEX3D_L2(g, N, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
+            accum_i += integrandWeight_i * TEX3D_LB2(g, N, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
         }
 
         float accum_j = 0.0f;
@@ -171,7 +171,7 @@ __global__ void consistencyCostKernel(TEX_DATA g, float* cost, const int3 N, con
             }
 
             //accum_j += integrandWeight_j * tex3D<float>(g, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
-            accum_j += integrandWeight_j * TEX3D_L2(g, N, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
+            accum_j += integrandWeight_j * TEX3D_LB2(g, N, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
         }
         cost_i += (accum_i - accum_j) * (accum_i - accum_j);
     }

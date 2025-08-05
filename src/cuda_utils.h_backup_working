@@ -109,10 +109,7 @@ template<typename T> __device__ __forceinline__ T ldg(const T* ptr)
 //// 1D texture functions
 __device__ inline float getTex1D_nearest_border(const float* img, int img_dim, float x)
 {
-    if (isnan(x))
-        return 0;
-
-    //x -= 0.5;
+    x -= 0.5;
     int x0 = static_cast<int>(x);
     if (x0 < 0 || x0 >= img_dim)
         return 0;
@@ -123,10 +120,7 @@ __device__ inline float getTex1D_nearest_border(const float* img, int img_dim, f
 
 __device__ inline float getTex1D_nearest_clamp(const float* img, int img_dim, float x)
 {
-    if (isnan(x))
-        return 0;
-
-    //x -= 0.5;
+    ///x -= 0.5;
     int x0 = static_cast<int>(x);
     x0 = __MAX__(x0, 0);
     x0 = __MIN__(x0, img_dim-1);
@@ -161,7 +155,7 @@ __device__ inline float getTex1D_linear_clamp(const float* img, int img_dim, flo
     if (isnan(x))
         return 0;
 
-    x -= 0.5;
+    ///x -= 0.5;
     int x0 = __MIN__(__MAX__(static_cast<int>(x), 0), img_dim-1);
     int x1 = __MIN__(x0+1, img_dim-1);
     float c0 = ldg(&img[x0]);
@@ -177,12 +171,9 @@ __device__ inline float getTex1D_linear_clamp(const float* img, int img_dim, flo
 //// 3D texture functions
 __device__ inline float getTex3D_nearest_border1(const float* img, int4 img_dim, float x, float y, float z)
 {
-    if (isnan(x) || isnan(y) || isnan(z))
-        return 0;
-
-    //x -= 0.5;
-    //y -= 0.5;
-    //z -= 0.5;
+    x -= 0.5;
+    y -= 0.5;
+    z -= 0.5;
 
     int x0 = static_cast<int>(x);
     int y0 = static_cast<int>(y);
@@ -203,12 +194,9 @@ __device__ inline float getTex3D_nearest_border1(const float* img, int3 img_dim,
 
 __device__ inline float getTex3D_nearest_border2(const float* img, int4 img_dim, float z, float y, float x)
 {
-    if (isnan(x) || isnan(y) || isnan(z))
-        return 0;
-
-    //x -= 0.5;
-    //y -= 0.5;
-    //z -= 0.5;
+    x -= 0.5;
+    y -= 0.5;
+    z -= 0.5;
 
     int x0 = static_cast<int>(x);
     int y0 = static_cast<int>(y);
@@ -229,12 +217,9 @@ __device__ inline float getTex3D_nearest_border2(const float* img, int3 img_dim,
 
 __device__ inline float getTex3D_nearest_clamp1(const float* img, int4 img_dim, float x, float y, float z)
 {
-    if (isnan(x) || isnan(y) || isnan(z))
-        return 0;
-
-    //x -= 0.5;
-    //y -= 0.5;
-    //z -= 0.5;
+    ///x -= 0.5;
+    ///y -= 0.5;
+    ///z -= 0.5;
     int x0 = static_cast<int>(x);
     int y0 = static_cast<int>(y);
     int z0 = static_cast<int>(z);
@@ -256,12 +241,9 @@ __device__ inline float getTex3D_nearest_clamp1(const float* img, int3 img_dim, 
 
 __device__ inline float getTex3D_nearest_clamp2(const float* img, int4 img_dim, float z, float y, float x)
 {
-    if (isnan(x) || isnan(y) || isnan(z))
-        return 0;
-    
-    //x -= 0.5;
-    //y -= 0.5;
-    //z -= 0.5;
+    ///x -= 0.5;
+    ///y -= 0.5;
+    ///z -= 0.5;
     int x0 = static_cast<int>(x);
     int y0 = static_cast<int>(y);
     int z0 = static_cast<int>(z);
@@ -281,7 +263,7 @@ __device__ inline float getTex3D_nearest_clamp2(const float* img, int3 img_dim, 
     return getTex3D_nearest_clamp2(img, img_dim2, z, y, x);
 }
 
-__device__ inline float getTex3D_linear_border1(const float* img, int4 img_dim, float x, float y, float z)
+__device__ inline float getTex3D_linear_border1(const float* img, int4 img_dim, float x, float y, float z, bool verbose=false)
 {
     if (isnan(x) || isnan(y) || isnan(z))
         return 0;
@@ -289,53 +271,66 @@ __device__ inline float getTex3D_linear_border1(const float* img, int4 img_dim, 
     x -= 0.5;
     y -= 0.5;
     z -= 0.5;
+    //if (x < 0 || y < 0 || z < 0 || x >= img_dim.x || y >= img_dim.y || z >= img_dim.z)
+    //if (x < 0 || y < 0 || z < 0 || x > img_dim.x-1 || y > img_dim.y-1 || z > img_dim.z-1)
+    //if (x < 0 || y < 0 || z < 0 || x >= img_dim.x-1 || y >= img_dim.y-1 || z >= img_dim.z-1)
+    //    return 0;
 
-    int x0 = floorf(x);
-    int y0 = floorf(y);
-    int z0 = floorf(z);
-    if (x0 < 0 || y0 < 0 || z0 < 0 || x0 > img_dim.x-1 || y0 > img_dim.y-1 || z0 > img_dim.z-1)
+    int ix = floorf(x);
+    int iy = floorf(y);
+    int iz = floorf(z);
+    if (ix < 0 || iy < 0 || iz < 0 || ix >= img_dim.x-1 || iy >= img_dim.y-1 || iz >= img_dim.z-1)
         return 0;
 
-    float tx = x - x0;
-    float ty = y - y0;
-    float tz = z - z0;
-    int x1 = __MIN__(x0+1, img_dim.x-1);
-    int y1 = __MIN__(y0+1, img_dim.y-1);
-    int z1 = __MIN__(z0+1, img_dim.z-1);
+    float tx = x - ix;
+    float ty = y - iy;
+    float tz = z - iz;
+    //if (verbose) {
+    //    printf("verbose0: x0, y0, z0, x1, y1, z1 = %d, %d, %d, %d, %d, %d\n", x0, y0, z0, x1, y1, z1);
+    //    printf("verbose0: tx, ty, tz = %f, %f, %f\n", tx, ty, tz);
+    //}
 
     #define IMG_IDX1(i,j,k) ((k)*img_dim.y*img_dim.x + (j)*img_dim.x + (i))
-    float c000 = ldg(&img[IMG_IDX1(x0, y0, z0)]);
-    float c100 = ldg(&img[IMG_IDX1(x1, y0, z0)]);
-    float c010 = ldg(&img[IMG_IDX1(x0, y1, z0)]);
-    float c110 = ldg(&img[IMG_IDX1(x1, y1, z0)]);
-    float c001 = ldg(&img[IMG_IDX1(x0, y0, z1)]);
-    float c101 = ldg(&img[IMG_IDX1(x1, y0, z1)]);
-    float c011 = ldg(&img[IMG_IDX1(x0, y1, z1)]);
-    float c111 = ldg(&img[IMG_IDX1(x1, y1, z1)]);
+    float c000 = ldg(&img[IMG_IDX1(ix,   iy,   iz  )]);
+    float c100 = ldg(&img[IMG_IDX1(ix+1, iy,   iz  )]);
+    float c010 = ldg(&img[IMG_IDX1(ix,   iy+1, iz  )]);
+    float c110 = ldg(&img[IMG_IDX1(ix+1, iy+1, iz  )]);
+    float c001 = ldg(&img[IMG_IDX1(ix,   iy,   iz+1)]);
+    float c101 = ldg(&img[IMG_IDX1(ix+1, iy,   iz+1)]);
+    float c011 = ldg(&img[IMG_IDX1(ix,   iy+1, iz+1)]);
+    float c111 = ldg(&img[IMG_IDX1(ix+1, iy+1, iz+1)]);
+    //if (verbose)
+    //    printf("verbose1: %f, %f, %f, %f, %f, %f, %f, %f\n", c000, c100, c010, c110, c001, c101, c011, c111);
 
     // interpolate x-direction
-    float c00 = fmaf(tx, c100-c000, c000); //c000 * (1 - tx) + c100 * tx; 
-    float c10 = fmaf(tx, c110-c010, c010); //c010 * (1 - tx) + c110 * tx; 
-    float c01 = fmaf(tx, c101-c001, c001); //c001 * (1 - tx) + c101 * tx; 
-    float c11 = fmaf(tx, c111-c011, c011); //c011 * (1 - tx) + c111 * tx; 
+    float c00 = c000 * (1 - tx) + c100 * tx; //fmaf(tx, c100-c000, c000);
+    float c10 = c010 * (1 - tx) + c110 * tx; //fmaf(tx, c110-c010, c010);
+    float c01 = c001 * (1 - tx) + c101 * tx; //fmaf(tx, c101-c001, c001);
+    float c11 = c011 * (1 - tx) + c111 * tx; //fmaf(tx, c111-c011, c011); 
+    //if (verbose)
+    //    printf("verbose2: %f, %f, %f, %f\n", c00, c10, c01, c11);
 
     // interpolate y-direction
-    float c0 = fmaf(ty, c10-c00, c00); //c00 * (1 - ty) + c10 * ty; 
-    float c1 = fmaf(ty, c11-c01, c01); //c01 * (1 - ty) + c11 * ty; 
+    float c0 = c00 * (1 - ty) + c10 * ty; //fmaf(ty, c10-c00, c00); 
+    float c1 = c01 * (1 - ty) + c11 * ty; //fmaf(ty, c11-c01, c01); 
+    //if (verbose)
+    //    printf("verbose3: %f, %f\n", c0, c1);
 
     // interpolate z-direction
-    float result = fmaf(tz, c1-c0, c0); //c0 * (1 - tz) + c1 * tz; 
+    float result = c0 * (1 - tz) + c1 * tz; //fmaf(tz, c1-c0, c0); 
+    //if (verbose)
+    //    printf("verbose4: %f\n", result);
 
     return result;
 
-    #undef IMG_IDX1
+    #undef IMG_IDX
 }
 
-__device__ inline float getTex3D_linear_border1(const float* img, int3 img_dim, float x, float y, float z)
+__device__ inline float getTex3D_linear_border1(const float* img, int3 img_dim, float x, float y, float z, bool verbose=false)
 {
     int4 img_dim2;
     img_dim2.x = img_dim.x; img_dim2.y = img_dim.y; img_dim2.z = img_dim.z;
-    return getTex3D_linear_border1(img, img_dim2, x, y, z);
+    return getTex3D_linear_border1(img, img_dim2, x, y, z, verbose);
 }
 
 __device__ inline float getTex3D_linear_border2(const float* img, int4 img_dim, float z, float y, float x)
@@ -347,41 +342,60 @@ __device__ inline float getTex3D_linear_border2(const float* img, int4 img_dim, 
     y -= 0.5;
     z -= 0.5;
 
-    int x0 = floorf(x);
-    int y0 = floorf(y);
-    int z0 = floorf(z);
-    if (x0 < 0 || y0 < 0 || z0 < 0 || x0 > img_dim.x-1 || y0 > img_dim.y-1 || z0 > img_dim.z-1)
+    int ix = floorf(x);
+    int iy = floorf(y);
+    int iz = floorf(z);
+    if (ix < 0 || iy < 0 || iz < 0 || ix >= img_dim.x-1 || iy >= img_dim.y-1 || iz >= img_dim.z-1)
         return 0;
 
-    float tx = x - x0;
-    float ty = y - y0;
-    float tz = z - z0;
-    int x1 = __MIN__(x0+1, img_dim.x-1);
-    int y1 = __MIN__(y0+1, img_dim.y-1);
-    int z1 = __MIN__(z0+1, img_dim.z-1);
+    float tx = x - ix;
+    float ty = y - iy;
+    float tz = z - iz;
+    //if (verbose) {
+    //    printf("verbose0: x0, y0, z0, x1, y1, z1 = %d, %d, %d, %d, %d, %d\n", x0, y0, z0, x1, y1, z1);
+    //    printf("verbose0: tx, ty, tz = %f, %f, %f\n", tx, ty, tz);
+    //}
 
+    //int d = img_dim.z;
+    //int dh = img_dim.y * img_dim.z;
+    //float c000 = ldg(&img[x0 * dh + y0 * d + z0]);
+    //float c100 = ldg(&img[x0 * dh + y0 * d + z1]);
+    //float c010 = ldg(&img[x0 * dh + y1 * d + z0]);
+    //float c110 = ldg(&img[x0 * dh + y1 * d + z1]);
+    //float c001 = ldg(&img[x1 * dh + y0 * d + z0]);
+    //float c101 = ldg(&img[x1 * dh + y0 * d + z1]);
+    //float c011 = ldg(&img[x1 * dh + y1 * d + z0]);
+    //float c111 = ldg(&img[x1 * dh + y1 * d + z1]);
     #define IMG_IDX2(i,j,k) ((k)*img_dim.y*img_dim.z + (j)*img_dim.z + (i))
-    float c000 = ldg(&img[IMG_IDX2(z0, y0, x0)]);
-    float c100 = ldg(&img[IMG_IDX2(z1, y0, x0)]);
-    float c010 = ldg(&img[IMG_IDX2(z0, y1, x0)]);
-    float c110 = ldg(&img[IMG_IDX2(z1, y1, x0)]);
-    float c001 = ldg(&img[IMG_IDX2(z0, y0, x1)]);
-    float c101 = ldg(&img[IMG_IDX2(z1, y0, x1)]);
-    float c011 = ldg(&img[IMG_IDX2(z0, y1, x1)]);
-    float c111 = ldg(&img[IMG_IDX2(z1, y1, x1)]);
+    float c000 = ldg(&img[IMG_IDX2(iz,   iy,   ix  )]);
+    float c100 = ldg(&img[IMG_IDX2(iz+1, iy,   ix  )]);
+    float c010 = ldg(&img[IMG_IDX2(iz,   iy+1, ix  )]);
+    float c110 = ldg(&img[IMG_IDX2(iz+1, iy+1, ix  )]);
+    float c001 = ldg(&img[IMG_IDX2(iz,   iy,   ix+1)]);
+    float c101 = ldg(&img[IMG_IDX2(iz+1, iy,   ix+1)]);
+    float c011 = ldg(&img[IMG_IDX2(iz,   iy+1, ix+1)]);
+    float c111 = ldg(&img[IMG_IDX2(iz+1, iy+1, ix+1)]);
+    //if (verbose)
+    //    printf("verbose1: %f, %f, %f, %f, %f, %f, %f, %f\n", c000, c100, c010, c110, c001, c101, c011, c111);
 
-    // interpolate z-direction
-    float c00 = fmaf(tz, c100-c000, c000); //c000 * (1 - tz) + c100 * tz;
-    float c10 = fmaf(tz, c110-c010, c010); //c010 * (1 - tz) + c110 * tz;
-    float c01 = fmaf(tz, c101-c001, c001); //c001 * (1 - tz) + c101 * tz;
-    float c11 = fmaf(tz, c111-c011, c011); //c011 * (1 - tz) + c111 * tz;
+    // interpolate y-direction
+    float c00 = fmaf(tz, c100-c000, c000); //c000 * (1 - tx) + c100 * tx;
+    float c10 = fmaf(tz, c110-c010, c010); //c010 * (1 - tx) + c110 * tx;
+    float c01 = fmaf(tz, c101-c001, c001); //c001 * (1 - tx) + c101 * tx;
+    float c11 = fmaf(tz, c111-c011, c011); //c011 * (1 - tx) + c111 * tx;
+    //if (verbose)
+    //    printf("verbose2: %f, %f, %f, %f\n", c00, c10, c01, c11);
 
     // interpolate y-direction
     float c0 = fmaf(ty, c10-c00, c00); //c00 * (1 - ty) + c10 * ty;
     float c1 = fmaf(ty, c11-c01, c01); //c01 * (1 - ty) + c11 * ty;
+    //if (verbose)
+    //    printf("verbose3: %f, %f\n", c0, c1);
 
     // interpolate x-direction
     float result = fmaf(tx, c1-c0, c0);  //c0 * (1 - tz) + c1 * tz;
+    //if (verbose)
+    //    printf("verbose4: %f\n", result);
 
     return result;
 
@@ -422,15 +436,25 @@ __device__ inline float getTex3D_linear_clamp1(const float* img, int4 img_dim, f
     float ty = y - float(y);
     float tz = z - float(z);
 
-    #define IMG_IDX1(i,j,k) ((k)*img_dim.y*img_dim.x + (j)*img_dim.x + (i))
-    float c000 = ldg(&img[IMG_IDX1(x0, y0, z0)]);
-    float c100 = ldg(&img[IMG_IDX1(x1, y0, z0)]);
-    float c010 = ldg(&img[IMG_IDX1(x0, y1, z0)]);
-    float c110 = ldg(&img[IMG_IDX1(x1, y1, z0)]);
-    float c001 = ldg(&img[IMG_IDX1(x0, y0, z1)]);
-    float c101 = ldg(&img[IMG_IDX1(x1, y0, z1)]);
-    float c011 = ldg(&img[IMG_IDX1(x0, y1, z1)]);
-    float c111 = ldg(&img[IMG_IDX1(x1, y1, z1)]);
+    int w = img_dim.x;
+    int wh = img_dim.y * img_dim.x;
+    float c000 = ldg(&img[z0 * wh + y0 * w + x0]);
+    float c100 = ldg(&img[z0 * wh + y0 * w + x1]);
+    float c010 = ldg(&img[z0 * wh + y1 * w + x0]);
+    float c110 = ldg(&img[z0 * wh + y1 * w + x1]);
+    float c001 = ldg(&img[z1 * wh + y0 * w + x0]);
+    float c101 = ldg(&img[z1 * wh + y0 * w + x1]);
+    float c011 = ldg(&img[z1 * wh + y1 * w + x0]);
+    float c111 = ldg(&img[z1 * wh + y1 * w + x1]);
+    //#define IMG_IDX1(i,j,k) ((k)*img_dim.y*img_dim.x + (j)*img_dim.x + (i))
+    //float c000 = ldg(&img[IMG_IDX1(ix,   iy,   iz  )]);
+    //float c100 = ldg(&img[IMG_IDX1(ix+1, iy,   iz  )]);
+    //float c010 = ldg(&img[IMG_IDX1(ix,   iy+1, iz  )]);
+    //float c110 = ldg(&img[IMG_IDX1(ix+1, iy+1, iz  )]);
+    //float c001 = ldg(&img[IMG_IDX1(ix,   iy,   iz+1)]);
+    //float c101 = ldg(&img[IMG_IDX1(ix+1, iy,   iz+1)]);
+    //float c011 = ldg(&img[IMG_IDX1(ix,   iy+1, iz+1)]);
+    //float c111 = ldg(&img[IMG_IDX1(ix+1, iy+1, iz+1)]);
 
     // interpolate x-direction
     float c00 = fmaf(tx, c100-c000, c000); //c000 * (1 - tx) + c100 * tx;
@@ -485,15 +509,25 @@ __device__ inline float getTex3D_linear_clamp2(const float* img, int4 img_dim, f
     z0 = __MIN__(__MAX__(z0, 0), img_dim.z-1);
     z1 = __MIN__(__MAX__(z1, 0), img_dim.z-1);
 
-    #define IMG_IDX2(i,j,k) ((k)*img_dim.y*img_dim.z + (j)*img_dim.z + (i))
-    float c000 = ldg(&img[IMG_IDX2(z0, y0, x0)]);
-    float c100 = ldg(&img[IMG_IDX2(z1, y0, x0)]);
-    float c010 = ldg(&img[IMG_IDX2(z0, y1, x0)]);
-    float c110 = ldg(&img[IMG_IDX2(z1, y1, x0)]);
-    float c001 = ldg(&img[IMG_IDX2(z0, y0, x1)]);
-    float c101 = ldg(&img[IMG_IDX2(z1, y0, x1)]);
-    float c011 = ldg(&img[IMG_IDX2(z0, y1, x1)]);
-    float c111 = ldg(&img[IMG_IDX2(z1, y1, x1)]);
+    int d = img_dim.z;
+    int dh = img_dim.y * img_dim.z;
+    float c000 = ldg(&img[x0 * dh + y0 * d + z0]);
+    float c100 = ldg(&img[x0 * dh + y0 * d + z1]);
+    float c010 = ldg(&img[x0 * dh + y1 * d + z0]);
+    float c110 = ldg(&img[x0 * dh + y1 * d + z1]);
+    float c001 = ldg(&img[x1 * dh + y0 * d + z0]);
+    float c101 = ldg(&img[x1 * dh + y0 * d + z1]);
+    float c011 = ldg(&img[x1 * dh + y1 * d + z0]);
+    float c111 = ldg(&img[x1 * dh + y1 * d + z1]);
+    //#define IMG_IDX2(i,j,k) ((k)*img_dim.y*img_dim.z + (j)*img_dim.z + (i))
+    //float c000 = ldg(&img[IMG_IDX2(iz,   iy,   ix  )]);
+    //float c100 = ldg(&img[IMG_IDX2(iz+1, iy,   ix  )]);
+    //float c010 = ldg(&img[IMG_IDX2(iz,   iy+1, ix  )]);
+    //float c110 = ldg(&img[IMG_IDX2(iz+1, iy+1, ix  )]);
+    //float c001 = ldg(&img[IMG_IDX2(iz,   iy,   ix+1)]);
+    //float c101 = ldg(&img[IMG_IDX2(iz+1, iy,   ix+1)]);
+    //float c011 = ldg(&img[IMG_IDX2(iz,   iy+1, ix+1)]);
+    //float c111 = ldg(&img[IMG_IDX2(iz+1, iy+1, ix+1)]);
 
     // interpolate z-direction
     float c00 = fmaf(tz, c100-c000, c000); //c000 * (1 - tz) + c100 * tz;

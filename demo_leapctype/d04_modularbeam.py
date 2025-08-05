@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import imageio
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
@@ -132,6 +133,13 @@ filters.append(TV(leapct, delta=0.02/20.0))
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
+print(f.shape, g.shape)
+f[f < 0] = 0
+f_slice = f[f.shape[0]//2,:,:]
+g_slice = g[:,g.shape[1]//2,:]
+print("f min/max:", np.min(f_slice), np.max(f_slice))
+imageio.imsave("sample_data/d04_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+imageio.imsave("sample_data/d04_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 
 # Post Reconstruction Smoothing (optional)
 #startTime = time.time()

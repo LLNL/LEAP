@@ -109,6 +109,7 @@ __global__ void guidedFilterSecondStep(float* f, const float* a, const float* b,
 
 bool guidedFilter(float* f, int N_1, int N_2, int N_3, int r, float epsilon, int numIter, bool data_on_cpu, int whichGPU)
 {
+    printf("guidedFilter()!!!\n");
     if (f == NULL) return false;
 
     cudaSetDevice(whichGPU);

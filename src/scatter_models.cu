@@ -48,7 +48,7 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.x >= float(N.x) - 0.5f) return 0.0f;
             int ix_max = min(N.x - 1, int(ceil((dst.x - startVal.x) / T.x)));
 
-            val = TEX3D_L2(mu, N, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * ((float(ix_start) - 0.5f) - max(-0.5f, ip.x));
+            val = TEX3D_LB2(mu, N, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * ((float(ix_start) - 0.5f) - max(-0.5f, ip.x));
             //val = tex3D<float>(mu, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
             //    ((float(ix_start) - 0.5f) - max(-0.5f, ip.x));
 
@@ -56,7 +56,7 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             const float iz_offset = iz_start - ir.z * float(ix_start) + 0.5f;
 
             for (int ix = ix_start; ix <= ix_max; ix++) {
-                val += TEX3D_L2(mu, N, float(ix) + 0.5f, iy_offset + ir.y * float(ix), iz_offset + ir.z * float(ix));
+                val += TEX3D_LB2(mu, N, float(ix) + 0.5f, iy_offset + ir.y * float(ix), iz_offset + ir.z * float(ix));
                 //val += tex3D<float>(mu, float(ix) + 0.5f, iy_offset + ir.y * float(ix), iz_offset + ir.z * float(ix));
             }
         }
@@ -65,14 +65,14 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.x <= -0.5f) return 0.0f;
             int ix_min = max(0, int(floor((dst.x - startVal.x) / T.x)));
 
-            val = TEX3D_L2(mu, N, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * (min((float(N.x) - 0.5f), ip.x) - (float(ix_start) + 0.5f));
+            val = TEX3D_LB2(mu, N, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * (min((float(N.x) - 0.5f), ip.x) - (float(ix_start) + 0.5f));
             //val = tex3D<float>(mu, float(ix_start) + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
             //    (min((float(N.x) - 0.5f), ip.x) - (float(ix_start) + 0.5f));
 
             const float iy_offset = iy_start + ir.y * float(ix_start) + 0.5f;
             const float iz_offset = iz_start + ir.z * float(ix_start) + 0.5f;
             for (int ix = ix_start; ix >= ix_min; ix--) {
-                val += TEX3D_L2(mu, N, float(ix) + 0.5f, iy_offset - ir.y * float(ix), iz_offset - ir.z * float(ix));
+                val += TEX3D_LB2(mu, N, float(ix) + 0.5f, iy_offset - ir.y * float(ix), iz_offset - ir.z * float(ix));
                 //val += tex3D<float>(mu, float(ix) + 0.5f, iy_offset - ir.y * float(ix), iz_offset - ir.z * float(ix));
             }
         }
@@ -94,14 +94,14 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.y >= float(N.y) - 0.5f) return 0.0f;
             int iy_max = min(N.y - 1, int(ceil((dst.y - startVal.y) / T.y)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, float(iy_start) + 0.5f, iz_start + 0.5f) * ((float(iy_start) - 0.5f) - max(-0.5f, ip.y));
+            val = TEX3D_LB2(mu, N, ix_start + 0.5f, float(iy_start) + 0.5f, iz_start + 0.5f) * ((float(iy_start) - 0.5f) - max(-0.5f, ip.y));
             //val = tex3D<float>(mu, ix_start + 0.5f, float(iy_start) + 0.5f, iz_start + 0.5f) *
             //    ((float(iy_start) - 0.5f) - max(-0.5f, ip.y));
 
             const float ix_offset = ix_start - ir.x * float(iy_start) + 0.5f;
             const float iz_offset = iz_start - ir.z * float(iy_start) + 0.5f;
             for (int iy = iy_start; iy <= iy_max; iy++) {
-                val += TEX3D_L2(mu, N, ix_offset + ir.x * float(iy), float(iy) + 0.5f, iz_offset + ir.z * float(iy));
+                val += TEX3D_LB2(mu, N, ix_offset + ir.x * float(iy), float(iy) + 0.5f, iz_offset + ir.z * float(iy));
                 //val += tex3D<float>(mu, ix_offset + ir.x * float(iy), float(iy) + 0.5f, iz_offset + ir.z * float(iy));
             }
         }
@@ -110,14 +110,14 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.y <= -0.5f) return 0.0f;
             int iy_min = max(0, int(floor((dst.y - startVal.y) / T.y)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * (min((float(N.y) - 0.5f), ip.y) - (float(iy_start) + 0.5f));
+            val = TEX3D_LB2(mu, N, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * (min((float(N.y) - 0.5f), ip.y) - (float(iy_start) + 0.5f));
             //val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
             //    (min((float(N.y) - 0.5f), ip.y) - (float(iy_start) + 0.5f));
 
             const float ix_offset = ix_start + ir.x * float(iy_start) + 0.5f;
             const float iz_offset = iz_start + ir.z * float(iy_start) + 0.5f;
             for (int iy = iy_start; iy >= iy_min; iy--) {
-                val += TEX3D_L2(mu, N, ix_offset - ir.x * float(iy), float(iy) + 0.5f, iz_offset - ir.z * float(iy));
+                val += TEX3D_LB2(mu, N, ix_offset - ir.x * float(iy), float(iy) + 0.5f, iz_offset - ir.z * float(iy));
                 //val += tex3D<float>(mu, ix_offset - ir.x * float(iy), float(iy) + 0.5f, iz_offset - ir.z * float(iy));
             }
         }
@@ -139,14 +139,14 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.z >= float(N.z) - 0.5f) return 0.0f;
             int iz_max = min(N.z - 1, int(ceil((dst.z - startVal.z) / T.z)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * ((float(iz_start) - 0.5f) - max(-0.5f, ip.z));
+            val = TEX3D_LB2(mu, N, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) * ((float(iz_start) - 0.5f) - max(-0.5f, ip.z));
             //val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, iz_start + 0.5f) *
             //    ((float(iz_start) - 0.5f) - max(-0.5f, ip.z));
 
             const float ix_offset = ix_start - ir.x * float(iz_start) + 0.5f;
             const float iy_offset = iy_start - ir.y * float(iz_start) + 0.5f;
             for (int iz = iz_start; iz <= iz_max; iz++) {
-                val += TEX3D_L2(mu, N, ix_offset + ir.x * float(iz), iy_offset + ir.y * float(iz), float(iz) + 0.5f);
+                val += TEX3D_LB2(mu, N, ix_offset + ir.x * float(iz), iy_offset + ir.y * float(iz), float(iz) + 0.5f);
                 //val += tex3D<float>(mu, ix_offset + ir.x * float(iz), iy_offset + ir.y * float(iz), float(iz) + 0.5f);
             }
         }
@@ -155,14 +155,14 @@ __device__ float divergentBeamTransform(TEX_DATA mu, const int4 N, const float4 
             if (ip.z <= -0.5f) return 0.0f;
             int iz_min = max(0, int(floor((dst.z - startVal.z) / T.z)));
 
-            val = TEX3D_L2(mu, N, ix_start + 0.5f, iy_start + 0.5f, float(iz_start) + 0.5f) * (min((float(N.z) - 0.5f), ip.z) - (float(iz_start) + 0.5f));
+            val = TEX3D_LB2(mu, N, ix_start + 0.5f, iy_start + 0.5f, float(iz_start) + 0.5f) * (min((float(N.z) - 0.5f), ip.z) - (float(iz_start) + 0.5f));
             //val = tex3D<float>(mu, ix_start + 0.5f, iy_start + 0.5f, float(iz_start) + 0.5f) *
             //    (min((float(N.z) - 0.5f), ip.z) - (float(iz_start) + 0.5f));
 
             const float ix_offset = ix_start + ir.x * float(iz_start) + 0.5f;
             const float iy_offset = iy_start + ir.y * float(iz_start) + 0.5f;
             for (int iz = iz_start; iz >= iz_min; iz--) {
-                val += TEX3D_L2(mu, N, ix_offset - ir.x * float(iz), iy_offset - ir.y * float(iz), float(iz) + 0.5f);
+                val += TEX3D_LB2(mu, N, ix_offset - ir.x * float(iz), iy_offset - ir.y * float(iz), float(iz) + 0.5f);
                 //val += tex3D<float>(mu, ix_offset - ir.x * float(iz), iy_offset - ir.y * float(iz), float(iz) + 0.5f);
             }
         }
@@ -181,12 +181,12 @@ __device__ float airScan(const float3 x_0, const float3 x_f, const float3 n_d, c
     const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
     for (int igamma = 0; igamma < N_energies; igamma++)
     {
-        const float spec = TEX1D_N(source_txt, N_energies, igamma); // spec = spectrum
+        const float spec = TEX1D_NB(source_txt, N_energies, igamma); // spec = spectrum
         //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
         if (spec > 0.0f)
         {
-            const float gamma_0 = TEX1D_N(energies_txt, N_energies, igamma);
-            val += TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec;
+            const float gamma_0 = TEX1D_NB(energies_txt, N_energies, igamma);
+            val += TEX1D_LB(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec;
             //const float gamma_0 = tex1D<float>(energies_txt, igamma);
             //val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec;
         }
@@ -212,22 +212,22 @@ __device__ float PrimaryScan(const float3 x_0, const float3 x_f, const float3 n_
     const float direct_solid_angle = x_f_minus_x_0_dot_n_d * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv * x_f_minus_x_0_mag_inv;
     for (int igamma = 0; igamma < N_energies; igamma++)
     {
-        const float spec = TEX1D_N(source_txt, N_energies, igamma);
+        const float spec = TEX1D_NB(source_txt, N_energies, igamma);
         //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
         if (spec > 0.0f)
         {
-            const float gamma_0 = TEX1D_N(energies_txt, N_energies, igamma);
+            const float gamma_0 = TEX1D_NB(energies_txt, N_energies, igamma);
             //const float gamma_0 = tex1D<float>(energies_txt, igamma);
 
-            const float sigma_PE_gamma_0 = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-            const float sigma_CS_gamma_0 = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-            const float sigma_RS_gamma_0 = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
+            const float sigma_PE_gamma_0 = TEX1D_LB(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
+            const float sigma_CS_gamma_0 = TEX1D_LB(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
+            const float sigma_RS_gamma_0 = TEX1D_LB(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
             //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
             //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
             //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
             const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-            val += TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
+            val += TEX1D_LB(detector_txt, maxEnergy, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
             //val += tex1D<float>(detector_txt, gamma_0 - 0.5f) * spec * expf(-sigma_total_gamma_0 * Prho);
         }
     }
@@ -277,7 +277,7 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
             {
                 const float3 x = make_float3(i * f_params->T.x + f_params->startVal.x, x_2, x_3);
 
-                const float rho = TEX3D_L1(f, f_params->N, i + 0.5f, j + 0.5f, k + 0.5f);
+                const float rho = TEX3D_LB1(f, f_params->N, i + 0.5f, j + 0.5f, k + 0.5f);
                 //const float rho = tex3D<float>(f, i + 0.5f, j + 0.5f, k + 0.5f);
 
                 if (rho > 0.0f)
@@ -302,32 +302,32 @@ __global__ void firstOrderScatterModel(float* dev_proj, const hypercube* g_param
                     float val_inner = 0.0f;
                     for (int igamma = 0; igamma < g_params->N.w; igamma++)
                     {
-                        const float spec = TEX1D_N(source_txt, g_params->N.w, igamma);
+                        const float spec = TEX1D_NB(source_txt, g_params->N.w, igamma);
                         //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
                         if (spec > 0.0f)
                         {
-                            const float gamma_0 = TEX1D_N(energies_txt, g_params->N.w, igamma);    
+                            const float gamma_0 = TEX1D_NB(energies_txt, g_params->N.w, igamma);    
                             //const float gamma_0 = tex1D<float>(energies_txt, igamma);
                             const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
 
-                            const float sigma_PE_gamma_0 = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-                            const float sigma_CS_gamma_0 = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-                            const float sigma_RS_gamma_0 = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
+                            const float sigma_PE_gamma_0 = TEX1D_LB(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
+                            const float sigma_CS_gamma_0 = TEX1D_LB(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
+                            const float sigma_RS_gamma_0 = TEX1D_LB(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
                             //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
                             //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
                             //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
                             const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-                            const float cur_CS = TEX1D_L(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                            const float cur_RS = TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
+                            const float cur_CS = TEX1D_LB(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_LB1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
+                            const float cur_RS = TEX1D_LB(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_LB1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
                             //const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
                             //const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
 
                             //val_inner += spec * (cur_CS + cur_RS) * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
                             //*
-                            const float sigma_PE_gamma_f = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
-                            const float sigma_CS_gamma_f = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
-                            const float sigma_RS_gamma_f = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
+                            const float sigma_PE_gamma_f = TEX1D_LB(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
+                            const float sigma_CS_gamma_f = TEX1D_LB(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
+                            const float sigma_RS_gamma_f = TEX1D_LB(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
                             //const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
                             //const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
                             //const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);
@@ -430,7 +430,7 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
                         {
                             const float3 x = make_float3((i+di) * f_params->T.x + f_params->startVal.x, x_2, x_3);
 
-                            const float rho = TEX3D_L1(f, f_params->N, i + 0.5f, j + 0.5f, k + 0.5f);
+                            const float rho = TEX3D_LB1(f, f_params->N, i + 0.5f, j + 0.5f, k + 0.5f);
                             //const float rho = tex3D<float>(f, i + 0.5f, j + 0.5f, k + 0.5f);
 
                             if (rho > 0.0f)
@@ -454,32 +454,32 @@ __global__ void firstOrderScatterModel_fast(float* dev_proj, const hypercube* g_
                                 float val_inner = 0.0f;
                                 for (int igamma = 0; igamma < g_params->N.w; igamma++)
                                 {
-                                    const float spec = TEX1D_N(source_txt, g_params->N.w, igamma);
+                                    const float spec = TEX1D_NB(source_txt, g_params->N.w, igamma);
                                     //const float spec = tex1D<float>(source_txt, igamma); // spec = spectrum
                                     if (spec > 0.0f)
                                     {
-                                        const float gamma_0 = TEX1D_N(energies_txt, g_params->N.w, igamma);
+                                        const float gamma_0 = TEX1D_NB(energies_txt, g_params->N.w, igamma);
                                         //const float gamma_0 = tex1D<float>(energies_txt, igamma);
                                         const float gamma_f = 510.975f * gamma_0 / (510.975f + (1.0f - cos_theta) * gamma_0);
 
-                                        const float sigma_PE_gamma_0 = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
-                                        const float sigma_CS_gamma_0 = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
-                                        const float sigma_RS_gamma_0 = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
+                                        const float sigma_PE_gamma_0 = TEX1D_LB(sigma_PE_txt, maxEnergy, gamma_0 - 0.5f);
+                                        const float sigma_CS_gamma_0 = TEX1D_LB(sigma_CS_txt, maxEnergy, gamma_0 - 0.5f);
+                                        const float sigma_RS_gamma_0 = TEX1D_LB(sigma_RS_txt, maxEnergy, gamma_0 - 0.5f);
                                         //const float sigma_PE_gamma_0 = tex1D<float>(sigma_PE_txt, gamma_0 - 0.5f);
                                         //const float sigma_CS_gamma_0 = tex1D<float>(sigma_CS_txt, gamma_0 - 0.5f);
                                         //const float sigma_RS_gamma_0 = tex1D<float>(sigma_RS_txt, gamma_0 - 0.5f);
                                         const float sigma_total_gamma_0 = sigma_PE_gamma_0 + sigma_CS_gamma_0 + sigma_RS_gamma_0;
 
-                                        const float cur_CS = TEX1D_L(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
-                                        const float cur_RS = TEX1D_L(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_L1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
+                                        const float cur_CS = TEX1D_LB(detector_txt, maxEnergy, gamma_f - 0.5f) * sigma_CS_gamma_0 * TEX3D_LB1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
+                                        const float cur_RS = TEX1D_LB(detector_txt, maxEnergy, gamma_0 - 0.5f) * sigma_RS_gamma_0 * TEX3D_LB1(scatterDist_txt, scatter_dist_dim, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
                                         //const float cur_CS = tex1D<float>(detector_txt, gamma_f - 0.5f) * sigma_CS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 0.5f);
                                         //const float cur_RS = tex1D<float>(detector_txt, gamma_0 - 0.5f) * sigma_RS_gamma_0 * tex3D<float>(scatterDist_txt, theta + 0.5f, gamma_0 - 0.5f, 1.5f);
 
                                         //val_inner += spec * (cur_CS + cur_RS) * expf(-sigma_total_gamma_0 * (Df_firstLeg + Df_secondLeg));
                                         //*
-                                        const float sigma_PE_gamma_f = TEX1D_L(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
-                                        const float sigma_CS_gamma_f = TEX1D_L(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
-                                        const float sigma_RS_gamma_f = TEX1D_L(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
+                                        const float sigma_PE_gamma_f = TEX1D_LB(sigma_PE_txt, maxEnergy, gamma_f - 0.5f);
+                                        const float sigma_CS_gamma_f = TEX1D_LB(sigma_CS_txt, maxEnergy, gamma_f - 0.5f);
+                                        const float sigma_RS_gamma_f = TEX1D_LB(sigma_RS_txt, maxEnergy, gamma_f - 0.5f);
                                         //const float sigma_PE_gamma_f = tex1D<float>(sigma_PE_txt, gamma_f - 0.5f);
                                         //const float sigma_CS_gamma_f = tex1D<float>(sigma_CS_txt, gamma_f - 0.5f);
                                         //const float sigma_RS_gamma_f = tex1D<float>(sigma_RS_txt, gamma_f - 0.5f);

@@ -1041,7 +1041,8 @@ extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const i
     if (data == nullptr)
         return nullptr;
 
-    printf("texture memory setting (from CPU): ");
+    /*
+    printf("3D texture memory setting from CPU (%d, %d, %d): ", N_txt.x, N_txt.y, N_txt.z);
     if (useExtrapolation) {
         printf("clamp ");
     }
@@ -1054,7 +1055,7 @@ extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const i
     else {
         printf("nearest ");
     }
-    printf("\n");
+    printf("\n");*/
 
 #ifdef __USE_NOTEX
     tex_object = nullptr;
@@ -1196,7 +1197,7 @@ extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N
     if (dev_data == nullptr)
         return nullptr;
 
-    printf("texture memory setting: ");
+    /*printf("3D texture memory setting (%d, %d, %d): ", N_txt.x, N_txt.y, N_txt.z);
     if (useExtrapolation) {
         printf("clamp ");
     }
@@ -1209,7 +1210,7 @@ extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N
     else {
         printf("nearest ");
     }
-    printf("\n");
+    printf("\n");*/
 
 #ifdef __USE_NOTEX
     TEX_ARRAY d_data_array = dev_data;
@@ -1291,7 +1292,7 @@ extern TEX_ARRAY loadTexture1D_from_cpu(TEX_DATA& tex_object, float* data, const
     if (data == nullptr)
         return nullptr;
 
-    printf("1D texture memory setting: ");
+    printf("1D texture memory setting from CPU (%d): ", N_txt);
     if (useExtrapolation) {
         printf("clamp ");
     }
@@ -1396,6 +1397,21 @@ extern TEX_ARRAY loadTexture1D(TEX_DATA& tex_object, float* dev_data, const int 
 {
     if (dev_data == nullptr)
         return nullptr;
+
+    printf("1D texture memory setting (%d): ", N_txt);
+    if (useExtrapolation) {
+        printf("clamp ");
+    }
+    else {
+        printf("border_0 ");
+    }
+    if (useLinearInterpolation) {
+        printf("linear ");
+    }
+    else {
+        printf("nearest ");
+    }
+    printf("\n");
 
 #ifdef __USE_NOTEX
     TEX_ARRAY d_data_array = dev_data;

@@ -82,18 +82,24 @@ if cuda:
     rocm = "AMD" in torch.cuda.get_device_name(0)
     if rocm: # AMD ROCM GPU
         #print("########## AMD ROCM architecture found! ##########")
-        extra_compile_args={'cxx':  ['-D__USE_GPU', '-D__USE_NOTEX', '-lcufft', '-lhipfft', '-D__INCLUDE_CUFFT'], 
-                            'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3', '-lcufft', '-lhipfft', '-D__INCLUDE_CUFFT']}
-        libraries = []
+        extra_compile_args={'cxx':  ['-D__USE_GPU', '-D__USE_NOTEX', '-O3', '-lhipfft', '-D__INCLUDE_CUFFT'], 
+                            'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3', '-lhipfft', '-D__INCLUDE_CUFFT']}
+        libraries = ['hipfft']
     else: # CUDA GPU
         #print("########## NVIDIA CUDA architecture found! ##########")
-        #extra_compile_args={'cxx': ['-D__USE_GPU'], 
-        #                    'nvcc': ['-D__USE_GPU', '-O3']} #, '-arch=compute_61'
-        #extra_compile_args={'cxx': ['-D__USE_GPU', '-D__USE_NOTEX'], 
+        # for debug
+        #extra_compile_args={'cxx':  ['-D__USE_GPU', '-D__USE_NOTEX', '-O3'], 
         #                    'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3']} #, '-arch=compute_61'
-        libraries = []
-        extra_compile_args={'cxx':  ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
-                            'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
+        #libraries = []
+
+        # for debug
+        extra_compile_args={'cxx':  ['-D__USE_GPU', '-D__USE_NOTEX', '-O3', '-lcufft', '-D__INCLUDE_CUFFT'], 
+                            'nvcc': ['-D__USE_GPU', '-D__USE_NOTEX', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']} #, '-arch=compute_61'
+        libraries = ['cufft']
+
+        # for release
+        #extra_compile_args={'cxx':  ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT'], 
+        #                    'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
         #libraries = ['cufft']
     ext_mod = CUDAExtension(
         name='leapct',
@@ -118,7 +124,7 @@ else:
 
 setup(
     name='leapct',
-    version='1.26', 
+    version='1.27', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 

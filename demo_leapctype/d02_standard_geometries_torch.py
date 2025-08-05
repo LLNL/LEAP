@@ -100,15 +100,31 @@ f = torch.from_numpy(f).to(device)
 #'''
 
 # temp ###
+'''
 ## backproject
 print("### backproject start ###")
 leapct.backproject(g, f)
+
+f_bp = f.cpu().detach().numpy()
+f_bp2 = np.load("sample_data/output_cuda_fft/d02_out_f_bp.npy")
+print(np.min(f_bp), np.max(f_bp), np.min(f_bp2), np.max(f_bp2))
+g1 = g.cpu().detach().numpy()
+g2 = np.load("sample_data/output_cuda_fft/d02_out_g.npy")
+print(np.min(g1), np.max(g1), np.min(g2), np.max(g2))
+are_close_f = np.allclose(f_bp, f_bp2)
+are_close_g = np.allclose(g1, g2)
+print("are_close: ", are_close_f, are_close_g)
+
+f_diff = np.abs(f_bp - f_bp2)[0,:,:]
+imageio.imsave("sample_data/d02_out_f_bp_diff.png", np.uint8(f_diff/np.max(f_diff)*255))
+
+np.save("sample_data/d02_out_f_bp.npy", f.cpu().detach().numpy())
 f_slice = f[0,:,:].cpu().detach().numpy()
 print("f min/max:", np.min(f_slice), np.max(f_slice))
 imageio.imsave("sample_data/d02_out_f_bp.png", np.uint8(f_slice/np.max(f_slice)*255))
 print("### backproject end ###")
 # temp ###
-
+'''
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
@@ -132,6 +148,14 @@ leapct.RDLS(g,f,20,filters,1.0,True,1)
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
+np.save("sample_data/d02_out_f.npy", f.cpu().detach().numpy())
+np.save("sample_data/d02_out_g.npy", g.cpu().detach().numpy())
+
+#f1 = f.cpu().detach().numpy()
+#f2 = np.load("sample_data/output_cuda_fft/d02_out_f.npy")
+#print("compare min/max: ", np.min(f1), np.max(f1), np.min(f2), np.max(f2))
+
+f[f < 0] = 0
 f_slice = f[0,:,:].cpu().detach().numpy()
 print("f min/max:", np.min(f_slice), np.max(f_slice))
 imageio.imsave("sample_data/d02_out_f_final.png", np.uint8(f_slice/np.max(f_slice)*255))

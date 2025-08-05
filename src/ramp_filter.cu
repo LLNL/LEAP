@@ -166,14 +166,14 @@ __global__ void explicit_convolution(TEX_DATA g, float* filtered_data, TEX_DATA 
 
     for (int j = 0; j < N.z; j+=8)
     {
-        const float x0 = TEX3D_N2(g, N, j + 0, m, l);
-        const float x1 = TEX3D_N2(g, N, j + 1, m, l);
-        const float x2 = TEX3D_N2(g, N, j + 2, m, l);
-        const float x3 = TEX3D_N2(g, N, j + 3, m, l);
-        const float x4 = TEX3D_N2(g, N, j + 4, m, l);
-        const float x5 = TEX3D_N2(g, N, j + 5, m, l);
-        const float x6 = TEX3D_N2(g, N, j + 6, m, l);
-        const float x7 = TEX3D_N2(g, N, j + 7, m, l);
+        const float x0 = TEX3D_NB2(g, N, j + 0, m, l);
+        const float x1 = TEX3D_NB2(g, N, j + 1, m, l);
+        const float x2 = TEX3D_NB2(g, N, j + 2, m, l);
+        const float x3 = TEX3D_NB2(g, N, j + 3, m, l);
+        const float x4 = TEX3D_NB2(g, N, j + 4, m, l);
+        const float x5 = TEX3D_NB2(g, N, j + 5, m, l);
+        const float x6 = TEX3D_NB2(g, N, j + 6, m, l);
+        const float x7 = TEX3D_NB2(g, N, j + 7, m, l);
         //const float x0 = tex3D<float>(g, j + 0, m, l);
         //const float x1 = tex3D<float>(g, j + 1, m, l);
         //const float x2 = tex3D<float>(g, j + 2, m, l);
@@ -186,14 +186,14 @@ __global__ void explicit_convolution(TEX_DATA g, float* filtered_data, TEX_DATA 
         const int n_minus_j_plus_N = n - j + N.z;
         for (int s = 0; s < NUM_RAYS_PER_THREAD; s++)
         {
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 0) * x0;
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 1) * x1;
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 2) * x2;
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 3) * x3;
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 4) * x4;
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 5) * x5;
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 6) * x6;
-            ys[s] += TEX1D_N(h, N_filter, n_minus_j_plus_N + s - 7) * x7;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 0) * x0;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 1) * x1;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 2) * x2;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 3) * x3;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 4) * x4;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 5) * x5;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 6) * x6;
+            ys[s] += TEX1D_NB(h, N_filter, n_minus_j_plus_N + s - 7) * x7;
             //ys[s] += tex1D<float>(h, n_minus_j_plus_N + s - 0) * x0 + tex1D<float>(h, n_minus_j_plus_N + s - 1) * x1
             //      +  tex1D<float>(h, n_minus_j_plus_N + s - 2) * x2 + tex1D<float>(h, n_minus_j_plus_N + s - 3) * x3
             //      +  tex1D<float>(h, n_minus_j_plus_N + s - 4) * x4 + tex1D<float>(h, n_minus_j_plus_N + s - 5) * x5
@@ -433,7 +433,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term1 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
-    const float term1 = TEX3D_L2(g, N, u_arg, v_arg, l0 + 0.5f);
+    const float term1 = TEX3D_LC2(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -446,7 +446,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
-    const float term2 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = TEX3D_LC2(g, N, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -459,7 +459,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
-    const float term3 = TEX3D_L2(g, N, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = TEX3D_LC2(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -472,7 +472,7 @@ __global__ void deriv_helical_NHDLH_curved(TEX_DATA g, float* Dg, const int4 N, 
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
     //const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
-    const float term4 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = TEX3D_LC2(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
     //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
@@ -541,7 +541,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term1 = tex3D<float>(g, u_arg, v_arg, l0+0.5f);
-    const float term1 = TEX3D_L2(g, N, u_arg, v_arg, l0+0.5f);
+    const float term1 = TEX3D_LC2(g, N, u_arg, v_arg, l0+0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -555,7 +555,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
-    const float term2 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = TEX3D_LC2(g, N, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -569,7 +569,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
-    const float term3 = TEX3D_L2(g, N, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = TEX3D_LC2(g, N, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -583,7 +583,7 @@ __global__ void deriv_helical_NHDLH_flat(TEX_DATA g, float* Dg, const int4 N, co
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
     //const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
-    const float term4 = TEX3D_L2(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = TEX3D_LC2(g, N, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
     //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);

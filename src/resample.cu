@@ -75,7 +75,7 @@ __global__ void downSampleKernel(TEX_DATA I, const int3 N, float* I_dn, const in
                 const float h_2 = bumpFcn(L.z, delay_2, l_2);
                 accum += h_0 * h_1 * h_2;
                 //val += tex3D<float>(I, kk+l_2, jj+l_1, ii+l_0) * h_0 * h_1 * h_2;
-                val += TEX3D_L2(I, N, kk+l_2, jj+l_1, ii+l_0) * h_0 * h_1 * h_2;
+                val += TEX3D_NC2(I, N, kk+l_2, jj+l_1, ii+l_0) * h_0 * h_1 * h_2;
             }
         }
     }
@@ -100,7 +100,7 @@ __global__ void upSampleKernel(TEX_DATA I, const int3 N, float* I_up, const int3
 
     uint64 ind = uint64(i) * uint64(N_up.y * N_up.z) + uint64(j * N_up.z + k);
     //I_up[ind] = tex3D<float>(I, z, y, x);
-    I_up[ind] = TEX3D_L2(I, N, z, y, x);
+    I_up[ind] = TEX3D_LC2(I, N, z, y, x);
 }
 
 bool downSample(float* I, int* N, float* I_dn, int* N_dn, float* factors, int whichGPU)

@@ -1,6 +1,7 @@
 
 import time
 import numpy as np
+import imageio
 from VAM import VAM
 
 # Set the target geometry which needs to be a numpy array of size
@@ -32,6 +33,15 @@ g_init = None # initial guess
 startTime = time.time()
 g, Pstar_g = v.execute(targetGeometry, numIter=100, pixelSize=pixelSize, numAngles=360, g=g_init, mu=None)
 print('total elapsed time: ' + str(time.time()-startTime))
+
+print(g.shape, Pstar_g.shape)
+np.save("out_g.npy", g)
+np.save("out_pstar_g.npy", Pstar_g)
+g_slice = g[:,0,:]
+pstarg_slice = Pstar_g[0,:,:]
+imageio.imsave("out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
+imageio.imsave("out_pstar_g.png", np.uint8(pstarg_slice/np.max(pstarg_slice)*255))
+
 
 ''' Display results (requires napari)
 from leapctype import *

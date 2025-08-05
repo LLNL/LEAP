@@ -95,7 +95,7 @@ __global__ void bilateralFilterKernel_txt(TEX_DATA f, float* f_filtered, const i
     uint64 ind = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z + k);
     //const float curVal = f[ind];
     //const float curVal = tex3D<float>(f, k, j, i);
-    const float curVal = TEX3D_L1(f, N, k, j, i);
+    const float curVal = TEX3D_NB1(f, N, k, j, i);
 
     // f_filtered[ind] = curVal;
 
@@ -114,7 +114,7 @@ __global__ void bilateralFilterKernel_txt(TEX_DATA f, float* f_filtered, const i
                 //const float neighborVal = f_slice[uint64((j + dj) * N.z + (k + dk))];
                 //const float neighborVal = f_line[k + dk];
                 //const float neighborVal = tex3D<float>(f, k+dk, j+dj, i+di);
-                const float neighborVal = TEX3D_L1(f, N, k+dk, j+dj, i+di);
+                const float neighborVal = TEX3D_NB1(f, N, k+dk, j+dj, i+di);
 
                 // const float x = (di * di + dj * dj + dk * dk) * sigma_d_sq_inv + (curVal - neighborVal)*(curVal -
                 // neighborVal) * sigma_i_sq_inv; const float w_cur = (x <= 10.0) ? exp_int[int(x)] * (1.0 + (x -
@@ -210,7 +210,7 @@ __global__ void scaledBilateralFilterKernel_txt(TEX_DATA f, TEX_DATA Bf, float* 
     uint64 ind = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z + k);
     //const float curVal = f[ind];
     //const float curVal = tex3D<float>(f, k, j, i);
-    const float curVal = TEX3D_L1(f, N, k, j, i);
+    const float curVal = TEX3D_NB1(f, N, k, j, i);
 
     // f_filtered[ind] = curVal;
 
@@ -228,7 +228,7 @@ __global__ void scaledBilateralFilterKernel_txt(TEX_DATA f, TEX_DATA Bf, float* 
                 //const float neighborVal = Bf[uint64(i + di) * uint64(N.z * N.y) + uint64((j + dj) * N.z + (k + dk))];
                 //const float neighborVal = Bf_line[k + dk];
                 //const float neighborVal = tex3D<float>(Bf, k+dk, j+dj, i+di);
-                const float neighborVal = TEX3D_L1(Bf, N, k+dk, j+dj, i+di);
+                const float neighborVal = TEX3D_NB1(Bf, N, k+dk, j+dj, i+di);
 
                 // const float x = (di * di + dj * dj + dk * dk) * sigma_d_sq_inv + (curVal - neighborVal)*(curVal -
                 // neighborVal) * sigma_i_sq_inv; const float w_cur = (x <= 10.0) ? exp_int[int(x)] * (1.0 + (x -
@@ -249,6 +249,7 @@ __global__ void scaledBilateralFilterKernel_txt(TEX_DATA f, TEX_DATA Bf, float* 
 
 bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, bool data_on_cpu, int whichGPU)
 {
+    printf("bilateralFilter()!!!\n");
     if (f == NULL) return false;
 
     spatialFWHM = float(max(0.25, min(100.0, spatialFWHM)));
@@ -347,6 +348,7 @@ bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, flo
 //*
 bool priorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float* Bf, bool data_on_cpu, int whichGPU)
 {
+    printf("priorBilateralFilter()!!!\n");
     if (Bf == NULL)
         return bilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, data_on_cpu, whichGPU);
     if (f == NULL) return false;
@@ -465,6 +467,7 @@ bool priorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM
 
 bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, float intensityFWHM, float scale, bool data_on_cpu, int whichGPU)
 {
+    printf("priorBilateralFilter()!!!\n");
     if (scale <= 1.0)
         return bilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, data_on_cpu, whichGPU);
     if (f == NULL) return false;
