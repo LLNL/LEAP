@@ -100,11 +100,11 @@ bool filteredBackprojection::convolve1D(float* g, parameters* params, bool data_
 				ray_derivative(g, params, data_on_cpu, scalar, 1.0);
 				return Hilbert1D(g, params, data_on_cpu, 1.0, -1.0);
 				//*/
-				printf("filteredBackprojection::convolve1D - rampFilter1D\n");
+				//printf("filteredBackprojection::convolve1D - rampFilter1D\n");
 				return rampFilter1D(g, params, data_on_cpu, scalar);
 			}
 			else {
-				printf("filteredBackprojection::convolve1D - Hilbert1D\n");
+				//printf("filteredBackprojection::convolve1D - Hilbert1D\n");
 				return Hilbert1D(g, params, data_on_cpu, scalar, sampleShift);
 			}
 		}
@@ -301,14 +301,14 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 		if (params->geometry == parameters::CONE && params->helicalPitch != 0.0)
 		{
 			#ifndef __USE_CPU
-			printf("filteredBackprojection::filterProjections - parallelRay_derivative\n");
+			//printf("filteredBackprojection::filterProjections - parallelRay_derivative\n");
 			parallelRay_derivative(g, params, false);
-			printf("filteredBackprojection::filterProjections - applyPostRampFilterWeights\n");
+			//printf("filteredBackprojection::filterProjections - applyPostRampFilterWeights\n");
 			applyPostRampFilterWeights(g, params, false);
 			if (params->inconsistencyReconstruction == true && params->offsetScan_has_adequate_angular_range() == true)
 				return true;
 			else {
-				printf("filteredBackprojection::filterProjections - HilbertFilterProjections\n");
+				//printf("filteredBackprojection::filterProjections - HilbertFilterProjections\n");
 				return HilbertFilterProjections(g, params, false, FBPscalar(params), -1.0);
 			}
 			#else
@@ -328,7 +328,7 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 				if (params->whichGPU < 0)
 					Laplacian_cpu(g, 1, false, params, -1.0);
 				else {
-					printf("filteredBackprojection::filterProjections - Laplacian_gpu\n");
+					//printf("filteredBackprojection::filterProjections - Laplacian_gpu\n");
 					Laplacian_gpu(g, 1, false, params, data_on_cpu, -1.0);
 				}
 			}
@@ -340,13 +340,13 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 					ray_derivative(g, params, data_on_cpu);
 			}
 			else {
-				printf("filteredBackprojection::filterProjections - rampFilterProjections 1\n");
+				//printf("filteredBackprojection::filterProjections - rampFilterProjections 1\n");
 				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
 			}
-			printf("11\n");
+			//printf("11\n");
 			if (params->muCoeff != 0.0)
 				convertARTtoERT(g, params, data_on_cpu, true);
-			printf("22\n");
+			//printf("22\n");
 			return applyPostRampFilterWeights(g, params, data_on_cpu);
 			#else
 			if (params->geometry != parameters::CONE_PARALLEL || params->helicalPitch == 0.0)
@@ -362,7 +362,7 @@ bool filteredBackprojection::filterProjections(float* g, float* g_out, parameter
 				ray_derivative_cpu(g, params);
 			}
 			else {
-				printf("filteredBackprojection::filterProjections - rampFilterProjections 2\n");
+				//printf("filteredBackprojection::filterProjections - rampFilterProjections 2\n");
 				rampFilterProjections(g, params, data_on_cpu, FBPscalar(params));
 			}
 			if (params->muCoeff != 0.0)
