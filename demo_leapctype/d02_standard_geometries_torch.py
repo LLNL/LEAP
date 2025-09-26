@@ -70,21 +70,11 @@ f = leapct.allocateVolume()
 leapct.set_FORBILD(f,True,3)
 #leapct.display(f)
 
-f_slice = f[0,:,:]
-print("f min/max:", np.min(f_slice), np.max(f_slice))
-imageio.imsave("sample_data/d02_in_f.png", np.uint8(f_slice/np.max(f_slice)*255))
-
-
 # "Simulate" projection data
 startTime = time.time()
 leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
-
-print(g.shape, g.dtype)
-g_slice = g[:,0,:]
-print("g min/max:", np.min(g_slice), np.max(g_slice))
-imageio.imsave("sample_data/d02_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 5000.0
@@ -98,33 +88,6 @@ device = torch.device("cuda:" + str(leapct.get_gpu()))
 g = torch.from_numpy(g).to(device)
 f = torch.from_numpy(f).to(device)
 #'''
-
-# temp ###
-'''
-## backproject
-print("### backproject start ###")
-leapct.backproject(g, f)
-
-f_bp = f.cpu().detach().numpy()
-f_bp2 = np.load("sample_data/output_cuda_fft/d02_out_f_bp.npy")
-print(np.min(f_bp), np.max(f_bp), np.min(f_bp2), np.max(f_bp2))
-g1 = g.cpu().detach().numpy()
-g2 = np.load("sample_data/output_cuda_fft/d02_out_g.npy")
-print(np.min(g1), np.max(g1), np.min(g2), np.max(g2))
-are_close_f = np.allclose(f_bp, f_bp2)
-are_close_g = np.allclose(g1, g2)
-print("are_close: ", are_close_f, are_close_g)
-
-f_diff = np.abs(f_bp - f_bp2)[0,:,:]
-imageio.imsave("sample_data/d02_out_f_bp_diff.png", np.uint8(f_diff/np.max(f_diff)*255))
-
-np.save("sample_data/d02_out_f_bp.npy", f.cpu().detach().numpy())
-f_slice = f[0,:,:].cpu().detach().numpy()
-print("f min/max:", np.min(f_slice), np.max(f_slice))
-imageio.imsave("sample_data/d02_out_f_bp.png", np.uint8(f_slice/np.max(f_slice)*255))
-print("### backproject end ###")
-# temp ###
-'''
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
@@ -148,19 +111,6 @@ leapct.RDLS(g,f,20,filters,1.0,True,1)
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-np.save("sample_data/d02_out_f.npy", f.cpu().detach().numpy())
-np.save("sample_data/d02_out_g.npy", g.cpu().detach().numpy())
-
-#f1 = f.cpu().detach().numpy()
-#f2 = np.load("sample_data/output_cuda_fft/d02_out_f.npy")
-#print("compare min/max: ", np.min(f1), np.max(f1), np.min(f2), np.max(f2))
-
-f[f < 0] = 0
-f_slice = f[0,:,:].cpu().detach().numpy()
-print("f min/max:", np.min(f_slice), np.max(f_slice))
-imageio.imsave("sample_data/d02_out_f_final.png", np.uint8(f_slice/np.max(f_slice)*255))
-
-
 # Post Reconstruction Smoothing (optional)
 #startTime = time.time()
 #leapct.diffuse(f,0.02/20.0,4)
@@ -172,9 +122,17 @@ imageio.imsave("sample_data/d02_out_f_final.png", np.uint8(f_slice/np.max(f_slic
 # To convert a torch tensor back to a numpy array, use the following
 #f = f.cpu().detach().numpy()
 
+# Save the result to NPY and PNG files
+np.save("sample_data/d02_out_f.npy", f.cpu().detach().numpy())
+np.save("sample_data/d02_out_g.npy", g.cpu().detach().numpy())
+
+f[f < 0] = 0
+f_slice = f[0,:,:].cpu().detach().numpy()
+imageio.imsave("sample_data/d02_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
 
 # Display the result with napari
 #leapct.display(f)
 import matplotlib.pyplot as plt
 plt.imshow(np.squeeze(f.cpu().detach().numpy()), cmap='gray')
 plt.show()
+

@@ -129,14 +129,12 @@ leapct.RLS(g,f,400,filters, 'SQS')
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-
-print(f.shape, g.shape)
+# Save the result to PNG file
 f[f < 0] = 0
 f_slice = f[f.shape[0]//2,:,:].cpu().detach().numpy()
 g_slice = g[:,g.shape[1]//2,:].cpu().detach().numpy()
-print("f min/max:", np.min(f_slice), np.max(f_slice))
 imageio.imsave("sample_data/d05_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
 imageio.imsave("sample_data/d05_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 
-
+# Display the result
 leapct.display(f)

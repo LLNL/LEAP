@@ -106,7 +106,6 @@ startTime = time.time()
 leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
-#quit()
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
@@ -133,14 +132,6 @@ filters.append(TV(leapct, delta=0.02/20.0))
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-print(f.shape, g.shape)
-f[f < 0] = 0
-f_slice = f[f.shape[0]//2,:,:]
-g_slice = g[:,g.shape[1]//2,:]
-print("f min/max:", np.min(f_slice), np.max(f_slice))
-imageio.imsave("sample_data/d04_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
-imageio.imsave("sample_data/d04_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
-
 # Post Reconstruction Smoothing (optional)
 #startTime = time.time()
 #leapct.diffuse(f,0.02/20.0,4)
@@ -148,9 +139,15 @@ imageio.imsave("sample_data/d04_out_g.png", np.uint8(g_slice/np.max(g_slice)*255
 #leapct.BlurFilter(f,2.0)
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
 
+# Save the result to PNG file
+f[f < 0] = 0
+f_slice = f[f.shape[0]//2,:,:]
+g_slice = g[:,g.shape[1]//2,:]
+imageio.imsave("sample_data/d04_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+imageio.imsave("sample_data/d04_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
+
 # Display the result with napari
 leapct.display(f)
-
 
 ''' Compare to cone-beam
 ct2 = tomographicModels()

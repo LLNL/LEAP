@@ -89,14 +89,6 @@ startTime = time.time()
 leapct.project(g,f)
 print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
-print(np.min(g), np.max(g))
-#nan_mask = np.isnan(g)
-#print(nan_mask)
-#print(np.sum(nan_mask), g.shape[0]*g.shape[1]*g.shape[2])
-
-# temp
-# load CUDA generated g
-#g = np.load("sample_data/output_notex_fft/d01_out_g.npy")
 
 # Add noise to the data (just for demonstration purposes)
 I_0 = 50000.0
@@ -115,13 +107,13 @@ f[:] = 0.0
 # this trick can be used to accelerate an iterative reconstruction algorithm
 # If you want an iterative reconstruction to start from scratch, just initialize it with zeros
 startTime = time.time()
-print("start BP/FBP")
+#print("start BP/FBP")
 #leapct.backproject(g,f)
 leapct.FBP(g,f)
 #filters = filterSequence(1.0e0)
 #filters.append(TV(leapct, delta=0.02/20.0))
 #leapct.RWLS(g,f,50,filters,None,'SQS')
-print("end BP/FBP")
+#print("end BP/FBP")
 #leapct.inconsistencyReconstruction(g,f)
 #leapct.print_cost = True
 #filters = filterSequence(1.0e0) # filter strength argument must be turned to your specific application
@@ -135,37 +127,6 @@ print("end BP/FBP")
 #leapct.MLTR(g,f,10,10,filters)
 print('Reconstruction Elapsed Time: ' + str(time.time()-startTime))
 
-np.save("sample_data/d01_out_f.npy", f)
-np.save("sample_data/d01_out_g.npy", g)
-
-'''
-# to compare with CUD Aresults
-f2 = np.load("sample_data/output_cuda_fft/d01_out_f.npy")
-g2 = np.load("sample_data/output_cuda_fft/d01_out_g.npy")
-
-are_close_f = np.allclose(f, f2)
-are_close_g = np.allclose(g, g2)
-print("are_close: ", are_close_f, are_close_g)
-print(np.min(f), np.max(f), np.min(f2), np.max(f2))
-print(np.min(g), np.max(g), np.min(g2), np.max(g2))
-
-f_diff = np.abs(f-f2)
-g_diff = np.abs(g-g2)
-f_diff[f_diff < 0] = 0
-f_slice = f_diff[256,:,:]
-g_slice = g_diff[:,256,:]
-imageio.imsave("sample_data/d01_out_f_diff.png", np.uint8(f_slice/np.max(f_slice)*255))
-imageio.imsave("sample_data/d01_out_g_diff.png", np.uint8(g_slice/np.max(g_slice)*255))
-'''
-
-f[f < 0] = 0
-print(f.shape, g.shape)
-f_slice = f[256,:,:]
-g_slice = g[:,256,:]
-imageio.imsave("sample_data/d01_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
-imageio.imsave("sample_data/d01_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
-print("image saved")
-
 # Post Reconstruction Smoothing (optional)
 # Here are some optional post reconstruction noise filters that can be applied
 # Try uncommenting out these lines to test how they work
@@ -174,6 +135,15 @@ print("image saved")
 #leapct.MedianFilter(f)
 #leapct.BlurFilter(f,2.0)
 #print('Post-Processing Elapsed Time: ' + str(time.time()-startTime))
+
+# Save the result to NPY and PNG
+np.save("sample_data/d01_out_f.npy", f)
+np.save("sample_data/d01_out_g.npy", g)
+f[f < 0] = 0
+f_slice = f[256,:,:]
+g_slice = g[:,256,:]
+imageio.imsave("sample_data/d01_out_f.png", np.uint8(f_slice/np.max(f_slice)*255))
+imageio.imsave("sample_data/d01_out_g.png", np.uint8(g_slice/np.max(g_slice)*255))
 
 # Display the result with napari
 leapct.display(f)
