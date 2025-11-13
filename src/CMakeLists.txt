@@ -27,31 +27,48 @@ endif()
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/..)
 
 set(HEADER
-  tomographic_models.h
-  list_of_tomographic_models.h
-  tomographic_models_c_interface.h
-  parameters.h
-  projectors.h
+  analytic_ray_tracing.h
+  analytic_ray_tracing_gpu.cuh
+  backprojectors_VD.cuh
+  bilateral_filter.cuh
+  cpu_utils.h
+  cuda_utils.h
+  file_io.h
   filtered_backprojection.h
-  projectors_SF.cuh
-  projectors_SF_cpu.h
-  projectors_extendedSF.cuh
+  find_center_cpu.h
+  geometric_calibration.cuh
+  guided_filter.cuh
+  leap_defines.h
+  list_of_tomographic_models.h
+  log.h
+  matching_pursuit.cuh
+  noise_filters.cuh
+  parameters.h
+  phantom.h
+  projectors.h
   projectors_Joseph.cuh
   projectors_Joseph_cpu.h
-  projectors_symmetric.cuh
-  projectors_symmetric_cpu.h
-  projectors_attenuated.cuh
+  projectors_SF.cuh
+  projectors_SF_cpu.h
   projectors_Siddon.cuh
   projectors_Siddon_cpu.h
-  backprojectors_VD.cuh
-  sensitivity_cpu.h
-  sensitivity.cuh
+  projectors_attenuated.cuh
+  projectors_extendedSF.cuh
+  projectors_symmetric.cuh
+  projectors_symmetric_cpu.h
   ramp_filter.cuh
   ramp_filter_cpu.h
   ray_weighting.cuh
   ray_weighting_cpu.h
+  rebin.h
+  resample.cuh
+  resample_cpu.h
   scatter_models.cuh
-  noise_filters.cuh
+  sensitivity.cuh
+  sensitivity_cpu.h
+  sinogram_replacement.h
+  tomographic_models.h
+  tomographic_models_c_interface.h
   total_variation.cuh
   matching_pursuit.cuh
   bilateral_filter.cuh
@@ -73,50 +90,50 @@ set(HEADER
 )
 
 set(SRC_CPP
-  tomographic_models.cpp
-  list_of_tomographic_models.cpp
-  tomographic_models_c_interface.cpp
-  parameters.cpp
-  projectors.cpp
+  analytic_ray_tracing.cpp
+  cpu_utils.cpp
+  file_io.cpp
   filtered_backprojection.cpp
-  projectors_SF_cpu.cpp
+  find_center_cpu.cpp
+  list_of_tomographic_models.cpp
+  parameters.cpp
+  phantom.cpp
+  projectors.cpp
   projectors_Joseph_cpu.cpp
-  projectors_symmetric_cpu.cpp
+  projectors_SF_cpu.cpp
   projectors_Siddon_cpu.cpp
-  sensitivity_cpu.cpp
+  projectors_symmetric_cpu.cpp
   ramp_filter_cpu.cpp
   ray_weighting_cpu.cpp
-  find_center_cpu.cpp
-  sinogram_replacement.cpp
-  resample_cpu.cpp
-  cpu_utils.cpp
-  phantom.cpp
-  analytic_ray_tracing.cpp
   rebin.cpp
-  file_io.cpp
+  resample_cpu.cpp
+  sensitivity_cpu.cpp
+  sinogram_replacement.cpp
+  tomographic_models.cpp
+  tomographic_models_c_interface.cpp
 )
 
 set(SRC_CU
-  projectors_SF.cu
-  projectors_extendedSF.cu
-  projectors_Joseph.cu
-  projectors_symmetric.cu
-  projectors_attenuated.cu
-  projectors_Siddon.cu
-  backprojectors_VD.cu
-  sensitivity.cu
-  ramp_filter.cu
-  resample.cu
-  noise_filters.cu
-  total_variation.cu
-  matching_pursuit.cu
-  bilateral_filter.cu
-  guided_filter.cu
-  geometric_calibration.cu
-  ray_weighting.cu
-  scatter_models.cu
   analytic_ray_tracing_gpu.cu
+  backprojectors_VD.cu
+  bilateral_filter.cu
   cuda_utils.cu
+  geometric_calibration.cu
+  guided_filter.cu
+  matching_pursuit.cu
+  noise_filters.cu
+  projectors_Joseph.cu
+  projectors_SF.cu
+  projectors_Siddon.cu
+  projectors_attenuated.cu
+  projectors_extendedSF.cu
+  projectors_symmetric.cu
+  ramp_filter.cu
+  ray_weighting.cu
+  resample.cu
+  scatter_models.cu
+  sensitivity.cu
+  total_variation.cu
 )
 
 include_directories(
