@@ -1,0 +1,44 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "leapct"
+dynamic = ["version"]
+description = "LivermorE AI Projector for Computed Tomography (LEAPCT)"
+authors = [
+    { name = "Kyle Champley", email = "champley@gmail.com" },
+    { name = "Hyojin Kim", email = "hkim@llnl.gov" }
+]
+readme = "README.md"
+license-files = ["LICENSE"]
+keywords = [
+    "Machine Learning", "ML", "AI", "Computed Tomography", "CT",
+    "Differentiable Project", "Forward Project", "Back Project"
+]
+requires-python = ">=3.6"
+dependencies = [
+    "imageio",
+    "matplotlib",
+    "numpy",
+    "scipy",
+]
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.23"
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+
+wheel.packages = ["src/leap_filter_sequence", "src/leap_preprocessing_algorithms", "src/leapctype", "src/leaptorch"]
+wheel.py-api = "py3"
+# If we have to issue revised packages for the same software version,
+# we can increment a build number:
+wheel.build-tag = 0
+
+[tool.scikit-build.cmake.define]
+BUILD_TESTING = false
+LEAP_GPU = "NVIDIA"
+
+[tool.setuptools_scm]
+# There are several packages. Is there an appropriate place to put a package version?
+#write_to = "src/leap/_version.py"

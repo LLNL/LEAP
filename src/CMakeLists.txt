@@ -1,21 +1,7 @@
-# cmake version 3.23 or higher is needed to support 
-# the argument CUDA_ARCHITECTURES all-major
-# You could use cmake as old as version 3.18 if you replaced
-# the line below that specifies all-major with the line below
-# it which specifies the list of CUDA architectures 
-#cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
-cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
-
-project(leapct CXX CUDA)
-
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-find_package(CUDA 11.7 REQUIRED)
 find_package(OpenMP REQUIRED)
-#set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -O3)
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -D__INCLUDE_CUFFT)
-add_compile_options(-D__INCLUDE_CUFFT)
+if(LEAP_CUDA)
+    find_package(CUDAToolkit 11.7 REQUIRED)
+endif()
 
 if (WIN32)
   set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
@@ -70,23 +56,6 @@ set(HEADER
   tomographic_models.h
   tomographic_models_c_interface.h
   total_variation.cuh
-  matching_pursuit.cuh
-  bilateral_filter.cuh
-  guided_filter.cuh
-  geometric_calibration.cuh
-  find_center_cpu.h
-  sinogram_replacement.h
-  resample_cpu.h
-  resample.cuh
-  cuda_utils.h
-  cpu_utils.h
-  phantom.h
-  analytic_ray_tracing.h
-  analytic_ray_tracing_gpu.cuh
-  rebin.h
-  file_io.h
-  leap_defines.h
-  log.h
 )
 
 set(SRC_CPP
@@ -146,8 +115,11 @@ include_directories(
 add_library(leapct SHARED
   ${HEADER}
   ${SRC_CPP}
-  ${SRC_CU}
 )
+
+if(LEAP_CUDA)
+    target_sources(leapct PRIVATE ${SRC_CU})
+endif()
 
 # <<<--- Create filters for subfolders for Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -167,31 +139,53 @@ foreach(_source IN ITEMS ${_source_list})
 endforeach()
 # --->>>
 
-target_link_libraries(${PROJECT_NAME}
-  OpenMP::OpenMP_CXX
-  ${CUDA_LIBRARIES}
-  ${CUDA_cublas_LIBRARY}
-  ${CUDA_cufft_LIBRARY}
-)
+if (LEAP_CUDA)
+    target_compile_definitions(
+        leapct PRIVATE
+        __USE_GPU
+        __USE_NOTEX
+        __INCLUDE_CUFFT
+    )
+    target_link_libraries(${PROJECT_NAME}
+      OpenMP::OpenMP_CXX
+      CUDA::cudart
+      CUDA::cublas
+      CUDA::cufft
+    )
+elseif (LEAP_HIP)
+    target_compile_definitions(
+        leapct PRIVATE
+        __USE_GPU
+        __USE_NOTEX
+        __INCLUDE_CUFFT
+    )
+    target_link_libraries(${PROJECT_NAME}
+      OpenMP::OpenMP_CXX
+      hip::hipfft
+    )
+else ()
+    target_compile_definitions(
+        leapct PRIVATE
+        __USE_CPU
+    )
+    target_link_libraries(${PROJECT_NAME}
+      OpenMP::OpenMP_CXX
+    )
+endif()
 
 target_compile_options(leapct PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
   --use_fast_math
 >)
 
-#set_property(TARGET leapct PROPERTY CXX_STANDARD 14)
-#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES native)
-if(CMAKE_VERSION VERSION_GREATER "3.23")
-    message("Building for all major cuda architectures")
-    set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
+if(SKBUILD)
+    install(TARGETS ${PROJECT_NAME}
+    DESTINATION ${SKBUILD_PLATLIB_DIR}/leapctype/
+    )
+else()
+    install(TARGETS ${PROJECT_NAME}
+      PUBLIC_HEADER DESTINATION include
+      RUNTIME DESTINATION bin
+      ARCHIVE DESTINATION lib
+      LIBRARY DESTINATION lib
+    )
 endif()
-#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
-#set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 60 61 62 70 72 75 80 86 87 89)
-#set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 75 86 87 89)
-#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES OFF)
-
-install(TARGETS ${PROJECT_NAME}
-  PUBLIC_HEADER DESTINATION include
-  RUNTIME DESTINATION bin
-  ARCHIVE DESTINATION lib
-  LIBRARY DESTINATION lib
-)
