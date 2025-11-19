@@ -1,4 +1,4 @@
-find_package(OpenMP REQUIRED)
+find_package(OpenMP REQUIRED COMPONENTS CXX)
 if(LEAP_CUDA)
     find_package(CUDAToolkit 11.7 REQUIRED)
 endif()
