@@ -143,7 +143,6 @@ if (LEAP_CUDA)
     target_compile_definitions(
         leapct PRIVATE
         __USE_GPU
-        __USE_NOTEX
         __INCLUDE_CUFFT
     )
     target_link_libraries(${PROJECT_NAME}

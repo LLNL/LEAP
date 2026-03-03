@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find a default GPU accelerator language.
-set(_default_accelerator_type "NONE")
+set(_default_accelerator_type "None")
 include(CheckLanguage)
 check_language(HIP)
 if(CMAKE_HIP_COMPILER)
@@ -19,7 +19,7 @@ if(CMAKE_CUDA_COMPILER)
     set(_default_accelerator_type "NVIDIA")
 endif()
 
-set(LEAP_GPU "NVIDIA" CACHE STRING "GPU acceleration type")
+set(LEAP_GPU "$_default_accelerator_type" CACHE STRING "GPU acceleration type")
 unset(_default_accelerator_type)
 
 set_property(CACHE LEAP_GPU PROPERTY STRINGS "NVIDIA" "AMD" "None")
