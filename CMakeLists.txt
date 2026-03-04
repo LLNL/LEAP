@@ -27,8 +27,9 @@ set_property(CACHE LEAP_GPU PROPERTY STRINGS "NVIDIA" "AMD" "None")
 get_property(OPT_STRINGS CACHE LEAP_GPU PROPERTY STRINGS)
 # Check that value of the parameter is inside "STRINGS" list.
 if (NOT LEAP_GPU IN_LIST OPT_STRINGS)
-  message(FATAL_ERROR "Wrong value of the parameter 'LEAP_GPU'")
+  message(FATAL_ERROR "Wrong value of the parameter 'LEAP_GPU': ${LEAP_GPU}")
 endif ()
+message(STATUS "LEAP_GPU selected accelerator type ${LEAP_GPU}")
 
 string(TOUPPER "${LEAP_GPU}" LEAP_GPU)
 if (LEAP_GPU STREQUAL "NVIDIA")
