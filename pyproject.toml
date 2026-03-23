@@ -40,5 +40,10 @@ BUILD_TESTING = false
 LEAP_GPU = "NVIDIA"
 
 [tool.setuptools_scm]
+# Ref https://setuptools-scm.readthedocs.io/en/latest/config/#configuration-parameters
+# WARNING: A fallback version allows the package to be built and installed without errors from a downloaded archive
+# (i.e. without using git to clone a repository), but the fallback version identifier then becomes an extra point
+# of maintenance.
+fallback_version = "1.26+untagged"
 # There are several packages. Is there an appropriate place to put a package version?
 #write_to = "src/leap/_version.py"
