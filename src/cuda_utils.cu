@@ -1905,9 +1905,10 @@ bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int which
 
     uint64 N = params->volumeData_numberOfElements();
 	cudaStatus = cudaMemcpy(f, dev_f, N * sizeof(float), cudaMemcpyDeviceToHost);
+    //printf("GPU=%d: copy volume data back to host!, %p, %p\n", params->whichGPU, (void*)f, (void*)dev_f);
 	if (cudaSuccess != cudaStatus)
 	{
-		fprintf(stderr, "failed to copy volume data back to host!\n");
+		fprintf(stderr, "GPU=%d: failed to copy volume data back to host! %p, %p\n", params->whichGPU, (void*)f, (void*)dev_f);
 		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		return false;

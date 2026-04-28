@@ -770,7 +770,7 @@ __global__ void attenuatedProjectorKernel_SF(float* g, int4 N_g, float4 T_g, flo
 }
 
 //__global__ void cylindricalAttenuatedBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, float4 T_g, float4 startVals_g, float* f, const float muCoeff, const float muRadius, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
-__global__ void cylindricalAttenuatedBackprojectorKernel_SF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, const float muCoeff, const float muRadius, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder)
+__global__ void cylindricalAttenuatedBackprojectorKernel_SF(TEX_DATA g, int4 N_g, float4 T_g, float4 startVals_g, float* f, const float muCoeff, const float muRadius, int4 N_f, float4 T_f, float4 startVals_f, float rFOVsq, float* phis, int volumeDimensionOrder, bool clamp)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -787,7 +787,8 @@ __global__ void cylindricalAttenuatedBackprojectorKernel_SF(TEX_DATA g, int4 N_g
         ind = uint64(i) * uint64(N_f.y * N_f.z) + uint64(j * N_f.z + k);
     else
         ind = uint64(k) * uint64(N_f.y * N_f.x) + uint64(j * N_f.x + i);
-
+    //if (ind >= N_f.x * N_f.y * N_f.z)
+    //    return;
     if (x * x + y * y > rFOVsq)
     {
         f[ind] = 0.0;
@@ -837,6 +838,7 @@ __global__ void cylindricalAttenuatedBackprojectorKernel_SF(TEX_DATA g, int4 N_g
         }
         //expTerm = -x * cos_phi - y * sin_phi; // ERT
         
+        //val += TEX3D_L2(g, N_g, s_ind_A, float(k) + 0.5f, float(l) + 0.5f, clamp) * expTerm;
         val += TEX3D_LB2(g, N_g, s_ind_A, float(k) + 0.5f, float(l) + 0.5f) * expTerm;
         //val += tex3D<float>(g, s_ind_A, float(k) + 0.5f, float(l) + 0.5f) * expTerm;
         l += 1;
@@ -904,17 +906,17 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
             const float weight_1 = max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C));
             if (volumeDimensionOrder == 0)
             {
-                g_output += ((weight_0 + weight_1) * TEX3D_NB2(f, N_f, float(m) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(i) + 0.5f)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * TEX3D_NB2(f, N_f, float(m) + 0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f)) * expTerm;
-                //g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(m) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(i) + 0.5f)
-                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, float(m) + 0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f)) * expTerm;
+                g_output += ((weight_0 + weight_1) * TEX3D_NB1(f, N_f, float(m) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(i) + 0.5f)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * TEX3D_NB1(f, N_f, float(m) + 0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f)) * expTerm;
+                //g_output += ((weight_0 + weight_1) * tex3D<float>((cudaTextureObject_t)f, float(m) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(i) + 0.5f)
+                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>((cudaTextureObject_t)f, float(m) + 0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f)) * expTerm;
             }
             else
             {
                 g_output += ((weight_0 + weight_1) * TEX3D_NB1(f, N_f, float(i) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(m) + 0.5f)
                     + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * TEX3D_NB1(f, N_f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(m) + 0.5f)) * expTerm;
-                //g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(m) + 0.5f)
-                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(m) + 0.5f)) * expTerm;
+                //g_output += ((weight_0 + weight_1) * tex3D<float>((cudaTextureObject_t)f, float(i) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(m) + 0.5f)
+                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>((cudaTextureObject_t)f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(m) + 0.5f)) * expTerm;
             }
         }
     }
@@ -951,17 +953,17 @@ __global__ void cylindricalAttenuatedProjectorKernel_SF(float* g, int4 N_g, floa
             const float weight_1 = max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C));
             if (volumeDimensionOrder == 0)
             {
-                g_output += ((weight_0 + weight_1) * TEX3D_NB2(f, N_f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1))
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * TEX3D_NB2(f, N_f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A + 2) + 0.5f)) * expTerm;
-                //g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1))
-                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A + 2) + 0.5f)) * expTerm;
+                g_output += ((weight_0 + weight_1) * TEX3D_NB1(f, N_f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1))
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * TEX3D_NB1(f, N_f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A + 2) + 0.5f)) * expTerm;
+                //g_output += ((weight_0 + weight_1) * tex3D<float>((cudaTextureObject_t)f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1))
+                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>((cudaTextureObject_t)f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A + 2) + 0.5f)) * expTerm;
             }
             else
             {
                 g_output += ((weight_0 + weight_1) * TEX3D_NB1(f, N_f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(j) + 0.5f, float(m) + 0.5f)
                     + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * TEX3D_NB1(f, N_f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(m) + 0.5f)) * expTerm;
-                //g_output += ((weight_0 + weight_1) * tex3D<float>(f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(j) + 0.5f, float(m) + 0.5f)
-                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(m) + 0.5f)) * expTerm;
+                //g_output += ((weight_0 + weight_1) * tex3D<float>((cudaTextureObject_t)f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(j) + 0.5f, float(m) + 0.5f)
+                //    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>((cudaTextureObject_t)f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(m) + 0.5f)) * expTerm;
             }
         }
     }
@@ -988,6 +990,8 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
         return false;
     }
 
+    //printf("GPU=%d project_attenuated(): start\n", params->whichGPU);
+
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
 
@@ -1004,6 +1008,7 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
 
     if (data_on_cpu)
     {
+        int temp = params->projectionData_numberOfElements() * sizeof(float);
         if ((cudaStatus = cudaMalloc((void**)&dev_g, params->projectionData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(projections) failed!\n");
@@ -1061,15 +1066,17 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
         attenuatedProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, d_mu_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
     }
     else {
-        //fprintf(stderr, "cylindricalAttenuatedProjectorKernel_SF()\n");
+        //fprintf(stderr, "cylindricalAttenuatedProjectorKernel_SF(), volumeDimensionOrder:%d, doExtrapolation: %d\n", params->volumeDimensionOrder, params->doExtrapolation);
         cylindricalAttenuatedProjectorKernel_SF <<< dimGrid, dimBlock >>> (dev_g, N_g, T_g, startVal_g, d_data_txt, params->muCoeff, params->muRadius, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
     }
+
+    //printf("GPU=%d, project_attenuated(): after forward project() kernel\n", params->whichGPU);
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess)
     {
-        fprintf(stderr, "kernel failed!\n");
+        fprintf(stderr, "GPU=%d, project_attenuated() - kernel failed!\n", params->whichGPU);
         fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
     }
@@ -1078,6 +1085,8 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
         pullProjectionDataFromGPU(g, params, dev_g, params->whichGPU);
     else
         g = dev_g;
+
+    //printf("GPU=%d, project_attenuated(): data copy back to CPU\n", params->whichGPU);
 
     // Clean up
     //cudaFreeArray(d_data_array);
@@ -1102,6 +1111,8 @@ bool project_attenuated(float*& g, float* f, parameters* params, bool data_on_cp
             cudaFree(dev_mu);
     }
 
+    //printf("GPU=%d, project_attenuated(): free memory\n", params->whichGPU);
+
     return true;
 }
 
@@ -1120,6 +1131,8 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
         //return backproject_eSF_cone(g, f, params, data_on_cpu);
         return false;
     }
+
+    //printf("GPU=%d, backproject_attenuated(): start, data_on_cpu=%d!!\n", params->whichGPU, data_on_cpu);
 
     cudaSetDevice(params->whichGPU);
     cudaError_t cudaStatus;
@@ -1174,9 +1187,9 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
 
     if (data_on_cpu)
     {
-        if (dev_g != 0)
-            cudaFree(dev_g);
-        dev_g = 0;
+        //if (dev_g != 0)  // Hyojin Kim commented out this
+        //    cudaFree(dev_g);
+        //dev_g = 0;
         if ((cudaStatus = cudaMalloc((void**)&dev_f, params->volumeData_numberOfElements() * sizeof(float))) != cudaSuccess)
         {
             fprintf(stderr, "cudaMalloc(volume) failed!\n");
@@ -1193,31 +1206,35 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
     if (params->mu != NULL)
     {
         if (params->doWeightedBackprojection) {
-            //fprintf(stderr, "attenuatedWeightedBackprojectorKernel_SF()\n");
             attenuatedWeightedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, d_mu_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
         }
         else {
-            //fprintf(stderr, "attenuatedBackprojectorKernel_SF()\n");
             attenuatedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, d_mu_txt, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
         }
     }
     else {
-        //fprintf(stderr, "cylindricalAttenuatedBackprojectorKernel_SF()\n");
-        cylindricalAttenuatedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, params->muCoeff, params->muRadius, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder);
+        //printf("GPU=%d, backproject_attenuated(): cylindricalAttenuatedBackprojectorKernel_SF, dimGrid: (%d, %d, %d), dimBlock: (%d, %d, %d), N_g: (%d, %d, %d), N_f: (%d, %d, %d), startVal_g: (%f, %f, %f), startVal_f: (%f, %f, %f), volumeDimensionOrder: %d, extrapolation: %d\n", 
+        //    params->whichGPU, dimGrid.x, dimGrid.y, dimGrid.z, dimBlock.x, dimBlock.y, dimBlock.z, N_g.x, N_g.y, N_g.z, N_f.x, N_f.y, N_f.z, startVal_g.x, startVal_g.y, startVal_g.z, startVal_f.x, startVal_f.y, startVal_f.z, params->volumeDimensionOrder, params->doExtrapolation);
+        cylindricalAttenuatedBackprojectorKernel_SF <<< dimGrid, dimBlock >>> (d_data_txt, N_g, T_g, startVal_g, dev_f, params->muCoeff, params->muRadius, N_f, T_f, startVal_f, rFOVsq, dev_phis, params->volumeDimensionOrder, params->doExtrapolation);
     }
+
+    //printf("GPU=%d, backproject_attenuated(): after back project() kernel\n", params->whichGPU);
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();
     if (cudaStatus != cudaSuccess)
     {
-        fprintf(stderr, "kernel failed!\n");
+        fprintf(stderr, "GPU=%d, kernel failed!\n", params->whichGPU);
         fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
         fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+        exit(-1);
     }
     if (data_on_cpu)
         pullVolumeDataFromGPU(f, params, dev_f, params->whichGPU);
     else
         f = dev_f;
+
+    //printf("GPU=%d, backproject_attenuated(): after copy back to CPU\n", params->whichGPU);
 
     // Clean up
     //cudaFreeArray(d_data_array);
@@ -1231,7 +1248,7 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
         freeTexture(d_mu_array, d_mu_txt, data_on_cpu);
     }
     cudaFree(dev_phis);
-
+    
     if (data_on_cpu)
     {
         if (dev_g != 0)
@@ -1241,6 +1258,8 @@ bool backproject_attenuated(float* g, float*& f, parameters* params, bool data_o
         if (dev_mu != 0)
             cudaFree(dev_mu);
     }
+    //printf("GPU=%d, backproject_attenuated(): free memory\n", params->whichGPU);
+    //exit(0);
 
     return true;
 }

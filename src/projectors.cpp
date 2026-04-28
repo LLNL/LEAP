@@ -47,6 +47,9 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 {
 	if (params == NULL)
 		return false;
+
+	//printf("GPU=%d, ############# projectors::project() #################\n", params->whichGPU);
+
 	if (params->allDefined() == false || g == NULL || f == NULL)
 	{
 		printf("ERROR: project: invalid parameters or invalid input arrays!\n");
@@ -77,12 +80,14 @@ bool projectors::project(float* g, float* f, parameters* params, bool data_on_cp
 			return project_attenuated(g, f, params, data_on_cpu);
 		else if (params->geometry == parameters::MODULAR)
 			return project_Joseph_modular(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
-		else
+		else {
 			return project_SF(g, f, params, data_on_cpu, volume_on_cpu, accumulate);
+		}
 	}
 #endif
 	else
 	{
+
 		if (params->isSymmetric())
 			return CPUproject_symmetric(g, f, params);
 
@@ -139,6 +144,8 @@ bool projectors::backproject(float* g, float* f, parameters* params, bool data_o
 
 bool projectors::backproject(float* g, float* f, parameters* params, bool data_on_cpu, bool volume_on_cpu, bool accumulate)
 {
+	//printf("GPU=%d, ############# projectors::backproject() #################\n", params->whichGPU);
+
 	if (params->allDefined() == false || g == NULL || f == NULL) {
 		return false;
 	}

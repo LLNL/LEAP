@@ -764,6 +764,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 	int numRowsPerChunk = std::max(1, int(ceil(float(params.numRows) / std::max(2.0, double(params.whichGPUs.size())) )));
 	numRowsPerChunk = std::min(numRowsPerChunk, maxSlicesForChunking);
 	int numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
+	//printf("project_multiGPU(): numRowsPerChunk: %d, numChunks: %d\n", numRowsPerChunk, numChunks);
 	if (params.hasSufficientGPUmemory(true, 0, numProjectionData, numVolumeData) == false)
 	{
 		float memNeeded = project_memoryRequired(numRowsPerChunk);
@@ -785,9 +786,13 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		return false;
 	else
 	{
+		//printf("project_multiGPU(), sufficient memory0: numRowsPerChunk: %d, maxSlicesForChunking: %d\n", numRowsPerChunk, maxSlicesForChunking);
 		numRowsPerChunk = int(ceil(float(params.numRows) / float(params.whichGPUs.size())));
+		//printf("project_multiGPU(), sufficient memory1: numRowsPerChunk: %d, maxSlicesForChunking: %d\n", numRowsPerChunk, maxSlicesForChunking);
 		numRowsPerChunk = std::min(numRowsPerChunk, maxSlicesForChunking);
+		//printf("project_multiGPU(), sufficient memory2: numRowsPerChunk: %d, params.numRows: %d\n", numRowsPerChunk, params.numRows);
 		numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
+		//printf("project_multiGPU(), sufficient memory3: numChunks: %d\n", numChunks);
 	}
 
 	//printf("numRowsPerChunk = %d\n", numRowsPerChunk);
@@ -800,6 +805,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 	bool retVal = true;
 
+	//printf("project_multiGPU(), # GPUs: %d, numChunks: %d omp threads: %d\n", int(params.whichGPUs.size()), numChunks, omp_get_num_procs());
 	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
 	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
@@ -1144,6 +1150,9 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	}
 	else
 	{
+		//printf("backproject_FBP_multiGPU: params.numZ: %d, numSlicesPerChunk: %d, maxSlicesForChunking: %d\n", 
+		//	params.numZ, numSlicesPerChunk, maxSlicesForChunking);
+
 		numSlicesPerChunk = int(ceil(float(params.numZ) / float(params.whichGPUs.size())));
 		numSlicesPerChunk = std::min(numSlicesPerChunk, maxSlicesForChunking);
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
