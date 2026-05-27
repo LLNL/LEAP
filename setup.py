@@ -7,36 +7,33 @@
 # setup.py for pytorch module
 ################################################################################
 import os
-import pathlib
-
-from setuptools import setup, find_packages
-from setuptools.command.install import install
+import shutil
 
 from sys import platform as _platform
+from setuptools import setup, find_packages
+
+
+retVal = -1
 if _platform == "linux" or _platform == "linux2":
     lib_fname = 'build/lib/libleapct.so'
     retVal = os.system(r'sh ./etc/build.sh')
-    if retVal != 0:
-        print('Failed to compile!')
-        quit()
-    
+
 elif _platform == "win32":
     lib_fname = r'win_build\bin\Release\libleapct.dll'
     retVal = os.system(r'.\etc\win_build_agn.bat')
-    if retVal != 0:
-        print('Failed to compile!')
-        quit()
-    
-    import site
-    copy_text = 'copy ' + str(lib_fname) + ' ' + str(os.path.join(site.getsitepackages()[1], 'libleapct.dll'))
-    os.system(copy_text)
     
 elif _platform == "darwin":
     lib_fname = 'build/lib/libleapct.dylib'
     retVal = os.system(r'sh ./etc/build.sh')
-    if retVal != 0:
-        print('Failed to compile!')
-        quit()
+
+if retVal != 0:
+    print('Failed to compile!')
+    quit()
+
+shutil.copy(
+    lib_fname,
+    os.path.join('src', 'leapct', os.path.basename(lib_fname)),
+)
 
 setup(
     name='leapct',
@@ -49,6 +46,6 @@ setup(
     packages=find_packages("src"), 
     package_dir={'': 'src'},
     install_requires=['numpy', 'torch'], 
-    py_modules=['leaptorch', 'leapctype', 'leap_filter_sequence', 'leap_preprocessing_algorithms'], 
-    package_data={'': [lib_fname]},
+    package_data={'leapct': [os.path.basename(lib_fname)]},
+    include_package_data=True,
 )
