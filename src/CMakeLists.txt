@@ -1,7 +1,21 @@
-find_package(OpenMP REQUIRED COMPONENTS CXX)
-if(LEAP_CUDA)
-    find_package(CUDAToolkit 11.7 REQUIRED)
-endif()
+# cmake version 3.23 or higher is needed to support 
+# the argument CUDA_ARCHITECTURES all-major
+# You could use cmake as old as version 3.18 if you replaced
+# the line below that specifies all-major with the line below
+# it which specifies the list of CUDA architectures 
+#cmake_minimum_required(VERSION 3.23 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
+
+project(leapct CXX CUDA)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(CUDA 11.7 REQUIRED)
+find_package(OpenMP REQUIRED)
+#set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -O3)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}; -D__INCLUDE_CUFFT)
+add_compile_options(-D__INCLUDE_CUFFT)
 
 if (WIN32)
   set(CMAKE_SHARED_LIBRARY_PREFIX "lib")
@@ -13,96 +27,96 @@ endif()
 #set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/..)
 
 set(HEADER
-  analytic_ray_tracing.h
-  analytic_ray_tracing_gpu.cuh
-  backprojectors_VD.cuh
-  bilateral_filter.cuh
-  cpu_utils.h
-  cuda_utils.h
-  file_io.h
-  filtered_backprojection.h
-  find_center_cpu.h
-  geometric_calibration.cuh
-  guided_filter.cuh
-  leap_defines.h
+  tomographic_models.h
   list_of_tomographic_models.h
-  log.h
-  matching_pursuit.cuh
-  noise_filters.cuh
+  tomographic_models_c_interface.h
   parameters.h
-  phantom.h
   projectors.h
-  projectors_Joseph.cuh
-  projectors_Joseph_cpu.h
+  filtered_backprojection.h
   projectors_SF.cuh
   projectors_SF_cpu.h
-  projectors_Siddon.cuh
-  projectors_Siddon_cpu.h
-  projectors_attenuated.cuh
   projectors_extendedSF.cuh
+  projectors_Joseph.cuh
+  projectors_Joseph_cpu.h
   projectors_symmetric.cuh
   projectors_symmetric_cpu.h
+  projectors_attenuated.cuh
+  projectors_Siddon.cuh
+  projectors_Siddon_cpu.h
+  backprojectors_VD.cuh
+  sensitivity_cpu.h
+  sensitivity.cuh
   ramp_filter.cuh
   ramp_filter_cpu.h
   ray_weighting.cuh
   ray_weighting_cpu.h
-  rebin.h
-  resample.cuh
-  resample_cpu.h
   scatter_models.cuh
-  sensitivity.cuh
-  sensitivity_cpu.h
-  sinogram_replacement.h
-  tomographic_models.h
-  tomographic_models_c_interface.h
+  noise_filters.cuh
   total_variation.cuh
+  matching_pursuit.cuh
+  bilateral_filter.cuh
+  guided_filter.cuh
+  geometric_calibration.cuh
+  find_center_cpu.h
+  sinogram_replacement.h
+  resample_cpu.h
+  resample.cuh
+  cuda_utils.h
+  cpu_utils.h
+  phantom.h
+  analytic_ray_tracing.h
+  analytic_ray_tracing_gpu.cuh
+  rebin.h
+  file_io.h
+  leap_defines.h
+  log.h
 )
 
 set(SRC_CPP
-  analytic_ray_tracing.cpp
-  cpu_utils.cpp
-  file_io.cpp
-  filtered_backprojection.cpp
-  find_center_cpu.cpp
+  tomographic_models.cpp
   list_of_tomographic_models.cpp
+  tomographic_models_c_interface.cpp
   parameters.cpp
-  phantom.cpp
   projectors.cpp
-  projectors_Joseph_cpu.cpp
+  filtered_backprojection.cpp
   projectors_SF_cpu.cpp
-  projectors_Siddon_cpu.cpp
+  projectors_Joseph_cpu.cpp
   projectors_symmetric_cpu.cpp
+  projectors_Siddon_cpu.cpp
+  sensitivity_cpu.cpp
   ramp_filter_cpu.cpp
   ray_weighting_cpu.cpp
-  rebin.cpp
-  resample_cpu.cpp
-  sensitivity_cpu.cpp
+  find_center_cpu.cpp
   sinogram_replacement.cpp
-  tomographic_models.cpp
-  tomographic_models_c_interface.cpp
+  resample_cpu.cpp
+  cpu_utils.cpp
+  phantom.cpp
+  analytic_ray_tracing.cpp
+  rebin.cpp
+  file_io.cpp
 )
 
 set(SRC_CU
-  analytic_ray_tracing_gpu.cu
-  backprojectors_VD.cu
-  bilateral_filter.cu
-  cuda_utils.cu
-  geometric_calibration.cu
-  guided_filter.cu
-  matching_pursuit.cu
-  noise_filters.cu
-  projectors_Joseph.cu
   projectors_SF.cu
-  projectors_Siddon.cu
-  projectors_attenuated.cu
   projectors_extendedSF.cu
+  projectors_Joseph.cu
   projectors_symmetric.cu
-  ramp_filter.cu
-  ray_weighting.cu
-  resample.cu
-  scatter_models.cu
+  projectors_attenuated.cu
+  projectors_Siddon.cu
+  backprojectors_VD.cu
   sensitivity.cu
+  ramp_filter.cu
+  resample.cu
+  noise_filters.cu
   total_variation.cu
+  matching_pursuit.cu
+  bilateral_filter.cu
+  guided_filter.cu
+  geometric_calibration.cu
+  ray_weighting.cu
+  scatter_models.cu
+  analytic_ray_tracing_gpu.cu
+  cuda_utils.cu
 )
 
 include_directories(
@@ -115,11 +129,8 @@ include_directories(
 add_library(leapct SHARED
   ${HEADER}
   ${SRC_CPP}
+  ${SRC_CU}
 )
-
-if(LEAP_CUDA)
-    target_sources(leapct PRIVATE ${SRC_CU})
-endif()
 
 # <<<--- Create filters for subfolders for Visual Studio
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -139,50 +150,31 @@ foreach(_source IN ITEMS ${_source_list})
 endforeach()
 # --->>>
 
-if (LEAP_CUDA)
-    target_compile_definitions(
-        leapct PRIVATE
-        __INCLUDE_CUFFT
-    )
-    target_link_libraries(${PROJECT_NAME}
-      OpenMP::OpenMP_CXX
-      CUDA::cudart
-      CUDA::cublas
-      CUDA::cufft
-    )
-elseif (LEAP_HIP)
-    target_compile_definitions(
-        leapct PRIVATE
-        __USE_NOTEX
-        __INCLUDE_CUFFT
-    )
-    target_link_libraries(${PROJECT_NAME}
-      OpenMP::OpenMP_CXX
-      hip::hipfft
-    )
-else ()
-    target_compile_definitions(
-        leapct PRIVATE
-        __USE_CPU
-    )
-    target_link_libraries(${PROJECT_NAME}
-      OpenMP::OpenMP_CXX
-    )
-endif()
+target_link_libraries(${PROJECT_NAME}
+  OpenMP::OpenMP_CXX
+  ${CUDA_LIBRARIES}
+  ${CUDA_cublas_LIBRARY}
+  ${CUDA_cufft_LIBRARY}
+)
 
 target_compile_options(leapct PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:
   --use_fast_math
 >)
 
-if(SKBUILD)
-    install(TARGETS ${PROJECT_NAME}
-    DESTINATION ${SKBUILD_PLATLIB_DIR}/leapctype/
-    )
-else()
-    install(TARGETS ${PROJECT_NAME}
-      PUBLIC_HEADER DESTINATION include
-      RUNTIME DESTINATION bin
-      ARCHIVE DESTINATION lib
-      LIBRARY DESTINATION lib
-    )
+#set_property(TARGET leapct PROPERTY CXX_STANDARD 14)
+#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES native)
+if(CMAKE_VERSION VERSION_GREATER "3.23")
+    message("Building for all major cuda architectures")
+    set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
 endif()
+#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES all-major)
+#set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 60 61 62 70 72 75 80 86 87 89)
+#set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES 75 86 87 89)
+#set_property(TARGET leapct PROPERTY CUDA_ARCHITECTURES OFF)
+
+install(TARGETS ${PROJECT_NAME}
+  PUBLIC_HEADER DESTINATION include
+  RUNTIME DESTINATION bin
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+)

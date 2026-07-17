@@ -85,7 +85,7 @@ class tomographicModels:
 
             #libdir = site.getsitepackages()[0]
             #libname = glob.glob(os.path.join(libdir, "leapct*.so"))
-            libname = glob.glob(os.path.join(current_dir, "*leapct*.so"))
+            libname = glob.glob(os.path.join(current_dir, "../*leapct*.so"))
             if len(libname) == 0:
                 fullPath = os.path.join(current_dir, 'libleapct.so')
                 fullPath_backup = os.path.join(current_dir, '../build/lib/libleapct.so')
