@@ -82,8 +82,8 @@ leapct.sketch_system([0, 45, 90, 135, 180])
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
 # All you need is for the data to be C contiguous float32 arrays with the right dimensions
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify a phantom to test the code
 # Here we make a cylindrical phantom with some cross-hatched high-density features
@@ -127,8 +127,7 @@ leapct.display(g)
 
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#leapct.poisson(g, 50000.0, True)
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating

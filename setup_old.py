@@ -21,7 +21,8 @@ cpp_files=['tomographic_models.cpp', 'tomographic_models_c_interface.cpp',
            'parameters.cpp', 'projectors.cpp', 'filtered_backprojection.cpp', 
            'projectors_SF_cpu.cpp', 'projectors_Joseph_cpu.cpp', 'projectors_symmetric_cpu.cpp', 
            'projectors_Siddon_cpu.cpp', 'sensitivity_cpu.cpp', 'ramp_filter_cpu.cpp', 'cpu_utils.cpp', 
-           'phantom.cpp', 'ray_weighting_cpu.cpp', 'list_of_tomographic_models.cpp']
+           'phantom.cpp', 'ray_weighting_cpu.cpp', 'list_of_tomographic_models.cpp',
+           'ring_removal.cpp', 'inpainting.cpp', 'segmentation.cpp']
 
 cuda_files=['projectors_SF.cu', 'projectors_extendedSF.cu', 
             'projectors_Joseph.cu', 'projectors_symmetric.cu', 

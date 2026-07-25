@@ -32,8 +32,8 @@ leapct.set_default_volume()
 
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f_true = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f_true = leapct.allocate_volume()
 
 
 # Specify simplified FORBILD head phantom
@@ -45,8 +45,7 @@ leapct.project(g,f_true)
 
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+leapct.poisson(g, 50000.0, True)
 
 # Choose which method you'd like to test
 #whichMethod = 1
@@ -64,7 +63,7 @@ if whichMethod == 1:
     outlierCorrection(leapct,g)
 
     # Reconstruct the data
-    f = leapct.allocateVolume()
+    f = leapct.allocate_volume()
     leapct.FBP(g,f)
 elif whichMethod == 2:
 
@@ -78,7 +77,7 @@ elif whichMethod == 2:
     badPixelCorrection(leapct, g, badPixelMap)
     
     # Reconstruct the data
-    f = leapct.allocateVolume()
+    f = leapct.allocate_volume()
     leapct.FBP(g,f)
 else:
     
@@ -101,7 +100,7 @@ else:
 
     
     # Reconstruct the data with RWLS
-    f = leapct.allocateVolume()
+    f = leapct.allocate_volume()
     leapct.RWLS(g,f,50, 0.0, 0.0, W, True, True)
     
 # Display the result with napari

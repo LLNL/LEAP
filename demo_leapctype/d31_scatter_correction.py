@@ -5,9 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from leapctype import *
 leapct = tomographicModels()
-from xrayphysics import *
-physics = xrayPhysics()
-leapct.about()
 
 '''
 This script provide a demonstration of LEAP's scatter simulation/ correction functionality.  Scatter correction
@@ -28,11 +25,11 @@ The attenuation data is what one uses for reconstruction.
 The best physics-based scatter correction algorithm we know is outlined in the following papers:
 Maslowski, Alexander, Adam Wang, Mingshan Sun, Todd Wareing, Ian Davis, and Josh Star-Lack.
 "Acuros CTS: A fast, linear Boltzmann transport equation solver for computed tomography scatter–Part I: Core algorithms and validation."
-Medical physics 45, no. 5 (2018): 1899-1913.
+Medical Physics 45, no. 5 (2018): 1899-1913.
 
 Wang, Adam, Alexander Maslowski, Philippe Messmer, Mathias Lehmann, Adam Strzelecki, Elaine Yu, Pascal Paysan et al.
 "Acuros CTS: A fast, linear Boltzmann transport equation solver for computed tomography scatter–Part II: System modeling, scatter correction, and optimization."
-Medical physics 45, no. 5 (2018): 1914-1925.
+Medical Physics 45, no. 5 (2018): 1914-1925.
 
 This algorithm accounts for all orders of scatter, while our only models first order scatter.
 Unfortunately it is extremely difficult to implement and the Varian implementation is proprietary.  Although our scatter estimation
@@ -74,19 +71,15 @@ leapct.set_default_volume()
 #leapct.set_volume(numX, numY, numZ, voxelWidth=None, voxelHeight=None, offsetX=None, offsetY=None, offsetZ=None):
 
 
-# The next line tells the XrayPhysics library to use mm-based units so that everything agrees with LEAP which is mm-based
-# Note that it is natural to express different quantities with different units, e.g., mm or cm
-# But to avoid confusion of which parameter uses which units, everything should use the same units
-# This should be fine for most things, but one thing to look out for is densities
+# LEAP uses mm for all length-based units and thus for densities it uses g/mm^3
 # *** Note that g/cm^3 = 1.0e-3 g/mm^3 ***
 # So just add "e-3" to the end of the densities so that they are expressed in g/mm^3
-physics.use_mm()
 
 
 #######################################################################################################################
 # Now we define the total system spectral response model
-# The XrayPhysics package provides methods to estimate this, but you can certainly use your own models
-# The models in XrayPhysics are quite accurate, but for best results, one should perform a spectral calibration
+# The LEAP package provides methods to estimate this, but you can certainly use your own models
+# The models in LEAP are quite accurate, but for best results, one should perform a spectral calibration
 #######################################################################################################################
 
 # Define the kV of the source voltage and the take-off angle (degrees)
@@ -97,16 +90,16 @@ takeOffAngle = 11.0
 # "Es" are the energy samples (in keV) and "s" is the source spectrum
 Es = np.array(range(30,int(kV)+2,2),dtype=np.float32)
 #Es = np.linspace(16, int(kV), num=(int(kV)-16)//4+1)
-Es,s = physics.simulateSpectra(kV,takeOffAngle,gammas=Es)
+Es,s = leapct.simulateSpectra(kV,takeOffAngle,gammas=Es)
 
 # Then model the detector response as the product of the
 # x-ray energy and the stopping power of the scintillator
 # Here the scintillator is 0.6 mm thick CsI
-detResp = physics.detectorResponse('CsI', physics.massDensity('CsI'), 0.6, Es)
+detResp = leapct.detectorResponse('CsI', leapct.massDensity('CsI'), 0.6, Es)
 
 # Finally model the attenuation due to the filters
 # Here the filter is 1.0 mm thick aluminum
-filtResp = physics.filterResponse('Al', physics.massDensity('Al'), 2.0, Es) * physics.filterResponse('Cu', physics.massDensity('Cu'), 2.0, Es)
+filtResp = leapct.filterResponse('Al', leapct.massDensity('Al'), 2.0, Es) * leapct.filterResponse('Cu', leapct.massDensity('Cu'), 2.0, Es)
 
 # Take the product of all three factors to get the total system spectral response
 s_total = s*filtResp*detResp
@@ -114,7 +107,7 @@ s_total = s*filtResp*detResp
 # The data is polychromatic which means the reconstruction will have some beam hardening artifacts
 # and it means we need to estimate the approximate effective energy of the spectra passing through
 # the object.  In this demo, we shall model the object as water, but one can choose any material.
-effectiveEnergy = physics.effectiveEnergy('H2O', 1.0e-3, 125.0, s_total, Es)
+effectiveEnergy = leapct.effectiveEnergy('H2O', 1.0e-3, 125.0, s_total, Es)
 
 # Now we define some tables the scatter correction needs
 # We will down-sample the spectra so that it has around 5-10 samples
@@ -123,25 +116,25 @@ effectiveEnergy = physics.effectiveEnergy('H2O', 1.0e-3, 125.0, s_total, Es)
 
 gammas_dn = Es[0:Es.shape[0]:5]
 gammas_dn = np.ascontiguousarray(gammas_dn,dtype=np.float32)
-s_dn = physics.resample(Es,s,gammas_dn)
+s_dn = leapct.resample(Es,s,gammas_dn)
 
 # Now we define the detector response, cross sections, and differential
 # scattering cross sections from 1 keV to the maximum energy of the spectra
 # for the object material, which in this case is water.
 Es_full = np.array(range(1,int(gammas_dn[-1])+1),dtype=np.float32)
-detResp = physics.detectorResponse('CsI', physics.massDensity('CsI'), 0.6, Es_full)
+detResp = leapct.detectorResponse('CsI', leapct.massDensity('CsI'), 0.6, Es_full)
 
 sigma_water = np.zeros((3,Es_full.size), dtype=np.float32)
 
-sigma_water[0,:] = physics.sigmaPE('H2O',Es_full)
-sigma_water[1,:] = physics.sigmaCS('H2O',Es_full)
-sigma_water[2,:] = physics.sigmaRS('H2O',Es_full)
+sigma_water[0,:] = leapct.sigmaPE('H2O',Es_full)
+sigma_water[1,:] = leapct.sigmaCS('H2O',Es_full)
+sigma_water[2,:] = leapct.sigmaRS('H2O',Es_full)
 thetas = np.array(range(180+1),dtype=np.float32)
 dsigma = np.zeros((2,Es_full.size,181),dtype=np.float32)
 for n in range(Es_full.size):
-    #dsigma[0,n,:] = physics.KleinNishinaScatterDistribution(Es_full[n], thetas, True)
-    dsigma[0,n,:] = physics.incoherentScatterDistribution('H2O', Es_full[n], thetas, doNormalize=True)
-    dsigma[1,n,:] = physics.coherentScatterDistribution('H2O', Es_full[n], thetas, doNormalize=True)
+    #dsigma[0,n,:] = leapct.KleinNishinaScatterDistribution(Es_full[n], thetas, True)
+    dsigma[0,n,:] = leapct.incoherentScatterDistribution('H2O', Es_full[n], thetas, doNormalize=True)
+    dsigma[1,n,:] = leapct.coherentScatterDistribution('H2O', Es_full[n], thetas, doNormalize=True)
 
 # If one wishes to only model Compton or Rayleigh scatter, just set the corresponding
 # scatter distribution to zero
@@ -162,8 +155,8 @@ leapct.addObject(f_rho, 4, np.array([0.0, 0.0, 0.0]), np.array([250.0*0.5, 250.0
 #leapct.set_FORBILD(f,True)
 
 # Perform polychromatic simulation through the material (water)
-f_mu = f_rho.copy()/np.max(f_rho)*physics.mu('water',effectiveEnergy)
-BH_LUT, T_lut = physics.setBHlookupTable(s_total, Es, 'water', effectiveEnergy)
+f_mu = f_rho.copy()/np.max(f_rho)*leapct.mu('water',effectiveEnergy)
+BH_LUT, T_lut = leapct.setBHlookupTable(s_total, Es, 'water', effectiveEnergy)
 leapct.project(g,f_mu)
 leapct.applyTransferFunction(g, BH_LUT, T_lut)
 #'''
@@ -181,7 +174,7 @@ f_rho_dn = leapct_LR.down_sample_volume([downSampleFactor,downSampleFactor,downS
 # Convert to modular-beam geometry
 leapct_LR.convert_to_modularbeam()
 
-physics.normalizeSpectrum(s_dn, gammas_dn)
+leapct.normalizeSpectrum(s_dn, gammas_dn)
 print('Starting scatter simulation...')
 startTime = time.time()
 scatterGain = leapct_LR.scatter_model(f_rho_dn, s_dn, gammas_dn, detResp, sigma_water, dsigma, 1)
@@ -211,7 +204,7 @@ leapct.display(f)
 # LAC = (mass density) * (mass cross section), so
 # mass density = LAC / (mass cross section)
 # The cross section will be evaluated at the effective energy which we already calculated above for water and the given spectra
-f_rho = f/physics.sigma('water',effectiveEnergy)
+f_rho = f/leapct.sigma('water',effectiveEnergy)
 
 # Now we down-sample the data.  So we copy the LEAP parameters to a new LEAP object class and down-sample
 leapct_LR.copy_parameters(leapct)
@@ -237,7 +230,7 @@ scatterGain = leapct_LR.up_sample_projections([1,downSampleFactor,downSampleFact
 g = leapct.negLog(leapct.expNeg(g) * scatterGain)
 
 # Let's also remove the beam hardening artifacts
-BHC_LUT, T_lut = physics.setBHClookupTable(s_total, Es, 'water', effectiveEnergy)
+BHC_LUT, T_lut = leapct.setBHClookupTable(s_total, Es, 'water', effectiveEnergy)
 leapct.applyTransferFunction(g, BHC_LUT, T_lut)
 
 # Perform reconstruction and display the result.

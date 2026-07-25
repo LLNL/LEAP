@@ -55,8 +55,8 @@ leapct.print_parameters()
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
 # All you need is for the data to be C contiguous float32 arrays with the right dimensions
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify the FORBILD head phantom
 # For more information on how to specify phantoms, see https://leapct.readthedocs.io/en/latest/ctsimulation.html
@@ -76,8 +76,7 @@ print('Ray Tracing Simulation Elapsed Time: ' + str(time.time()-startTime))
 #plt.show()
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#leapct.poisson(g, 50000.0, True)
 
 
 # Reconstruct the data

@@ -45,7 +45,7 @@ class denoisingFilter:
         """
         pass
         
-    def gradient(self, f):
+    def gradient(self, f, out=None):
         """Calculates the gradient of the given volume
         
         Args:
@@ -246,11 +246,11 @@ class TV(denoisingFilter):
         else:
             return self.leapct.TVcost(f, self.delta, self.weight, self.p)
         
-    def gradient(self, f):
+    def gradient(self, f, out=None):
         if self.f_0 is not None:
-            return self.leapct.TVgradient(f-self.f_0, self.delta, self.weight, self.p)
+            return self.leapct.TVgradient(f-self.f_0, self.delta, self.weight, self.p, out=out)
         else:
-            return self.leapct.TVgradient(f, self.delta, self.weight, self.p)
+            return self.leapct.TVgradient(f, self.delta, self.weight, self.p, out=out)
         
     def quadForm(self, f, d):
         if self.f_0 is not None:
@@ -347,8 +347,12 @@ class LpNorm(denoisingFilter):
             self.leapct.HighPassFilter(f_copy, -self.FWHM)
         return self.weight * self.leapct.sum(self.Huber(f_copy))
         
-    def gradient(self, f):
-        Df = self.leapct.copyData(f)
+    def gradient(self, f, out=None):
+        if out is None:
+            Df = self.leapct.copyData(f)
+        else:
+            Df = out
+            Df[:] = f[:]
         if self.f_0 is not None:
             Df[:] -= self.f_0[:]
         if np.abs(self.FWHM) > 1.0:
@@ -484,8 +488,11 @@ class histogramSparsity(denoisingFilter):
             curTerm *= self.Geman0(f-self.mus[l])
         return self.weight * self.leapct.sum(curTerm)
         
-    def gradient(self, f):
-        Sp = self.leapct.copyData(f)
+    def gradient(self, f, out=None):
+        if out is None:
+            Sp = self.leapct.copyData(f)
+        else:
+            Sp = out
         Sp[:] = 0.0
         for l_1 in range(self.mus.size):
             curTerm = self.leapct.copyData(f)
@@ -546,16 +553,26 @@ class azimuthalFilter(denoisingFilter):
         Bf[:] = f[:] - Bf[:]
         return self.weight * self.leapct.sum(self.leapct.abs(Bf)**p)
         
-    def gradient(self, f):
-        Bf = self.leapct.copyData(f)
+    def gradient(self, f, out=None):
+        if out is None:
+            Bf = self.leapct.copyData(f)
+        else:
+            Bf = out
+            Bf[:] = f[:]
         self.leapct.AzimuthalBlur(Bf, self.FWHM)
         Bf[:] = f[:] - Bf[:]
-        Bf = self.p * self.leapct.sign(Bf) * self.leapct.abs(Bf)**(self.p-1.0)
-        
+
+        # Bf = self.p * self.leapct.sign(Bf) * self.leapct.abs(Bf)**(self.p-1.0)
+        abs_Bf = self.leapct.copyData(Bf)
+        self.leapct.abs(abs_Bf, out=abs_Bf)
+        abs_Bf[:] = abs_Bf[:]**(self.p-1.0)
+        self.leapct.sign(Bf, out=Bf)
+        Bf[:] *= self.p * abs_Bf[:]
+
         BBf = self.leapct.copyData(Bf)
         self.leapct.AzimuthalBlur(BBf, self.FWHM)
         Bf[:] = Bf[:] - BBf[:]
-        Bf *= self.weight
+        Bf[:] *= self.weight
         return Bf
         
     def quadForm(self, f, d):
@@ -655,17 +672,22 @@ class filterSequence:
             retVal *= self.beta
         return retVal
         
-    def gradient(self, f):
+    def gradient(self, f, out=None):
         """Calculates the accumulated gradient of all filters"""
         #if len(self.filters) == 0:
         #    return 0.0
-        D = self.filters[0].leapct.copyData(f)
+
+        if out is None:
+            D = self.filters[0].leapct.copyData(f)
+        else:
+            D = out
         D[:] = 0.0
         if self.beta > 0.0:
             for n in range(len(self.filters)):
                 if self.filters[n].isDifferentiable == True and self.filters[n].weight > 0.0:
-                    D += self.filters[n].gradient(f)
-            D *= self.beta
+                    D_n = self.filters[n].gradient(f)
+                    D[:] += D_n[:]
+            D[:] *= self.beta
         return D
         
     def quadForm(self, f, d):

@@ -26,8 +26,8 @@ leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numR
 leapct.set_default_volume()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f = leapct.allocate_volume()
 
 # Specify simplified FORBILD head phantom
 leapct.set_FORBILD(f,True)

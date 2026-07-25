@@ -23,6 +23,42 @@ from scipy.spatial.transform import Rotation as R
 from leapctype import *
 leapct_sweep = tomographicModels() # used in parameter_sweep function
 
+def _affine_inplace(leapct, g, scale, shift):
+    r""" In-place g = scale*g + shift.
+
+    For numpy arrays this uses leapct.fmad, a multi-threaded (OpenMP) C++ routine.
+    For torch tensors (which fmad does not support) it falls back to broadcasted
+    tensor arithmetic.  scale and shift may be Python scalars, or numpy arrays
+    that broadcast over g: 1D arrays (length numAngles) broadcast over the
+    projections and 2D arrays (numRows x numCols) broadcast over each projection.
+    """
+    if has_torch == True and type(g) is torch.Tensor:
+        def _b(v):
+            if isinstance(v, np.ndarray):
+                v = torch.as_tensor(v, dtype=g.dtype, device=g.device)
+            if type(v) is torch.Tensor and v.dim() == 1:
+                return v[:, None, None]
+            return v
+        g[:] = _b(scale) * g[:] + _b(shift)
+        return
+
+    # numpy path -> fmad (multi-threaded C++)
+    if has_torch == True and type(scale) is torch.Tensor:
+        scale = scale.detach().cpu().numpy()
+    if has_torch == True and type(shift) is torch.Tensor:
+        shift = shift.detach().cpu().numpy()
+    if isinstance(scale, np.ndarray):
+        scale = np.ascontiguousarray(scale, dtype=np.float32)
+    if isinstance(shift, np.ndarray):
+        shift = np.ascontiguousarray(shift, dtype=np.float32)
+    # fmad requires scale and shift to have the same shape; promote a scalar to
+    # match the other argument when only one of them is an array.
+    if isinstance(scale, np.ndarray) and not isinstance(shift, np.ndarray):
+        shift = np.full(scale.shape, float(shift), dtype=np.float32)
+    elif isinstance(shift, np.ndarray) and not isinstance(scale, np.ndarray):
+        scale = np.full(shift.shape, float(scale), dtype=np.float32)
+    leapct.fmad(g, scale, shift)
+
 def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=None, badPixelMap=None, flux_response=None):
     r""" Performs gain correction
     
@@ -73,15 +109,15 @@ def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=
     if leapct is None:
         leapct = leapct_sweep
 
-    # Subtract off dark
+    # Subtract off dark (g = g - dark_scan, done in-place with leapct.fmad)
     if isinstance(dark_scan, int) or isinstance(dark_scan, float):
-        g[:] = g[:] - dark_scan
+        _affine_inplace(leapct, g, 1.0, -dark_scan)
         if isinstance(air_scan, int) or isinstance(air_scan, float):
             air_scan = air_scan - dark_scan
         else:
             air_scan[:] = air_scan[:] - dark_scan
     else:
-        g[:] = g[:] - dark_scan[None,:,:]
+        _affine_inplace(leapct, g, 1.0, -dark_scan)
         air_scan[:] = air_scan[:] - dark_scan[:]
 
     if isinstance(air_scan, int) or isinstance(air_scan, float):
@@ -167,7 +203,7 @@ def gain_correction(leapct, g, air_scan, dark_scan, calibration_scans=None, ROI=
         postageStamp = postageStamp / postageStamp_air
         print('ROI mean: ' + str(np.mean(postageStamp)) + ', standard deviation: ' + str(np.std(postageStamp)))
         #g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
-        g[:] = g[:] / postageStamp[:,None,None]
+        _affine_inplace(leapct, g, 1.0 / postageStamp, 0.0)
         
     badPixelCorrection(leapct, g, None, None, badPixelMap, 5, isAttenuationData=False)
         
@@ -243,28 +279,17 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
         else:
             leapct.expNeg(g)
     
-    # Perform Flat Fielding
-    
+    # Perform Flat Fielding: g = (g - dark_scan) / (air_scan - dark_scan)
+    # This is the affine operation g = scale*g + shift, performed in-place with
+    # leapct.fmad (multi-threaded C++).
     if dark_scan is not None:
         if air_scan is not None:
-            if isinstance(dark_scan, int) or isinstance(dark_scan, float):
-                air_scan = air_scan - dark_scan
-                if isinstance(air_scan, int) or isinstance(air_scan, float):
-                    g[:] = (g[:] - dark_scan) / air_scan
-                else:
-                    g[:] = (g[:] - dark_scan) / air_scan[None,:,:]
-            else:
-                g[:] = (g[:] - dark_scan[None,:,:]) / (air_scan - dark_scan)[None,:,:]
+            denom = air_scan - dark_scan
+            _affine_inplace(leapct, g, 1.0 / denom, -dark_scan / denom)
         else:
-            if isinstance(dark_scan, int) or isinstance(dark_scan, float):
-                g[:] = g[:] - dark_scan
-            else:
-                g[:] = g[:] - dark_scan[None,:,:]
-    else:
-        if isinstance(air_scan, int) or isinstance(air_scan, float):
-            g[:] = g[:] / air_scan
-        elif air_scan is not None:
-            g[:] = g[:] / air_scan[None,:,:]
+            _affine_inplace(leapct, g, 1.0, -dark_scan)
+    elif air_scan is not None:
+        _affine_inplace(leapct, g, 1.0 / air_scan, 0.0)
     
     # Perform Flux Correction
     if ROI is not None:
@@ -274,12 +299,12 @@ def makeAttenuationRadiographs(leapct, g, air_scan=None, dark_scan=None, ROI=Non
             postageStamp = np.mean(g[:,ROI[0]:ROI[1]+1, ROI[2]:ROI[3]+1], axis=(1,2))
         print('ROI mean: ' + str(np.mean(postageStamp)) + ', standard deviation: ' + str(np.std(postageStamp)))
         #g[:,:,:] = g[:,:,:] / postageStamp[:,None,None]
-        g[:] = g[:] / postageStamp[:,None,None]
+        _affine_inplace(leapct, g, 1.0 / postageStamp, 0.0)
         
-    # Convert to attenuation
-    if np.isnan(g).any():
+    # Convert to attenuation.  negLog floors the transmission at clip_low
+    # (default 2^-16) before taking the log, so no separate clamp is needed.
+    if leapct.has_nan_or_inf(g):
         print('some nans exist')
-    g[g<=0.0] = 2.0**-16
     leapct.negLog(g)
     
     return True
@@ -436,7 +461,7 @@ def LowSignalCorrection(leapct, g, threshold=0.03, windowSize=3, signalThreshold
         leapct.negLog(g)
     return True    
 
-def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True):
+def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationData=True, FWHM=1.0):
     """Removes detector blur by fourier deconvolution
     
     Args:
@@ -460,7 +485,7 @@ def detectorDeblur_FourierDeconv(leapct, g, H, WienerParam=0.0, isAttenuationDat
     else:
         H = 1.0 / H
     H = H / H[0,0]
-    leapct.transmission_filter(g, H, isAttenuationData)
+    leapct.transmission_filter(g, H, isAttenuationData, FWHM)
     return True
     
 def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=True):
@@ -498,7 +523,7 @@ def detectorDeblur_RichardsonLucy(leapct, g, H, numIter=10, isAttenuationData=Tr
         Ht = leapct.transmission_filter(Ht, H, False)
         Ht[:] = t_0[:] / Ht[:]
         Ht = leapct.transmission_filter(Ht, H, False)
-        t[:] = t[:] * Ht[:]
+        t[:] *= Ht[:]
     if isAttenuationData:
         leapct.negLog(t)
     return True
@@ -528,9 +553,10 @@ def ringRemoval_fast(leapct, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.
         leapct (tomographicModels object): This is just needed to access LEAP algorithms
         g (contiguous float32 numpy array or torch tensor): attenuation projection data
         delta (float): The delta parameter of the Total Variation Functional
+        beta (float): The strength of the regularization
         numIter (int): Number of iterations
         maxChange (float): An upper limit on the maximum difference that can be applied to a detector pixels
-        beta (float): The strength of the regularization
+        average_in_transmission_space (bool): if true, averaging is done in transmission space, otherwise it is done in attenuation space
     
     Returns:
         True if successful, False otherwise
@@ -650,8 +676,6 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
     """
     if leapct is None:
         leapct = leapct_sweep
-    numNeighbors = leapct.get_numTVneighbors()
-    leapct.set_numTVneighbors(6)
     """
     g_0 = leapct.copyData(g)
     for n in range(numIter):
@@ -671,15 +695,22 @@ def ringRemoval(leapct, g, delta=0.01, beta=1.0e1, numIter=30, maxChange=0.05):
         
         g[:] = g[:] - stepSize*Dg[:]
     """
+
+    """
+    numNeighbors = leapct.get_numTVneighbors()
+    leapct.set_numTVneighbors(6)
     leapct.TV_denoise(g, delta, beta, numIter, p=1.0, meanOverFirstDim=True)
+    leapct.set_numTVneighbors(numNeighbors)
+    #"""
+
+    leapct.ring_removal(g, delta, beta, numIter, maxChange)
     
-    '''
+    """
     gainMap = g - g_0
     gainMap[gainMap>maxChange] = maxChange
     gainMap[gainMap<-maxChange] = -maxChange
     g = g_0 + gainMap
-    #'''
-    leapct.set_numTVneighbors(numNeighbors)
+    #"""
     
     return True
 
@@ -714,7 +745,20 @@ def transmission_shift(leapct, g, shift, isAttenuationData=True):
     if isAttenuationData:
         leapct.negLog(g)
     return True
-    
+
+def quadratic_extrema_list(values, metrics, do_min=True):
+    if do_min:
+        ind_best = np.argmin(metrics)
+    else:
+        ind_best = np.argmax(metrics)
+    optimal_value = values[ind_best]
+    metric_value = metrics[ind_best]
+
+    if 0 < ind_best and ind_best < metrics.size-1:
+        return quadratic_extrema(values[ind_best-1], values[ind_best], values[ind_best+1], metrics[ind_best-1], metrics[ind_best], metrics[ind_best+1])
+    else:
+        return optimal_value, metric_value
+
 def quadratic_extrema(x_0, x_1, x_2, y_0, y_1, y_2):
     optimal_value = x_1
     metric_value = y_1
@@ -770,7 +814,14 @@ def geometric_calibration(leapct, g, shifts, tilts, param='centerCol', method=No
         print('tiltAngle = ' + str(tilts[m]))
         leapct.set_tiltAngle(tilts[m])
         if method == 'inconsistency':
-            dont_care, opt = parameter_sweep(leapct, g, shifts, param, iz, algorithmName='inconsistency', set_optimal=True)
+            if isinstance(iz,list):
+                f_stack, opt = parameter_sweep(leapct, g, shifts, param, iz[0], algorithmName='inconsistency', set_optimal=True)
+                metrics_2 = np.mean(f_stack**2, axis=(1,2))
+                f_stack, opt = parameter_sweep(leapct, g, shifts, param, iz[1], algorithmName='inconsistency', set_optimal=True)
+                metrics_2 += np.mean(f_stack**2, axis=(1,2))
+                dont_care, opt = quadratic_extrema_list(shifts, metrics_2)
+            else:
+                dont_care, opt = parameter_sweep(leapct, g, shifts, param, iz, algorithmName='inconsistency', set_optimal=True)
         else:
             opt = find_centerCol_or_tau_bowtie(leapct, g, shifts, iRow=iz)
         metrics[m] = opt
@@ -793,7 +844,14 @@ def geometric_calibration(leapct, g, shifts, tilts, param='centerCol', method=No
         best_tilt = optimal_value
         leapct.set_tiltAngle(best_tilt)
         if method == 'inconsistency':
-            dont_care, opt = parameter_sweep(leapct, g, shifts, param, iz, algorithmName='inconsistency', set_optimal=True)
+            if isinstance(iz,list):
+                f_stack, opt = parameter_sweep(leapct, g, shifts, param, iz[0], algorithmName='inconsistency', set_optimal=True)
+                metrics = np.mean(f_stack**2, axis=(1,2))
+                f_stack, opt = parameter_sweep(leapct, g, shifts, param, iz[1], algorithmName='inconsistency', set_optimal=True)
+                metrics += np.mean(f_stack**2, axis=(1,2))
+                dont_care, opt = quadratic_extrema_list(shifts, metrics)
+            else:
+                dont_care, opt = parameter_sweep(leapct, g, shifts, param, iz, algorithmName='inconsistency', set_optimal=True)
         else:
             opt = find_centerCol_or_tau_bowtie(leapct, g, shifts, param, iRow=iz)
         return opt
@@ -868,6 +926,101 @@ def bowtie_alignment_metric(leapct, g, iRow=-1, doPlot=False):
         plt.show()
 
     return np.sum(mask*bowtie)/np.sum(mask)
+
+def inconsistency_sweep(leapct, g, values, param='centerCol', iz=None):
+    r"""Performs single-slice reconstructions of several values of a given parameter
+    
+    The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+    
+    The parameters to sweep are all standard LEAP CT geometry parameter names, except 'tilt' which is only available for cone- and modular-beam data.
+    (note that the data g is not rotated, just the model of the detector orientation which is better because no interpolation is necessary).
+    
+    Args:
+        leapct (tomographicModels object): This is just needed to access LEAP algorithms
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        values (list of floats): the values to reconstruct with
+        param (string): the name of the parameter to sweep; can be 'centerCol', 'centerRow', 'tau', 'sod', 'sdd', 'tilt', 'vertical_shift', 'horizontal_shift'
+        iz (integer): the z-slice index to perform the reconstruction; if not given, uses the central slice
+        
+    Returns:
+        returns the value of the metric at the optimal value
+    """
+    
+    if param == 'tiltAngle':
+        param = 'tilt'
+    values = np.array(values)
+    values = np.unique(values)
+    
+    if leapct.ct_geometry_defined() == False or leapct.ct_volume_defined() == False:
+        print('Error: CT geometry and CT volume parameters must be set before running this function!')
+        return None
+    valid_params = ['centerCol', 'tau', 'tilt']
+    if param == None:
+        param = 'centerCol'
+    if any(name in param for name in valid_params) == False:
+        print('Error: Invalid parameter, must be one of: ' + str(valid_params))
+        return None
+    #if iz is None:
+    #    iz = np.argmin(np.abs(leapct.z_samples()))
+    if iz is not None:
+        if iz < 0 or iz >= leapct.get_numZ():
+            print('Error: Slice index is out of bounds for current volume specification.')
+            return None
+    if param == 'tilt' and leapct.get_geometry() == 'FAN':
+        print('Error: Detector tilt can cannot be applied to fan-beam data.')
+        return None
+    if param == 'tau' and leapct.get_geometry() == 'PARALLEL':
+        print('Error: tau does not apply to parallel-beam data.')
+        return None
+    if leapct.get_geometry() == 'MODULAR':
+        if param == 'tau' or param == 'centerCol' or param == 'centerRow':
+            print('Error: centerCol, centerRow, and tau do not apply to modular-beam data.')
+            return None
+            
+    leapct_sweep.copy_parameters(leapct)
+    
+    if iz is not None:
+        z = leapct_sweep.z_samples()
+        leapct_sweep.set_numZ(1)
+        offsetZ = z[iz]
+        leapct_sweep.set_offsetZ(offsetZ)
+    
+    shifts = None
+    tilts = None
+    if param == 'centerCol':
+        shifts = values.copy()
+        shifts -= leapct_sweep.get_centerCol()
+    elif param == 'tau':
+        shifts = values.copy()
+        shifts -= leapct_sweep.get_tau()
+    else:
+        tilts = values.copy()
+        tilts -= leapct_sweep.get_tiltAngle()
+    metrics = leapct_sweep.inconsistency_sweep(g, shifts, tilts, param)
+    if metrics is None:
+        return None
+    else:
+        metrics = np.squeeze(metrics)
+        if shifts is not None:
+            print("shifts:", np.array2string(shifts+leapct_sweep.get_centerCol(), separator=', ', max_line_width=10000))
+        if tilts is not None:
+            print("tilts:", np.array2string(tilts+leapct_sweep.get_tiltAngle(), separator=', ', max_line_width=10000))
+        print("metrics:", np.array2string(metrics, separator=', ', max_line_width=10000))
+        ind_best = np.argmin(metrics)
+        optimal_value = values[ind_best]
+        metric_value = metrics[ind_best]
+
+        if 0 < ind_best and ind_best < metrics.size-1:
+            optimal_value, metric_value = quadratic_extrema(values[ind_best-1], values[ind_best], values[ind_best+1], metrics[ind_best-1], metrics[ind_best], metrics[ind_best+1])
+        
+        if param == 'centerCol':
+            leapct.set_centerCol(optimal_value)
+        elif param == 'tau':
+            leapct.set_tau(optimal_value)
+        elif param == 'tilt':
+            leapct.set_tiltAngle(optimal_value)
+        return metric_value
+    
 
 def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName='FBP', set_optimal=False, isFiltered=False):
     r"""Performs single-slice reconstructions of several values of a given parameter
@@ -969,19 +1122,24 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
     offsetZ = z[iz]
     leapct_sweep.set_offsetZ(offsetZ)
     
-    if (param == 'tau' or param == 'centerCol') and (leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'MODULAR' or leapct.get_geometry() == 'CONE_PARALLEL'):
+    if (param == 'tau' or param == 'centerCol') and (leapct.get_geometry() == 'CONE' or leapct.get_geometry() == 'MODULAR' or leapct.get_geometry() == 'CONE_PARALLEL') and leapct.get_helicalPitch() == 0.0:
         rowRange = leapct_sweep.rowRangeNeededForBackprojection(0)
         if 0 < rowRange[0] or rowRange[1] < leapct_sweep.get_numRows()-1:
             g_sweep = leapct_sweep.cropProjections(rowRange, None, g_sweep)
         else:
             g_sweep = g_sweep.copy()
 
-        """ This improves speed, but not sure it is a good idea
-        if algorithmName == 'inconsistency':
-            leapct_sweep.filterProjections(g_sweep, g_sweep, True)
-        else:
-            leapct_sweep.filterProjections(g_sweep, g_sweep, False)
-        isFiltered = True
+        #""" This improves speed, but not sure it is a good idea
+        if leapct.get_offsetScan() == False:
+            if param == 'centerCol':
+                leapct_sweep.set_centerCol(values[values.size//2])
+            else:
+                leapct_sweep.set_tau(values[values.size//2])
+            if algorithmName == 'inconsistency':
+                leapct_sweep.filterProjections(g_sweep, g_sweep, True)
+            else:
+                leapct_sweep.filterProjections(g_sweep, g_sweep, False)
+            isFiltered = True
         #"""
     
     if has_torch == True and type(g) is torch.Tensor:
@@ -1032,7 +1190,7 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
                 leapct_sweep.weightedBackproject(g_sweep, f)
             else:
                 leapct_sweep.inconsistencyReconstruction(g_sweep, f)
-            metrics[n] = leapct_sweep.sum(f**2)
+            metrics[n] = leapct_sweep.sum(f**2)/float(f.size)
             print('   inconsistency metric: ' + str(metrics[n]))
         else:
             if isFiltered:
@@ -1078,7 +1236,349 @@ def parameter_sweep(leapct, g, values, param='centerCol', iz=None, algorithmName
         return f_stack, metric_value
     else:
         return f_stack
+
+
+def inconsistency_sweep_safe(leapct, g, values, param='centerCol', iz=None):
+    """
+    This function is exactly the same as inconsistency_sweep except sometimes
+    inconsistency_sweep can fail because it runs out of GPU memory.
+    This function simply calls inconsistency_sweep and if it fails, reverts
+    to using parameter_sweep
+    """
+    opt = inconsistency_sweep(leapct, g, values, param, iz)
+    if opt is None:
+        _, opt = parameter_sweep(leapct, g, values, param, algorithmName="inconsistency", set_optimal=True, iz=iz)
+    return opt
+
+
+def prep_for_iterative_reconstruction(leapct, g, crop_if_helpful=False, ignore_middle=False):
+    """This function modifies projection data so that it is ready for iterative reconstruction.
+
+    It does this by reconstructing extra slices at the top and bottom of the volume,
+    forward projecting these and then subtracting this off the measured data.
+    The correction is done in-place
+
+    Args:
+        leapct (tomographicModels object): leapct tomographicModels class object
+        describing the CT geometry and CT volume parameters
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        crop_if_helpful (bool): if True, will crop the projection data to only the rows needed
+        ignore_middle (bool): if True, the Ziegler middle step is forced to be skipped
+        to reconstruct the volume
+    """
+
+    if leapct.get_geometry() != 'CONE':
+        return g
+    if leapct.get_helicalPitch() != 0.0:
+        return g
+
+
+    # Get ROI parameters
+    dFOV = leapct.get_diameterFOV(True)
+    x = leapct.x_samples()
+    y = leapct.y_samples()
+    AABB = leapct.volume_bounding_box()
+
+    # Make a copy of the current parameters to use for this method,
+    # so that we don't disturb the original parameters
+    leapct_caps = leapct_sweep
+    leapct_caps.copy_parameters(leapct)
+
+    # Make leapct_caps volume volume fill the whole field of view
+    # remove any volume rotation, but keep the same voxel size
+    leapct_caps.set_default_volume()
+    leapct_caps.set_default_volume(leapct.get_voxelWidth() / leapct_caps.get_voxelWidth())
+
+    # set z-samples for a bounding box that contains all of AABB
+    z_min = AABB[0]
+    z_max = AABB[1]
+    numZ = max(1,int(np.ceil(np.abs(z_max - z_min)/leapct.get_voxelHeight())))
+    offsetZ = 0.5*(z_max + z_min)
+    leapct_caps.set_numZ(numZ)
+    leapct_caps.set_offsetZ(offsetZ)
+    z = leapct.z_samples()
+
+    Pf = None
+
+    dROI = 2.0*min(np.abs(AABB[2]), np.abs(AABB[3]), np.abs(AABB[4]), np.abs(AABB[5]))
+    if not ignore_middle:
+        if dROI < dFOV - leapct.get_voxelWidth():
+            print('Ziegler middle...')
+
+            # reconstruct the whole section
+            f = leapct_caps.allocate_3D_array(leapct_caps.get_numZ(), leapct_caps.get_numY(), leapct_caps.get_numX())
+            leapct_caps.FBP(g, f)
+
+            # zero-out the ROI
+            leapct_caps.clearPhantom()
+            center = np.array([np.mean(x), np.mean(y), np.mean(z)], dtype=np.float32)
+            radii  = [x[-1]-center[0]+0.5*leapct_caps.get_voxelWidth(), y[-1]-center[1]+0.5*leapct_caps.get_voxelWidth(), z[-1]-center[2]+0.5*leapct_caps.get_voxelHeight()]
+            leapct_caps.addObject(f, 'box', center, radii, 0.0, oversampling=3)
+
+            # project the compliment of the ROI
+            # we don't want to subtract this now because it'll cause problems in the next steps
+            Pf = leapct_caps.allocate_3D_array(leapct_caps.get_numAngles(), leapct_caps.get_numRows(), leapct_caps.get_numCols())
+            leapct_caps.project(Pf, f)
+
+            # Free Memory
+            leapct_caps.free_3D_array(f)
+
+    # Now we need to determine what, if any, gets subtracted from the top/bottom
+    # First we set the z-slices to include everything within AABB[0] to AABB[1]
+    zSliceRange = leapct_caps.sliceRangeNeededForProjection(False, True)
+
+    if zSliceRange[0] < 0:
+        print('Ziegler bottom...')
+
+        # Set the z-samples
+        z_bottom = np.array(range(zSliceRange[0],0))*leapct_caps.get_voxelHeight() + leapct_caps.get_z0()
+        leapct_caps.set_numZ(int(z_bottom.size))
+        leapct_caps.set_offsetZ(np.mean(z_bottom))
+
+        # save row parameters
+        numRows = leapct_caps.get_numRows()
+        centerRow = leapct_caps.get_centerRow()
+
+        # Apply Ziegler method
+        rowRange = leapct_caps.rowRangeNeededForBackprojection()
+        leapct_caps.set_numRowsExtrapolate(1000)
+        f_bottom = leapct_caps.allocate_3D_array(leapct_caps.get_numZ(), leapct_caps.get_numY(), leapct_caps.get_numX())
+        leapct_caps.FBP(g, f_bottom)
+        leapct_caps.crop_rows(rowRange)
+        Pf_bottom = leapct_caps.allocate_3D_array(leapct_caps.get_numAngles(), leapct_caps.get_numRows(), leapct_caps.get_numCols())
+        leapct_caps.project(Pf_bottom, f_bottom)
+        g[:,rowRange[0]:rowRange[1]+1,:] = g[:,rowRange[0]:rowRange[1]+1,:] - Pf_bottom[:]
+        
+        # Free Memory
+        leapct_caps.free_3D_array(f_bottom)
+        leapct_caps.free_3D_array(Pf_bottom)
+
+        # Restore original z-samples
+        leapct_caps.set_numZ(numZ)
+        leapct_caps.set_offsetZ(offsetZ)
+
+        # Restore row parameters
+        leapct_caps.set_numRows(numRows)
+        leapct_caps.set_centerRow(centerRow)
+
+    if zSliceRange[1] >= leapct_caps.get_numZ():
+        print('Ziegler top...')
+
+        # Record the locations of these z-slices at the top of the current volume specification
+        z_top = np.array(range(leapct_caps.get_numZ(),zSliceRange[1]+1))*leapct_caps.get_voxelHeight() + leapct_caps.get_z0()
+        leapct_caps.set_numZ(int(z_top.size))
+        leapct_caps.set_offsetZ(np.mean(z_top))
+
+        # Apply Ziegler method
+        rowRange = leapct_caps.rowRangeNeededForBackprojection()
+        leapct_caps.set_numRowsExtrapolate(1000)
+        f_top = leapct_caps.allocate_3D_array(leapct_caps.get_numZ(), leapct_caps.get_numY(), leapct_caps.get_numX())
+        leapct_caps.FBP(g, f_top)
+        leapct_caps.crop_rows(rowRange)
+        Pf_top = leapct_caps.allocate_3D_array(leapct_caps.get_numAngles(), leapct_caps.get_numRows(), leapct_caps.get_numCols())
+        leapct_caps.project(Pf_top, f_top)
+        g[:,rowRange[0]:rowRange[1]+1,:] = g[:,rowRange[0]:rowRange[1]+1,:] - Pf_top[:]
+
+        # Free Memory
+        leapct_caps.free_3D_array(f_top)
+        leapct_caps.free_3D_array(Pf_top)
+
+        # Restore original z-samples
+        leapct_caps.set_numZ(numZ)
+        leapct_caps.set_offsetZ(offsetZ)
+
+    # subtract off Pf if it exists (Ziegler middle)
+    if Pf is not None:
+        leapct_caps.scalar_add(g, -1.0, Pf, do_clip=False, out=g)
+        leapct_caps.free_3D_array(Pf)
+
+    # Final step is to zero out or crop anything that has nothing to do with the ROI
+    rowRange_needed = leapct.rowRangeNeededForBackprojection()
+    if crop_if_helpful:
+        # Crop out the unnecessary detector rows
+        if rowRange_needed[0] > 0 or rowRange_needed[1] < leapct.get_numRows()-1:
+            g_crop = leapct.crop_rows(rowRange_needed, g)
+            return g_crop
+        else:
+            return g
+    else:
+        # The user does not want the data cropped
+        # so just zero out this unnecessary data
+        if rowRange_needed[0] > 0:
+            g[:,0:rowRange_needed[0],:] = 0.0
+        if rowRange_needed[1] < leapct.get_numRows()-1:
+            g[:,rowRange_needed[1]+1:leapct.get_numRows(),:] = 0.0
+        return g
+
+def is_roi_reconstruction(leapct, part_diameter=0.0):
+    """
+    This function returns True if the current volume specification is a
+    region of interest and False if it is the full field of view
+    """
+    dFOV = leapct.get_diameterFOV(True)
+    if part_diameter <= 0.0:
+        part_diameter = dFOV
+    else:
+        part_diameter = min(leapct.get_sod()-2.0*leapct.default_voxelWidth(), min(leapct.get_odd()-2.0*leapct.get_pixelWidth(), min(2.0*dFOV, part_diameter)))
+    AABB = leapct.volume_bounding_box()
+    dROI = 2.0 * min(np.abs(AABB[2]), np.abs(AABB[3]), np.abs(AABB[4]), np.abs(AABB[5]))
+    if dROI < part_diameter - leapct.get_voxelWidth():
+        return True
+    else:
+        return False
+
+def iterative_reconstruction_roi_weights(leapct, g, ignore_middle=False, part_diameter=0.0):
+    """Returns the forward projection of the volume outside the current ROI.
+
+    This function performs the same reconstructions and forward projections as
+    :func:`prep_for_iterative_reconstruction`, but instead of subtracting them
+    from the measured data it adds the middle, bottom, and top correction
+    projections together and returns the result.  The input projection data ``g``
+    is not modified.
+
+    Args:
+        leapct (tomographicModels object): leapct tomographicModels class object
+        describing the CT geometry and CT volume parameters
+        g (contiguous float32 numpy array or torch tensor): attenuation projection data
+        ignore_middle (bool): if True, the Ziegler middle step is forced to be skipped
+        part_diameter (float): if given informs the algorithm of the true part size
+
+    Returns:
+        Combined forward projection of the Ziegler extrapolations (same shape as
+        ``g``), or ``None`` if the geometry is not stationary cone-beam.
+    """
+
+    if leapct.get_geometry() != 'CONE':
+        return None
+    if leapct.get_helicalPitch() != 0.0:
+        return None
+
+    # Get ROI parameters
+    dFOV = leapct.get_diameterFOV(True)
+    if part_diameter <= 0.0:
+        part_diameter = dFOV
+    else:
+        part_diameter = min(leapct.get_sod()-2.0*leapct.default_voxelWidth(), min(leapct.get_odd()-2.0*leapct.get_pixelWidth(), min(2.0*dFOV, part_diameter)))
+    x = leapct.x_samples()
+    y = leapct.y_samples()
+    AABB = leapct.volume_bounding_box()
+
+    # Make a copy of the current parameters to use for this method,
+    # so that we don't disturb the original parameters
+    leapct_caps = leapct_sweep
+    leapct_caps.copy_parameters(leapct)
+
+    # Make leapct_caps volume fill the whole field of view
+    # remove any volume rotation, but keep the same voxel size
+    leapct_caps.set_default_volume()
+    leapct_caps.set_default_volume(leapct.get_voxelWidth() / leapct_caps.get_voxelWidth())
+    if part_diameter > dFOV:
+        # we need to expand our volume to fit the entire object
+        # but let's do so by just making the voxels bigger
+        leapct_caps.set_voxelWidth(part_diameter/dFOV * leapct_caps.get_voxelWidth())
+        leapct_caps.set_diameterFOV(part_diameter*np.sqrt(2.0))
+
+    # set z-samples for a bounding box that contains all of AABB
+    z_min = AABB[0]
+    z_max = AABB[1]
+    numZ = max(1, int(np.ceil(np.abs(z_max - z_min) / leapct.get_voxelHeight())))
+    offsetZ = 0.5 * (z_max + z_min)
+    leapct_caps.set_numZ(numZ)
+    leapct_caps.set_offsetZ(offsetZ)
+    z = leapct.z_samples()
+
+    #leapct_caps.set_clipWeightedBackprojection(True)
+
+    P_combined = leapct_caps.allocate_projections()
+
+    dROI = 2.0 * min(np.abs(AABB[2]), np.abs(AABB[3]), np.abs(AABB[4]), np.abs(AABB[5]))
+    if not ignore_middle:
+        if dROI < part_diameter - leapct.get_voxelWidth():
+            print('Ziegler middle...')
+
+            # reconstruct the whole section
+            f = leapct_caps.allocate_3D_array(leapct_caps.get_numZ(), leapct_caps.get_numY(), leapct_caps.get_numX())
+            leapct_caps.FBP(g, f)
+
+            # zero-out the ROI
+            leapct_caps.clearPhantom()
+            center = np.array([np.mean(x), np.mean(y), np.mean(z)], dtype=np.float32)
+            radii = [
+                x[-1] - center[0] + 0.5 * leapct_caps.get_voxelWidth(),
+                y[-1] - center[1] + 0.5 * leapct_caps.get_voxelWidth(),
+                z[-1] - center[2] + 0.5 * leapct_caps.get_voxelHeight(),
+            ]
+            leapct_caps.addObject(f, 'box', center, radii, 0.0, oversampling=3)
+            
+            # project the compliment of the ROI
+            Pf = leapct_caps.allocate_3D_array(
+                leapct_caps.get_numAngles(), leapct_caps.get_numRows(), leapct_caps.get_numCols()
+            )
+            leapct_caps.project(Pf, f)
+            leapct_caps.scalar_add(P_combined, 1.0, Pf, do_clip=False, out=P_combined)
+            leapct_caps.free_3D_array(Pf)
+
+            # Free Memory
+            leapct_caps.free_3D_array(f)
+
+    zSliceRange = leapct_caps.sliceRangeNeededForProjection(False, True)
+
+    if zSliceRange[0] < 0:
+        print('Ziegler bottom...')
+
+        z_bottom = np.array(range(zSliceRange[0], 0)) * leapct_caps.get_voxelHeight() + leapct_caps.get_z0()
+        leapct_caps.set_numZ(int(z_bottom.size))
+        leapct_caps.set_offsetZ(np.mean(z_bottom))
+
+        numRows = leapct_caps.get_numRows()
+        centerRow = leapct_caps.get_centerRow()
+
+        rowRange = leapct_caps.rowRangeNeededForBackprojection()
+        leapct_caps.set_numRowsExtrapolate(1000)
+        f_bottom = leapct_caps.allocate_3D_array(leapct_caps.get_numZ(), leapct_caps.get_numY(), leapct_caps.get_numX())
+        leapct_caps.FBP(g, f_bottom)
+        leapct_caps.crop_rows(rowRange)
+        Pf_bottom = leapct_caps.allocate_3D_array(
+            leapct_caps.get_numAngles(), leapct_caps.get_numRows(), leapct_caps.get_numCols()
+        )
+        leapct_caps.project(Pf_bottom, f_bottom)
+        P_combined[:, rowRange[0] : rowRange[1] + 1, :] += Pf_bottom[:]
+
+        leapct_caps.free_3D_array(f_bottom)
+        leapct_caps.free_3D_array(Pf_bottom)
+
+        leapct_caps.set_numZ(numZ)
+        leapct_caps.set_offsetZ(offsetZ)
+        leapct_caps.set_numRows(numRows)
+        leapct_caps.set_centerRow(centerRow)
+
+    if zSliceRange[1] >= leapct_caps.get_numZ():
+        print('Ziegler top...')
+
+        z_top = np.array(range(leapct_caps.get_numZ(), zSliceRange[1] + 1)) * leapct_caps.get_voxelHeight() + leapct_caps.get_z0()
+        leapct_caps.set_numZ(int(z_top.size))
+        leapct_caps.set_offsetZ(np.mean(z_top))
+
+        rowRange = leapct_caps.rowRangeNeededForBackprojection()
+        leapct_caps.set_numRowsExtrapolate(1000)
+        f_top = leapct_caps.allocate_3D_array(leapct_caps.get_numZ(), leapct_caps.get_numY(), leapct_caps.get_numX())
+        leapct_caps.FBP(g, f_top)
+        leapct_caps.crop_rows(rowRange)
+        Pf_top = leapct_caps.allocate_3D_array(
+            leapct_caps.get_numAngles(), leapct_caps.get_numRows(), leapct_caps.get_numCols()
+        )
+        leapct_caps.project(Pf_top, f_top)
+        P_combined[:, rowRange[0] : rowRange[1] + 1, :] += Pf_top[:]
+
+        leapct_caps.free_3D_array(f_top)
+        leapct_caps.free_3D_array(Pf_top)
+
+        leapct_caps.set_numZ(numZ)
+        leapct_caps.set_offsetZ(offsetZ)
+
+    return P_combined
     
+
 def entropy(x):
     marg = np.histogramdd(np.ravel(x), bins = int(np.sqrt(x.size)))[0]/x.size
     marg = list(filter(lambda p: p > 0, np.ravel(marg)))
@@ -1235,7 +1735,8 @@ class ball_phantom_calibration:
             self.leapct.find_centerCol(g_copy)
             del g_copy
             del g_sum
-        x = [self.leapct.get_centerRow(), self.leapct.get_centerCol(), self.leapct.get_sod(), self.leapct.get_sdd()-self.leapct.get_sod(), 0.0, 0.0, 0.0, r, z_0, 0.0]
+        #x = [self.leapct.get_centerRow(), self.leapct.get_centerCol(), self.leapct.get_sod(), self.leapct.get_sdd()-self.leapct.get_sod(), 0.0, 0.0, 0.0, r, z_0, 0.0]
+        x = [self.leapct.get_centerRow(), self.leapct.get_centerCol(), self.leapct.get_sod(), self.leapct.get_sdd()-self.leapct.get_sod(), 0.0, 0.0, 0.0, r, z_0, -6.0]
         return x
     
     def estimate_locations(self, x):
@@ -1305,7 +1806,12 @@ class ball_phantom_calibration:
         if self.N_z <= 0:
             return 0.0
         estimated = self.estimate_locations(x)
-        return (estimated - self.ball_projection_locations).flatten()
+        
+        #sod = x[2]
+        #odd = x[3]
+        #misFitTerm = min(sod,0.0) + min(odd,0.0)
+        
+        return (estimated - self.ball_projection_locations).flatten() #+ misFitTerm
         
     def cost(self, x):
         if self.N_z <= 0:
@@ -1322,8 +1828,8 @@ class ball_phantom_calibration:
         if set_parameters:
             self.leapct.set_centerRow(res.x[0])
             self.leapct.set_centerCol(res.x[1])
-            self.leapct.set_sod(np.abs(res.x[2]))
-            self.leapct.set_sdd(np.abs(res.x[2]+res.x[3]))
+            self.leapct.set_sod(res.x[2])
+            self.leapct.set_sdd(res.x[2]+res.x[3])
             """
             if np.abs(res.x[4]) < 0.1:
                 res.x[4] = 0.0
@@ -1334,10 +1840,9 @@ class ball_phantom_calibration:
             #"""
             if res.x[4] != 0.0 or res.x[5] != 0.0 or res.x[6] != 0.0:
                 A = R.from_euler('xyz', [res.x[4], res.x[5], res.x[6]], degrees=True).as_matrix()
-                #self.leapct.convert_to_modularbeam()
+                self.leapct.convert_to_modularbeam()
                 #self.leapct.rotate_detector(-res.x[5])
-                #self.leapct.rotate_detector(A.T)
-                self.leapct.set_tiltAngle(np.clip(res.x[4], -5.0, 5.0))
+                self.leapct.rotate_detector(A.T)
         return res
 
     def connected_components(self, g, threshold=None, FWHM=0.0, connectivity=2):
@@ -1356,18 +1861,26 @@ class ball_phantom_calibration:
             
             # Filter out small objects
             count = 0
-            min_size = 10  # Minimum desired object size (in pixels)
+            min_size = 10**2  # Minimum desired object size (in pixels)
+            max_size = 250**2
             filtered_image = np.zeros_like(labeled_image)
             for region in ski.measure.regionprops(labeled_image):
-                if region.area >= min_size:
+                if region.area >= min_size and region.area <= max_size:
                     count += 1
                     filtered_image[labeled_image == region.label] = count
             labeled_image = filtered_image
             
+            #if i == 0:
+            #    plt.imshow(labeled_image)
+            #    plt.show()
+            
             if i > 0:
                 if count != count_last:
+                    plt.imshow(labeled_image)
+                    plt.show()
                     print('Error: inconsistent number of balls found across projections!')
-                    print('Try running connected_components segmentation with different parameters or inspect your data.')
+                    print('Try running connected_components segmentation with different parameters, crop the projections, or inspect your data.')
+                    print('ran into issue at view: ' + str(i))
                     print(count)
                     print(count_last)
                     return None

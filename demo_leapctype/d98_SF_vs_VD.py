@@ -41,7 +41,7 @@ objectRadius = 110.0
 leapct.addObject(None, 4, 0.0, objectRadius, val=0.02)
 #leapct.set_FORBILD()
 g = leapct.allocate_projections()
-leapct.rayTrace(g,3)
+leapct.rayTrace(g,oversampling=3)
 
 # Add noise to data
 I_0 = 50000.0

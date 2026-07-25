@@ -40,9 +40,9 @@ leapct.print_parameters()
 #leapct.sketch_system()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
-mu = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f = leapct.allocate_volume()
+mu = leapct.allocate_volume()
 
 # Specify the attenuation map parameters
 # In this demo, one can specify a voxelized attenuation or a cylindrical attenuation volume

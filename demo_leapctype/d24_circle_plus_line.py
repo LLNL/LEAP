@@ -79,9 +79,9 @@ ct_line.set_volume(ct_circular.get_numX(), ct_circular.get_numY(), ct_circular.g
 
 
 # Allocate space for the projections and the volume
-g_circular = ct_circular.allocateProjections()
-g_line = ct_line.allocateProjections()
-f_true = ct_circular.allocateVolume()
+g_circular = ct_circular.allocate_projections()
+g_line = ct_line.allocate_projections()
+f_true = ct_circular.allocate_volume()
 
 
 # Specify simplified FORBILD head phantom
@@ -96,7 +96,7 @@ ct_circular.project(g_circular,f_true)
 ct_line.project(g_line,f_true)
 
 
-f = ct_circular.allocateVolume()
+f = ct_circular.allocate_volume()
 
 # Reconstruct the axial cone-beam data with FBP (FDK)
 ct_circular.FBP(g_circular, f)

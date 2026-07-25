@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: MIT
 #
 # LivermorE AI Projector for Computed Tomography (LEAP)
-# setup.py for pytorch module
+# setup_ctype.py for pytorch-free leapct module
 ################################################################################
 import os
 import pathlib
@@ -19,28 +19,42 @@ if _platform == "linux" or _platform == "linux2":
     if retVal != 0:
         print('Failed to compile!')
         quit()
-    
+
+    lib_fname_cpu = 'cpu_build/lib_cpu/libleapct_cpu.so'
+    retVal = os.system(r'sh ./etc/cpu_build.sh')
+    if retVal != 0:
+        print('Failed to compile!')
+        quit()
+        
+    copy_text = 'cp ' + str(lib_fname_cpu) + ' ' + str(os.path.join('build/lib', 'libleapct_cpu.so'))
+    os.system(copy_text)
+    lib_fname_cpu = 'build/lib/libleapct_cpu.so'
+            
 elif _platform == "win32":
     lib_fname = r'win_build\bin\Release\libleapct.dll'
     retVal = os.system(r'.\etc\win_build_agn.bat')
     if retVal != 0:
         print('Failed to compile!')
         quit()
+        
+    lib_fname_cpu = lib_fname
     
     import site
     copy_text = 'copy ' + str(lib_fname) + ' ' + str(os.path.join(site.getsitepackages()[1], 'libleapct.dll'))
     os.system(copy_text)
     
 elif _platform == "darwin":
-    lib_fname = 'build/lib/libleapct.dylib'
-    retVal = os.system(r'sh ./etc/build.sh')
+    lib_fname = 'cpu_build/lib_cpu/libleapct_cpu.dylib'
+    retVal = os.system(r'sh ./etc/cpu_build.sh')
     if retVal != 0:
         print('Failed to compile!')
         quit()
 
+    lib_fname_cpu = lib_fname
+
 setup(
     name='leapct',
-    version='1.26', 
+    version='2.0', 
     author='Kyle Champley, Hyojin Kim', 
     author_email='champley@gmail.com, hkim@llnl.gov', 
     description='LivermorE AI Projector for Computed Tomography (LEAPCT)', 
@@ -48,7 +62,8 @@ setup(
     python_requires='>=3.6', 
     packages=find_packages("src"), 
     package_dir={'': 'src'},
-    install_requires=['numpy', 'torch'], 
-    py_modules=['leaptorch', 'leapctype', 'leap_filter_sequence', 'leap_preprocessing_algorithms'], 
-    package_data={'': [lib_fname]},
+    install_requires=['numpy', 'imageio', 'scipy'], 
+    py_modules=['leapctype', 'leap_filter_sequence', 'leap_preprocessing_algorithms', 'xrayphysics', 'leapctserver'], 
+    package_data={'': [lib_fname, lib_fname_cpu]},
 )
+

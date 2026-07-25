@@ -4,13 +4,10 @@ import time
 #import matplotlib.pyplot as plt
 from leapctype import *
 leapct = tomographicModels()
-from xrayphysics import *
-physics = xrayPhysics()
 
 '''
-This script demonstrates how to perform multi-material beam hardening correction (BHC) and requires the XrayPhysics package
-which can be found here: https://github.com/kylechampley/XrayPhysics
-And the methodology we use to perform multi-material BHC in this paper:
+This script demonstrates how to perform multi-material beam hardening correction (BHC)
+The methodology we use to perform multi-material BHC in this paper:
 https://www.osti.gov/servlets/purl/1158895
 '''
 
@@ -22,19 +19,15 @@ numRows = 1
 leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 leapct.set_default_volume()
 
-# The next line tells the XrayPhysics library to use mm-based units so that everything agrees with LEAP which is mm-based
-# Note that it is natural to express different quantities with different units, e.g., mm or cm
-# But to avoid confusion of which parameter uses which units, everything should use the same units
-# This should be fine for most things, but one thing to look out for is densities
+# LEAP uses mm for all length-based units and thus for densities it uses g/mm^3
 # *** Note that g/cm^3 = 1.0e-3 g/mm^3 ***
 # So just add "e-3" to the end of the densities so that they are expressed in g/mm^3
-physics.use_mm()
 
 
 #######################################################################################################################
 # Now we define the total system spectral response model
-# The XrayPhysics package provides methods to estimate this, but you can certainly use your own models
-# The models in XrayPhysics are quite accurate, but for best results, one should perform a spectral calibration
+# LEAP provides methods to estimate this, but you can certainly use your own models
+# These models are quite accurate, but for best results, one should perform a spectral calibration
 #######################################################################################################################
 
 # Define the kV of the source voltage and the take-off angle (degrees)
@@ -43,20 +36,21 @@ takeOffAngle = 11.0
 
 # First simulate the source spectrum (units are photons/(bin * mAs * sr))
 # "Es" are the energy samples (in keV) and "s" is the source spectrum
-Es, s = physics.simulateSpectra(kV,takeOffAngle)
+Es, s = leapct.simulateSpectra(kV,takeOffAngle)
 
 # Then model the detector response as the product of the
 # x-ray energy and the stopping power of the scintillator
 # Here the scintillator is 0.1 mm thick GOS with density 7.32 g/cm^3
-detResp = physics.detectorResponse('O2SGd2', 7.32e-3, 0.1, Es)
+detResp = leapct.detectorResponse('O2SGd2', 7.32e-3, 0.1, Es)
 
 # Finally model the attenuation due to the filters
 # Here the filter is 1.0 mm thick aluminum
-filtResp = physics.filterResponse('Al', 2.7e-3, 1.0, Es)
+filtResp = leapct.filterResponse('Al', 2.7e-3, 1.0, Es)
 
 # Take the product of all three factors to get the total system spectral response
 s = s*filtResp*detResp
 
+referenceEnergy = np.round(leapct.meanEnergy(s, Es))
 
 #######################################################################################################################
 # Now we calculate the multi-material BHC lookup table transfer function
@@ -68,66 +62,29 @@ s = s*filtResp*detResp
 # By default the x-ray physics lookup tables generate go up to np.ceil(-np.log(2.0**(-physics.detectorBits)))
 # One can change the "detectorBits" parameter, but only do this if you know what you are doing
 #######################################################################################################################
-loZ_material = {'chemical_formula': 'H2O', 'mass_density': 1.0e-3}
-#hiZ_material = {'chemical_formula': 'Al', 'mass_density': 2.7e-3}
-hiZ_material = {'chemical_formula': 'Ti', 'mass_density': 4.5e-3}
-sigma_loZ = physics.sigma(loZ_material['chemical_formula'], Es)
-sigma_hiZ = physics.sigma(hiZ_material['chemical_formula'], Es)
 
-# Now let's choose the reference energy BHC.  The user is free to choose what they want,
-# but we recommend that this energy be within the energy range of the spectra.
-# Here we will just use the mean energy of the spectra as the reference energy.
-# This is what would be chosen if this parameter were not specified (i.e., the default value)
-# Although not necessary, we round this value to the nearest whole number
-referenceEnergy = np.round(physics.meanEnergy(s, Es))
+loZ_material = 'water'
+hiZ_material = 'Ti'
 
-# Now we generate the tables which should only take less than a second
 startTime = time.time()
-LUT_single,T_single_atten = physics.setBHClookupTable(s, Es, loZ_material['chemical_formula'], referenceEnergy)
-LUT_dual,T_dual_atten = physics.setTwoMaterialBHClookupTable(s, Es, sigma_loZ, sigma_hiZ, referenceEnergy)
+LUT_single,T_single_atten = leapct.setBHClookupTable(s, Es, loZ_material, referenceEnergy)
+LUT_dual,T_dual_atten = leapct.setTwoMaterialBHClookupTable(s, Es, leapct.sigma(loZ_material, Es), leapct.sigma(hiZ_material, Es), referenceEnergy)
 T_frac = 1.0/(LUT_dual.shape[0]-1)
 print('BHC LUT generation time: ' + str(time.time()-startTime) + ' seconds')
 
 
-#######################################################################################################################
-# Simulate dual energy data
-#######################################################################################################################
-g = leapct.allocate_projections() # polychromatic attenuation data
-
-g_loZ = leapct.allocate_projections() # forward projection of low Z density map
-g_hiZ = leapct.allocate_projections() # forward projection of high Z density map
-f_loZ = leapct.allocate_volume() # low Z density map
-f_hiZ = leapct.allocate_volume() # high Z density map
+# Set the low Z material as one large cylinder
+leapct.addObject(None, 4, np.array([0.0, 0.0, 0.0]), 120.0*np.array([1.0, 1.0, 1.0]), loZ_material)
 
 # Set the high Z map as three cylinders
 hiZ_diameter = 30.0/4.0
 hiZ_location = 50.0/2.0
-leapct.addObject(f_hiZ, 4, hiZ_location*np.array([np.cos(0.0*np.pi/180.0), np.sin(0.0*np.pi/180.0), 0.0]), hiZ_diameter*np.array([1.0, 1.0, 1.0]), 1.0, None, None, 3)
-leapct.addObject(f_hiZ, 4, hiZ_location*np.array([np.cos(120.0*np.pi/180.0), np.sin(120.0*np.pi/180.0), 0.0]), hiZ_diameter*np.array([1.0, 1.0, 1.0]), 1.0, None, None, 3)
-leapct.addObject(f_hiZ, 4, hiZ_location*np.array([np.cos(240.0*np.pi/180.0), np.sin(240.0*np.pi/180.0), 0.0]), hiZ_diameter*np.array([1.0, 1.0, 1.0]), 1.0, None, None, 3)
+leapct.addObject(None, 4, hiZ_location*np.array([np.cos(0.0*np.pi/180.0), np.sin(0.0*np.pi/180.0), 0.0]), hiZ_diameter*np.array([1.0, 1.0, 1.0]), hiZ_material)
+leapct.addObject(None, 4, hiZ_location*np.array([np.cos(120.0*np.pi/180.0), np.sin(120.0*np.pi/180.0), 0.0]), hiZ_diameter*np.array([1.0, 1.0, 1.0]), hiZ_material)
+leapct.addObject(None, 4, hiZ_location*np.array([np.cos(240.0*np.pi/180.0), np.sin(240.0*np.pi/180.0), 0.0]), hiZ_diameter*np.array([1.0, 1.0, 1.0]), hiZ_material)
 
-# Set the low Z map as one big cylinder.  Need to subtract out region that high Z material occupies
-leapct.addObject(f_loZ, 4, np.array([0.0, 0.0, 0.0]), 120.0*np.array([1.0, 1.0, 1.0]), 1.0, None, None, 3)
-f_loZ = f_loZ - f_hiZ
-
-# Now we scale the low and high Z maps by their respective densities
-f_loZ *= loZ_material['mass_density']
-f_hiZ *= hiZ_material['mass_density']
-
-# Now forward project the density maps
-leapct.project(g_loZ, f_loZ)
-leapct.project(g_hiZ, f_hiZ)
-
-# Now we calculate the polychromatic attenuation
-physics.normalizeSpectrum(s, Es)
-for n in range(Es.size):
-    if s[n] > 0.0:
-        g[:] += s[n]*np.exp(-sigma_loZ[n]*g_loZ[:] - sigma_hiZ[n]*g_hiZ[:])
-g = -np.log(g)
-
-# Check that you didn't simulate data with an unrealistic attenuation
-print(np.max(g))
-
+# Simulate the polychromatic data
+g = leapct.rayTrace(None, s, Es, 3)
 
 #######################################################################################################################
 # Run the multi-material BHC algorithm
@@ -138,8 +95,8 @@ print(np.max(g))
 # One can choose any method they want, including sophisticated segmentation algorithms
 # Here we shall just use thresholding.  For this we first need to know the LAC values
 # at the reference energy.
-mu_loZ_ref = physics.mu(loZ_material['chemical_formula'], referenceEnergy, loZ_material['mass_density'])
-mu_hiZ_ref = physics.mu(hiZ_material['chemical_formula'], referenceEnergy, hiZ_material['mass_density'])
+mu_loZ_ref = leapct.mu(loZ_material, referenceEnergy)
+mu_hiZ_ref = leapct.mu(hiZ_material, referenceEnergy)
 
 # Print out the target values of the reconstruction (mm^-1) to verify that everything reconstructed properly
 print('mu_loZ_ref = ' + str(mu_loZ_ref))

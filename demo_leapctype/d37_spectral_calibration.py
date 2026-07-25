@@ -5,14 +5,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-try:
-    from xrayphysics import *
-    physics = xrayPhysics()
-    physics.use_mm()
-except:
-    print('This demo script requires the XrayPhysics package found here:')
-    print('https://github.com/kylechampley/XrayPhysics')
-    quit()
 
 '''
 This script demonstrates how to perform a spectral calibration by scanning well-known high-purity reference materials.
@@ -29,11 +21,11 @@ very, very high accuracy, so in practice one should perform a registration algor
 
 # Model total system spectral response as 100 kV source, 2 mm Al filter, and GOS scintillator 0.1 mm thick
 #Es = np.array(range(10,102,2), dtype=np.float32)
-Es, s_source = physics.simulateSpectra(100.0,11.0)
-detResp = physics.detectorResponse('GOS', None, 0.1, Es)
-filtResp = physics.filterResponse('Al', None, 2.0, Es)
+Es, s_source = leapct.simulateSpectra(100.0,11.0)
+detResp = leapct.detectorResponse('GOS', None, 0.1, Es)
+filtResp = leapct.filterResponse('Al', None, 2.0, Es)
 s_total = s_source*detResp*filtResp
-physics.normalizeSpectrum(s_total, Es)
+leapct.normalizeSpectrum(s_total, Es)
 
 
 # Set the scanner geometry
@@ -46,22 +38,22 @@ leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRo
 
 # Specify spectral calibration phantom as three half inch diameter cylinders of delrin, teflon, and magnesium
 referenceEnergy = 50.0
-sigma_hat_delrin = physics.mu('delrin',Es) / physics.mu('delrin', referenceEnergy)
-leapct.addObject(None, 4, 80.0*np.array([np.cos(0.0*np.pi/180.0), np.sin(0.0*np.pi/180.0), 0.0]), 6.35*np.array([1.0, 1.0, 1.0]), physics.mu('delrin', referenceEnergy))
+sigma_hat_delrin = leapct.mu('delrin',Es) / leapct.mu('delrin', referenceEnergy)
+leapct.addObject(None, 4, 80.0*np.array([np.cos(0.0*np.pi/180.0), np.sin(0.0*np.pi/180.0), 0.0]), 6.35*np.array([1.0, 1.0, 1.0]), leapct.mu('delrin', referenceEnergy))
 g_delrin = leapct.allocate_projections()
-leapct.rayTrace(g_delrin, 3)
+leapct.rayTrace(g_delrin, oversampling=3)
 
 leapct.clearPhantom()
-sigma_hat_teflon = physics.mu('teflon',Es) / physics.mu('teflon', referenceEnergy)
-leapct.addObject(None, 4, 80.0*np.array([np.cos(120.0*np.pi/180.0), np.sin(120.0*np.pi/180.0), 0.0]), 6.35*np.array([1.0, 1.0, 1.0]), physics.mu('teflon', referenceEnergy))
+sigma_hat_teflon = leapct.mu('teflon',Es) / leapct.mu('teflon', referenceEnergy)
+leapct.addObject(None, 4, 80.0*np.array([np.cos(120.0*np.pi/180.0), np.sin(120.0*np.pi/180.0), 0.0]), 6.35*np.array([1.0, 1.0, 1.0]), leapct.mu('teflon', referenceEnergy))
 g_teflon = leapct.allocate_projections()
-leapct.rayTrace(g_teflon, 3)
+leapct.rayTrace(g_teflon, oversampling=3)
 
 leapct.clearPhantom()
-sigma_hat_Mg = physics.mu('Mg',Es) / physics.mu('Mg', referenceEnergy)
-leapct.addObject(None, 4, 80.0*np.array([np.cos(240.0*np.pi/180.0), np.sin(240.0*np.pi/180.0), 0.0]), 6.35*np.array([1.0, 1.0, 1.0]), physics.mu('Mg', referenceEnergy))
+sigma_hat_Mg = leapct.mu('Mg',Es) / leapct.mu('Mg', referenceEnergy)
+leapct.addObject(None, 4, 80.0*np.array([np.cos(240.0*np.pi/180.0), np.sin(240.0*np.pi/180.0), 0.0]), 6.35*np.array([1.0, 1.0, 1.0]), leapct.mu('Mg', referenceEnergy))
 g_Mg = leapct.allocate_projections()
-leapct.rayTrace(g_Mg, 3)
+leapct.rayTrace(g_Mg, oversampling=3)
 
 
 # Calculate measured polychromatic transmission data
@@ -96,12 +88,12 @@ for i in range(Es.size):
 # Set the initial guess of the spectra, we know what it really is, but let's change it to prove our method works
 s_est = s_source.copy()
 s_est[:] = 1.0
-#s_est = s_source*physics.filterResponse('Al', None, 0.25, Es)
-s_est = s_source*detResp*physics.filterResponse('Al', None, 0.25, Es)
-physics.normalizeSpectrum(s_est, Es)
+#s_est = s_source*leapct.filterResponse('Al', None, 0.25, Es)
+s_est = s_source*detResp*leapct.filterResponse('Al', None, 0.25, Es)
+leapct.normalizeSpectrum(s_est, Es)
 s_init = s_est.copy()
-print('mean energy of initial guess: ', physics.meanEnergy(s_est, Es))
-print('mean energy of true spectra: ' , physics.meanEnergy(s_total, Es))
+print('mean energy of initial guess: ', leapct.meanEnergy(s_est, Es))
+print('mean energy of true spectra: ' , leapct.meanEnergy(s_total, Es))
 
 
 # Use Richard-Lucy algorithm to optimize spectra model, we use this model because it is easy to perserve nonnegativity and provides smooth updates
@@ -109,6 +101,6 @@ print('Solving for spectra model...')
 At1 = np.matmul(A, np.ones(Es.size))
 for n in range(10000000):
     s_est = (s_est / At1) * np.matmul(A, b / np.matmul(A,s_est))
-print('mean energy of optimized guess: ', physics.meanEnergy(s_est, Es))
+print('mean energy of optimized guess: ', leapct.meanEnergy(s_est, Es))
 plt.plot(Es,s_init,'b-', Es,s_est,'r-o', Es,s_total,'k-')
 plt.show()

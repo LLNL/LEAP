@@ -24,7 +24,7 @@ pixelSize = 0.65*512/numCols
 numRows = 1
 leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, angularRange), 1100, 1400)
 leapct.set_default_volume()
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
 
 # Simulate projection data using analytic ray tracing methods and add noise
 for i in range(10):
@@ -35,11 +35,7 @@ for i in range(10):
             break
     leapct.addObject(None, 4, 100*np.array([x_c, y_c, 0.0]), 5.0*np.array([1.0, 1.0, 1.0]), 0.02)
 leapct.rayTrace(g)
-I_0 = 10000.0
-t = np.random.poisson(I_0*np.exp(-g))
-t[t<=1.0] = 1.0
-g[:] = -np.log(t/I_0)
-g[g<0.0] = 0.0
+leapct.poisson(g, 10000.0, True)
 
 # Now we use the space carving algorithm to estimate the support of the object
 # To do this we first identify the rays in the projections that pass through the object

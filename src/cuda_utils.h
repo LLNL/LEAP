@@ -20,10 +20,11 @@
  * This header and associated source file are for generic GPU-based functions that are used in LEAP
  */
 
-#define GPU_MEMORY_SAFETY_MULTIPLIER 0.9
+#define GPU_MEMORY_SAFETY_MULTIPLIER 0.95
 
 #ifndef __USE_CPU
 #include "cuda_runtime.h"
+#include "texture_compat.h"  // TEX_DATA / TEX_ARRAY / TEX3D / TEX1D backend selection
 
 #define CUDA_CHECK(expr) cudaSafeCall((expr), __FILE__, __LINE__, #expr)
 #define CHECK_LAST_ERROR() cudaCall(cudaGetLastError(), NULL, __FILE__, __LINE__)
@@ -33,34 +34,48 @@ void printGPUproperties(int whichGPU = 0);
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
 extern float getAvailableGPUmemory(std::vector<int> whichGPUs);
+extern bool physically_shared_memory(int whichGPU = 0);
+
+bool sort_gpus_by_memory(std::vector<int>& whichGPUs);
 
 extern dim3 setBlockSize(int3 N);
 extern dim3 setGridSize(int3 N, dim3 dimBlock);
 extern dim3 setBlockSize(int4 N);
 extern dim3 setGridSize(int4 N, dim3 dimBlock);
 
-extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
-extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
-extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
-extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, int3 srcPos, int3 srcShape, bool useExtrapolation = true, bool useLinearInterpolation = true, bool swapFirstAndLastDimensions = false);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int3 N_txt, int3 srcPos, int3 srcShape, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, parameters* params, bool useExtrapolation = true, bool useLinearInterpolation = true);
 
-extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
-extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
-extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
-extern cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions);
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
 
-extern cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
-extern cudaArray* loadTexture2D(cudaTextureObject_t& tex_object, float* data, const int2 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture1D(TEX_DATA& tex_object, float* data, const int N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+extern TEX_ARRAY loadTexture2D(TEX_DATA& tex_object, float* data, const int2 N_txt, bool useExtrapolation = true, bool useLinearInterpolation = true);
+
+// Releases a texture created by loadTexture*/loadTexture1D. Replaces the inline
+// cudaFreeArray + cudaDestroyTextureObject pairs so both backends free correctly:
+// the hardware path destroys the array + texture object, the software path frees
+// the backing buffer only when loadTexture* allocated it (tex_array != NULL).
+extern void freeTexture(TEX_ARRAY& tex_array, TEX_DATA& tex_object);
 
 // Utility Functions for pushing/pulling data to/from CPU/GPU
 extern float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU);
 extern bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int whichGPU);
 extern float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU);
-extern bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU);
+extern bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU, bool skipFIHT = false);
 extern float* copy3DdataToGPU(float* g, int3 N, int whichGPU);
 extern bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU);
 extern float* copy1DdataToGPU(float* x, int N, int whichGPU);
+extern float3* copy1Dfloat3ToGPU(float3* x, int N, int whichGPU);
+extern float4* copy1Dfloat4ToGPU(float4* x, int N, int whichGPU);
 extern bool* copy1DbooleanToGPU(bool* x, int N, int whichGPU);
+extern bool pull1DdataFromGPU(float* x, int N, float* dev_x, int whichGPU);
 
 extern float* copyAngleArrayToGPU(parameters* params);
 bool setProjectionGPUparams(parameters*, int4&, float4&, float4&, bool doNormalize = false);
@@ -69,15 +84,18 @@ bool setVolumeGPUparams(parameters*, int4&, float4&, float4&);
 extern cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t equal(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
-extern cudaError_t divide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
+extern cudaError_t divide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0, bool skip_zero_denominator = false);
+extern cudaError_t rdivide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t add(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t add(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t sub(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t scale(float* dev_lhs, const float c, const int3 N, int whichGPU = 0);
 extern cudaError_t scalarAdd(float* dev_lhs, const float c, const float* dev_rhs, const int3 N, int whichGPU = 0);
 extern cudaError_t mean_over_slices(float* dev_lhs, const int3 N, int whichGPU = 0);
+extern cudaError_t reciprocal(float* dev_lhs, const int3 N, float divide_by_zero_value, int whichGPU = 0);
 
 extern cudaError_t replaceZeros(float* dev_lhs, const int3 N, int whichGPU = 0, float newVal = 1.0);
+extern cudaError_t replaceNAN(float* dev_lhs, const int3 N, int whichGPU = 0);
 
 extern cudaError_t clip(float* dev_lhs, const int3 N, int whichGPU = 0, float clipVal = 0.0);
 extern cudaError_t cosFcn(float* dev_lhs, const int3 N, int whichGPU = 0);
@@ -99,6 +117,9 @@ bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3
 extern int numberOfGPUs();
 extern float getAvailableGPUmemory(int whichGPU);
 extern float getAvailableGPUmemory(std::vector<int> whichGPUs);
+extern bool physically_shared_memory(int whichGPU = 0);
 #endif
+
+extern float max_gpu_memory; // GB
 
 #endif

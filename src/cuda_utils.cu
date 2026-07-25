@@ -6,12 +6,17 @@
 // LivermorE AI Projector for Computed Tomography (LEAP)
 // basic CUDA operations
 ////////////////////////////////////////////////////////////////////////////////
+#include "parameters.h"
 #include <string.h>
 #include <algorithm>
 
 #ifndef __USE_CPU
 #include "cuda_utils.h"
+#include "cpu_utils.h"
 #include "cuda_runtime.h"
+#include "fbp/ramp_filter.cuh"
+
+float max_gpu_memory = 4096.0; // 4 TB limit
 
 __global__ void DualTransferFunctionKernel(float* x, float* y, const float* LUT, const int3 N, const float firstSample, const float sampleRate, const int numSamples)
 {
@@ -48,7 +53,7 @@ __global__ void DualTransferFunctionKernel(float* x, float* y, const float* LUT,
     }
     else
     {
-        float ind = curVal_1 / sampleRate - firstSample;
+        float ind = (curVal_1 - firstSample) / sampleRate;
         ind_lo_1 = int(ind);
         ind_hi_1 = ind_lo_1 + 1;
         d_1 = ind - float(ind_lo_1);
@@ -70,7 +75,7 @@ __global__ void DualTransferFunctionKernel(float* x, float* y, const float* LUT,
     }
     else
     {
-        float ind = curVal_2 / sampleRate - firstSample;
+        float ind = (curVal_2 - firstSample) / sampleRate;
         ind_lo_2 = int(ind);
         ind_hi_2 = ind_lo_2 + 1;
         d_2 = ind - float(ind_lo_2);
@@ -102,16 +107,20 @@ __global__ void TransferFunctionKernel(float* f, const float* LUT, const int3 N,
 
     if (curVal >= lastSample)
     {
-        float slope = (LUT[numSamples - 1] - LUT[numSamples - 2]) / sampleRate;
+        const float slope = (LUT[numSamples - 1] - LUT[numSamples - 2]) / sampleRate;
         f[ind] = LUT[numSamples - 1] + slope * (curVal - lastSample);
     }
     else if (curVal <= firstSample)
-        f[ind] = firstSample;
+    {
+        //f[ind] = firstSample;
+        const float slope = (LUT[1] - LUT[0]) / sampleRate;
+        f[ind] = LUT[0] + slope * (curVal - firstSample);
+    }
     else
     {
-        float arg = curVal / sampleRate - firstSample;
-        int arg_low = int(arg);
-        float d = arg - float(arg_low);
+        const float arg = (curVal - firstSample) / sampleRate;
+        const int arg_low = int(arg);
+        const float d = arg - float(arg_low);
         f[ind] = (1.0 - d) * LUT[arg_low] + d * LUT[arg_low + 1];
     }
 }
@@ -165,7 +174,7 @@ __global__ void copyVolumeDataToMaskKernel(float* f, float* mask, const int4 N, 
     }
 }
 
-__global__ void windowFOVKernel(float* f, const int4 N, const float4 T, const float4 startVal, const float rFOVsq, const int volumeDimensionOrder)
+__global__ void windowFOVKernel(float* __restrict__ f, const int4 N, const float4 T, const float4 startVal, const float rFOVsq, const int volumeDimensionOrder)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -176,7 +185,6 @@ __global__ void windowFOVKernel(float* f, const int4 N, const float4 T, const fl
 
     const float x = ix * T.x + startVal.x;
     const float y = iy * T.y + startVal.y;
-    //const float z = iz * T.z + startVal.z;
 
     if (x * x + y * y > rFOVsq)
     {
@@ -190,7 +198,23 @@ __global__ void windowFOVKernel(float* f, const int4 N, const float4 T, const fl
     }
 }
 
-__global__ void replaceZerosKernel(float* lhs, const int3 dim, const float newVal)
+__global__ void reciprocalKernel(float* __restrict__ lhs, const int3 dim, const float divide_by_zero_value)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    if (lhs[ind] == 0.0f)
+        lhs[ind] = divide_by_zero_value;
+    else
+        lhs[ind] = 1.0f / lhs[ind];
+}
+
+__global__ void replaceZerosKernel(float* __restrict__ lhs, const int3 dim, const float newVal)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -204,7 +228,44 @@ __global__ void replaceZerosKernel(float* lhs, const int3 dim, const float newVa
         lhs[ind] = newVal;
 }
 
-__global__ void clipKernel(float* lhs, const int3 dim, const float clipVal)
+__global__ void replaceNANKernel(float* __restrict__ lhs, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    if (isnan(lhs[ind]))
+    {
+        float* aSlice = &lhs[uint64(iz) * uint64(dim.x * dim.y)];
+        int count = 0;
+        float accum = 0.0f;
+        for (int j = -1; j <= 1; j++)
+        {
+            const int dj = max(0, min(dim.y-1, iy + j));
+            for (int k = -1; k <= 1; k++)
+            {
+                const int dk = max(0, min(dim.x-1, ix + k));
+                const float val = aSlice[dj * dim.x + dk];
+                if (!isnan(val))
+                {
+                    accum += val;
+                    count += 1;
+                }
+            }
+        }
+
+        if (count > 0)
+            lhs[ind] = accum / float(count);
+        else
+            lhs[ind] = 0.0f;
+    }
+}
+
+__global__ void clipKernel(float* __restrict__ lhs, const int3 dim, const float clipVal)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -218,7 +279,7 @@ __global__ void clipKernel(float* lhs, const int3 dim, const float clipVal)
         lhs[ind] = clipVal;
 }
 
-__global__ void cosKernel(float* lhs, const int3 dim)
+__global__ void cosKernel(float* __restrict__ lhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -231,7 +292,7 @@ __global__ void cosKernel(float* lhs, const int3 dim)
     lhs[ind] = cos(lhs[ind]);
 }
 
-__global__ void sinKernel(float* lhs, const int3 dim)
+__global__ void sinKernel(float* __restrict__ lhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -244,7 +305,7 @@ __global__ void sinKernel(float* lhs, const int3 dim)
     lhs[ind] = sin(lhs[ind]);
 }
 
-__global__ void expKernel(float* lhs, const int3 dim)
+__global__ void expKernel(float* __restrict__ lhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -257,7 +318,7 @@ __global__ void expKernel(float* lhs, const int3 dim)
     lhs[ind] = expf(lhs[ind]);
 }
 
-__global__ void negExpKernel(float* lhs, const int3 dim)
+__global__ void negExpKernel(float* __restrict__ lhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -270,7 +331,7 @@ __global__ void negExpKernel(float* lhs, const int3 dim)
     lhs[ind] = expf(-lhs[ind]);
 }
 
-__global__ void setToConstantKernel(float* lhs, const float c, const int3 dim)
+__global__ void setToConstantKernel(float* __restrict__ lhs, const float c, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -283,7 +344,7 @@ __global__ void setToConstantKernel(float* lhs, const float c, const int3 dim)
     lhs[ind] = c;
 }
 
-__global__ void equalKernel(float* lhs, const float* rhs, const int3 dim)
+__global__ void equalKernel(float* __restrict__ lhs, const float* __restrict__ rhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -296,7 +357,7 @@ __global__ void equalKernel(float* lhs, const float* rhs, const int3 dim)
     lhs[ind] = rhs[ind];
 }
 
-__global__ void multiplyKernel(float* lhs, const float* rhs, const int3 dim)
+__global__ void multiplyKernel(float* __restrict__ lhs, const float* __restrict__ rhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -309,7 +370,7 @@ __global__ void multiplyKernel(float* lhs, const float* rhs, const int3 dim)
     lhs[ind] *= rhs[ind];
 }
 
-__global__ void divideKernel(float* lhs, const float* rhs, const int3 dim)
+__global__ void divideKernel(float* __restrict__ lhs, const float* __restrict__ rhs, const int3 dim, const bool skip_zero_denominator)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -321,9 +382,30 @@ __global__ void divideKernel(float* lhs, const float* rhs, const int3 dim)
     const float rhs_val = rhs[ind];
 
     if (rhs_val == 0.0f)
-        lhs[ind] = 1.0f;
+    {
+        if (!skip_zero_denominator)
+            lhs[ind] = 1.0f;
+    }
     else
         lhs[ind] /= rhs_val;
+}
+
+__global__ void rdivideKernel(float* __restrict__ lhs, const float* __restrict__ rhs, const int3 dim)
+{
+    const int ix = threadIdx.x + blockIdx.x * blockDim.x;
+    const int iy = threadIdx.y + blockIdx.y * blockDim.y;
+    const int iz = threadIdx.z + blockIdx.z * blockDim.z;
+
+    if (ix >= dim.x || iy >= dim.y || iz >= dim.z)
+        return;
+    const uint64 ind = uint64(iz) * uint64(dim.x * dim.y) + uint64(iy * dim.x + ix);
+    const float rhs_val = rhs[ind];
+    const float lhs_val = lhs[ind];
+
+    if (lhs_val == 0.0f)
+        lhs[ind] = 1.0f;
+    else
+        lhs[ind] = rhs_val / lhs_val;
 }
 
 __global__ void addKernel(float* lhs, const float* rhs, const int3 dim)
@@ -339,7 +421,7 @@ __global__ void addKernel(float* lhs, const float* rhs, const int3 dim)
     lhs[ind] += rhs[ind];
 }
 
-__global__ void addKernel(float* lhs, const float rhs, const int3 dim)
+__global__ void addKernel(float* __restrict__ lhs, const float rhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -352,7 +434,7 @@ __global__ void addKernel(float* lhs, const float rhs, const int3 dim)
     lhs[ind] += rhs;
 }
 
-__global__ void subKernel(float* lhs, const float* rhs, const int3 dim)
+__global__ void subKernel(float* __restrict__ lhs, const float* __restrict__ rhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -365,7 +447,7 @@ __global__ void subKernel(float* lhs, const float* rhs, const int3 dim)
     lhs[ind] -= rhs[ind];
 }
 
-__global__ void scaleKernel(float* lhs, const float c, const int3 dim)
+__global__ void scaleKernel(float* __restrict__ lhs, const float c, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -378,7 +460,7 @@ __global__ void scaleKernel(float* lhs, const float c, const int3 dim)
     lhs[ind] *= c;
 }
 
-__global__ void scalarAddKernel(float* lhs, const float c, const float* rhs, const int3 dim)
+__global__ void scalarAddKernel(float* __restrict__ lhs, const float c, const float* __restrict__ rhs, const int3 dim)
 {
     const int ix = threadIdx.x + blockIdx.x * blockDim.x;
     const int iy = threadIdx.y + blockIdx.y * blockDim.y;
@@ -608,7 +690,8 @@ int getSPcores(int whichGPU)
             else printf("Unknown device type\n");
             break;
         default:
-            printf("Unknown device type\n");
+            cores = mp * 128;
+            //printf("Unknown device type\n");
             break;
         }
         return cores;
@@ -647,13 +730,87 @@ float getAvailableGPUmemory(int whichGPU)
     if (whichGPU >= 0)
     {
         cudaSetDevice(whichGPU);
-        std::size_t free_byte;
-        std::size_t total_byte;
-        cudaMemGetInfo(&free_byte, &total_byte);
-        return float(double(free_byte) / pow(2.0, 30.0)) * GPU_MEMORY_SAFETY_MULTIPLIER;
+        float freeGB;
+        if (physically_shared_memory(whichGPU))
+        {
+            freeGB = getAvailableSystemMemory();
+        }
+        else
+        {
+            std::size_t free_byte = 0;
+            std::size_t total_byte = 0;
+            cudaError_t err = cudaMemGetInfo(&free_byte, &total_byte);
+            if (err != cudaSuccess)
+            {
+                fprintf(stderr, "cudaMemGetInfo failed!\n");
+                fprintf(stderr, "error message: %s\n", cudaGetErrorString(err));
+                return 0.0;
+            }
+            freeGB = float(double(free_byte) / pow(2.0, 30.0));
+        }
+        freeGB = min(max_gpu_memory, freeGB);
+        freeGB = max(freeGB * GPU_MEMORY_SAFETY_MULTIPLIER, freeGB - 0.5);
+        return freeGB;
     }
     else
         return 0.0;
+}
+
+bool physically_shared_memory(int whichGPU)
+{
+    if (whichGPU >= 0)
+    {
+        //int device = whichGPU;
+        cudaSetDevice(whichGPU);
+        //cudaGetDevice(&device);
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, whichGPU);
+        //printf("prop.managedMemory = %d, prop.unifiedAddressing = %d\n", prop.managedMemory, prop.unifiedAddressing);
+        bool has_physically_shared_memory = prop.managedMemory && prop.unifiedAddressing && prop.integrated;
+        return has_physically_shared_memory;
+    }
+    else
+        return false;
+}
+
+bool sort_gpus_by_memory(std::vector<int>& whichGPUs)
+{
+    if (whichGPUs.size() == 0)
+        return false;
+    if (whichGPUs.size() == 1)
+        return true;
+
+    std::vector<float> mem;
+    for (int i = 0; i < int(whichGPUs.size()); i++)
+        mem.push_back(getAvailableGPUmemory(whichGPUs[i]));
+
+    std::vector<size_t> idx(whichGPUs.size());
+    for (size_t i = 0; i < idx.size(); i++)
+        idx[i] = i;
+
+    // Sort indices based on a (descending)
+    std::sort(idx.begin(), idx.end(),
+              [&](size_t i, size_t j) {
+                  return mem[i] > mem[j];
+              });
+
+    // Reorder both vectors
+    std::vector<float> mem_sorted;
+    std::vector<int> whichGPUs_sorted;
+
+    mem_sorted.reserve(mem.size());
+    whichGPUs_sorted.reserve(whichGPUs.size());
+
+    for (size_t i : idx)
+    {
+        mem_sorted.push_back(mem[i]);
+        whichGPUs_sorted.push_back(whichGPUs[i]);
+    }
+
+    //a = std::move(a_sorted);
+    whichGPUs = std::move(whichGPUs_sorted);
+
+    return true;
 }
 
 cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int whichGPU)
@@ -668,12 +825,15 @@ cudaError_t setToConstant(float* dev_lhs, const float c, const int3 N, int which
 
 cudaError_t equal(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU)
 {
+    if (N.x <= 0 || N.y <= 0 || N.z <= 0)
+        return cudaSuccess; // empty copy; a zero-dim kernel launch is a CUDA error
     cudaSetDevice(whichGPU);
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
+    cudaGetLastError(); // clear stale error state so only this launch is reported
     equalKernel <<< dimGrid, dimBlock >>> (dev_lhs, dev_rhs, N);
-    return cudaPeekAtLastError();
+    return cudaGetLastError();
 }
 
 cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU)
@@ -686,13 +846,23 @@ cudaError_t multiply(float* dev_lhs, const float* dev_rhs, const int3 N, int whi
     return cudaPeekAtLastError();
 }
 
-cudaError_t divide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU)
+cudaError_t divide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU, bool skip_zero_denominator)
 {
     cudaSetDevice(whichGPU);
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    divideKernel <<< dimGrid, dimBlock >>> (dev_lhs, dev_rhs, N);
+    divideKernel <<< dimGrid, dimBlock >>> (dev_lhs, dev_rhs, N, skip_zero_denominator);
+    return cudaPeekAtLastError();
+}
+
+cudaError_t rdivide(float* dev_lhs, const float* dev_rhs, const int3 N, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    rdivideKernel <<< dimGrid, dimBlock >>> (dev_lhs, dev_rhs, N);
     return cudaPeekAtLastError();
 }
 
@@ -757,6 +927,16 @@ cudaError_t mean_over_slices(float* dev_lhs, const int3 N, int whichGPU)
     return cudaPeekAtLastError();
 }
 
+cudaError_t reciprocal(float* dev_lhs, const int3 N, float divide_by_zero_value, int whichGPU)
+{
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    reciprocalKernel <<< dimGrid, dimBlock >>> (dev_lhs, N, divide_by_zero_value);
+    return cudaPeekAtLastError();
+}
+
 extern cudaError_t replaceZeros(float* dev_lhs, const int3 N, int whichGPU, float newVal)
 {
     cudaSetDevice(whichGPU);
@@ -767,14 +947,27 @@ extern cudaError_t replaceZeros(float* dev_lhs, const int3 N, int whichGPU, floa
     return cudaPeekAtLastError();
 }
 
-extern cudaError_t clip(float* dev_lhs, const int3 N, int whichGPU, float clipVal)
+extern cudaError_t replaceNAN(float* dev_lhs, const int3 N, int whichGPU)
 {
     cudaSetDevice(whichGPU);
     dim3 dimBlock = setBlockSize(N);
     dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
         int(ceil(double(N.z) / double(dimBlock.z))));
-    clipKernel <<< dimGrid, dimBlock >>> (dev_lhs, N, clipVal);
+    replaceNANKernel <<< dimGrid, dimBlock >>> (dev_lhs, N);
     return cudaPeekAtLastError();
+}
+
+extern cudaError_t clip(float* dev_lhs, const int3 N, int whichGPU, float clipVal)
+{
+    if (N.x <= 0 || N.y <= 0 || N.z <= 0)
+        return cudaSuccess; // nothing to clip; a zero-dim kernel launch is a CUDA error
+    cudaSetDevice(whichGPU);
+    dim3 dimBlock = setBlockSize(N);
+    dim3 dimGrid(int(ceil(double(N.x) / double(dimBlock.x))), int(ceil(double(N.y) / double(dimBlock.y))),
+        int(ceil(double(N.z) / double(dimBlock.z))));
+    cudaGetLastError(); // clear stale error state so only this launch is reported
+    clipKernel <<< dimGrid, dimBlock >>> (dev_lhs, N, clipVal);
+    return cudaGetLastError();
 }
 
 cudaError_t cosFcn(float* dev_lhs, const int3 N, int whichGPU)
@@ -824,7 +1017,8 @@ float sum(const float* dev_lhs, const int3 N, int whichGPU)
     float* dev_sum = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_sum, 1 * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "sum: cudaMalloc failed!\n");
+        fprintf(stderr, "error message: %s\n", cudaGetErrorString(cudaStatus));
         return 0.0;
     }
     //sumKernel<<<1,1>>>(dev_lhs, dev_sum, N);
@@ -845,7 +1039,8 @@ float sum(const float* dev_lhs, const int3 N, int whichGPU)
     float* dev_partial_sum = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_partial_sum, numDataCopies * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "sum: cudaMalloc failed!\n");
+        fprintf(stderr, "error message: %s\n", cudaGetErrorString(cudaStatus));
         return 0.0;
     }
     sum_partial <<< numBlocks, blockSize >>> (dev_lhs, dev_partial_sum, numberOfElements, num_gpu_cores, maxNumItemsPerCore);
@@ -857,7 +1052,7 @@ float sum(const float* dev_lhs, const int3 N, int whichGPU)
     float* dev_sum_1D = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_sum_1D, N.x * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "sum: cudaMalloc failed!\n");
         return 0.0;
     }
     int blockSize = 8;
@@ -887,7 +1082,8 @@ float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int
     float* dev_sum = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_sum, 1 * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "innerProduct: cudaMalloc failed!\n");
+        fprintf(stderr, "error message: %s\n", cudaGetErrorString(cudaStatus));
         return 0.0;
     }
     //innerProductKernel <<<1, 1 >>> (dev_lhs, dev_rhs, dev_sum, N);
@@ -908,7 +1104,8 @@ float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int
     float* dev_partial_sum = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_partial_sum, numDataCopies * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "innerProduct: cudaMalloc failed!\n");
+        fprintf(stderr, "error message: %s\n", cudaGetErrorString(cudaStatus));
         return 0.0;
     }
     innerProductKernel_partial <<< numBlocks, blockSize >>> (dev_lhs, dev_rhs, dev_partial_sum, numberOfElements, num_gpu_cores, maxNumItemsPerCore);
@@ -920,7 +1117,7 @@ float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int
     float* dev_sum_1D = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_sum_1D, N.x * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "innerProduct: cudaMalloc failed!\n");
         return 0.0;
     }
     int blockSize = 8;
@@ -943,11 +1140,12 @@ float innerProduct(const float* dev_lhs, const float* dev_rhs, const int3 N, int
 float weightedInnerProduct(const float* dev_lhs, const float* dev_w, const float* dev_rhs, const int3 N, int whichGPU)
 {
     cudaSetDevice(whichGPU);
-    cudaError_t cudaStatus;
+    cudaError_t cudaStatus = cudaSuccess;
     float* dev_sum = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_sum, 1 * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "weightedInnerProduct: cudaMalloc failed!\n");
+        fprintf(stderr, "error message: %s\n", cudaGetErrorString(cudaStatus));
         return 0.0;
     }
     weightedInnerProductKernel <<<1, 1 >>> (dev_lhs, dev_w, dev_rhs, dev_sum, N);
@@ -965,6 +1163,7 @@ float weightedInnerProduct(const float* dev_lhs, const float* dev_w, const float
 dim3 setBlockSize(int3 N)
 {
 	dim3 dimBlock(8, 8, 8);  // needs to be optimized
+    //dim3 dimBlock(32, 4, 2);  // needs to be optimized
 	if (N.z < 8)
 	{
 		dimBlock.x = 16;
@@ -1002,38 +1201,94 @@ dim3 setGridSize(int4 N, dim3 dimBlock)
     return setGridSize(make_int3(N.x, N.y, N.z), dimBlock);
 }
 
-extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
+extern TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
+{
+    return loadTexture_from_cpu(tex_object, data, N_txt, make_int3(0, 0, 0), make_int3(N_txt.x, N_txt.y, N_txt.z), useExtrapolation, useLinearInterpolation, swapFirstAndLastDimensions);
+}
+
+TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+{
+    return loadTexture_from_cpu(tex_object, data, N_txt, make_int3(0, 0, 0), make_int3(N_txt.x, N_txt.y, N_txt.z), useExtrapolation, useLinearInterpolation);
+}
+
+TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+{
+    return loadTexture_from_cpu(tex_object, data, N_txt, make_int3(0, 0, 0), make_int3(N_txt.x, N_txt.y, N_txt.z), useExtrapolation, useLinearInterpolation);
+}
+
+// int4 router: unpacks to int3 (optionally swapping x/z), then delegates to the int3 canonical.
+TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int4 N_txt, int3 srcPos, int3 srcShape, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
 {
     int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);
     if (swapFirstAndLastDimensions)
     {
-        N.x = N_txt.z;
-        N.z = N_txt.x;
+        N = make_int3(N_txt.z, N_txt.y, N_txt.x);
+        srcPos = make_int3(srcPos.z, srcPos.y, srcPos.x);
+        srcShape = make_int3(srcShape.z, srcShape.y, srcShape.x);
     }
-    return loadTexture_from_cpu(tex_object, data, N, useExtrapolation, useLinearInterpolation);
+    return loadTexture_from_cpu(tex_object, data, N, srcPos, srcShape, useExtrapolation, useLinearInterpolation);
 }
 
-extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions, bool data_on_cpu)
+TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, parameters* params, bool useExtrapolation, bool useLinearInterpolation)
 {
-    int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);
-    if (swapFirstAndLastDimensions)
+    int stride   = params->projectionDataStride > 0 ? params->projectionDataStride : params->numRows;
+    int3 srcShape = make_int3(params->numAngles, stride, params->numCols);
+    int3 srcPos   = make_int3(0, params->projectionDataFirstRow, 0);
+    int3 N_txt    = make_int3(params->numAngles, params->numRows, params->numCols);
+    return loadTexture_from_cpu(tex_object, data, N_txt, srcPos, srcShape, useExtrapolation, useLinearInterpolation);
+}
+
+TEX_ARRAY loadTexture_from_cpu(TEX_DATA& tex_object, float* data, const int3 N_txt, int3 srcPos, int3 srcShape, bool useExtrapolation, bool useLinearInterpolation)
+{
+    // The copy region [srcPos, srcPos + N_txt) must lie inside srcShape on every axis.
+    // Out-of-bounds here means cudaMemcpy3D would silently read past one slab into the
+    // next (e.g. firstRow + numRows > stride spills into the next angle's data).
+    if (srcPos.x < 0 || srcPos.y < 0 || srcPos.z < 0 ||
+        srcPos.x + N_txt.z > srcShape.z ||   // x of cudaPos addresses the "cols" axis
+        srcPos.y + N_txt.y > srcShape.y ||
+        srcPos.z + N_txt.x > srcShape.x)
     {
-        N.x = N_txt.z;
-        N.z = N_txt.x;
+        printf("loadTexture_from_cpu: srcPos/N_txt out of bounds for srcShape "
+               "(srcPos=(%d,%d,%d) N_txt=(%d,%d,%d) srcShape=(%d,%d,%d))\n",
+               srcPos.x, srcPos.y, srcPos.z,
+               N_txt.x, N_txt.y, N_txt.z,
+               srcShape.x, srcShape.y, srcShape.z);
+        return nullptr;
     }
-    return loadTexture_from_cpu(tex_object, data, N, useExtrapolation, useLinearInterpolation);
-}
 
-cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation)
-{
-    int3 N3 = make_int3(N_txt.x, N_txt.y, N_txt.z);
-    return loadTexture_from_cpu(tex_object, data, N3, useExtrapolation, useLinearInterpolation);
-}
-
-cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation)
-{
     if (data == nullptr)
         return nullptr;
+
+#ifdef __USE_NOTEX
+    // Software path: repack the requested sub-region into a dense, extent-order
+    // device buffer (axis 0 = cols, fastest-varying) that the software sampler
+    // indexes as data[k*n1*n0 + j*n0 + i], matching hardware tex3D(t, i, j, k).
+    const long long nElem = (long long)N_txt.x * N_txt.y * N_txt.z;
+    float* dev_buf = nullptr;
+    if (cudaMalloc((void**)&dev_buf, (size_t)nElem * sizeof(float)) != cudaSuccess)
+    {
+        printf("loadTexture_from_cpu (NOTEX): cudaMalloc failed\n");
+        return nullptr;
+    }
+    {
+        float* host_dense = (float*)malloc((size_t)nElem * sizeof(float));
+        for (int d = 0; d < N_txt.x; d++)      // slowest axis (depth)
+            for (int h = 0; h < N_txt.y; h++)  // middle axis (rows)
+            {
+                const float* srow = data + ((long long)(srcPos.z + d) * srcShape.y + (srcPos.y + h)) * srcShape.z + srcPos.x;
+                float* drow = host_dense + ((long long)d * N_txt.y + h) * N_txt.z;
+                memcpy(drow, srow, (size_t)N_txt.z * sizeof(float));
+            }
+        cudaMemcpy(dev_buf, host_dense, (size_t)nElem * sizeof(float), cudaMemcpyHostToDevice);
+        free(host_dense);
+    }
+    tex_object.data = dev_buf;
+    tex_object.n0 = N_txt.z; tex_object.n1 = N_txt.y; tex_object.n2 = N_txt.x;
+    tex_object.address = useExtrapolation ? TEX_CLAMP : TEX_BORDER;
+    tex_object.filter  = useLinearInterpolation ? TEX_LINEAR : TEX_NEAREST;
+    tex_object.owns = 1;
+    return dev_buf;
+#else
     cudaArray* d_data_array = nullptr;
     cudaError_t cudaStatus;
 
@@ -1042,6 +1297,10 @@ cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, co
     if ((cudaStatus = cudaMalloc3DArray(&d_data_array, &channel_desc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x), 0)) != cudaSuccess)
     {
         printf("cudaMalloc3DArray Error: %s\n", cudaGetErrorString(cudaStatus));
+        printf("attempted to allocate 3D array of size: %d x %d x %d\n", N_txt.z, N_txt.y, N_txt.x);
+        int which;
+        cudaGetDevice(&which);
+        printf("memory available: %f GB\n", getAvailableGPUmemory(which));
         return nullptr;
     }
 
@@ -1089,12 +1348,13 @@ cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, co
     cudaMemcpy3DParms copy_params_;
     memset(&copy_params_, 0, sizeof(cudaMemcpy3DParms));
 
+    // srcPtr describes the full source layout; srcPos offsets into it to skip the first firstRow rows.
     copy_params_.dstArray = (cudaArray_t)d_data_array;
     copy_params_.dstPos = make_cudaPos(0, 0, 0);
     copy_params_.extent = make_cudaExtent(N_txt.z, N_txt.y, N_txt.x);
-    copy_params_.srcPos = make_cudaPos(0, 0, 0);
+    copy_params_.srcPos = make_cudaPos(srcPos.x, srcPos.y, srcPos.z);
     copy_params_.kind = cudaMemcpyHostToDevice;
-    copy_params_.srcPtr = make_cudaPitchedPtr((void*)data, N_txt.z * sizeof(float), N_txt.z, N_txt.y);
+    copy_params_.srcPtr = make_cudaPitchedPtr((void*)data, srcShape.z * sizeof(float), N_txt.z, srcShape.y);
 
     /*
     cudaStream_t stream;
@@ -1116,9 +1376,10 @@ cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, co
     //###################################################################
 
     return d_data_array;
+#endif
 }
 
-cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
+TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
 {
     int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);
     if (swapFirstAndLastDimensions)
@@ -1129,7 +1390,7 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     return loadTexture(tex_object, dev_data, N, useExtrapolation, useLinearInterpolation);
 }
 
-cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
+TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
 {
     int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);
     if (swapFirstAndLastDimensions)
@@ -1140,16 +1401,27 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     return loadTexture(tex_object, dev_data, N, useExtrapolation, useLinearInterpolation);
 }
 
-cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation)
 {
     int3 N3 = make_int3(N_txt.x, N_txt.y, N_txt.z);
     return loadTexture(tex_object, dev_data, N3, useExtrapolation, useLinearInterpolation);
 }
 
-cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+TEX_ARRAY loadTexture(TEX_DATA& tex_object, float* dev_data, const int3 N_txt, bool useExtrapolation, bool useLinearInterpolation)
 {
     if (dev_data == nullptr)
         return nullptr;
+
+#ifdef __USE_NOTEX
+    // Software path: alias the caller's device buffer (already in extent order:
+    // axis 0 = N.z, fastest). No copy, so freeTexture must not release it.
+    tex_object.data = dev_data;
+    tex_object.n0 = N_txt.z; tex_object.n1 = N_txt.y; tex_object.n2 = N_txt.x;
+    tex_object.address = useExtrapolation ? TEX_CLAMP : TEX_BORDER;
+    tex_object.filter  = useLinearInterpolation ? TEX_LINEAR : TEX_NEAREST;
+    tex_object.owns = 0;
+    return dev_data; // non-NULL so existing "== nullptr" error checks still pass
+#else
     cudaArray* d_data_array = nullptr;
     cudaError_t cudaStatus;
 
@@ -1158,6 +1430,10 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     if ((cudaStatus = cudaMalloc3DArray(&d_data_array, &channelDesc, make_cudaExtent(N_txt.z, N_txt.y, N_txt.x), 0)) != cudaSuccess)
     {
         printf("cudaMalloc3DArray Error: %s\n", cudaGetErrorString(cudaStatus));
+        printf("attempted to allocate 3D array of size: %d x %d x %d\n", N_txt.z, N_txt.y, N_txt.x);
+        int which;
+        cudaGetDevice(&which);
+        printf("memory available: %f GB\n", getAvailableGPUmemory(which));
         return nullptr;
     }
 
@@ -1216,10 +1492,36 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
         return nullptr;
     }
     return d_data_array;
+#endif
 }
 
-cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int N_txt, bool useExtrapolation, bool useLinearInterpolation)
+TEX_ARRAY loadTexture1D(TEX_DATA& tex_object, float* data, const int N_txt, bool useExtrapolation, bool useLinearInterpolation)
 {
+#ifdef __USE_NOTEX
+    // Software path: copy the 1D samples into an owned device buffer.
+    // cudaMemcpyDefault relies on UVA to accept either a host or device source.
+    if (data == nullptr)
+        return nullptr;
+    float* dev_buf = nullptr;
+    if (cudaMalloc((void**)&dev_buf, (size_t)N_txt * sizeof(float)) != cudaSuccess)
+    {
+        printf("loadTexture1D (NOTEX): cudaMalloc failed\n");
+        return nullptr;
+    }
+    cudaMemcpy(dev_buf, data, (size_t)N_txt * sizeof(float), cudaMemcpyDefault);
+    tex_object.data = dev_buf;
+    tex_object.n0 = N_txt; tex_object.n1 = 1; tex_object.n2 = 1;
+    tex_object.address = useExtrapolation ? TEX_CLAMP : TEX_BORDER;
+    tex_object.filter  = useLinearInterpolation ? TEX_LINEAR : TEX_NEAREST;
+    tex_object.owns = 1;
+    return dev_buf;
+#else
+    /*
+    //int2 N_2d = make_int2(1, N_txt);
+    int2 N_2d = make_int2(N_txt, 1);
+    return loadTexture2D(tex_object, data, N_2d, useExtrapolation, useLinearInterpolation);
+    //*/
+    //*
     if (data == nullptr)
         return nullptr;
     cudaArray* d_data_array = nullptr;
@@ -1268,7 +1570,7 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
         return nullptr;
     }
 
-    if ((cudaStatus = cudaMemcpyToArray(d_data_array, 0, 0, data, sizeof(float) * N_txt, cudaMemcpyHostToDevice)) != cudaSuccess)
+    if ((cudaStatus = cudaMemcpy2DToArray(d_data_array, 0, 0, data, sizeof(float) * N_txt, sizeof(float) * N_txt, 1, cudaMemcpyHostToDevice)) != cudaSuccess)
     {
         printf("cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
         cudaFreeArray(d_data_array);
@@ -1276,22 +1578,111 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
         return nullptr;
     }
 
-    /* Update the texture memory
-    cudaMemcpy3DParms cudaparams = { 0 };
-    cudaparams.extent = make_cudaExtent(N_txt.z, N_txt.y, N_txt.x);
-    cudaparams.kind = cudaMemcpyDeviceToDevice;
-    cudaparams.srcPos = make_cudaPos(0, 0, 0);
-    cudaparams.srcPtr = make_cudaPitchedPtr(dev_data, N_txt.z * sizeof(float), N_txt.z, N_txt.y);
-    cudaparams.dstPos = make_cudaPos(0, 0, 0);
-    cudaparams.dstArray = (cudaArray_t)d_data_array;
-    cudaMemcpy3D(&cudaparams);
-    //*/
     return d_data_array;
+    //*/
+#endif
 }
 
-extern cudaArray* loadTexture2D(cudaTextureObject_t& tex_object, float* dev_data, const int2 N_txt, bool useExtrapolation, bool useLinearInterpolation)
+extern TEX_ARRAY loadTexture2D(TEX_DATA& tex_object, float* data, const int2 N_txt, bool useExtrapolation, bool useLinearInterpolation)
 {
-    return NULL;
+    if (data == nullptr)
+        return nullptr;
+
+#ifdef __USE_NOTEX
+    // Software path: dense owned buffer, axis 0 = N_txt.y (fastest), axis 1 = N_txt.x.
+    const long long nElem = (long long)N_txt.x * N_txt.y;
+    float* dev_buf = nullptr;
+    if (cudaMalloc((void**)&dev_buf, (size_t)nElem * sizeof(float)) != cudaSuccess)
+    {
+        printf("loadTexture2D (NOTEX): cudaMalloc failed\n");
+        return nullptr;
+    }
+    cudaMemcpy(dev_buf, data, (size_t)nElem * sizeof(float), cudaMemcpyDefault);
+    tex_object.data = dev_buf;
+    tex_object.n0 = N_txt.y; tex_object.n1 = N_txt.x; tex_object.n2 = 1;
+    tex_object.address = useExtrapolation ? TEX_CLAMP : TEX_BORDER;
+    tex_object.filter  = useLinearInterpolation ? TEX_LINEAR : TEX_NEAREST;
+    tex_object.owns = 1;
+    return dev_buf;
+#else
+    cudaArray* d_data_array = nullptr;
+    cudaError_t cudaStatus;
+
+    // Allocate 2D array memory
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+    if ((cudaStatus = cudaMallocArray(&d_data_array, &channelDesc, N_txt.y, N_txt.x)) != cudaSuccess)
+    {
+        printf("cudaMallocArray Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+
+    // Bind 1D array to texture object
+    cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = (cudaArray_t)d_data_array;
+
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.normalizedCoords = false;  // Texture coordinates normalization
+
+    if (useExtrapolation)
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeClamp;
+        texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeClamp;
+    }
+    else
+    {
+        texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
+        texDesc.addressMode[1] = (cudaTextureAddressMode)cudaAddressModeBorder;
+    }
+
+    if (useLinearInterpolation)
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
+    }
+    else
+    {
+        texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
+    }
+    if ((cudaStatus = cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr)) != cudaSuccess)
+    {
+        printf("cudaCreateTextureObject Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        return nullptr;
+    }
+
+    if ((cudaStatus = cudaMemcpy2DToArray(d_data_array, 0, 0, data, sizeof(float) * N_txt.y, sizeof(float) * N_txt.y, N_txt.x, cudaMemcpyHostToDevice)) != cudaSuccess)
+    {
+        printf("cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFreeArray(d_data_array);
+        cudaDestroyTextureObject(tex_object);
+        return nullptr;
+    }
+
+    return d_data_array;
+#endif
+}
+
+void freeTexture(TEX_ARRAY& tex_array, TEX_DATA& tex_object)
+{
+#ifdef __USE_NOTEX
+    // Only release buffers that loadTexture* allocated; aliased caller memory
+    // (owns == 0, e.g. the device loadTexture path) is left for the caller.
+    if (tex_object.owns && tex_array != nullptr)
+        cudaFree((void*)tex_array);
+    tex_array = nullptr;
+    tex_object.data = nullptr;
+    tex_object.owns = 0;
+#else
+    if (tex_array != nullptr)
+        cudaFreeArray(tex_array);
+    if (tex_object != 0)
+        cudaDestroyTextureObject(tex_object);
+    tex_array = nullptr;
+    tex_object = 0;
+#endif
 }
 
 float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
@@ -1305,6 +1696,27 @@ float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
 
     uint64 N = params->projectionData_numberOfElements();
 
+    int stride    = params->projectionDataStride > 0 ? params->projectionDataStride : params->numRows;
+    int3 srcShape = make_int3(params->numAngles, stride, params->numCols);
+    int3 srcPos   = make_int3(0, params->projectionDataFirstRow, 0);
+    int3 N_txt    = make_int3(params->numAngles, params->numRows, params->numCols);
+
+    // The copy region [srcPos, srcPos + N_txt) must lie inside srcShape on every axis.
+    // Out-of-bounds here means cudaMemcpy3D would silently read past one slab into the
+    // next (e.g. firstRow + numRows > stride spills into the next angle's data).
+    if (g == nullptr ||
+        srcPos.x < 0 || srcPos.y < 0 || srcPos.z < 0 ||
+        srcPos.x + N_txt.z > srcShape.z ||   // x of cudaPos addresses the "cols" axis
+        srcPos.y + N_txt.y > srcShape.y ||
+        srcPos.z + N_txt.x > srcShape.x)
+    {
+        printf("copyProjectionDataToGPU: srcPos/N_txt out of bounds for srcShape "
+               "(srcPos=(%d,%d,%d) N_txt=(%d,%d,%d) srcShape=(%d,%d,%d))\n",
+               srcPos.x, srcPos.y, srcPos.z,
+               N_txt.x, N_txt.y, N_txt.z,
+               srcShape.x, srcShape.y, srcShape.z);
+        return nullptr;
+    }
 	//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// Copy volume data to GPU
 	float* dev_g = 0;
@@ -1314,10 +1726,22 @@ float* copyProjectionDataToGPU(float* g, parameters* params, int whichGPU)
         printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
 		return NULL;
 	}
-    if ((cudaStatus = cudaMemcpy(dev_g, g, N * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
+    cudaMemcpy3DParms copy_params_;
+    memset(&copy_params_, 0, sizeof(cudaMemcpy3DParms));
+
+    // No cudaArray participates in this copy (both src and dst are linear/pitched
+    // memory), so cudaMemcpy3D interprets the width axis (extent.width, pos.x, and
+    // the pitched-ptr xsize) in BYTES, not elements. The row/slice axes stay in rows.
+    copy_params_.dstPtr = make_cudaPitchedPtr((void*)dev_g, N_txt.z * sizeof(float), N_txt.z * sizeof(float), N_txt.y);
+    copy_params_.dstPos = make_cudaPos(0, 0, 0);
+    copy_params_.extent = make_cudaExtent(N_txt.z * sizeof(float), N_txt.y, N_txt.x);
+    copy_params_.srcPos = make_cudaPos(srcPos.x * sizeof(float), srcPos.y, srcPos.z);
+    copy_params_.kind = cudaMemcpyHostToDevice;
+    copy_params_.srcPtr = make_cudaPitchedPtr((void*)g, srcShape.z * sizeof(float), N_txt.z * sizeof(float), srcShape.y);
+    if ((cudaStatus = cudaMemcpy3D(&copy_params_)) != cudaSuccess)
 	{
-		fprintf(stderr, "cudaMemcpy(projection) failed!\n");
-        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+		fprintf(stderr, "cudaMemcpy3D(projection) failed!\n");
+        printf("cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
         cudaFree(dev_g);
 		return NULL;
 	}
@@ -1334,18 +1758,29 @@ bool pullProjectionDataFromGPU(float* g, parameters* params, float* dev_g, int w
         return false;
     }
 
-    uint64 N = params->projectionData_numberOfElements();
+    int stride    = params->projectionDataStride > 0 ? params->projectionDataStride : params->numRows;
+    int3 dstShape = make_int3(params->numAngles, stride, params->numCols);
+    int3 dstPos   = make_int3(0, params->projectionDataFirstRow, 0);
+    int3 N_txt    = make_int3(params->numAngles, params->numRows, params->numCols);
 
-	cudaStatus = cudaMemcpy(g, dev_g, N * sizeof(float), cudaMemcpyDeviceToHost);
-	if (cudaSuccess != cudaStatus)
-	{
-		fprintf(stderr, "failed to copy projection data back to host!\n");
-		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
-		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
-		return false;
-	}
-	else
-		return true;
+    cudaMemcpy3DParms copy_params_;
+    memset(&copy_params_, 0, sizeof(cudaMemcpy3DParms));
+
+    // dev_g is contiguous (numAngles, numRows, numCols); host g may be strided.
+    copy_params_.srcPtr = make_cudaPitchedPtr((void*)dev_g, N_txt.z * sizeof(float), N_txt.z * sizeof(float), N_txt.y);
+    copy_params_.srcPos = make_cudaPos(0, 0, 0);
+    copy_params_.extent = make_cudaExtent(N_txt.z * sizeof(float), N_txt.y, N_txt.x);
+    copy_params_.dstPos = make_cudaPos(dstPos.x * sizeof(float), dstPos.y, dstPos.z);
+    copy_params_.kind   = cudaMemcpyDeviceToHost;
+    copy_params_.dstPtr = make_cudaPitchedPtr((void*)g, dstShape.z * sizeof(float), N_txt.z * sizeof(float), dstShape.y);
+
+    if ((cudaStatus = cudaMemcpy3D(&copy_params_)) != cudaSuccess)
+    {
+        fprintf(stderr, "failed to copy projection data back to host!\n");
+        fprintf(stderr, "cudaMemcpy3D Error: %s\n", cudaGetErrorString(cudaStatus));
+        return false;
+    }
+    return true;
 }
 
 float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU)
@@ -1379,7 +1814,7 @@ float* copyVolumeDataToGPU(float* f, parameters* params, int whichGPU)
 	return dev_f;
 }
 
-bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU)
+bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int whichGPU, bool skipFIHT)
 {
     cudaError_t cudaStatus;
     if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
@@ -1388,6 +1823,39 @@ bool pullVolumeDataFromGPU(float* f, parameters* params, float* dev_f, int which
         return false;
     }
 
+    bool do_clipping = true;
+
+    //*
+    if (params->doDBP && skipFIHT == false && params->DBPparameter >= 0.0)
+    {
+        float scalar = 1.0;
+        //float sampleShift = 0.0;
+        float sampleShift = -1.0;
+        finiteInverseHilbert(dev_f, params, false, scalar, sampleShift);
+        if (params->DBPparameter <= 0.0)
+            do_clipping = false;
+        else if (params->rFOV() < params->furthestFromCenter())
+            windowFOV_gpu(dev_f, params);
+    }
+    //*/
+
+    if (do_clipping && params->clipWeightedBackprojection == true && (params->doDBP == true || params->doWeightedBackprojection == true) && params->inconsistencyReconstruction == false)
+    {
+        cudaStatus = clip(dev_f, make_int3(params->numZ, params->numY, params->numX), whichGPU);
+        if (cudaSuccess != cudaStatus)
+        {
+            fprintf(stderr, "volume clipping failed!\n");
+            fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+            fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+            return false;
+        }
+    }
+
+    if (f == dev_f)
+    {
+        cudaDeviceSynchronize();
+        return true;
+    }
     uint64 N = params->volumeData_numberOfElements();
 	cudaStatus = cudaMemcpy(f, dev_f, N * sizeof(float), cudaMemcpyDeviceToHost);
 	if (cudaSuccess != cudaStatus)
@@ -1461,6 +1929,64 @@ extern float* copy1DdataToGPU(float* x, int N, int whichGPU)
     return dev_x;
 }
 
+extern float3* copy1Dfloat3ToGPU(float3* x, int N, int whichGPU)
+{
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Copy volume data to GPU
+    float3* dev_x = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_x, N * sizeof(float3))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(1D) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
+        return NULL;
+    }
+    if ((cudaStatus = cudaMemcpy(dev_x, x, N * sizeof(float3), cudaMemcpyHostToDevice)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_x);
+        return NULL;
+    }
+
+    return dev_x;
+}
+
+extern float4* copy1Dfloat4ToGPU(float4* x, int N, int whichGPU)
+{
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // Copy volume data to GPU
+    float4* dev_x = 0;
+    if ((cudaStatus = cudaMalloc((void**)&dev_x, N * sizeof(float4))) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMalloc(1D) failed!\n");
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
+        return NULL;
+    }
+    if ((cudaStatus = cudaMemcpy(dev_x, x, N * sizeof(float4), cudaMemcpyHostToDevice)) != cudaSuccess)
+    {
+        fprintf(stderr, "cudaMemcpy(1D) failed!\n");
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(dev_x);
+        return NULL;
+    }
+
+    return dev_x;
+}
+
 extern bool* copy1DbooleanToGPU(bool* x, int N, int whichGPU)
 {
     cudaError_t cudaStatus;
@@ -1490,6 +2016,26 @@ extern bool* copy1DbooleanToGPU(bool* x, int N, int whichGPU)
     return dev_x;
 }
 
+bool pull1DdataFromGPU(float* x, int N, float* dev_x, int whichGPU)
+{
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaSetDevice(whichGPU)) != cudaSuccess)
+    {
+        printf("cudaSetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return false;
+    }
+
+	if ((cudaStatus = cudaMemcpy(x, dev_x, N * sizeof(float), cudaMemcpyDeviceToHost)) != cudaSuccess)
+	{
+		fprintf(stderr, "failed to copy 1D data back to host!\n");
+		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
+		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
+		return false;
+	}
+	else
+		return true;
+}
+
 bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
 {
     cudaError_t cudaStatus;
@@ -1502,7 +2048,7 @@ bool pull3DdataFromGPU(float* g, int3 N, float* dev_g, int whichGPU)
     uint64 N_prod = uint64(N.x) * uint64(N.y) * uint64(N.z);
 	if ((cudaStatus = cudaMemcpy(g, dev_g, N_prod * sizeof(float), cudaMemcpyDeviceToHost)) != cudaSuccess)
 	{
-		fprintf(stderr, "failed to copy volume data back to host!\n");
+		fprintf(stderr, "failed to copy 3D data back to host!\n");
 		fprintf(stderr, "error name: %s\n", cudaGetErrorName(cudaStatus));
 		fprintf(stderr, "error msg: %s\n", cudaGetErrorString(cudaStatus));
 		return false;
@@ -1530,13 +2076,13 @@ float* copyAngleArrayToGPU(parameters* params)
     float* dev_phis = 0;
     if ((cudaStatus = cudaMalloc((void**)&dev_phis, params->numAngles * sizeof(float))) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMalloc failed!\n");
+        fprintf(stderr, "copyAngleArrayToGPU: cudaMalloc failed!\n");
         printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
         return NULL;
     }
     if ((cudaStatus = cudaMemcpy(dev_phis, params->phis, params->numAngles * sizeof(float), cudaMemcpyHostToDevice)) != cudaSuccess)
     {
-        fprintf(stderr, "cudaMemcpy(phis) failed!\n");
+        fprintf(stderr, "copyAngleArrayToGPU: cudaMemcpy(phis) failed!\n");
         printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
         cudaFree(dev_phis);
         return NULL;
@@ -1703,9 +2249,9 @@ bool applyTransferFunction_gpu(float* x, int N_1, int N_2, int N_3, float* LUT, 
         dev_f = copy3DdataToGPU(x, N, whichGPU);
 
         if (cudaSuccess != cudaMalloc((void**)&dev_LUT, numSamples * sizeof(float)))
-            fprintf(stderr, "cudaMalloc failed!\n");
+            fprintf(stderr, "applyTransferFunction_gpu: cudaMalloc failed!\n");
         if (cudaMemcpy(dev_LUT, LUT, numSamples * sizeof(float), cudaMemcpyHostToDevice))
-            fprintf(stderr, "cudaMemcpy(LUT) failed!\n");
+            fprintf(stderr, "applyTransferFunction_gpu: cudaMemcpy(LUT) failed!\n");
     }
     else
     {
@@ -1755,9 +2301,9 @@ bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3
         dev_y = copy3DdataToGPU(y, N, whichGPU);
 
         if (cudaSuccess != cudaMalloc((void**)&dev_LUT, 2*numSamples*numSamples * sizeof(float)))
-            fprintf(stderr, "cudaMalloc failed!\n");
+            fprintf(stderr, "applyDualTransferFunction_gpu: cudaMalloc failed!\n");
         if (cudaMemcpy(dev_LUT, LUT, 2 * numSamples * numSamples * sizeof(float), cudaMemcpyHostToDevice))
-            fprintf(stderr, "cudaMemcpy(LUT) failed!\n");
+            fprintf(stderr, "applyDualTransferFunction_gpu: cudaMemcpy(LUT) failed!\n");
     }
     else
     {
@@ -1793,19 +2339,6 @@ bool applyDualTransferFunction_gpu(float* x, float* y, int N_1, int N_2, int N_3
     return true;
 }
 
-#else
-int numberOfGPUs()
-{
-    return 0;
-}
-
-float getAvailableGPUmemory(std::vector<int> whichGPUs)
-{
-    return 0.0;
-}
-
-float getAvailableGPUmemory(int whichGPU)
-{
-    return 0.0;
-}
+// For non-GPU versions of these functions, see cpu_utils.cpp. 
+// Put there instead to avoid linking errors on CPU builds.
 #endif

@@ -21,23 +21,27 @@
 //#define __INCLUDE_CUFFT
 
 #ifndef PI
-	#define PI 3.1415926535897932385
+  //#define PI 3.1415926535897932385
+    #define PI 3.141592653589793238462643383279502884197
 #endif
 
 #ifndef RAD_TO_DEG
-    #define RAD_TO_DEG 57.29577951308232 // 180.0 / PI
+    //#define RAD_TO_DEG 57.29577951308232 // 180.0 / PI
+    #define RAD_TO_DEG 57.29577951308232087679815481410517036830
 #endif
 
 #ifndef PIINV
-    #define PIINV 0.3183098861837907 // 1.0 / PI
+    //#define PIINV 0.3183098861837907 // 1.0 / PI
+    #define PIINV 0.318309886183790671537767526745028724068
 #endif
 
-//#ifndef NAN
-//	#define NAN sqrt(-1)
-//#endif
+#ifndef NAN
+	#define NAN sqrt(-1)
+#endif
 
 #ifndef E
-	#define E 2.7182818284590452354
+	//#define E 2.7182818284590452354
+    #define E 2.718281828459045235360287471352662497757
 #endif
 
 #ifdef WIN32
@@ -49,6 +53,13 @@
 typedef unsigned int uint32;
 typedef unsigned short uint16;
 typedef unsigned char uint8;
+
+#define MAX_CPU_THREADS 1000
+
+struct Point3D
+{
+    float x, y, z;
+};
 
 /**
  * LEAP Error Codes

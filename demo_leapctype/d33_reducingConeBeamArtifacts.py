@@ -51,8 +51,8 @@ leapct.print_parameters()
 #leapct.sketch_system()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify a phantom with the strong gradient in the cone angle direction
 # which should produce strong cone-beam artifacts

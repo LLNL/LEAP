@@ -89,8 +89,8 @@ leapct.print_parameters()
 #leapct.sketch_system(0)
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f = leapct.allocate_volume()
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
@@ -108,8 +108,7 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #quit()
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#leapct.poisson(g, 50000.0, True)
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
@@ -148,7 +147,7 @@ leapct.display(f)
 ct2 = tomographicModels()
 ct2.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, 360.0), 1100, 1400)
 ct2.set_default_volume()
-f_cone = ct2.allocateVolume()
+f_cone = ct2.allocate_volume()
 ct2.FBP(g,f_cone)
 leapct.display(f_cone)
 leapct.display(f_cone-f)

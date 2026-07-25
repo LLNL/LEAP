@@ -50,8 +50,8 @@ leapct.print_parameters()
 #leapct.sketch_system()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f_true = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f_true = leapct.allocate_volume()
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
