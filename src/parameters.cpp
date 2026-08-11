@@ -2252,7 +2252,8 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 		if (phis_full != NULL)
 			delete[] phis_full;
 		phis_full = new float[numAngles];
-		get_angles(phis_full);
+		for (int i = 0; i < numAngles; i++)
+			phis_full[i] = phis[i];  // radians
 		phis_new = new float[numAngles_new];
 		for (int i = firstProj; i <= lastProj; i++)
 			phis_new[i - firstProj] = phis_full[i];
@@ -2287,11 +2288,11 @@ bool parameters::removeProjections(int firstProj, int lastProj)
 	}
 	if (phis_new != NULL)
 	{
-		float phi_start_save = phi_start;
-		float phi_end_save = phi_end;
-		set_angles(phis_new, numAngles_new);
-		phi_start = phi_start_save;
-		phi_end = phi_end_save;
+		delete[] phis;
+		phis = phis_new;
+		phis_new = NULL;
+		phi_start = min(phis[0], phis[numAngles_new - 1]);
+		phi_end   = max(phis[0], phis[numAngles_new - 1]);
 		angularRange = angularRange_save;
 	}
 	numAngles = numAngles_new;
