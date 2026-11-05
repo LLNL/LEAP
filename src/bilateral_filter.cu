@@ -24,7 +24,7 @@ __global__ void bilateralFilterKernel(float* f, float* f_filtered, const int3 N,
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
@@ -79,7 +79,7 @@ __global__ void bilateralFilterKernel_txt(cudaTextureObject_t f, float* f_filter
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
@@ -92,7 +92,7 @@ __global__ void bilateralFilterKernel_txt(cudaTextureObject_t f, float* f_filter
 
     uint64 ind = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z + k);
     //const float curVal = f[ind];
-    const float curVal = tex3D<float>(f, k, j, i);
+    const float curVal = leapTex3D(f, k, j, i, false);
 
     // f_filtered[ind] = curVal;
 
@@ -110,7 +110,7 @@ __global__ void bilateralFilterKernel_txt(cudaTextureObject_t f, float* f_filter
             {
                 //const float neighborVal = f_slice[uint64((j + dj) * N.z + (k + dk))];
                 //const float neighborVal = f_line[k + dk];
-                const float neighborVal = tex3D<float>(f, k+dk, j+dj, i+di);
+                const float neighborVal = leapTex3D(f, k+dk, j+dj, i+di, false);
 
                 // const float x = (di * di + dj * dj + dk * dk) * sigma_d_sq_inv + (curVal - neighborVal)*(curVal -
                 // neighborVal) * sigma_i_sq_inv; const float w_cur = (x <= 10.0) ? exp_int[int(x)] * (1.0 + (x -
@@ -136,7 +136,7 @@ __global__ void scaledBilateralFilterKernel(float* f, float* Bf, float* f_filter
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
@@ -190,7 +190,7 @@ __global__ void scaledBilateralFilterKernel_txt(cudaTextureObject_t f, cudaTextu
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
@@ -203,7 +203,7 @@ __global__ void scaledBilateralFilterKernel_txt(cudaTextureObject_t f, cudaTextu
 
     uint64 ind = uint64(i) * uint64(N.z * N.y) + uint64(j * N.z + k);
     //const float curVal = f[ind];
-    const float curVal = tex3D<float>(f, k, j, i);
+    const float curVal = leapTex3D(f, k, j, i, false);
 
     // f_filtered[ind] = curVal;
 
@@ -220,7 +220,7 @@ __global__ void scaledBilateralFilterKernel_txt(cudaTextureObject_t f, cudaTextu
             {
                 //const float neighborVal = Bf[uint64(i + di) * uint64(N.z * N.y) + uint64((j + dj) * N.z + (k + dk))];
                 //const float neighborVal = Bf_line[k + dk];
-                const float neighborVal = tex3D<float>(Bf, k+dk, j+dj, i+di);
+                const float neighborVal = leapTex3D(Bf, k+dk, j+dj, i+di, false);
 
                 // const float x = (di * di + dj * dj + dk * dk) * sigma_d_sq_inv + (curVal - neighborVal)*(curVal -
                 // neighborVal) * sigma_i_sq_inv; const float w_cur = (x <= 10.0) ? exp_int[int(x)] * (1.0 + (x -
@@ -243,8 +243,8 @@ bool bilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM, flo
 {
     if (f == NULL) return false;
 
-    spatialFWHM = float(max(0.25, min(100.0, spatialFWHM)));
-    intensityFWHM = float(max(1.0e-8, min(1.0e8, intensityFWHM)));
+    spatialFWHM = float(fmax(0.25, fmin(100.0, double(spatialFWHM))));
+    intensityFWHM = float(fmax(1.0e-8, fmin(1.0e8, double(intensityFWHM))));
 
     // convert FWHM input parameters to sigmas
     float sigma_d_sq = float(spatialFWHM / (2.0 * sqrt(2.0 * log(2.0))));
@@ -340,8 +340,8 @@ bool priorBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWHM
         return bilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, data_on_cpu, whichGPU);
     if (f == NULL) return false;
 
-    spatialFWHM = float(max(0.25, min(100.0, spatialFWHM)));
-    intensityFWHM = float(max(1.0e-8, min(1.0e8, intensityFWHM)));
+    spatialFWHM = float(fmax(0.25, fmin(100.0, double(spatialFWHM))));
+    intensityFWHM = float(fmax(1.0e-8, fmin(1.0e8, double(intensityFWHM))));
 
     // convert FWHM input parameters to sigmas
     float sigma_d_sq = float(spatialFWHM / (2.0 * sqrt(2.0 * log(2.0))));
@@ -452,8 +452,8 @@ bool scaledBilateralFilter(float* f, int N_1, int N_2, int N_3, float spatialFWH
         return bilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, data_on_cpu, whichGPU);
     if (f == NULL) return false;
 
-    spatialFWHM = float(max(0.25, min(100.0, spatialFWHM)));
-    intensityFWHM = float(max(1.0e-8, min(1.0e8, intensityFWHM)));
+    spatialFWHM = float(fmax(0.25, fmin(100.0, double(spatialFWHM))));
+    intensityFWHM = float(fmax(1.0e-8, fmin(1.0e8, double(intensityFWHM))));
 
     // convert FWHM input parameters to sigmas
     float sigma_d_sq = float(spatialFWHM / (2.0 * sqrt(2.0 * log(2.0))));

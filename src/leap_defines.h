@@ -47,8 +47,14 @@
 #endif
 
 typedef unsigned int uint32;
+// On Windows with the ROCm/HIP toolchain, amd_hip_vector_types.h defines
+// uint8 and uint16 as HIP vector types (8- and 16-element int vectors), which
+// conflicts with LEAP's byte/short integer typedefs. Skip them here; callers
+// that need them include <cstdint> directly.
+#if !(defined(_MSC_VER) && defined(__HIP_PLATFORM_AMD__))
 typedef unsigned short uint16;
 typedef unsigned char uint8;
+#endif
 
 /**
  * LEAP Error Codes

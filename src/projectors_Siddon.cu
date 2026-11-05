@@ -41,10 +41,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy + 1, ix)
-						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy + 1, ix);
+					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy + 1, ix, false)
+						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy + 1, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -57,10 +57,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy + 1, ix)
-						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy + 1, ix);
+					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy + 1, ix, false)
+						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy + 1, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -73,8 +73,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy + 1, ix);
+					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy + 1, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -90,10 +90,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy - 1, ix)
-						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy - 1, ix);
+					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy - 1, ix, false)
+						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy - 1, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -106,10 +106,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy - 1, ix)
-						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy - 1, ix);
+					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy - 1, ix, false)
+						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy - 1, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -122,8 +122,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy - 1, ix);
+					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy - 1, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -139,8 +139,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc))*tex3D<float>(f, iz + 1, iy, ix);
+					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc))*leapTex3D(f, iz + 1, iy, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -153,8 +153,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc))*tex3D<float>(f, iz - 1, iy, ix);
+					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc))*leapTex3D(f, iz - 1, iy, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -167,7 +167,7 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += tex3D<float>(f, iz, iy, ix);
+					val += leapTex3D(f, iz, iy, ix, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -197,10 +197,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix + 1)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy, ix + 1);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix + 1, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy, ix + 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -213,10 +213,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix + 1)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy, ix + 1);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix + 1, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy, ix + 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -229,8 +229,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix + 1);
+					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix + 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -246,10 +246,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix - 1)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz + 1, iy, ix - 1);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix - 1, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc)))*leapTex3D(f, iz + 1, iy, ix - 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -262,10 +262,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz, iy, ix - 1)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*tex3D<float>(f, iz - 1, iy, ix - 1);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz, iy, ix - 1, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc)))*leapTex3D(f, iz - 1, iy, ix - 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -278,8 +278,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix - 1);
+					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix - 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -295,8 +295,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc))*tex3D<float>(f, iz + 1, iy, ix);
+					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc))*leapTex3D(f, iz + 1, iy, ix, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -309,8 +309,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc))*tex3D<float>(f, iz - 1, iy, ix);
+					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc))*leapTex3D(f, iz - 1, iy, ix, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -323,7 +323,7 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += tex3D<float>(f, iz, iy, ix);
+					val += leapTex3D(f, iz, iy, ix, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -353,10 +353,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix + 1)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy + 1, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy + 1, ix + 1);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix + 1, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy + 1, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy + 1, ix + 1, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -369,10 +369,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix + 1)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy - 1, ix)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy - 1, ix + 1);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix + 1, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy - 1, ix, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy - 1, ix + 1, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -385,8 +385,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix + 1);
+					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix + 1, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -402,10 +402,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix - 1)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy + 1, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy + 1, ix - 1);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix - 1, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy + 1, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy + 1, ix - 1, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -418,10 +418,10 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy, ix - 1)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy - 1, ix)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*tex3D<float>(f, iz, iy - 1, ix - 1);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy, ix - 1, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy - 1, ix, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc)))*leapTex3D(f, iz, iy - 1, ix - 1, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -434,8 +434,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc))*tex3D<float>(f, iz, iy, ix - 1);
+					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc))*leapTex3D(f, iz, iy, ix - 1, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -451,8 +451,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy + 1, ix);
+					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy + 1, ix, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -465,8 +465,8 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy, ix)
-						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc))*tex3D<float>(f, iz, iy - 1, ix);
+					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy, ix, false)
+						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc))*leapTex3D(f, iz, iy - 1, ix, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -479,7 +479,7 @@ __device__ float projectLine(cudaTextureObject_t f, int4 N_f, float4 T_f, float4
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += tex3D<float>(f, iz, iy, ix);
+					val += leapTex3D(f, iz, iy, ix, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -516,10 +516,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz)
-						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz + 1);
+					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy + 1, iz, false)
+						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz + 1, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy + 1, iz + 1, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -532,10 +532,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz)
-						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
-						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy + 1, iz - 1);
+					val += max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy + 1, iz, false)
+						+ max(0.0f, min(1.0f, min((iy + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz - 1, false)
+						+ max(0.0f, min(1.0f, min((iy + 1 + 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 1 - 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy + 1, iz - 1, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -548,8 +548,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy + 1, iz);
+					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy + 1, iz, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -565,10 +565,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz)
-						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz + 1);
+					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy - 1, iz, false)
+						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz + 1, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy - 1, iz + 1, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -581,10 +581,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz)
-						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
-						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy - 1, iz - 1);
+					val += max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy - 1, iz, false)
+						+ max(0.0f, min(1.0f, min((iy - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz - 1, false)
+						+ max(0.0f, min(1.0f, min((iy - 1 - 0.5f - y_low) / y_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((iy - 1 + 0.5f - y_low) / y_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy - 1, iz - 1, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -597,8 +597,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy - 1, iz);
+					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy - 1, iz, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -614,8 +614,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz + 1);
+					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz + 1, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -628,8 +628,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz - 1);
+					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz - 1, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -642,7 +642,7 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int iy = int(y_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += tex3D<float>(f, ix, iy, iz);
+					val += leapTex3D(f, ix, iy, iz, false);
 
 					y_low += y_inc;
 					z_low += z_inc;
@@ -672,10 +672,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz + 1);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix + 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz + 1, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix + 1, iy, iz + 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -688,10 +688,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix + 1, iy, iz - 1);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix + 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz - 1, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix + 1, iy, iz - 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -704,8 +704,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix + 1, iy, iz);
+					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc)) * leapTex3D(f, ix + 1, iy, iz, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -721,10 +721,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz + 1)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz + 1);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix - 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz + 1, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz + 1 + 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 1 - 0.5f - z_low) / z_inc))) * leapTex3D(f, ix - 1, iy, iz + 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -737,10 +737,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix, iy, iz - 1)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * tex3D<float>(f, ix - 1, iy, iz - 1);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix - 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix, iy, iz - 1, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iz - 1 - 0.5f - z_low) / z_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iz - 1 + 0.5f - z_low) / z_inc))) * leapTex3D(f, ix - 1, iy, iz - 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -753,8 +753,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix - 1, iy, iz);
+					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc)) * leapTex3D(f, ix - 1, iy, iz, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -770,8 +770,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz + 1);
+					val += max(0.0f, min(1.0f, (iz + 0.5f - z_low) / z_inc) - max(0.0f, (iz - 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iz + 1 + 0.5f - z_low) / z_inc) - max(0.0f, (iz + 1 - 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz + 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -784,8 +784,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc)) * tex3D<float>(f, ix, iy, iz - 1);
+					val += max(0.0f, min(1.0f, (iz - 0.5f - z_low) / z_inc) - max(0.0f, (iz + 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iz - 1 - 0.5f - z_low) / z_inc) - max(0.0f, (iz - 1 + 0.5f - z_low) / z_inc)) * leapTex3D(f, ix, iy, iz - 1, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -798,7 +798,7 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iz = int(z_low + 0.5f);
 
-					val += tex3D<float>(f, ix, iy, iz);
+					val += leapTex3D(f, ix, iy, iz, false);
 
 					x_low += x_inc;
 					z_low += z_inc;
@@ -828,10 +828,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy + 1, iz)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy + 1, iz);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix + 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy + 1, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix + 1, iy + 1, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -844,10 +844,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy - 1, iz)
-						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix + 1, iy - 1, iz);
+					val += max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix + 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy - 1, iz, false)
+						+ max(0.0f, min(1.0f, min((ix + 1 + 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 1 - 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix + 1, iy - 1, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -860,8 +860,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix + 1, iy, iz);
+					val += max(0.0f, min(1.0f, (ix + 0.5f - x_low) / x_inc) - max(0.0f, (ix - 0.5f - x_low) / x_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (ix + 1 + 0.5f - x_low) / x_inc) - max(0.0f, (ix + 1 - 0.5f - x_low) / x_inc)) * leapTex3D(f, ix + 1, iy, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -877,10 +877,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy + 1, iz)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy + 1, iz);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix - 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy + 1, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy + 1 + 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 1 - 0.5f - y_low) / y_inc))) * leapTex3D(f, ix - 1, iy + 1, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -893,10 +893,10 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy, iz)
-						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix, iy - 1, iz)
-						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * tex3D<float>(f, ix - 1, iy - 1, iz);
+					val += max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix - 1, iy, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix, iy - 1, iz, false)
+						+ max(0.0f, min(1.0f, min((ix - 1 - 0.5f - x_low) / x_inc, (iy - 1 - 0.5f - y_low) / y_inc)) - max(0.0f, max((ix - 1 + 0.5f - x_low) / x_inc, (iy - 1 + 0.5f - y_low) / y_inc))) * leapTex3D(f, ix - 1, iy - 1, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -909,8 +909,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f); // ?
 
-					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc)) * tex3D<float>(f, ix - 1, iy, iz);
+					val += max(0.0f, min(1.0f, (ix - 0.5f - x_low) / x_inc) - max(0.0f, (ix + 0.5f - x_low) / x_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (ix - 1 - 0.5f - x_low) / x_inc) - max(0.0f, (ix - 1 + 0.5f - x_low) / x_inc)) * leapTex3D(f, ix - 1, iy, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -926,8 +926,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy + 1, iz);
+					val += max(0.0f, min(1.0f, (iy + 0.5f - y_low) / y_inc) - max(0.0f, (iy - 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iy + 1 + 0.5f - y_low) / y_inc) - max(0.0f, (iy + 1 - 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy + 1, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -940,8 +940,8 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy, iz)
-						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc)) * tex3D<float>(f, ix, iy - 1, iz);
+					val += max(0.0f, min(1.0f, (iy - 0.5f - y_low) / y_inc) - max(0.0f, (iy + 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy, iz, false)
+						+ max(0.0f, min(1.0f, (iy - 1 - 0.5f - y_low) / y_inc) - max(0.0f, (iy - 1 + 0.5f - y_low) / y_inc)) * leapTex3D(f, ix, iy - 1, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -954,7 +954,7 @@ __device__ float projectLine_ZYX(cudaTextureObject_t f, int4 N_f, float4 T_f, fl
 					int ix = int(x_low + 0.5f);
 					int iy = int(y_low + 0.5f);
 
-					val += tex3D<float>(f, ix, iy, iz);
+					val += leapTex3D(f, ix, iy, iz, false);
 
 					x_low += x_inc;
 					y_low += y_inc;
@@ -1052,7 +1052,7 @@ __global__ void fanBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, floa
 				t_min = max(t_min, min(t_b, t_a));
 			}
 
-			val += max(0.0f, t_max - t_min) * tex3D<float>(g, iu, iv, iphi);
+			val += max(0.0f, t_max - t_min) * leapTex3D(g, iu, iv, iphi, false);
 		}
 	}
 	f[ind] = val;
@@ -1174,7 +1174,7 @@ __global__ void coneBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, flo
 					t_min = max(t_min, min(t_b, t_a));
 				}
 
-				val += max(0.0f, t_max - t_min)*tex3D<float>(g, iu, iv, iphi);
+				val += max(0.0f, t_max - t_min)*leapTex3D(g, iu, iv, iphi, false);
 			}
 		}
 	}
@@ -1286,7 +1286,7 @@ __global__ void parallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g,
 				t_min = max(t_min, min(t_b, t_a));
 			}
 
-			val += max(0.0f, t_max - t_min)*tex3D<float>(g, iu, iv, iphi);
+			val += max(0.0f, t_max - t_min)*leapTex3D(g, iu, iv, iphi, false);
 		}
 	}
 	f[ind] = val;
@@ -1424,7 +1424,7 @@ __global__ void modularBeamBackprojectorKernel(cudaTextureObject_t g, int4 N_g, 
 					t_min = max(t_min, min(t_b, t_a));
 				}
 
-				val += max(0.0f, t_max - t_min)*tex3D<float>(g, iu, iv, iphi);
+				val += max(0.0f, t_max - t_min)*leapTex3D(g, iu, iv, iphi, false);
 			}
 		}
 	}

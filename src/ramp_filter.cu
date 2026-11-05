@@ -163,22 +163,22 @@ __global__ void explicit_convolution(cudaTextureObject_t g, float* filtered_data
 
     for (int j = 0; j < N.z; j+=8)
     {
-        const float x0 = tex3D<float>(g, j + 0, m, l);
-        const float x1 = tex3D<float>(g, j + 1, m, l);
-        const float x2 = tex3D<float>(g, j + 2, m, l);
-        const float x3 = tex3D<float>(g, j + 3, m, l);
-        const float x4 = tex3D<float>(g, j + 4, m, l);
-        const float x5 = tex3D<float>(g, j + 5, m, l);
-        const float x6 = tex3D<float>(g, j + 6, m, l);
-        const float x7 = tex3D<float>(g, j + 7, m, l);
+        const float x0 = leapTex3D(g, j + 0, m, l, false);
+        const float x1 = leapTex3D(g, j + 1, m, l, false);
+        const float x2 = leapTex3D(g, j + 2, m, l, false);
+        const float x3 = leapTex3D(g, j + 3, m, l, false);
+        const float x4 = leapTex3D(g, j + 4, m, l, false);
+        const float x5 = leapTex3D(g, j + 5, m, l, false);
+        const float x6 = leapTex3D(g, j + 6, m, l, false);
+        const float x7 = leapTex3D(g, j + 7, m, l, false);
 
         const int n_minus_j_plus_N = n - j + N.z;
         for (int s = 0; s < NUM_RAYS_PER_THREAD; s++)
         {
-            ys[s] += tex1D<float>(h, n_minus_j_plus_N + s - 0) * x0 + tex1D<float>(h, n_minus_j_plus_N + s - 1) * x1
-                  +  tex1D<float>(h, n_minus_j_plus_N + s - 2) * x2 + tex1D<float>(h, n_minus_j_plus_N + s - 3) * x3
-                  +  tex1D<float>(h, n_minus_j_plus_N + s - 4) * x4 + tex1D<float>(h, n_minus_j_plus_N + s - 5) * x5
-                  +  tex1D<float>(h, n_minus_j_plus_N + s - 6) * x6 + tex1D<float>(h, n_minus_j_plus_N + s - 7) * x7;
+            ys[s] += leapTex1D(h, n_minus_j_plus_N + s - 0, false) * x0 + leapTex1D(h, n_minus_j_plus_N + s - 1, false) * x1
+                  +  leapTex1D(h, n_minus_j_plus_N + s - 2, false) * x2 + leapTex1D(h, n_minus_j_plus_N + s - 3, false) * x3
+                  +  leapTex1D(h, n_minus_j_plus_N + s - 4, false) * x4 + leapTex1D(h, n_minus_j_plus_N + s - 5, false) * x5
+                  +  leapTex1D(h, n_minus_j_plus_N + s - 6, false) * x6 + leapTex1D(h, n_minus_j_plus_N + s - 7, false) * x7;
         }
     }
     for (int s = 0; s < min(NUM_RAYS_PER_THREAD, N.z-n); s++)
@@ -412,7 +412,7 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term1 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    const float term1 = leapTex3D(g, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -424,7 +424,7 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = leapTex3D(g, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -436,7 +436,7 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = leapTex3D(g, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -448,7 +448,7 @@ __global__ void deriv_helical_NHDLH_curved(cudaTextureObject_t g, float* Dg, con
     B2 = helicalPitch *(epsilon-(float)shiftDirection)* T_phi + lineLength*v;
     u_arg = one_over_T_u * atan((sin_phi_shift*B0 - cos_phi_shift*B1) / (cos_phi_shift*B0 + sin_phi_shift*B1)) - u_shift;
     v_arg = one_over_T_v * B2*rsqrt(B0*B0 + B1*B1) - v_shift;
-    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = leapTex3D(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
     //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
@@ -515,7 +515,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term1 = tex3D<float>(g, u_arg, v_arg, l0+0.5f);
+    const float term1 = leapTex3D(g, u_arg, v_arg, l0+0.5f);
 
     shiftDirection = l_next-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon - sin_phi*sin_T_phi_epsilon;
@@ -528,7 +528,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term2 = tex3D<float>(g, u_arg, v_arg, (float)l_next + 0.5f);
+    const float term2 = leapTex3D(g, u_arg, v_arg, (float)l_next + 0.5f);
 
     shiftDirection = 0;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -541,7 +541,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term3 = tex3D<float>(g, u_arg, v_arg, l0 + 0.5f);
+    const float term3 = leapTex3D(g, u_arg, v_arg, l0 + 0.5f);
 
     shiftDirection = l_prev-l;
     cos_phi_epsilon = cos_phi*cos_T_phi_epsilon + sin_phi*sin_T_phi_epsilon;
@@ -554,7 +554,7 @@ __global__ void deriv_helical_NHDLH_flat(cudaTextureObject_t g, float* Dg, const
     one_over_neg_B_dot_theta = 1.0f/(-B0*cos_phi_shift - B1*sin_phi_shift);
     u_arg = one_over_T_u * (-sin_phi_shift*B0 + cos_phi_shift*B1) * one_over_neg_B_dot_theta - u_shift;
     v_arg = one_over_T_v * B2 * one_over_neg_B_dot_theta - v_shift;
-    const float term4 = tex3D<float>(g, u_arg, v_arg, (float)l_prev + 0.5f);
+    const float term4 = leapTex3D(g, u_arg, v_arg, (float)l_prev + 0.5f);
 
     Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) / (2.0f * epsilon * R * T_phi); // ? 1.0f / T_phi
     //Dg[uint64(l) * uint64(N.z * N.y) + uint64(m * N.z + n)] = ((1.0f - epsilon) * (term1 - term3) + epsilon * (term2 - term4)) * 2.0f * PI / (R * T.z);
@@ -840,7 +840,7 @@ cufftComplex* HilbertTransformFrequencyResponse(int N, parameters* params, float
         {
             //float omega = float(i)*PI / N_over2;
             float omega = float(i) * PI / N;
-            float theWeight = pow(max(0.0, cos(omega)), 2.0 * theExponent);
+            float theWeight = pow(fmax(0.0, double(cos(omega))), 2.0 * theExponent);
 
             H_Hilb[i].x *= theWeight;
             H_Hilb[i].y *= theWeight;
@@ -931,7 +931,7 @@ float* rampFilterFrequencyResponseMagnitude(int N, parameters* params)
         {
             //float omega = float(i)*PI / N_over2;
             float omega = float(i) * PI / N;
-            float theWeight = pow(max(0.0, cos(omega)), 2.0 * theExponent);
+            float theWeight = pow(fmax(0.0, double(cos(omega))), 2.0 * theExponent);
 
             H_real[i] *= theWeight;
             //printf("H(%f) = %f (%d)\n", omega, theWeight, i);

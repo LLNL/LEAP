@@ -61,9 +61,9 @@ __global__ void AbelConeInverseKernel(cudaTextureObject_t g, int4 N_g, float4 T_
 		const float theWeight = R_sq * v_denom_inv * v_denom_inv;
 
 		//if (r_val*s_val >= 0.0f)
-			curVal += theWeight * tex3D<float>(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
+			curVal += theWeight * leapTex3D(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
 		//else
-		//	curVal += theWeight * tex3D<float>(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
+		//	curVal += theWeight * leapTex3D(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
 	}
 
 	int ind;
@@ -117,7 +117,7 @@ __global__ void AbelParallelInverseKernel(cudaTextureObject_t g, int4 N_g, float
 		const float v_arg = ((r_val * sin_phi * sin_beta + z_val * cos_beta) - v_0) * T_v_inv;
 
 		//if (r_val * s_val >= 0.0f)
-			curVal += tex3D<float>(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
+			curVal += leapTex3D(g, s_arg + 0.5f, v_arg + 0.5f, 0.5f);
 	}
 
 	int ind;
@@ -208,18 +208,18 @@ __global__ void AbelConeBackprojectorKernel(cudaTextureObject_t g, int4 N_g, flo
 				const float t_1st_low = (b_ti - disc_outer) * a_ti_inv;
 				const float t_1st_high = (b_ti - disc_inner) * a_ti_inv;
 				const float v_1st_arg = 2.0f * z_slope / (t_1st_low + t_1st_high) - tan_beta;
-				curVal += sqrt(1.0f + tan_beta * tan_beta + u * u + v_1st_arg * v_1st_arg) * (t_1st_high - t_1st_low) * tex3D<float>(g, float(iu) + 0.5f, (v_1st_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
+				curVal += sqrt(1.0f + tan_beta * tan_beta + u * u + v_1st_arg * v_1st_arg) * (t_1st_high - t_1st_low) * leapTex3D(g, float(iu) + 0.5f, (v_1st_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
 
 				const float t_2nd_low = (b_ti + disc_inner) * a_ti_inv;
 				const float t_2nd_high = (b_ti + disc_outer) * a_ti_inv;
 				const float v_2nd_arg = 2.0f * z_slope / (t_2nd_low + t_2nd_high) - tan_beta;
-				curVal += sqrt(1.0f + tan_beta * tan_beta + u * u + v_2nd_arg * v_2nd_arg) * (t_2nd_high - t_2nd_low) * tex3D<float>(g, float(iu) + 0.5f, (v_2nd_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
+				curVal += sqrt(1.0f + tan_beta * tan_beta + u * u + v_2nd_arg * v_2nd_arg) * (t_2nd_high - t_2nd_low) * leapTex3D(g, float(iu) + 0.5f, (v_2nd_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
 			}
 			else
 			{
 				disc_outer = sqrt(disc_outer);
 				const float v_arg = z_slope / (b_ti * a_ti_inv) - tan_beta;
-				curVal += sqrt(1.0f + tan_beta * tan_beta + u * u + v_arg * v_arg) * 2.0f * disc_outer * a_ti_inv * tex3D<float>(g, float(iu) + 0.5f, (v_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
+				curVal += sqrt(1.0f + tan_beta * tan_beta + u * u + v_arg * v_arg) * 2.0f * disc_outer * a_ti_inv * leapTex3D(g, float(iu) + 0.5f, (v_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
 			}
 		}
 	}
@@ -293,13 +293,13 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
@@ -312,13 +312,13 @@ __device__ float AbelConeProjectorKernel_left(int4 N_g, float4 T_g, float4 start
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 
 		// update radius and sqrt for t calculation
@@ -389,13 +389,13 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
@@ -408,13 +408,13 @@ __device__ float AbelConeProjectorKernel_right(int4 N_g, float4 T_g, float4 star
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 
 		// update radius and sqrt for t calculation
@@ -494,13 +494,13 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
@@ -514,13 +514,13 @@ __device__ float AbelParallelBeamProjectorKernel_left(int4 N_g, float4 T_g, floa
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left - 1 - ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 	}
 	return curVal;
@@ -582,13 +582,13 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 		{
 			if (volumeDimensionOrder == 0)
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, 0.5f);
 			}
 			else
 			{
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti - 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+				curVal += max(0.0f, disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + rInd_min_minus) + 0.5f, (b_ti + 0.5f * (disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 			}
 		}
 	}
@@ -602,13 +602,13 @@ __device__ float AbelParallelBeamProjectorKernel_right(int4 N_g, float4 T_g, flo
 
 		if (volumeDimensionOrder == 0)
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f, (float)(N_r_left + ir) + 0.5f, 0.5f);
 		}
 		else
 		{
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
-			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * tex3D<float>(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti - 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
+			curVal += (disc_sqrt_next - disc_sqrt_prev) * a_ti_inv * leapTex3D(f, 0.5f, (float)(N_r_left + ir) + 0.5f, (b_ti + 0.5f * (disc_sqrt_next + disc_sqrt_prev)) * a_ti_inv * z_slope + z_shift + 0.5f);
 		}
 	}
 	return curVal;
@@ -703,18 +703,18 @@ __global__ void AbelParallelBeamBackprojectorKernel(cudaTextureObject_t g, int4 
 				const float t_1st_low = (b_ti - disc_outer) * a_ti_inv;
 				const float t_1st_high = (b_ti - disc_inner) * a_ti_inv;
 				const float v_1st_arg = -0.5f * (t_1st_low + t_1st_high) * tan_beta + z * sec_beta;
-				curVal += (t_1st_high - t_1st_low) * tex3D<float>(g, float(iu) + 0.5f, (v_1st_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
+				curVal += (t_1st_high - t_1st_low) * leapTex3D(g, float(iu) + 0.5f, (v_1st_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
 
 				const float t_2nd_low = (b_ti + disc_inner) * a_ti_inv;
 				const float t_2nd_high = (b_ti + disc_outer) * a_ti_inv;
 				const float v_2nd_arg = -0.5f * (t_2nd_low + t_2nd_high) * tan_beta + z * sec_beta;
-				curVal += (t_2nd_high - t_2nd_low) * tex3D<float>(g, float(iu) + 0.5f, (v_2nd_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
+				curVal += (t_2nd_high - t_2nd_low) * leapTex3D(g, float(iu) + 0.5f, (v_2nd_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
 			}
 			else
 			{
 				disc_outer = sqrt(disc_outer);
 				const float v_arg = -(b_ti * a_ti_inv) * tan_beta + z * sec_beta;
-				curVal += 2.0f * disc_outer * a_ti_inv * tex3D<float>(g, float(iu) + 0.5f, (v_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
+				curVal += 2.0f * disc_outer * a_ti_inv * leapTex3D(g, float(iu) + 0.5f, (v_arg - startVals_g.y) * Tv_inv + 0.5f, 0.5f);
 			}
 		}
 	}

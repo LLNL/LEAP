@@ -29,7 +29,7 @@ __device__ float innerProduct(cudaTextureObject_t f, const float* patches, const
             {
                 const int ind = di * patchSize.y * patchSize.z + dj * patchSize.z + dk + ind_shift;
                 retVal += patches[ind] * //tex2D<float>(patches, whichPatch, ind) *
-                    tex3D<float>(f, voxelIndices.z + dk, voxelIndices.y + dj, voxelIndices.x + di);
+                    leapTex3D(f, voxelIndices.z + dk, voxelIndices.y + dj, voxelIndices.x + di, false);
                          //tex3D<float>(f, voxelIndices.x + di, voxelIndices.y + dj, voxelIndices.z + dk);
             }
         }
@@ -45,7 +45,7 @@ __device__ void copyVolumePatch(cudaTextureObject_t f, const int3 voxelIndices, 
         {
             for (int dk = 0; dk < patchSize.z; dk++)
                 patch_copy[di * patchSize.y * patchSize.z + dj * patchSize.z + dk] =
-                tex3D<float>(f, voxelIndices.z + dk, voxelIndices.y + dj, voxelIndices.x + di);
+                leapTex3D(f, voxelIndices.z + dk, voxelIndices.y + dj, voxelIndices.x + di, false);
                     //tex3D<float>(f, voxelIndices.x + di, voxelIndices.y + dj, voxelIndices.z + dk);
         }
     }

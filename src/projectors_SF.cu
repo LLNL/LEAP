@@ -166,12 +166,12 @@ __global__ void coneParallelWeightedHelicalBackprojectorKernel_SF(cudaTextureObj
 
             if (z_high > 1.0f)
             {
-                val += (tex3D<float>(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two)
-                    + tex3D<float>(g, s_ind_A, row_high_plus_two, L) * (z_high - 1.0f)) * bpWeight;
+                val += (leapTex3D(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two)
+                    + leapTex3D(g, s_ind_A, row_high_plus_two, L) * (z_high - 1.0f)) * bpWeight;
             }
             else
             {
-                val += tex3D<float>(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two) * bpWeight;
+                val += leapTex3D(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two) * bpWeight;
             }
         }
     }
@@ -287,12 +287,12 @@ __global__ void coneParallelBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
 
             if (z_high > 1.0f)
             {
-                vals[k_offset] += (tex3D<float>(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two)
-                    + tex3D<float>(g, s_ind_A, row_high_plus_two, L) * (z_high - 1.0f)) * bpWeight;
+                vals[k_offset] += (leapTex3D(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two)
+                    + leapTex3D(g, s_ind_A, row_high_plus_two, L) * (z_high - 1.0f)) * bpWeight;
             }
             else
             {
-                vals[k_offset] += tex3D<float>(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two) * bpWeight;
+                vals[k_offset] += leapTex3D(g, s_ind_A, row_high + v_oneAndTwo, L) * (v_weight_one + v_weight_two) * bpWeight;
             }
         }
     }
@@ -403,17 +403,17 @@ __global__ void coneParallelProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
 
             if (volumeDimensionOrder == 0)
             {
-                g_output += (tex3D<float>(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, z_12, float(j_min_A + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(k + 2) + 0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, z_12, float(j_min_A + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(k + 2) + 0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
             }
             else
             {
-                g_output += (tex3D<float>(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
     }
@@ -457,17 +457,17 @@ __global__ void coneParallelProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
 
             if (volumeDimensionOrder == 0)
             {
-                g_output += (tex3D<float>(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, z_12, float(j) + 0.5f, float(i_min_A + 2) + 0.5f) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, float(i_min_A + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, z_12, float(j) + 0.5f, float(i_min_A + 2) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(k + 2) + 0.5f, float(j) + 0.5f, float(i_min_A + 2) + 0.5f) * vWeight_2) * hWeight_2;
             }
             else
             {
-                g_output += (tex3D<float>(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, x_12, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, x_12, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
     }
@@ -541,7 +541,7 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
         const float s_ind_A = s_arg - (C_num_T_x / C * max(0.0f, (min(0.5f, C + ds) + min(0.5f, C - ds)))) * maxWeight_inv + 1.5f;
 
         for (int k_offset = 0; k_offset < numZ; k_offset++)
-            vals[k_offset] += tex3D<float>(g, s_ind_A, float(k+k_offset) + 0.5f, float(l) + 0.5f);
+            vals[k_offset] += leapTex3D(g, s_ind_A, float(k+k_offset) + 0.5f, float(l) + 0.5f);
     }
 
     if (accum)
@@ -614,10 +614,10 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
             const float s_ind_D = s_arg-(C_num_T_x / C * max(0.0f, (min(0.5f, C + ds) + min(0.5f, C - ds) )))*maxWeight_inv+1.5f;
 
             // Do texture mapping
-            val += tex3D<float>(g,s_ind_A, float(k)+0.5f, float(l)+0.5f)
-                +  tex3D<float>(g,s_ind_B, float(k)+0.5f, float(l1)+0.5f)
-                +  tex3D<float>(g,s_ind_C, float(k)+0.5f, float(l2)+0.5f)
-                +  tex3D<float>(g,s_ind_D, float(k)+0.5f, float(l3)+0.5f);
+            val += leapTex3D(g,s_ind_A, float(k)+0.5f, float(l)+0.5f)
+                +  leapTex3D(g,s_ind_B, float(k)+0.5f, float(l1)+0.5f)
+                +  leapTex3D(g,s_ind_C, float(k)+0.5f, float(l2)+0.5f)
+                +  leapTex3D(g,s_ind_D, float(k)+0.5f, float(l3)+0.5f);
             l += 4;
         }
         else if (l+1 < N_g.x)
@@ -638,8 +638,8 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
             ds = modf(s_arg,&s_arg);
             const float s_ind_B = s_arg-(C_num_T_x / C * max(0.0f, (min(0.5f, C + ds) + min(0.5f, C - ds) )))*maxWeight_inv+1.5f;
 
-            val += tex3D<float>(g,s_ind_A, float(k)+0.5f, float(l)+0.5f)
-                +  tex3D<float>(g,s_ind_B, float(k)+0.5f, float(l1)+0.5f);
+            val += leapTex3D(g,s_ind_A, float(k)+0.5f, float(l)+0.5f)
+                +  leapTex3D(g,s_ind_B, float(k)+0.5f, float(l1)+0.5f);
             l += 2;
         }
         else //if (l+1 < N_g.x)
@@ -651,7 +651,7 @@ __global__ void parallelBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N
             ds = modf(s_arg,&s_arg);
             const float s_ind_A = s_arg-(C_num_T_x / C * max(0.0f, (min(0.5f, C + ds) + min(0.5f, C - ds) )))*maxWeight_inv+1.5f;
 
-            val += tex3D<float>(g,s_ind_A, float(k)+0.5f, float(l)+0.5f);
+            val += leapTex3D(g,s_ind_A, float(k)+0.5f, float(l)+0.5f);
             l += 1;
         }
     }
@@ -706,13 +706,13 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
             const float weight_1 = max(0.0f, min(n_plus_half, s_ind_A + ds_ind_dj + C) - max(n_minus_half, s_ind_A + ds_ind_dj - C));
             if (volumeDimensionOrder == 0)
             {
-                g_output += (weight_0 + weight_1) * tex3D<float>(f, float(m)+0.5f, float(j_min_A)+0.5f+ weight_1/(weight_0+ weight_1), float(i)+0.5f)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, float(m)+0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f);
+                g_output += (weight_0 + weight_1) * leapTex3D(f, float(m)+0.5f, float(j_min_A)+0.5f+ weight_1/(weight_0+ weight_1), float(i)+0.5f)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * leapTex3D(f, float(m)+0.5f, float(j_min_A + 2) + 0.5f, float(i) + 0.5f);
             }
             else
             {
-                g_output += (weight_0 + weight_1) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(m) + 0.5f)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * tex3D<float>(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(m)+0.5f);
+                g_output += (weight_0 + weight_1) * leapTex3D(f, float(i) + 0.5f, float(j_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(m) + 0.5f)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_dj + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_dj - C)) * leapTex3D(f, float(i) + 0.5f, float(j_min_A + 2) + 0.5f, float(m)+0.5f);
             }
         }
     }
@@ -737,13 +737,13 @@ __global__ void parallelBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, f
             const float weight_1 = max(0.0f, min(n_plus_half, s_ind_A + ds_ind_di + C) - max(n_minus_half, s_ind_A + ds_ind_di - C));
             if (volumeDimensionOrder == 0)
             {
-                g_output += (weight_0 + weight_1) * tex3D<float>(f, float(m)+0.5f, float(j)+0.5f, float(i_min_A)+0.5f + weight_1/(weight_0 + weight_1))
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A + 2)+0.5f);
+                g_output += (weight_0 + weight_1) * leapTex3D(f, float(m)+0.5f, float(j)+0.5f, float(i_min_A)+0.5f + weight_1/(weight_0 + weight_1))
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * leapTex3D(f, float(m) + 0.5f, float(j) + 0.5f, float(i_min_A + 2)+0.5f);
             }
             else
             {
-                g_output += (weight_0 + weight_1) * tex3D<float>(f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(j) + 0.5f, float(m) + 0.5f)
-                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * tex3D<float>(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(m) + 0.5f);
+                g_output += (weight_0 + weight_1) * leapTex3D(f, float(i_min_A) + 0.5f + weight_1 / (weight_0 + weight_1), float(j) + 0.5f, float(m) + 0.5f)
+                    + max(0.0f, min(n_plus_half, s_ind_A + 2.0f * ds_ind_di + C) - max(n_minus_half, s_ind_A + 2.0f * ds_ind_di - C)) * leapTex3D(f, float(i_min_A + 2) + 0.5f, float(j) + 0.5f, float(m) + 0.5f);
             }
         }
     }
@@ -839,8 +839,8 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
 
         for (int k_offset = 0; k_offset < numZ; k_offset++)
         {
-            vals[k_offset] += (tex3D<float>(g, ind_first, iv + float(k_offset), L) * horizontalWeights_0_A
-                + tex3D<float>(g, ind_last, iv + float(k_offset), L) * horizontalWeights_1_A) * bpWeight;
+            vals[k_offset] += (leapTex3D(g, ind_first, iv + float(k_offset), L) * horizontalWeights_0_A
+                + leapTex3D(g, ind_last, iv + float(k_offset), L) * horizontalWeights_1_A) * bpWeight;
         }
     }
 
@@ -916,8 +916,8 @@ __global__ void fanBeamBackprojectorKernel_SF(cudaTextureObject_t g, int4 N_g, f
 
         const float bpWeight = doWeight ? R * R_minus_x_dot_theta_inv : 1.0f;
 
-        val += (tex3D<float>(g, ind_first, iv, L) * horizontalWeights_0_A
-            + tex3D<float>(g, ind_last, iv, L) * horizontalWeights_1_A) * bpWeight;
+        val += (leapTex3D(g, ind_first, iv, L) * horizontalWeights_0_A
+            + leapTex3D(g, ind_last, iv, L) * horizontalWeights_1_A) * bpWeight;
     }
 
     f[ind] = val;
@@ -988,13 +988,13 @@ __global__ void fanBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4
 
             if (volumeDimensionOrder == 0)
             {
-                g_output += tex3D<float>(f, float(iz) + 0.5f, float(j) + 0.5f, float(i) + 0.5f + hWeight_1/(hWeight_0 + hWeight_1)) * (hWeight_0 + hWeight_1)
-                    + tex3D<float>(f, float(iz) + 0.5f, float(j) + 0.5f, float(i + 2)+0.5f) * hWeight_2;
+                g_output += leapTex3D(f, float(iz) + 0.5f, float(j) + 0.5f, float(i) + 0.5f + hWeight_1/(hWeight_0 + hWeight_1)) * (hWeight_0 + hWeight_1)
+                    + leapTex3D(f, float(iz) + 0.5f, float(j) + 0.5f, float(i + 2)+0.5f) * hWeight_2;
             }
             else
             {
-                g_output += tex3D<float>(f, float(i) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1), float(j) + 0.5f, float(iz) + 0.5f) * (hWeight_0 + hWeight_1)
-                    + tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(iz) + 0.5f) * hWeight_2;
+                g_output += leapTex3D(f, float(i) + 0.5f + hWeight_1 / (hWeight_0 + hWeight_1), float(j) + 0.5f, float(iz) + 0.5f) * (hWeight_0 + hWeight_1)
+                    + leapTex3D(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(iz) + 0.5f) * hWeight_2;
             }
         }
         if (accum)
@@ -1042,13 +1042,13 @@ __global__ void fanBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g, float4
 
             if (volumeDimensionOrder == 0)
             {
-                g_output += tex3D<float>(f, float(iz) + 0.5f, float(j) + 0.5f + hWeight_1/(hWeight_0 + hWeight_1), float(i) + 0.5f) * (hWeight_0 + hWeight_1)
-                    + tex3D<float>(f, float(iz) + 0.5f, float(j + 2) + 0.5f, float(i) + 0.5f) * hWeight_2;
+                g_output += leapTex3D(f, float(iz) + 0.5f, float(j) + 0.5f + hWeight_1/(hWeight_0 + hWeight_1), float(i) + 0.5f) * (hWeight_0 + hWeight_1)
+                    + leapTex3D(f, float(iz) + 0.5f, float(j + 2) + 0.5f, float(i) + 0.5f) * hWeight_2;
             }
             else
             {
-                g_output += tex3D<float>(f, float(i) + 0.5f, float(j) + 0.5f+hWeight_1 / (hWeight_0 + hWeight_1), float(iz) + 0.5f) * (hWeight_0 + hWeight_1)
-                    + tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(iz)+0.5f) * hWeight_2;
+                g_output += leapTex3D(f, float(i) + 0.5f, float(j) + 0.5f+hWeight_1 / (hWeight_0 + hWeight_1), float(iz) + 0.5f) * (hWeight_0 + hWeight_1)
+                    + leapTex3D(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(iz)+0.5f) * hWeight_2;
             }
         }
         if (accum)
@@ -1225,17 +1225,17 @@ __global__ void curvedConeBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureO
             {
                 const float extraWeight = sqrtf(1.0f + v_arg*v_arg) * R * dist_from_source_inv / (l_phi * (tau_high - tau_low) * (v_weight_one + v_weight_two + (z_high_A - 1.0f)));
 
-                val += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
-                    + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
-                        + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f)) * extraWeight * centralWeight / (centralWeight + sumWeights);
+                val += ((leapTex3D(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + leapTex3D(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
+                    + (leapTex3D(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
+                        + leapTex3D(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f)) * extraWeight * centralWeight / (centralWeight + sumWeights);
             }
             else
             {
                 const float extraWeight = sqrtf(1.0f + v_arg*v_arg) * R * dist_from_source_inv / (l_phi * (tau_high - tau_low) * (v_weight_one + v_weight_two));
 
-                val += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)) * extraWeight * centralWeight / (centralWeight + sumWeights);
+                val += ((leapTex3D(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + leapTex3D(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)) * extraWeight * centralWeight / (centralWeight + sumWeights);
             }
         }
     }
@@ -1374,10 +1374,10 @@ __global__ void coneBeamHelicalWeightedBackprojectorKernel_SF(cudaTextureObject_
             const float extraWeight = sqrtf(1.0f + v_arg*v_arg) * R * R_minus_x_dot_theta_inv / (l_phi * (tau_high - tau_low) * (v_weight_one + v_weight_two + max(0.0f, z_high_A - 1.0f)));
 
             //*
-            val += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
-                + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
-                    + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * max(0.0f, z_high_A - 1.0f)) * extraWeight * centralWeight / (centralWeight + sumWeights);
+            val += ((leapTex3D(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                + leapTex3D(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
+                + (leapTex3D(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
+                    + leapTex3D(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * max(0.0f, z_high_A - 1.0f)) * extraWeight * centralWeight / (centralWeight + sumWeights);
             //*/
             //val += centralWeight + sumWeights;
             //val += 1.0f + sumWeights;
@@ -1500,15 +1500,15 @@ __global__ void curvedConeBeamBackprojectorKernel_SF(cudaTextureObject_t g, cons
 
             if (z_high_A > 1.0f)
             {
-                vals[k_offset] += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
-                    + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
-                        + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f)) * v_weight;
+                vals[k_offset] += ((leapTex3D(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + leapTex3D(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
+                    + (leapTex3D(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
+                        + leapTex3D(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f)) * v_weight;
             }
             else
             {
-                vals[k_offset] += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                    + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)) * v_weight;
+                vals[k_offset] += ((leapTex3D(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                    + leapTex3D(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)) * v_weight;
             }
         }
     }
@@ -1642,17 +1642,17 @@ __global__ void curvedConeBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g,
             const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
             if (volumeDimensionOrder == 0)
             {
-                g_output += (tex3D<float>(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, z_12, float(j) + 0.5f, float(i + 2) + 0.5f) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, float(i + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, z_12, float(j) + 0.5f, float(i + 2) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(k + 2) + 0.5f, float(j) + 0.5f, float(i + 2) + 0.5f) * vWeight_2) * hWeight_2;
             }
             else
             {
-                g_output += (tex3D<float>(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, x_12, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, x_12, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, float(i + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
         if (accum)
@@ -1723,17 +1723,17 @@ __global__ void curvedConeBeamProjectorKernel_SF(float* g, int4 N_g, float4 T_g,
             const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
             if (volumeDimensionOrder == 0)
             {
-                g_output += (tex3D<float>(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, z_12, float(j + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(k + 2) + 0.5f, float(j + 2) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, z_12, float(j + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(k + 2) + 0.5f, float(j + 2) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
             }
             else
             {
-                g_output += (tex3D<float>(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
-                    + tex3D<float>(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                    + (tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                        + tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                g_output += (leapTex3D(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
+                    + leapTex3D(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                    + (leapTex3D(f, float(i) + 0.5f, float(j + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                        + leapTex3D(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
             }
         }
         if (accum)
@@ -1849,15 +1849,15 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
 
                 if (z_high_A > 1.0f)
                 {
-                    vals[k_offset] += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                        + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
-                        + (tex3D<float>(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
-                            + tex3D<float>(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f)) * v_weight;
+                    vals[k_offset] += ((leapTex3D(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                        + leapTex3D(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)
+                        + (leapTex3D(g, ind_first, row_high_plus_two_A, L) * horizontalWeights_0_A
+                            + leapTex3D(g, ind_last, row_high_plus_two_A, L) * horizontalWeights_1_A) * (z_high_A - 1.0f)) * v_weight;
                 }
                 else
                 {
-                    vals[k_offset] += ((tex3D<float>(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
-                        + tex3D<float>(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)) * v_weight;
+                    vals[k_offset] += ((leapTex3D(g, ind_first, row_high_A + v_oneAndTwo, L) * horizontalWeights_0_A
+                        + leapTex3D(g, ind_last, row_high_A + v_oneAndTwo, L) * horizontalWeights_1_A) * (v_weight_one + v_weight_two)) * v_weight;
                 }
             }
         }
@@ -1928,15 +1928,15 @@ __global__ void coneBeamBackprojectorKernel_SF(cudaTextureObject_t g, const int4
 
                 if (vWeights_1 > 0.0f)
                 {
-                    vals[k_offset] += (tex3D<float>(g, u_ind_first, v_ind_first, L) * uWeights_0
-                        + tex3D<float>(g, u_ind_last, v_ind_first, L) * uWeights_1) * vWeights_0
-                        + (tex3D<float>(g, u_ind_first, v_ind_last, L) * uWeights_0
-                            + tex3D<float>(g, u_ind_last, v_ind_last, L) * uWeights_1) * vWeights_1;
+                    vals[k_offset] += (leapTex3D(g, u_ind_first, v_ind_first, L) * uWeights_0
+                        + leapTex3D(g, u_ind_last, v_ind_first, L) * uWeights_1) * vWeights_0
+                        + (leapTex3D(g, u_ind_first, v_ind_last, L) * uWeights_0
+                            + leapTex3D(g, u_ind_last, v_ind_last, L) * uWeights_1) * vWeights_1;
                 }
                 else
                 {
-                    vals[k_offset] += (tex3D<float>(g, u_ind_first, v_ind_first, L) * uWeights_0
-                        + tex3D<float>(g, u_ind_last, v_ind_first, L) * uWeights_1) * vWeights_0;
+                    vals[k_offset] += (leapTex3D(g, u_ind_first, v_ind_first, L) * uWeights_0
+                        + leapTex3D(g, u_ind_last, v_ind_first, L) * uWeights_1) * vWeights_0;
                 }
             }
         }
@@ -2087,17 +2087,17 @@ __global__ void coneBeamProjectorKernel_SF(float* g, const int4 N_g, const float
              const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
              if (volumeDimensionOrder == 0)
              {
-                 g_output += (tex3D<float>(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
-                     + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
-                     + (tex3D<float>(f, z_12, float(j) + 0.5f, float(i + 2) + 0.5f) * (vWeight_0 + vWeight_1)
-                         + tex3D<float>(f, float(k + 2) + 0.5f, float(j) + 0.5f, float(i + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                 g_output += (leapTex3D(f, z_12, float(j) + 0.5f, x_12) * (vWeight_0 + vWeight_1)
+                     + leapTex3D(f, float(k + 2) + 0.5f, float(j) + 0.5f, x_12) * vWeight_2) * (hWeight_0 + hWeight_1)
+                     + (leapTex3D(f, z_12, float(j) + 0.5f, float(i + 2) + 0.5f) * (vWeight_0 + vWeight_1)
+                         + leapTex3D(f, float(k + 2) + 0.5f, float(j) + 0.5f, float(i + 2) + 0.5f) * vWeight_2) * hWeight_2;
              }
              else
              {
-                 g_output += (tex3D<float>(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                 + tex3D<float>(f, x_12, float(j) + 0.5f, float(k+2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                 + (tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                 + tex3D<float>(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                 g_output += (leapTex3D(f, x_12, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                 + leapTex3D(f, x_12, float(j) + 0.5f, float(k+2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                 + (leapTex3D(f, float(i + 2) + 0.5f, float(j) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                 + leapTex3D(f, float(i + 2) + 0.5f, float(j) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
              }
          }
          if (accum)
@@ -2170,17 +2170,17 @@ __global__ void coneBeamProjectorKernel_SF(float* g, const int4 N_g, const float
              const float z_12 = float(k) + 0.5f + vWeight_1 / (vWeight_0 + vWeight_1);
              if (volumeDimensionOrder == 0)
              {
-                 g_output += (tex3D<float>(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
-                     + tex3D<float>(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                     + (tex3D<float>(f, z_12, float(j + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
-                         + tex3D<float>(f, float(k + 2) + 0.5f, float(j + 2) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
+                 g_output += (leapTex3D(f, z_12, y_12, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                     + leapTex3D(f, float(k + 2) + 0.5f, y_12, float(i) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                     + (leapTex3D(f, z_12, float(j + 2) + 0.5f, float(i) + 0.5f) * (vWeight_0 + vWeight_1)
+                         + leapTex3D(f, float(k + 2) + 0.5f, float(j + 2) + 0.5f, float(i) + 0.5f) * vWeight_2) * hWeight_2;
              }
              else
              {
-                 g_output += (tex3D<float>(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
-                     + tex3D<float>(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
-                     + (tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
-                     + tex3D<float>(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
+                 g_output += (leapTex3D(f, float(i) + 0.5f, y_12, z_12) * (vWeight_0 + vWeight_1)
+                     + leapTex3D(f, float(i) + 0.5f, y_12, float(k + 2) + 0.5f) * vWeight_2) * (hWeight_0 + hWeight_1)
+                     + (leapTex3D(f, float(i) + 0.5f, float(j + 2) + 0.5f, z_12) * (vWeight_0 + vWeight_1)
+                     + leapTex3D(f, float(i) + 0.5f, float(j + 2) + 0.5f, float(k + 2) + 0.5f) * vWeight_2) * hWeight_2;
              }
          }
          if (accum)

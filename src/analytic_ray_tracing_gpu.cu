@@ -8,9 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <math.h>
+#include "cuda_runtime.h"
 #include "analytic_ray_tracing_gpu.cuh"
 #include "analytic_ray_tracing.h"
-#include "cuda_runtime.h"
 //#include "device_launch_parameters.h"
 #include "cuda_utils.h"
 

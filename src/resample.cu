@@ -73,7 +73,7 @@ __global__ void downSampleKernel(cudaTextureObject_t I, const int3 N, float* I_d
             {
                 const float h_2 = bumpFcn(L.z, delay_2, l_2);
                 accum += h_0 * h_1 * h_2;
-                val += tex3D<float>(I, kk+l_2, jj+l_1, ii+l_0) * h_0 * h_1 * h_2;
+                val += leapTex3D(I, kk+l_2, jj+l_1, ii+l_0, false) * h_0 * h_1 * h_2;
             }
         }
     }
@@ -96,7 +96,7 @@ __global__ void upSampleKernel(cudaTextureObject_t I, const int3 N, float* I_up,
     float z = (k - 0.5f * float(N_up.z - 1)) / L.z + 0.5f * float(N.z - 1) + 0.5f;
 
     uint64 ind = uint64(i) * uint64(N_up.y * N_up.z) + uint64(j * N_up.z + k);
-    I_up[ind] = tex3D<float>(I, z, y, x);
+    I_up[ind] = leapTex3D(I, z, y, x);
 }
 
 bool downSample(float* I, int* N, float* I_dn, int* N_dn, float* factors, int whichGPU)

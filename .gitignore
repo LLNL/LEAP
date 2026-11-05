@@ -646,3 +646,9 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+# torch build-time hipify outputs (ROCm CUDAExtension build)
+src/*.hip
+src/*_hip.cpp
+src/*_hip.cuh
+src/*_hip.h
+src/hip_utils.h

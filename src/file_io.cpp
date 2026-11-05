@@ -14,8 +14,16 @@
 #include <iostream>
 #include <fstream>
 #include <algorithm>
+#include <cstdint>
 #include "file_io.h"
 #include "cpu_utils.h"
+
+// On Windows+ROCm, leap_defines.h skips uint8/uint16 to avoid conflict with
+// HIP vector type aliases; provide the integer typedefs here for file_io.cpp.
+#if defined(_MSC_VER) && defined(__HIP_PLATFORM_AMD__)
+typedef uint8_t uint8;
+typedef uint16_t uint16;
+#endif
 
 bool saveParametersToFile(const char* param_fn, parameters* params)
 {
