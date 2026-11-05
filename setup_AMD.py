@@ -79,23 +79,32 @@ if cuda:
     # optionally we could add '-O3'
     # or extra_link_args=["-std=c++11"]
     rocm = "AMD" in torch.cuda.get_device_name(0)
+    # On Windows, PROJECTOR_API in tomographic_models_c_interface.h expands to
+    # __declspec(dllimport) unless PROJECTOR_EXPORTS is defined at build time.
+    win_extra = ['-DPROJECTOR_EXPORTS'] if _platform == 'win32' else []
     if rocm: # AMD ROCM GPU
-        extra_compile_args={'cxx': ['-D__USE_GPU'], 
-                            'nvcc': ['-D__USE_GPU', '-O3']}
-        libraries = []
+        # __INCLUDE_CUFFT selects the GPU FFT ramp/Hilbert filter path; torch's
+        # build-time hipify maps cufft -> hipfft, so link hipfft on ROCm.
+        extra_compile_args={'cxx': ['-D__USE_GPU', '-D__INCLUDE_CUFFT'] + win_extra,
+                            'nvcc': ['-D__USE_GPU', '-O3', '-D__INCLUDE_CUFFT'] + win_extra}
+        libraries = ['hipfft']
     else: # CUDA GPU
-        extra_compile_args={'cxx': ['-D__USE_GPU'], 
-                            'nvcc': ['-D__USE_GPU', '-O3']}
+        extra_compile_args={'cxx': ['-D__USE_GPU'] + win_extra,
+                            'nvcc': ['-D__USE_GPU', '-O3'] + win_extra}
         #extra_compile_args={'cxx': ['-D__USE_GPU', '-lcufft', '-D__INCLUDE_CUFFT'], 
         #                    'nvcc': ['-D__USE_GPU', '-O3', '-lcufft', '-D__INCLUDE_CUFFT']}
         #libraries = ['cufft']
         libraries = []
+    # On Windows, LTCG strips dllexport functions not called internally.  Use a
+    # .def file to force-export all ctypes C-interface symbols regardless of LTCG.
+    extra_link = ['/DEF:leapct_exports.def'] if _platform == 'win32' else []
     ext_mod = CUDAExtension(
         name='leapct',
         sources=source_files,
         extra_compile_args=extra_compile_args,
         libraries = libraries,
-        #extra_link_args=["-lcufft"], 
+        #extra_link_args=["-lcufft"],
+        extra_link_args=extra_link,
         extra_cflags=['-O3'])
 else:
     source_files = []

@@ -745,7 +745,7 @@ __global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, i
                 if (theWeight > 0.0001f)
                 {
                     //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j_shift * N.z + k_shift)];
-                    val += theWeight * tex3D<float>(f, k_shift, j_shift, i_shift);
+                    val += theWeight * leapTex3D(f, k_shift, j_shift, i_shift, false);
                     sum += theWeight;
                 }
             }
@@ -753,7 +753,7 @@ __global__ void BlurFilterKernel_txt(cudaTextureObject_t f, float* f_filtered, i
     }
 
     if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = leapTex3D(f, k, j, i, false) - val / sum;
     else
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
@@ -793,14 +793,14 @@ __global__ void BlurFilter2DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f_slice[uint64(j_shift * N.z + k_shift)];
-                val += theWeight * tex3D<float>(f, k_shift, j_shift, i);
+                val += theWeight * leapTex3D(f, k_shift, j_shift, i, false);
                 sum += theWeight;
             }
         }
     }
 
     if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = leapTex3D(f, k, j, i, false) - val / sum;
     else
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }
@@ -834,7 +834,7 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-                val += theWeight * tex3D<float>(f, k, j, i_shift);
+                val += theWeight * leapTex3D(f, k, j, i_shift, false);
                 sum += theWeight;
             }
         }
@@ -852,7 +852,7 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-                val += theWeight * tex3D<float>(f, k, j_shift, i);
+                val += theWeight * leapTex3D(f, k, j_shift, i, false);
                 sum += theWeight;
             }
         }
@@ -870,14 +870,14 @@ __global__ void BlurFilter1DKernel_txt(cudaTextureObject_t f, float* f_filtered,
             if (theWeight > 0.0001f)
             {
                 //val += theWeight * f[uint64(i_shift) * uint64(N.y * N.z) + uint64(j * N.z + k)];
-                val += theWeight * tex3D<float>(f, k_shift, j, i);
+                val += theWeight * leapTex3D(f, k_shift, j, i, false);
                 sum += theWeight;
             }
         }
     }
 
     if (d_DO_HIGH_PASS)
-        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = tex3D<float>(f, k, j, i) - val / sum;
+        f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = leapTex3D(f, k, j, i, false) - val / sum;
     else
         f_filtered[uint64(i) * uint64(N.y * N.z) + uint64(j * N.z + k)] = val / sum;
 }

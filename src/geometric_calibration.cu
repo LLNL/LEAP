@@ -142,7 +142,7 @@ __global__ void consistencyCostKernel(cudaTextureObject_t g, float* cost, const 
                 v_arg_i = ((vox.x - tau * sin_phi_i) * Rpsi_e3.x + (vox.y + tau * cos_phi_i) * Rpsi_e3.y) * v_denom_inv_i;
             }
 
-            accum_i += integrandWeight_i * tex3D<float>(g, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
+            accum_i += integrandWeight_i * leapTex3D(g, (u_arg_i - u_0) * T_u_inv + 0.5f, (v_arg_i - v_0) * T_v_inv + 0.5f, i + 0.5f);
         }
 
         float accum_j = 0.0f;
@@ -168,7 +168,7 @@ __global__ void consistencyCostKernel(cudaTextureObject_t g, float* cost, const 
                 v_arg_j = ((vox.x - tau * sin_phi_j) * Rpsi_e3.x + (vox.y + tau * cos_phi_j) * Rpsi_e3.y) * v_denom_inv_j;
             }
 
-            accum_j += integrandWeight_j * tex3D<float>(g, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
+            accum_j += integrandWeight_j * leapTex3D(g, (u_arg_j - u_0) * T_u_inv + 0.5f, (v_arg_j - v_0) * T_v_inv + 0.5f, j + 0.5f);
         }
         cost_i += (accum_i - accum_j) * (accum_i - accum_j);
     }

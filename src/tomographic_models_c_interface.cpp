@@ -1232,6 +1232,19 @@ void test_script()
 	
 }
 
+// On Windows, the torch CUDAExtension build passes /EXPORT:PyInit_leapct to
+// the linker.  The PYBIND11_MODULE block below is commented out (leapctype.py
+// loads this DLL via ctypes, not via Python's import machinery), so we provide
+// a minimal entry point to satisfy the linker.  Importing via Python will
+// return a null module; ctypes loading is unaffected.
+#if defined(_WIN32) && defined(TORCH_EXTENSION_NAME)
+#include <pybind11/pybind11.h>
+namespace py = pybind11;
+PYBIND11_MODULE(leapct, m) {
+    m.doc() = "LEAP CT projector library (ctypes interface; use leapctype.py)";
+}
+#endif
+
 /*
 //PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 PYBIND11_MODULE(leapct, m) {

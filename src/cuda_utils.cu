@@ -1002,6 +1002,131 @@ dim3 setGridSize(int4 N, dim3 dimBlock)
     return setGridSize(make_int3(N.x, N.y, N.z), dimBlock);
 }
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+#include <map>
+#include <mutex>
+
+// See leapTextureHeader in cuda_utils.h: on GPUs without image support a
+// texture is a header plus a dense copy of the data in linear device memory,
+// and the handle points at it.
+
+// The texture kind the device code of each target reads.
+#if __HIP_NO_IMAGE_SUPPORT
+__device__ int leapLinearTextureCode = 1;
+#else
+__device__ int leapLinearTextureCode = 0;
+#endif
+
+// Returns 1 if loadTexture* must create a linear buffer for the current device,
+// 0 for a texture object, -1 on error. The choice follows the device's image
+// support and must agree with the device code loaded for it; if they disagree
+// no handle is created at all.
+static int leapUseLinearTexture()
+{
+    static std::mutex mutex;
+    static std::map<int, int> kinds;
+    int device = 0;
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaGetDevice(&device)) != cudaSuccess)
+    {
+        printf("cudaGetDevice Error: %s\n", cudaGetErrorString(cudaStatus));
+        return -1;
+    }
+    std::lock_guard<std::mutex> lock(mutex);
+    std::map<int, int>::const_iterator it = kinds.find(device);
+    if (it != kinds.end())
+        return it->second;
+    int imageSupport = 0, linearCode = 0;
+    if ((cudaStatus = hipDeviceGetAttribute(&imageSupport, hipDeviceAttributeImageSupport, device)) != cudaSuccess ||
+        (cudaStatus = cudaMemcpyFromSymbol(&linearCode, leapLinearTextureCode, sizeof(int))) != cudaSuccess)
+    {
+        printf("texture kind query Error: %s\n", cudaGetErrorString(cudaStatus));
+        return -1;
+    }
+    int kind = imageSupport ? 0 : 1;
+    if (linearCode != kind)
+    {
+        printf("Error: GPU %d %s image support, but its device code reads %s\n", device, imageSupport ? "has" : "lacks", linearCode ? "linear buffers" : "texture objects");
+        kind = -1;
+    }
+    kinds[device] = kind;
+    return kind;
+}
+
+// Linear buffers from loadLinearTexture, with the halves of their
+// cudaFreeArray/cudaDestroyTextureObject pair that are still outstanding. A
+// buffer is freed only when both are released, so its address cannot be reused
+// by a texture object while either half is pending.
+enum { LEAP_ARRAY_PENDING = 1, LEAP_HANDLE_PENDING = 2 };
+static std::mutex leapLinearTextureMutex;
+static std::map<const void*, int> leapLinearTextures;
+
+static cudaArray* loadLinearTexture(cudaTextureObject_t& tex_object, const float* data, int width, int height, int depth, bool useExtrapolation, cudaMemcpyKind kind)
+{
+    const size_t numElements = size_t(width) * size_t(height) * size_t(depth);
+    const leapTextureHeader header = { { width, height, depth }, useExtrapolation ? 1 : 0 };
+    char* buffer = nullptr;
+    cudaError_t cudaStatus;
+    if ((cudaStatus = cudaMalloc((void**)&buffer, sizeof(leapTextureHeader) + numElements * sizeof(float))) != cudaSuccess)
+    {
+        printf("cudaMalloc Error: %s\n", cudaGetErrorString(cudaStatus));
+        return nullptr;
+    }
+    if ((cudaStatus = cudaMemcpy(buffer, &header, sizeof(leapTextureHeader), cudaMemcpyHostToDevice)) != cudaSuccess ||
+        (cudaStatus = cudaMemcpy(buffer + sizeof(leapTextureHeader), data, numElements * sizeof(float), kind)) != cudaSuccess)
+    {
+        printf("cudaMemcpy Error: %s\n", cudaGetErrorString(cudaStatus));
+        cudaFree(buffer);
+        return nullptr;
+    }
+    {
+        std::lock_guard<std::mutex> lock(leapLinearTextureMutex);
+        leapLinearTextures[buffer] = LEAP_ARRAY_PENDING | LEAP_HANDLE_PENDING;
+    }
+    tex_object = (cudaTextureObject_t)buffer;
+    return (cudaArray*)buffer;
+}
+
+// Releases one half of a linear buffer's pair. Returns false, touching nothing,
+// if the pointer is not a linear buffer, i.e. it is a real array or texture.
+static bool leapReleaseLinearTexture(const void* buffer, int half, cudaError_t& cudaStatus)
+{
+    std::lock_guard<std::mutex> lock(leapLinearTextureMutex);
+    std::map<const void*, int>::iterator it = leapLinearTextures.find(buffer);
+    if (it == leapLinearTextures.end())
+        return false;
+    if (!(it->second & half))
+    {
+        cudaStatus = cudaErrorInvalidValue;
+        return true;
+    }
+    it->second &= ~half;
+    cudaStatus = cudaSuccess;
+    if (it->second == 0)
+    {
+        leapLinearTextures.erase(it);
+        cudaStatus = cudaFree((void*)buffer);
+    }
+    return true;
+}
+
+cudaError_t leapFreeArray(cudaArray* array)
+{
+    cudaError_t cudaStatus;
+    if (leapReleaseLinearTexture(array, LEAP_ARRAY_PENDING, cudaStatus))
+        return cudaStatus;
+    return (cudaFreeArray)(array);
+}
+
+cudaError_t leapDestroyTextureObject(cudaTextureObject_t tex_object)
+{
+    cudaError_t cudaStatus;
+    if (leapReleaseLinearTexture((const void*)tex_object, LEAP_HANDLE_PENDING, cudaStatus))
+        return cudaStatus;
+    return (cudaDestroyTextureObject)(tex_object);
+}
+#endif
+
 extern cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, const int4 N_txt, bool useExtrapolation, bool useLinearInterpolation, bool swapFirstAndLastDimensions)
 {
     int3 N = make_int3(N_txt.x, N_txt.y, N_txt.z);
@@ -1034,6 +1159,11 @@ cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, co
 {
     if (data == nullptr)
         return nullptr;
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    const int linearTexture = leapUseLinearTexture();
+    if (linearTexture != 0)
+        return linearTexture > 0 ? loadLinearTexture(tex_object, data, N_txt.z, N_txt.y, N_txt.x, useExtrapolation, cudaMemcpyHostToDevice) : nullptr;
+#endif
     cudaArray* d_data_array = nullptr;
     cudaError_t cudaStatus;
 
@@ -1069,6 +1199,12 @@ cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, co
         texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
     }
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    // AMD/ROCm rejects cudaFilterModeLinear on cudaReadModeElementType float
+    // textures at create time. Always create point mode; the linear blend is
+    // done in software at the fetch site (leapTex* in cuda_utils.h).
+    texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
+#else
     if (useLinearInterpolation)
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
@@ -1077,6 +1213,7 @@ cudaArray* loadTexture_from_cpu(cudaTextureObject_t& tex_object, float* data, co
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
     }
+#endif
     if ((cudaStatus = cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr)) != cudaSuccess)
     {
         printf("cudaCreateTextureObject Error: %s\n", cudaGetErrorString(cudaStatus));
@@ -1150,6 +1287,11 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
 {
     if (dev_data == nullptr)
         return nullptr;
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    const int linearTexture = leapUseLinearTexture();
+    if (linearTexture != 0)
+        return linearTexture > 0 ? loadLinearTexture(tex_object, dev_data, N_txt.z, N_txt.y, N_txt.x, useExtrapolation, cudaMemcpyDeviceToDevice) : nullptr;
+#endif
     cudaArray* d_data_array = nullptr;
     cudaError_t cudaStatus;
 
@@ -1185,6 +1327,12 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
         texDesc.addressMode[2] = (cudaTextureAddressMode)cudaAddressModeBorder;
     }
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    // AMD/ROCm rejects cudaFilterModeLinear on cudaReadModeElementType float
+    // textures at create time. Always create point mode; the linear blend is
+    // done in software at the fetch site (leapTex* in cuda_utils.h).
+    texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
+#else
     if (useLinearInterpolation)
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
@@ -1193,6 +1341,7 @@ cudaArray* loadTexture(cudaTextureObject_t& tex_object, float* dev_data, const i
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
     }
+#endif
     if ((cudaStatus = cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr)) != cudaSuccess)
     {
         printf("cudaCreateTextureObject Error: %s\n", cudaGetErrorString(cudaStatus));
@@ -1222,6 +1371,11 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
 {
     if (data == nullptr)
         return nullptr;
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    const int linearTexture = leapUseLinearTexture();
+    if (linearTexture != 0)
+        return linearTexture > 0 ? loadLinearTexture(tex_object, data, N_txt, 1, 1, useExtrapolation, cudaMemcpyDefault) : nullptr;
+#endif
     cudaArray* d_data_array = nullptr;
     cudaError_t cudaStatus;
 
@@ -1253,6 +1407,12 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
         texDesc.addressMode[0] = (cudaTextureAddressMode)cudaAddressModeBorder;
     }
 
+#if defined(__HIP_PLATFORM_AMD__) || defined(__HIPCC__)
+    // AMD/ROCm rejects cudaFilterModeLinear on cudaReadModeElementType float
+    // textures at create time. Always create point mode; the linear blend is
+    // done in software at the fetch site (leapTex* in cuda_utils.h).
+    texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
+#else
     if (useLinearInterpolation)
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModeLinear;
@@ -1261,6 +1421,7 @@ cudaArray* loadTexture1D(cudaTextureObject_t& tex_object, float* data, const int
     {
         texDesc.filterMode = (cudaTextureFilterMode)cudaFilterModePoint;
     }
+#endif
     if ((cudaStatus = cudaCreateTextureObject(&tex_object, &resDesc, &texDesc, nullptr)) != cudaSuccess)
     {
         printf("cudaCreateTextureObject Error: %s\n", cudaGetErrorString(cudaStatus));
