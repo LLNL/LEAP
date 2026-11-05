@@ -24,7 +24,7 @@ __global__ void bilateralFilterKernel(float* f, float* f_filtered, const int3 N,
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
@@ -79,7 +79,7 @@ __global__ void bilateralFilterKernel_txt(cudaTextureObject_t f, float* f_filter
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
@@ -136,7 +136,7 @@ __global__ void scaledBilateralFilterKernel(float* f, float* Bf, float* f_filter
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
@@ -190,7 +190,7 @@ __global__ void scaledBilateralFilterKernel_txt(cudaTextureObject_t f, cudaTextu
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
     const int k = threadIdx.z + blockIdx.z * blockDim.z;
-    if (i > N.x || j >= N.y || k >= N.z) return;
+    if (i >= N.x || j >= N.y || k >= N.z) return;
 
     const int di_min = -min(i, w);
     const int di_max = min(N.x - 1 - i, w);
