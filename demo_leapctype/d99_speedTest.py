@@ -36,8 +36,8 @@ leapct.set_projector('VD')
 #leapct.convert_to_modularbeam()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f = leapct.allocate_volume()
 
 print('using ' + str(4.0*(g.size+f.size)/2.0**30.0) + ' GB of memory')
 

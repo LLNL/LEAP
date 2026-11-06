@@ -4,18 +4,11 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
-try:
-    from xrayphysics import *
-    physics = xrayPhysics()
-except:
-    print('This demo script requires the XrayPhysics package found here:')
-    print('https://github.com/kylechampley/XrayPhysics')
-    quit()
+leapct.about()
 
 '''
-This script demonstrates how to perform single-material beam hardening correction (BHC) and requires the XrayPhysics package
-which can be found here: https://github.com/kylechampley/XrayPhysics
-And the methodology we use to perform multi-material BHC in this paper:
+This script demonstrates how to perform single-material beam hardening correction (BHC)
+The methodology we use to perform multi-material BHC in this paper:
 https://www.osti.gov/servlets/purl/1158895
 '''
 
@@ -40,25 +33,15 @@ leapct.set_default_volume()
 
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f_true = leapct.allocateVolume()
-
+g = leapct.allocate_projections()
 
 # Specify simplified FORBILD head phantom
-leapct.addObject(f_true, 4, np.array([0.0, 0.0, 0.0]), 100.0*np.array([1.0, 1.0, 1.0]), 0.02)
-#leapct.set_FORBILD(f_true,True)
+material = 'water'
+leapct.addObject(None, 4, np.array([0.0, 0.0, 0.0]), 100.0*np.array([1.0, 1.0, 1.0]), material)
 
-
-# "Simulate" projection data
-leapct.project(g,f_true)
-
-# Tell the XrayPhysics library to use mm-based units so that everything agrees with LEAP which is mm-based
-# Note that it is natural to express different quantities with different units, e.g., mm or cm
-# But to avoid confusion of which parameter uses which units, everything should use the same units
-# This should be fine for most things, but one thing to look out for is densities
+# LEAP uses mm for all length-based units and thus for densities it uses g/mm^3
 # *** Note that g/cm^3 = 1.0e-3 g/mm^3 ***
 # So just add "e-3" to the end of the densities so that they are expressed in g/mm^3
-physics.use_mm()
 
 ### Source Spectra Modeling
 # This is done with the XrayPhysics package.  Note that the units in this
@@ -68,47 +51,35 @@ kV = 80.0
 takeOffAngle = 11.0
 
 # First simulate the source spectrum (units are photons/(bin * mAs * sr))
-Es, s = physics.simulateSpectra(kV,takeOffAngle)
+Es, s = leapct.simulateSpectra(kV,takeOffAngle)
 
 # Then model the detector response as the product of the
 # x-ray energy and the stopping power of the scintillator
 # Here we assume the scintillator is GOS, 0.1 mm thick, and density of 7.32 g/cm^3
-detResp = physics.detectorResponse('O2SGd2', 7.32e-3, 0.1, Es)
+detResp = leapct.detectorResponse('O2SGd2', 7.32e-3, 0.1, Es)
 
 # Finally model the attenuation due to the filters
-# We are going to comment this out so we get more beam hardening
-#filtResp = physics.filterResponse('Al', 2.7e-3, 1.0, Es)
+filtResp = leapct.filterResponse('Al', 2.7e-3, 0.1, Es)
 
 # Take the product of all three factors
-s_total = s*detResp #*filtResp
+s_total = s * detResp * filtResp
 
-# Generate the Beam Hardening (BH) lookup table
-# which assumes the input is monochromatic attenuation at 63.9544 keV
-# We chose this energy because the LAC of water is 0.02 mm^-1 which
-# agrees with the value in the phantom
-BH_LUT, T_lut = physics.setBHlookupTable(s_total, Es, 'H2O', 63.9544)
+# Beam Hardening Correction essentially synthesizes monochromatic projections
+# from the measured polychromatic projections.
+# LEAP allows you to choose the output energy of this transformation
+# as long as it is in the range of the original spectrum
+# Here we shall just use the mean energy of the spectra
+referenceEnergy = leapct.meanEnergy(s_total, Es)
 
-# Apply Beam Hardening
-g_save = g.copy()
-startTime = time.time()
-leapct.applyTransferFunction(g, BH_LUT, T_lut)
-print('Elapsed time: ' + str(time.time()-startTime))
+# Perform polychromatic simulation
+leapct.rayTrace(g, s_total, Es)
 
 # The code below will remove the beam hardening, i.e., Beam Hardening Correction (BHC)
-# Applying these steps should just undo the BH you applied above, so isn't too exciting
-# in this demo, but for real data this can remove beam hardening
-BHC_LUT, T_lut = physics.setBHClookupTable(s_total, Es, 'H2O', 63.9544)
+BHC_LUT, T_lut = leapct.setBHClookupTable(s_total, Es, material, referenceEnergy)
 leapct.applyTransferFunction(g, BHC_LUT, T_lut)
-
-# Another thing we could do is change in output energy.  This will effectively
-# change the scaling of the reconstruction.  Let's try with 40 keV which should
-# get us a reconstructed value of about 0.2684
-#BHC_LUT, T_lut = physics.setBHClookupTable(s_total, Es, 'H2O', 40.0)
-#leapct.applyTransferFunction(g, BHC_LUT, T_lut)
 
 # Reconstruct the data
 f = leapct.FBP(g)
-
 
 # Display the result with napari
 leapct.display(f)

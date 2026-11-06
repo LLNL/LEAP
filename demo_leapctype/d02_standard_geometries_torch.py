@@ -4,6 +4,7 @@ import time
 import numpy as np
 from leapctype import *
 leapct = tomographicModels()
+leapct.about()
 
 '''
 This script is nearly identical to d01_standard_geometries.py
@@ -56,12 +57,13 @@ leapct.set_default_volume()
 leapct.print_parameters()
 #leapct.sketch_system()
 
-# Set the backprojector model, 'SF' (the default setting), is more accurate, but 'VD' is faster
+# Set the backprojector model, 'SF', is more accurate, but 'VD' is faster
+# The default value is 'AUTO' which selects the best projector for the given voxel size
 #leapct.set_projector('VD')
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f = leapct.allocate_volume()
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
@@ -78,8 +80,7 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 5000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#leapct.poisson(g, 5000.0, True)
 
 # Copy data to GPU
 #'''

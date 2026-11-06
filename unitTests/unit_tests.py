@@ -1,13 +1,44 @@
 import sys
 import time
 import matplotlib.pyplot as plt
+import numpy as np
+
 from leapctype import *
+
+print('Running unit tests...')
 leapct = tomographicModels()
 
-numAngles = 720
+includeEar = False
+
+geometries = list(range(6))
+voxelScales = [0.5, 1.0, 2.0]
+angularRanges = [200.0, 360.0]
+projection_methods = ['VD', 'SF']
+angularRange = 360.0
+tau = 10.0 * 0.0
+tiltAngle = 1.0 #* 0.0
+pitchAngle = 0.91 #* 0.0
+helicalPitch = 0.0
+normalizedHelicalPitch = 0.25 * 0.0
+
+#voxelScales = [0.5]
+#voxelScales = [1.0]
+#voxelScales = [2.0]
+voxelScales = [1.0, 2.0]
+#projection_methods = ['SF']
+#projection_methods = ['VD']
+projection_methods = ['AUTO']
+geometries = [3]
+
+if normalizedHelicalPitch != 0.0:
+    numTurns = 3
+else:
+    numTurns = 1
+numAngles = 720*numTurns
+phis = np.array(range(numAngles),dtype=np.float32)*angularRange*numTurns/float(numAngles)
 numCols = 512
-numRows = int(numCols*25.0/24.0)
-pixelSize = 1.03*2.0*250.0/512 # 0.5*512*x=240
+numRows = int(numCols*27.0/24.0)
+pixelSize = 1.03*2.0*250.0/numCols # 0.5*512*x=240
 centerRow = 0.5*(numRows-1)
 centerCol = 0.5*(numCols-1)
 sdd = 765
@@ -22,49 +53,42 @@ sod = 0.5*sdd
 #print(np.arctan(0.5*numRows*pixelSize/sdd)*180.0/np.pi)
 #quit()
 
-includeEar = False
-
-geometries = list(range(6))
-voxelScales = [0.5, 1.0, 2.0]
-angularRanges = [200.0, 360.0]
-projection_methods = ['VD', 'SF']
-angularRange = 360.0
-tau = 0.0
-tiltAngle = 1.0
-pitch = 0.0
-
-#voxelScales = [1.0]
-#voxelScales = [2.0]
-#projection_methods = ['SF']
-#projection_methods = ['VD']
-geometries = []
+#numAngles=1
 
 for ii in range(len(geometries)):
+    print('Testing geometry ' + str(geometries[ii]))
     igeom = geometries[ii]
     leapct.reset()
     #leapct.set_rampFilter(12)
     geo = None
     if igeom == 0:
-        leapct.set_parallelbeam(numAngles, numRows, numCols, sod/sdd*pixelSize, sod/sdd*pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange))
+        leapct.set_parallelbeam(numAngles, numRows, numCols, sod/sdd*pixelSize, sod/sdd*pixelSize, centerRow, centerCol, phis)
     elif igeom == 1:
-        leapct.set_fanbeam(numAngles, numRows, numCols, sod/sdd*pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau)
+        leapct.set_fanbeam(numAngles, numRows, numCols, sod/sdd*pixelSize, pixelSize, centerRow, centerCol, phis, sod, sdd, tau)
     elif igeom == 2:
-        leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, sod/sdd*pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch)
+        leapct.set_coneparallel(numAngles, numRows, numCols, pixelSize, sod/sdd*pixelSize, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     elif igeom == 3:
-        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch, tiltAngle)
+        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch, tiltAngle, pitchAngle)
+        leapct.set_normalizedHelicalPitch(normalizedHelicalPitch)
     elif igeom == 4:
-        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch)
+        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
         leapct.set_curvedDetector()
     elif igeom == 5:
-        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, 0.0, tiltAngle)
+        leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, phis, sod, sdd, tau, 0.0, tiltAngle)
         leapct.convert_to_modularbeam()
 
-    #leapct.set_offsetScan(True)
+    if leapct.get_tau() != 0.0:
+        leapct.set_offsetScan(True)
     for iscale in range(len(voxelScales)):
+        print('Testing voxel scale ' + str(voxelScales[iscale]))
         # Set true phantom
         leapct.set_default_volume(voxelScales[iscale])
-        f_true = leapct.allocate_volume()
-        leapct.set_FORBILD(f_true, includeEar)
+        leapct.set_numZ(leapct.get_numX())
+        #leapct.set_numZ(3)
+        leapct.set_FORBILD(None, includeEar)
+        #leapct.scalePhantom(0.95)
+        #leapct.addObject(None, 4, 0.0, [100.0, 100.0, 200.0], 0.02)
+        f_true = leapct.voxelize(oversampling=3)
         
         leapct.print_parameters()
         #leapct.display(f_true)
@@ -73,7 +97,6 @@ for ii in range(len(geometries)):
         
         # Set true projection data
         g_true = leapct.allocate_projections()
-        leapct.set_FORBILD(None, includeEar)
         st = time.time()
         leapct.rayTrace(g_true)
         print('ray trace time: ' + str(time.time()-st) + ' sec')
@@ -94,20 +117,34 @@ for ii in range(len(geometries)):
             # Test FBP
             f = leapct.allocate_volume()
             st = time.time()
-            leapct.FBP(g_true, f)
+            #leapct.filterProjections(g_true)
+            #quit()
+            g_temp = g_true.copy()
+            q = leapct.filterProjections_cpu(g_temp)
+            leapct.weightedBackproject(q, f)
+            #leapct.FBP(g_true, f)
             print('FBP time: ' + str(time.time()-st) + ' sec')
             
             #diff_g = g
             #diff_f = f
+            np.seterr(divide='ignore', invalid='ignore')
             diff_g = np.clip(100.0*(g-g_true)/g_true, -10.0, 10.0)
             diff_f = np.clip(100.0*(f-f_true)/f_true, -10.0, 10.0)
-
+            
+            #leapct.clip(f)
+            print(' ')
+            print('projector error:', 100.0*np.sum((g-g_true)**2)/np.sum(g_true**2))
+            print('FBP error:', 100.0*np.sum((f-f_true)**2)/np.sum(f_true**2))
+            
+            #leapct.display(f)
+            #quit()
+            #leapct.display(g)
             
             #"""
             plt.figure()
             plt.subplot(2, 2, 1)
             plt.title('projection')
-            plt.imshow(np.squeeze(diff_g[0,:,:]), cmap='gray')
+            plt.imshow(np.squeeze(diff_g[diff_g.shape[0]//2,:,:]), cmap='gray')
             plt.subplot(2, 2, 2)
             plt.title('sinogram')
             plt.imshow(np.squeeze(diff_g[:,numRows//2,:]), cmap='gray')
@@ -116,19 +153,21 @@ for ii in range(len(geometries)):
             plt.imshow(np.squeeze(diff_f[diff_f.shape[0]//2,:,:]), cmap='gray')
             plt.subplot(2, 2, 4)
             plt.title('x-slice')
-            plt.imshow(np.squeeze(diff_f[:,diff_f.shape[1]//2,:]), cmap='gray')
+            plt.imshow(np.squeeze(diff_f[:,:,diff_f.shape[2]//2]), cmap='gray')
             plt.show()
             #"""
             #quit()
 
-#quit()
+quit()
 
 # Now compare cone and modular to make sure they match
 leapct.reset()
-leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, pitch, tiltAngle)
+leapct.set_conebeam(numAngles, numRows, numCols, pixelSize, pixelSize, centerRow, centerCol, leapct.setAngleArray(numAngles, angularRange), sod, sdd, tau, helicalPitch, tiltAngle, pitchAngle)
 leapct_mod = tomographicModels()
 leapct_mod.copy_parameters(leapct)
 leapct_mod.convert_to_modularbeam()
+if leapct.get_tau() != 0.0:
+    leapct.set_offsetScan(True)
 #leapct_mod.rotate_detector(1.0)
 #leapct.set_offsetScan(True)
 
@@ -140,6 +179,7 @@ leapct.rayTrace(g_true)
 print('ray trace time: ' + str(time.time()-st) + ' sec')
 
 for iscale in range(len(voxelScales)):
+    print('Testing voxel scale ' + str(voxelScales[iscale]))
     # Set true phantom
     leapct.set_default_volume(voxelScales[iscale])
     leapct_mod.copy_parameters(leapct)
@@ -168,6 +208,7 @@ for iscale in range(len(voxelScales)):
     #leapct.display(f_true)
 
     for imethod in range(len(projection_methods)):
+        print('Testing projection method ' + projection_methods[imethod])
 
         leapct.set_projector(projection_methods[imethod])
         

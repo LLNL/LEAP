@@ -24,12 +24,12 @@
 /*
 struct PhysicsTables
 {
-	cudaTextureObject_t source_txt;
-	cudaTextureObject_t energies_txt;
-	cudaTextureObject_t sigma_PE_txt;
-	cudaTextureObject_t sigma_CS_txt;
-	cudaTextureObject_t sigma_RS_txt;
-	cudaTextureObject_t scatterDist_txt;
+	TEX_DATA source_txt;
+	TEX_DATA energies_txt;
+	TEX_DATA sigma_PE_txt;
+	TEX_DATA sigma_CS_txt;
+	TEX_DATA sigma_RS_txt;
+	TEX_DATA scatterDist_txt;
 
 	int N_energies;
 	int maxEnergy;
@@ -51,6 +51,6 @@ struct hypercube
 // scatterDist: the CS and RS distributions sampled in 1 keV bins and 1.0 degree angular bins
 bool simulateScatter_firstOrder_singleMaterial(float* g, float* f, parameters* params, float* source, float* energies, int N_energies, float* detector, float* sigma, float* scatterDist, bool data_on_cpu, int jobType);
 
-bool firstLeg(cudaTextureObject_t f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition);
+bool firstLeg(TEX_DATA f_data_txt, parameters* params, float* dev_Df, float3 sourcePosition);
 
 #endif

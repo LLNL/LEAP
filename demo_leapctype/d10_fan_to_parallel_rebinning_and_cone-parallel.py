@@ -56,8 +56,8 @@ leapct.print_parameters()
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
 # All you need is for the data to be C contiguous float32 arrays with the right dimensions
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,

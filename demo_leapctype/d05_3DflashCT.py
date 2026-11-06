@@ -78,8 +78,8 @@ leapct.print_parameters()
 #quit()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f = leapct.allocate_volume()
 
 # Specify simplified FORBILD head phantom
 leapct.set_FORBILD(f,True)

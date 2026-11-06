@@ -24,8 +24,8 @@ numRows = 1
 #leapct.set_parallelbeam(numAngles=numAngles, numRows=numRows, numCols=numCols, pixelHeight=pixelSize, pixelWidth=pixelSize, centerRow=0.5*(numRows-1), centerCol=0.5*(numCols-1), phis=leapct.setAngleArray(numAngles, 360.0))
 leapct.set_fanbeam(numAngles, numRows, numCols, pixelSize, pixelSize, 0.5*(numRows-1), 0.5*(numCols-1), leapct.setAngleArray(numAngles, angularRange), 1100, 1400)
 leapct.set_default_volume()
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-#f_true = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+#f_true = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Simulate projection data using analytic ray tracing methods
 #leapct.set_FORBILD()
@@ -33,10 +33,7 @@ leapct.addObject(None, 4, np.array([0.0, 0.0, 0.0]), 120.0*np.array([1.0, 1.0, 1
 for i in range(100):
     leapct.addObject(None, 4, 100*np.array([np.random.uniform(-1,1), np.random.uniform(-1,1), 0.0]), 5.0*np.array([1.0, 1.0, 1.0]), 0.0)
 leapct.rayTrace(g)
-I_0 = 1000.0
-t = np.random.poisson(I_0*np.exp(-g))
-t[t<=1.0] = 1.0
-g[:] = -np.log(t/I_0)
+leapct.poisson(g, 10000.0, True)
 
 # Choose which method you'd like to test
 #whichMethod = 1

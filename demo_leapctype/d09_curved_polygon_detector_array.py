@@ -85,7 +85,7 @@ alphas = (np.array(range(numSticks))-(numSticks-1)/2.0)*angularSpacing
 # We will do this for each projection angle individually.  Note that we
 # specify numAngles=numSticks because each projection in the modular-beam geometry is one source and detector pair 
 leapct_true.set_volume(numCols, numCols, numRows, pixelSize*sod/sdd, pixelSize*sod/sdd)
-f = leapct_true.allocateVolume() # shape is numZ, numY, numX
+f = leapct_true.allocate_volume() # shape is numZ, numY, numX
 leapct_true.set_FORBILD(f,True)
 
 for n in range(numAngles):
@@ -104,7 +104,7 @@ for n in range(numAngles):
         moduleCenters[m,1] = -sdd*np.sin(phi-alphas[m])+sourcePositions[m,1]
     
     leapct_true.set_modularbeam(numSticks, numRows, numCols_per_module, pixelSize, pixelSize, sourcePositions, moduleCenters, rowVectors, colVectors)
-    g_sim = leapct_true.allocateProjections() # shape is numAngles, numRows, numCols
+    g_sim = leapct_true.allocate_projections() # shape is numAngles, numRows, numCols
     
     #leapct_true.sketch_system()
     #quit()

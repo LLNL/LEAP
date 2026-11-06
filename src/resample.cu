@@ -28,7 +28,7 @@ __device__ float bumpFcn(float W, float delay, int l)
     }
 }
 
-__global__ void downSampleKernel(cudaTextureObject_t I, const int3 N, float* I_dn, const int3 N_dn, const float3 L)
+__global__ void downSampleKernel(TEX_DATA I, const int3 N, float* I_dn, const int3 N_dn, const float3 L)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -73,17 +73,17 @@ __global__ void downSampleKernel(cudaTextureObject_t I, const int3 N, float* I_d
             {
                 const float h_2 = bumpFcn(L.z, delay_2, l_2);
                 accum += h_0 * h_1 * h_2;
-                val += tex3D<float>(I, kk+l_2, jj+l_1, ii+l_0) * h_0 * h_1 * h_2;
+                val += TEX3D(I, kk+l_2, jj+l_1, ii+l_0) * h_0 * h_1 * h_2;
             }
         }
     }
 
     uint64 ind = uint64(i) * uint64(N_dn.y * N_dn.z) + uint64(j * N_dn.z + k);
-    //I_dn[ind] = tex3D<float>(I, z, y, x);
+    //I_dn[ind] = TEX3D(I, z, y, x);
     I_dn[ind] = val / accum;
 }
 
-__global__ void upSampleKernel(cudaTextureObject_t I, const int3 N, float* I_up, const int3 N_up, const float3 L)
+__global__ void upSampleKernel(TEX_DATA I, const int3 N, float* I_up, const int3 N_up, const float3 L, const int set_type)
 {
     const int i = threadIdx.x + blockIdx.x * blockDim.x;
     const int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -96,7 +96,26 @@ __global__ void upSampleKernel(cudaTextureObject_t I, const int3 N, float* I_up,
     float z = (k - 0.5f * float(N_up.z - 1)) / L.z + 0.5f * float(N.z - 1) + 0.5f;
 
     uint64 ind = uint64(i) * uint64(N_up.y * N_up.z) + uint64(j * N_up.z + k);
-    I_up[ind] = tex3D<float>(I, z, y, x);
+    if (set_type == 0)
+        I_up[ind] = TEX3D(I, z, y, x);
+    else if (set_type == 1)
+        I_up[ind] += TEX3D(I, z, y, x);
+    else if (set_type == 2)
+        I_up[ind] *= TEX3D(I, z, y, x);
+    else if (set_type == 3)
+    {
+        const float temp = TEX3D(I, z, y, x);
+        const float curVal = I_up[ind];
+        if (curVal != 0.0)
+            I_up[ind] = curVal * curVal / (curVal + temp);;
+    }
+    else //if (set_type == 4)
+    {
+        const float temp = TEX3D(I, z, y, x);
+        const float curVal = I_up[ind];
+        if (curVal != 0.0)
+            I_up[ind] = curVal * (curVal + temp) / curVal;
+    }
 }
 
 bool downSample(float* I, int* N, float* I_dn, int* N_dn, float* factors, int whichGPU)
@@ -116,8 +135,8 @@ bool downSample(float* I, int* N, float* I_dn, int* N_dn, float* factors, int wh
     int3 N_f = make_int3(N[0], N[1], N[2]);
     float3 L = make_float3(factors[0], factors[1], factors[2]);
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_I, N_f, true, false);
+    TEX_DATA d_data_txt = {};
+    TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_I, N_f, true, false);
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_g);
@@ -135,13 +154,12 @@ bool downSample(float* I, int* N, float* I_dn, int* N_dn, float* factors, int wh
     }
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt);
 
     return true;
 }
 
-bool upSample(float* I, int* N, float* I_up, int* N_up, float* factors, int whichGPU)
+bool upSample(float* I, int* N, float* I_up, int* N_up, float* factors, int set_type, int whichGPU)
 {
     if (I == NULL || N == NULL || I_up == NULL || N_up == NULL || factors == NULL)
         return false;
@@ -158,14 +176,14 @@ bool upSample(float* I, int* N, float* I_up, int* N_up, float* factors, int whic
     int3 N_f = make_int3(N[0], N[1], N[2]);
     float3 L = make_float3(factors[0], factors[1], factors[2]);
 
-    cudaTextureObject_t d_data_txt = NULL;
-    cudaArray* d_data_array = loadTexture(d_data_txt, dev_I, N_f, true, true);
+    TEX_DATA d_data_txt = {};
+    TEX_ARRAY d_data_array = loadTexture(d_data_txt, dev_I, N_f, true, true);
 
     // Call Kernel
     dim3 dimBlock = setBlockSize(N_g);
     dim3 dimGrid = setGridSize(N_g, dimBlock);
 
-    upSampleKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_f, dev_I_up, N_g, L);
+    upSampleKernel <<< dimGrid, dimBlock >>> (d_data_txt, N_f, dev_I_up, N_g, L, set_type);
 
     // pull result off GPU
     cudaStatus = cudaDeviceSynchronize();
@@ -177,8 +195,7 @@ bool upSample(float* I, int* N, float* I_up, int* N_up, float* factors, int whic
     }
 
     // Clean up
-    cudaFreeArray(d_data_array);
-    cudaDestroyTextureObject(d_data_txt);
+    freeTexture(d_data_array, d_data_txt);
 
     return true;
 }

@@ -49,8 +49,8 @@ leapct.set_default_volume()
 
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify simplified FORBILD head phantom with some additional pieces of metal
 leapct.set_FORBILD()
@@ -74,11 +74,7 @@ leapct.rayTrace(g, oversampling=3)
 print('Ray Tracing Elapsed Time: ' + str(time.time()-startTime))
 
 # Add noise to the data and photon stravation to create metal artifacts
-I_0 = 100000.0
-t = I_0*np.exp(-g)
-t = np.random.poisson(t)
-t[t<=1.0] = 1.0
-g[:] = -np.log(t/I_0)
+leapct.poisson(g, 100000.0, True)
 
 
 # Reconstruct the data with FBP

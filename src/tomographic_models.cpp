@@ -11,32 +11,37 @@
 #include <algorithm>
 #include <omp.h>
 #include "tomographic_models.h"
-#include "ray_weighting_cpu.h"
-#include "ramp_filter_cpu.h"
+#include "fbp/ray_weighting_cpu.h"
+#include "fbp/ramp_filter_cpu.h"
 #include "cuda_utils.h"
-#include "sensitivity_cpu.h"
-#include "sensitivity.cuh"
-#include "ramp_filter_cpu.h"
-#include "find_center_cpu.h"
-#include "projectors_Joseph_cpu.h"
-#include "analytic_ray_tracing.h"
+#include "projectors/sensitivity_cpu.h"
+#include "projectors/sensitivity.cuh"
+#include "fbp/ramp_filter_cpu.h"
+#include "geometry/find_center_cpu.h"
+#include "projectors/projectors_Joseph_cpu.h"
+#include "ray_tracing/analytic_ray_tracing.h"
 #include "sinogram_replacement.h"
 #include "resample_cpu.h"
-#include "rebin.h"
+#include "geometry/rebin.h"
+#include "cpu_utils.h"
+#include "geometry/geometric_calibration_cpu.h"
 #ifndef __USE_CPU
 #include "resample.cuh"
-#include "ramp_filter.cuh"
-#include "noise_filters.cuh"
-#include "total_variation.cuh"
-#include "matching_pursuit.cuh"
-#include "bilateral_filter.cuh"
-#include "guided_filter.cuh"
+#include "fbp/ramp_filter.cuh"
+#include "denoise/noise_filters.cuh"
+#include "denoise/total_variation.cuh"
+#include "denoise/matching_pursuit.cuh"
+#include "denoise/bilateral_filter.cuh"
+#include "denoise/guided_filter.cuh"
 #include "scatter_models.cuh"
-#include "geometric_calibration.cuh"
-#include "analytic_ray_tracing_gpu.cuh"
+#include "geometry/geometric_calibration.cuh"
+#include "ray_tracing/analytic_ray_tracing_gpu.cuh"
+#include "physics/billiards.cuh"
 #endif
 
+#include "physics/xrayphysics_c_interface.h"
 #include "log.h"
+#include "statistics.h"
 //Log::ReportingLevel() = logSTATUS;
 
 tomographicModels::tomographicModels()
@@ -44,11 +49,15 @@ tomographicModels::tomographicModels()
 	className = "tomographicModels";
 	params.initialize();
 	maxSlicesForChunking = 128;
-	//maxSlicesForChunking = 256;
+	maxSlicesForChunking = 256;
 	//maxSlicesForChunking = 512;
-	//minSlicesForChunking = std::min(64, maxSlicesForChunking);
 	//minSlicesForChunking = std::min(8, maxSlicesForChunking);
-	minSlicesForChunking = std::min(32, maxSlicesForChunking);
+	//minSlicesForChunking = std::min(32, maxSlicesForChunking);
+	//minSlicesForChunking = std::min(64, maxSlicesForChunking);
+	minSlicesForChunking = std::min(128, maxSlicesForChunking);
+
+	use_pinned_memory = false;
+
 
 	/*
 	//std::ofstream pfile;
@@ -101,6 +110,11 @@ bool tomographicModels::set_maxSlicesForChunking(int N)
 		return false;
 }
 
+int tomographicModels::get_maxSlicesForChunking()
+{
+	return maxSlicesForChunking;
+}
+
 bool tomographicModels::print_parameters()
 {
 	params.printAll();
@@ -112,7 +126,6 @@ const char* tomographicModels::about()
 	printf("****************************************************************\n");
 	printf("LivermorE AI Projector for Computed Tomography (LEAP)\n");
 	printf("                     version %s\n", LEAP_VERSION);
-	printf("                   LLNL-CODE-848657\n");
 	printf("\n");
 	printf("             compiled: %s %s\n", __DATE__, __TIME__);
 	printf("        written by: Kyle Champley and Hyojin Kim\n");
@@ -124,7 +137,7 @@ const char* tomographicModels::about()
 bool tomographicModels::reset()
 {
 	params.clearAll();
-	params.initialize();
+	params.initialize(false);
 	geometricPhantom.clearObjects();
 	return true;
 }
@@ -234,11 +247,11 @@ bool tomographicModels::backproject_cpu(float* g, float* f)
 	return retVal;
 }
 
-bool tomographicModels::filterProjections_cpu(float* g)
+bool tomographicModels::filterProjections_cpu(float* g, float* g_out)
 {
 	int whichGPU_save = params.whichGPU;
 	params.whichGPU = -1;
-	bool retVal = filterProjections(g, g, true);
+	bool retVal = filterProjections(g, g_out, true);
 	params.whichGPU = whichGPU_save;
 	return retVal;
 }
@@ -305,7 +318,7 @@ bool tomographicModels::copy_volume_data_to_mask(float* f, float* mask, bool dat
 			N_3 = params.numZ;
 		}
 
-		omp_set_num_threads(omp_get_num_procs());
+		omp_set_num_threads(num_cpu_threads());
 		#pragma omp parallel for
 		for (int i = 0; i < N_1; i++)
 		{
@@ -370,6 +383,7 @@ bool tomographicModels::copy_volume_data_to_mask(float* f, float* mask, bool dat
 
 bool tomographicModels::backproject(float* g, float* f, bool data_on_cpu)
 {
+	params.set_zFOV_peaks();
 	if (data_on_cpu == true && backproject_multiGPU(g, f) == true)
 		return true;
 	else
@@ -392,28 +406,43 @@ bool tomographicModels::backproject(float* g, float* f, bool data_on_cpu)
 		return true;
 		//*/
 
+		// If only a subset of detector rows contribute to this volume, tell the backprojector
+		// so it can load just those rows into GPU texture memory without an intermediate copy.
+		int rowRange[2];
+		params.rowRangeNeededForBackprojection(0, params.numZ - 1, rowRange);
+		if (rowRange[0] > 0 || rowRange[1] < params.numRows - 1) {
+			parameters local_params = params;
+			local_params.projectionDataFirstRow = rowRange[0];
+			local_params.projectionDataStride = params.numRows;
+			local_params.numRows = rowRange[1] - rowRange[0] + 1;
+			local_params.centerRow = params.centerRow - rowRange[0];
+			return proj.backproject(g, f, &local_params, data_on_cpu);
+		}
 		return proj.backproject(g, f, &params, data_on_cpu);
 	}
 }
 
-bool tomographicModels::weightedBackproject(float* g, float* f, bool data_on_cpu)
+bool tomographicModels::weightedBackproject(float* g, float* f, bool doDBP, bool data_on_cpu)
 {
 	bool doWeight_save = params.doWeightedBackprojection;
 	params.doWeightedBackprojection = true;
+	bool doDBP_save = params.doDBP;
+	params.doDBP = doDBP;
 
 	bool doExtrapolation_save = params.doExtrapolation;
-	if ((params.geometry != parameters::CONE && params.geometry != parameters::CONE_PARALLEL) || params.helicalPitch == 0.0)
+	if ((params.geometry != parameters::CONE && params.geometry != parameters::CONE_PARALLEL) || params.is_essentially_axial_scan())
 		params.doExtrapolation = true;
 
 	bool retVal = backproject(g, f, data_on_cpu);
 	params.doWeightedBackprojection = doWeight_save;
 	params.doExtrapolation = doExtrapolation_save;
+	params.doDBP = doDBP_save;
 	return retVal;
 }
 
-bool tomographicModels::HilbertFilterProjections(float* g, bool data_on_cpu, float scalar)
+bool tomographicModels::HilbertFilterProjections(float* g, bool data_on_cpu, float scalar, float sampleShift)
 {
-	return FBP.HilbertFilterProjections(g, &params, data_on_cpu, scalar);
+	return FBP.HilbertFilterProjections(g, &params, data_on_cpu, scalar, sampleShift);
 }
 
 bool tomographicModels::rampFilterProjections(float* g, bool data_on_cpu, float scalar)
@@ -443,12 +472,26 @@ bool tomographicModels::filterProjections_multiGPU(float* g, float* g_out)
 	// Now divide numAngles further to fit on the GPUs
 	// reserve some extra memory for filtering (FFT)
 	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
-	float memNeeded = (1.0+2.0/40.0)*params.projectionDataSize()*float(params.numCols + extraCols)/float(params.numCols);
+
+	float extra_copies_needed = 15.0/40.0; // ramp filter
+	if (params.helicalPitch != 0.0)
+	{
+		extra_copies_needed = 1.0;
+	}
+	else
+	{
+		if (params.inconsistencyReconstruction)
+			extra_copies_needed = 0.0; // derivative filter
+	}
+
+	float memNeeded = (1.0+extra_copies_needed)*params.projectionDataSize()*float(params.numCols + extraCols)/float(params.numCols);
 	if (memNeeded >= memAvailable)
 	{
 		// memNeeded*N/params.numAngles = memAvailable
 		numViewsPerChunk = std::min(numViewsPerChunk, int(floor(memAvailable * float(params.numAngles) / memNeeded)));
 	}
+	LOG(logDEBUG, className, "") << "memAvailable = " << memAvailable << std::endl;
+	LOG(logDEBUG, className, "") << "memNeeded = " << memNeeded << std::endl;
 	if (numViewsPerChunk < 2)
 		return false; // not enough GPU memory for even two projections, ouch!
 
@@ -467,7 +510,7 @@ bool tomographicModels::filterProjections_multiGPU(float* g, float* g_out)
 	float rowShiftFromFilter = params.rowShiftFromFilter;
 
 	// FIXME: need to copy over some of the changes to params that filter makes
-	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
@@ -531,6 +574,37 @@ bool tomographicModels::filterProjections(float* g, float* g_out, bool data_on_c
 		return FBP.filterProjections(g, g_out, &params, data_on_cpu);
 }
 
+bool tomographicModels::DBPfilter_cpu(float* g)
+{
+	int whichGPU_save = params.whichGPU;
+	params.whichGPU = -1;
+	bool retVal = DBPfilter(g, true);
+	params.whichGPU = whichGPU_save;
+	return retVal;
+}
+
+bool tomographicModels::DBPfilter(float* g, bool data_on_cpu)
+{
+	//if (data_on_cpu)
+	//	return DBPfilter_cpu(g);
+	params.doDBP = true;
+	bool offsetScan_save = params.offsetScan;
+	params.offsetScan = false;
+	if (data_on_cpu == true && filterProjections_multiGPU(g, g) == true)
+	{
+		params.doDBP = false;
+		params.offsetScan = offsetScan_save;
+		return true;
+	}
+	else
+	{
+		bool retVal = FBP.filterProjections(g, g, &params, data_on_cpu);
+		params.doDBP = false;
+		params.offsetScan = offsetScan_save;
+		return retVal;
+	}
+}
+
 bool tomographicModels::preRampFiltering(float* g, bool data_on_cpu)
 {
 	return FBP.preRampFiltering(g, &params, data_on_cpu);
@@ -579,7 +653,7 @@ bool tomographicModels::rampFilterVolume(float* f, bool data_on_cpu)
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -621,6 +695,23 @@ bool tomographicModels::windowFOV(float* f, bool data_on_cpu)
 #endif
 }
 
+bool tomographicModels::free_memory(float* data)
+{
+	if (data == nullptr)
+		return false;
+	#ifndef __USE_CPU
+	if (use_pinned_memory)
+	{
+		cudaFreeHost(data);
+		return true;
+	}
+	else
+		return free_aligned(data);
+	#else
+	return free_aligned(data);
+	#endif
+}
+
 float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice, int firstView, int lastView)
 {
 	//Timer clock;
@@ -635,10 +726,30 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice, int 
 	int numViews_new = lastView - firstView + 1;
 
 	int numSlices = lastSlice - firstSlice + 1;
-	float* g_chunk = (float*)malloc(sizeof(float) * uint64(numViews_new) * uint64(params.numCols) * uint64(numSlices));
+	//float* g_chunk = (float*)malloc(sizeof(float) * uint64(numViews_new) * uint64(params.numCols) * uint64(numSlices));
+	float* g_chunk = nullptr;
+	
+	#ifndef __USE_CPU
+	if (use_pinned_memory)
+	{
+		size_t size_bytes = size_t(numViews_new) * size_t(numSlices) * size_t(params.numCols) * sizeof(float);
+		cudaError_t err = cudaHostAlloc((void**)&g_chunk, size_bytes, cudaHostAllocDefault);
+		if (err != cudaSuccess)
+		{
+			std::fprintf(stderr, "cudaHostAlloc failed: %s\n", cudaGetErrorString(err));
+			return nullptr;
+		}
+	}
+	else
+	{
+		g_chunk = malloc_aligned(size_t(numViews_new)*size_t(numSlices)*size_t(params.numCols)*sizeof(float));
+	}
+	#else
+	g_chunk = malloc_aligned(size_t(numViews_new)*size_t(numSlices)*size_t(params.numCols)*sizeof(float));
+	#endif
 
 	//*
-	omp_set_num_threads(omp_get_num_procs());
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int iphi = firstView; iphi <= lastView; iphi++)
 	{
@@ -657,7 +768,7 @@ float* tomographicModels::copyRows(float* g, int firstSlice, int lastSlice, int 
 	//*/
 
 	/*
-	omp_set_num_threads(omp_get_num_procs());
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
 	{
@@ -693,7 +804,7 @@ bool tomographicModels::combineRows(float* g, float* g_chunk, int firstRow, int 
 
 	int numRows = lastRow - firstRow + 1;
 	
-	omp_set_num_threads(omp_get_num_procs());
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int iphi = firstView; iphi <= lastView; iphi++)
 	{
@@ -704,7 +815,7 @@ bool tomographicModels::combineRows(float* g, float* g_chunk, int firstRow, int 
 	}
 
 	/*
-	omp_set_num_threads(omp_get_num_procs());
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int iphi = 0; iphi < params.numAngles; iphi++)
 	{
@@ -736,6 +847,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 #ifndef __USE_CPU
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
+	/*
 	if ((params.geometry == parameters::CONE || params.geometry == parameters::CONE_PARALLEL) && params.helicalPitch != 0.0)
 		return project_multiGPU_splitViews(g, f);
 	if (params.geometry == parameters::MODULAR)
@@ -743,8 +855,15 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		if (params.modularbeamIsAxiallyAligned() == false)
 			return project_multiGPU_splitViews(g, f);
 	}
+	//*/
+	if (params.is_essentially_axial_scan() == false)
+		return project_multiGPU_splitViews(g, f);
+
+	bool has_unified_memory = physically_shared_memory(params.whichGPU);
 
 	int numProjectionData = 1;
+	if (has_unified_memory)
+		numProjectionData = 0;
 	int numVolumeData = 1;
 
 	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
@@ -790,7 +909,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 		numChunks = std::max(1, int(ceil(float(params.numRows) / float(numRowsPerChunk))));
 	}
 
-	//printf("numRowsPerChunk = %d\n", numRowsPerChunk);
+	//printf("numRowsPerChunk = %d, numChunks = %d\n", numRowsPerChunk, numChunks);
 
 	if (numChunks <= 1)
 		return false;
@@ -800,7 +919,7 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 	bool retVal = true;
 
-	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
@@ -814,9 +933,6 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 
 		if (numSlices > 0)
 		{
-			// make a copy of the relavent rows
-			float* g_chunk = (float*)malloc(sizeof(float) * params.numAngles * params.numCols * numRows);
-
 			float memNeeded = params.projectionDataSize() * float(numRows) / float(params.numRows) + params.volumeDataSize() * float(numSlices) / float(params.numZ) + params.get_extraMemoryReserved();
 			if (memNeeded < memAvailable)
 			{
@@ -828,6 +944,8 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 				chunk_params.numRows = numRows;
 				chunk_params.numZ = numSlices;
 				chunk_params.centerRow = params.centerRow - firstRow;
+				chunk_params.projectionDataStride = params.numRows;
+				chunk_params.projectionDataFirstRow = firstRow;
 
 				// need: chunk_params.z_0() + z_shift = sliceRange[0]*params.voxelHeight + params.z_0()
 				chunk_params.offsetZ += sliceRange[0] * params.voxelHeight + params.z_0() - chunk_params.z_0();
@@ -840,10 +958,12 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 				LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": projection: z-slices: (" << sliceRange[0] << ", " << sliceRange[1] << "), rows = (" << firstRow << ", " << lastRow << ")" << std::endl;
 
 				// Do Computation
-				proj.project(g_chunk, f_chunk, &chunk_params, true);
+				// chunk params carries the coords of the subwindow into g we are updating
+				proj.project(g, f_chunk, &chunk_params, true);
 			}
 			else
 			{
+				//printf("two-stage subchunking!!\n");
 				// Further reduce number of volume slices
 				// memAvailable => params.projectionDataSize() * float(numRows) / float(params.numRows) + params.volumeDataSize() * float(numSlices_stage2) / float(params.numZ)
 				int numSlices_stage2 = std::max(1, int(floor((memAvailable - params.get_extraMemoryReserved() - params.projectionDataSize() * float(numRows) / float(params.numRows)) * float(params.numZ) / params.volumeDataSize())));
@@ -898,14 +1018,17 @@ bool tomographicModels::project_multiGPU(float* g, float* f)
 						//proj.project(g_chunk, f_chunk, &chunk_params, true);
 					}
 				}
-				pull3DdataFromGPU(g_chunk, make_int3(params.numAngles, numRows, params.numCols), dev_g, params.whichGPUs[omp_get_thread_num()]);
+				// dev_g holds only this chunk's rows contiguously; describe the strided
+				// copy back into the full host array g (numRows rows starting at firstRow).
+				parameters pull_params;
+				pull_params = params;
+				pull_params.numRows = numRows;
+				pull_params.projectionDataStride = params.numRows;
+				pull_params.projectionDataFirstRow = firstRow;
+				pullProjectionDataFromGPU(g, &pull_params, dev_g, params.whichGPUs[omp_get_thread_num()]);
 				if (dev_g != 0)
 					cudaFree(dev_g);
 			}
-			combineRows(g, g_chunk, firstRow, lastRow);
-
-			// clean up
-			free(g_chunk);
 		}
 	}
 	return retVal;
@@ -969,6 +1092,16 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 	int numProjectionData = 1;
 	int numVolumeData = 1; // need an extra for texture memory (not anymore)
 
+	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
+
+	// Calculate the minimum number of projections one would like to calculate at a time before the volume must be divided further
+	// We want to make sure that this lower bound is set low enough to leave extra room for the volume data
+	// For now let's make it so it can't occupy more than half the memory
+	int minProjectionsForChunking_local = int(float(params.numAngles) / float(params.whichGPUs.size()));
+	// 0.5*memAvailable >= params.projectionDataSize()*float(minProjectionsForChunking_local) / float(params.numAngles)
+	minProjectionsForChunking_local = std::min(minProjectionsForChunking_local, int(floor(0.5 * memAvailable * float(params.numAngles) / params.projectionDataSize())));
+	minProjectionsForChunking_local = std::max(1, minProjectionsForChunking_local);
+
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numRowsPerChunk = std::min(64, params.numRows);
 	int numViewsPerChunk = std::max(1, int(ceil(float(params.numAngles) / std::max(2.0, double(params.whichGPUs.size())))));
@@ -977,20 +1110,27 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 	if (params.hasSufficientGPUmemory(true, 0, numProjectionData, numVolumeData) == false)
 	{
 		// FIXME: this does not properly calculate the amount of memory necessary
-		float memAvailable = getAvailableGPUmemory(params.whichGPUs);
 		float memNeeded = project_memoryRequired_splitViews(numViewsPerChunk);
 
 		while (memAvailable < memNeeded)
 		{
 			numViewsPerChunk = numViewsPerChunk / 2;
-			if (numViewsPerChunk <= 1)
-				return false;
+			//if (numViewsPerChunk <= 1)
+			//	return false;
+			if (numViewsPerChunk <= minProjectionsForChunking_local)
+			{
+				numViewsPerChunk = minProjectionsForChunking_local;
+				numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
+				break;
+			}
 			memNeeded = project_memoryRequired_splitViews(numViewsPerChunk);
 		}
 		numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
 	}
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory(0, numProjectionData, numVolumeData) <= params.chunkingMemorySizeThreshold)
+	{
 		return false;
+	}
 	else
 	{
 		numViewsPerChunk = int(ceil(float(params.numAngles) / float(params.whichGPUs.size())));
@@ -998,10 +1138,13 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 		numChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
 	}
 
+	//printf("numViewsPerChunk = %d, numChunks = %d\n", numViewsPerChunk, numChunks);
+
 	if (numChunks <= 1)
 		return false;
 
-	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	bool retVal = true;
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
@@ -1013,40 +1156,103 @@ bool tomographicModels::project_multiGPU_splitViews(float* g, float* f)
 		params.sliceRangeNeededForProjectionRange(firstView, lastView, sliceRange);
 		int numSlices = sliceRange[1] - sliceRange[0] + 1;
 
-		float* f_chunk = &f[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
+		if (numViews > 0 && numSlices > 0)
+		{
+			// make a copy of the relavent rows
+			float* g_chunk = &g[uint64(firstView)* uint64(params.numRows*params.numCols)];
 
-		// make a copy of the relavent rows
-		float* g_chunk = &g[uint64(firstView)* uint64(params.numRows*params.numCols)];
+			float memNeeded = params.projectionDataSize() * float(numViews) / float(params.numAngles) + params.volumeDataSize() * float(numSlices) / float(params.numZ) + params.get_extraMemoryReserved();
+			if (memNeeded < memAvailable)
+			{
+				float* f_chunk = &f[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
-		// make a copy of the params
-		parameters chunk_params;
-		chunk_params = params;
-		chunk_params.removeProjections(firstView, lastView);
-		chunk_params.numZ = numSlices;
+				// make a copy of the params
+				parameters chunk_params;
+				chunk_params = params;
+				chunk_params.removeProjections(firstView, lastView);
+				chunk_params.numZ = numSlices;
 
-		// need: chunk_params.z_0() + z_shift = sliceRange[0]*params.voxelHeight + params.z_0()
-		chunk_params.offsetZ += sliceRange[0] * params.voxelHeight + params.z_0() - chunk_params.z_0();
+				// need: chunk_params.z_0() + z_shift = sliceRange[0]*params.voxelHeight + params.z_0()
+				chunk_params.offsetZ += sliceRange[0] * params.voxelHeight + params.z_0() - chunk_params.z_0();
 
-		/*
-		chunk_params.offsetZ = params.offsetZ + (sliceRange[0] - 0) * params.voxelHeight; // FIXME?
-		if (params.helicalPitch != 0.0)
-			chunk_params.offsetZ += float(chunk_params.numZ - params.numZ) * 0.5 * params.voxelHeight;
-		//*/
+				chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+				chunk_params.whichGPUs.clear();
+				if (params.mu != NULL)
+					chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
 
-		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
-		chunk_params.whichGPUs.clear();
-		if (params.mu != NULL)
-			chunk_params.mu = &params.mu[uint64(sliceRange[0]) * uint64(params.numX * params.numY)];
+				//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
+				//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
 
-		//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
-		//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
+				LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": projection: z-slices: (" << sliceRange[0] << ", " << sliceRange[1] << "), views = (" << firstView << ", " << lastView << ")" << std::endl;
 
-		LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": projection: z-slices: (" << sliceRange[0] << ", " << sliceRange[1] << "), views = (" << firstView << ", " << lastView << ")" << std::endl;
+				// Do Computation
+				proj.project(g_chunk, f_chunk, &chunk_params, true);
+			}
+			else
+			{
+				//printf("two-stage subchunking!!\n");
+				// Further reduce number of volume slices
+				//LOG(logERROR, className, "project_multiGPU_splitViews") << "Two-stage GPU chunking not yet implemented!" << endl;
+				//retVal = false;
 
-		// Do Computation
-		proj.project(g_chunk, f_chunk, &chunk_params, true);
+				// memAvailable => params.projectionDataSize() * float(numViews) / float(params.numAngles) + params.volumeDataSize() * float(numSlices_stage2) / float(params.numZ)
+				int numSlices_stage2 = std::max(1, int(floor((memAvailable - params.get_extraMemoryReserved() - params.projectionDataSize() * float(numViews) / float(params.numAngles)) * float(params.numZ) / params.volumeDataSize())));
+				int numChunks_z = std::max(1, int(ceil(float(numSlices) / float(numSlices_stage2))));
+				numSlices_stage2 = std::max(1, int(ceil(float(numSlices) / float(numChunks_z)))); // make each chunk approximately equal in size
+
+				float* dev_g = 0;
+				cudaError_t cudaStatus;
+				cudaSetDevice(params.whichGPUs[omp_get_thread_num()]);
+				if ((cudaStatus = cudaMalloc((void**)&dev_g, uint64(numViews) * uint64(params.numRows) * uint64(params.numCols) * sizeof(float))) != cudaSuccess)
+				{
+					fprintf(stderr, "cudaMalloc(projections) failed!\n");
+					retVal = false;
+					continue;
+				}
+
+				for (int ichunk_z = 0; ichunk_z < numChunks_z; ichunk_z++)
+				{
+					int sliceRange_stage2[2];
+					sliceRange_stage2[0] = sliceRange[0] + ichunk_z * numSlices_stage2;
+					sliceRange_stage2[1] = std::min(sliceRange_stage2[0] + numSlices_stage2 - 1, sliceRange[1]);
+					int numSlices_stage2 = sliceRange_stage2[1] - sliceRange_stage2[0] + 1;
+					if (numSlices_stage2 > 0)
+					{
+						float* f_chunk = &f[uint64(sliceRange_stage2[0]) * uint64(params.numX * params.numY)];
+
+						// make a copy of the params
+						parameters chunk_params;
+						chunk_params = params;
+						chunk_params.removeProjections(firstView, lastView);
+						chunk_params.numZ = numSlices_stage2;
+						//chunk_params.centerRow = params.centerRow - firstRow;
+
+						// need: chunk_params.z_0() + z_shift = sliceRange_stage2[0]*params.voxelHeight + params.z_0()
+						chunk_params.offsetZ += sliceRange_stage2[0] * params.voxelHeight + params.z_0() - chunk_params.z_0();
+
+						chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
+						chunk_params.whichGPUs.clear();
+						if (params.mu != NULL)
+							chunk_params.mu = &params.mu[uint64(sliceRange_stage2[0]) * uint64(params.numX * params.numY)];
+
+						LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": volume: z-slices: (" << sliceRange_stage2[0] << ", " << sliceRange_stage2[1] << "), views = (" << firstView << ", " << lastView << ")" << std::endl;
+
+						bool accumulate = false;
+						if (ichunk_z > 0)
+							accumulate = true;
+
+						// Do Computation
+						proj.project(dev_g, f_chunk, &chunk_params, false, true, accumulate);
+						//proj.project(g_chunk, f_chunk, &chunk_params, true);
+					}
+				}
+				pull3DdataFromGPU(g_chunk, make_int3(numViews, params.numRows, params.numCols), dev_g, params.whichGPUs[omp_get_thread_num()]);
+				if (dev_g != 0)
+					cudaFree(dev_g);
+			}
+		}
 	}
-	return true;
+	return retVal;
 #else
 	return false;
 #endif
@@ -1056,8 +1262,10 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 {
 #ifndef __USE_CPU
 	//return false;
-	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
+	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric() || params.whichGPU < 0)
 		return false;
+
+	/*
 	if ((params.geometry == parameters::CONE || params.geometry == parameters::CONE_PARALLEL) && params.helicalPitch != 0.0)
 		return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
 	if (params.geometry == parameters::MODULAR)
@@ -1065,6 +1273,10 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		if (params.modularbeamIsAxiallyAligned() == false)
 			return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
 	}
+	//*/
+
+	if (params.is_essentially_axial_scan() == false)
+		return backproject_FBP_multiGPU_splitViews(g, f, doFBP);
 
 	int extraCols = 0;
 	if (doFBP)
@@ -1076,10 +1288,17 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		LOG(logDEBUG, className, "") << "Extra columns needed for offset scan reconstruction: " << extraCols << std::endl;
 	}
 
+	// Probed once on params.whichGPU; mixed-UMA configurations (one integrated UMA GPU
+	// + one discrete) are not supported here — every chunk is dispatched as if it shares
+	// this GPU's UMA state.
+	bool has_unified_memory = physically_shared_memory(params.whichGPU);
+
 	float numProjectionData = 1.0;
 	float numVolumeData = 1.0;
-	if (params.mu != NULL)
-		numVolumeData += 1.0;
+	if (has_unified_memory)
+		numVolumeData = 0.0; // if in UMA we don't need to copy
+	if (params.mu != NULL && !has_unified_memory)
+		numVolumeData += 1.0;  // if in UMA no need to copy
 	if (doFBP)
 		numProjectionData = 2.0; // need an extra for texture memory
 
@@ -1104,10 +1323,10 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	int numSlicesPerChunk = std::max(1, int(ceil(float(params.numZ) / std::max(2.0, double(params.whichGPUs.size())))));
 	numSlicesPerChunk = std::min(numSlicesPerChunk, maxSlicesForChunking);
 	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
-	if (params.hasSufficientGPUmemory(true, extraCols, numProjectionData, numVolumeData) == false)
+	if (params.hasSufficientGPUmemory(true, extraCols, numProjectionData, numVolumeData, true) == false)
 	{
 		//*
-		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP);
+		float memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP, -1, !has_unified_memory);
 		while (memAvailable < memNeeded)
 		{
 			numSlicesPerChunk = numSlicesPerChunk / 2;
@@ -1116,7 +1335,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 				numSlicesPerChunk = minSlicesForChunking_local;
 				break;
 			}
-			memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP);
+			memNeeded = backproject_memoryRequired(numSlicesPerChunk, extraCols, doFBP, -1, !has_unified_memory);
 		}
 		//*/
 
@@ -1139,7 +1358,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 	else if (int(params.whichGPUs.size()) <= 1 || params.requiredGPUmemory(extraCols, numProjectionData, numVolumeData) <= params.chunkingMemorySizeThreshold)
 	{
 		// in this case one is only using one GPU and the whole operation can fit on the GPU, so no reason to chunk the data
-		if (params.numZ > 1) // well if we are just reconstructing one slice, then we don't want to filter and copy over unnecessary detector rows
+		if (params.numZ > 1 && need_all_rows_for_backprojection()) // well if we are just reconstructing one slice, then we don't want to filter and copy over unnecessary detector rows
 			return false;
 	}
 	else
@@ -1154,13 +1373,18 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		bool retVal2 = false;
 		if (params.numZ == 1 && params.numRows > 1)
 			retVal2 = true;
-		if (retVal2 == false)
+		// There is a possible edge case of having a single chunk without enough memory, we require subchunking if so.
+		else if (params.hasSufficientGPUmemory(true, extraCols, numProjectionData, numVolumeData, true) == false)
+			retVal2 = true;
+		if (need_all_rows_for_backprojection() == false)
+			retVal2 = true;
+		if (retVal2 == false) // numZ > 1 || numRows <= 1
 			return false;
 	}
 
 	bool retVal = true;
 
-	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
@@ -1173,7 +1397,7 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		// make a copy of the relavent rows
 		int rowRange[2];
 		params.rowRangeNeededForBackprojection(firstSlice, lastSlice, rowRange);
-		
+
 		/*
 		float* g_chunk = NULL;
 		if (rowRange[0] == 0 && rowRange[1] == params.numRows - 1)
@@ -1182,11 +1406,14 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 			g_chunk = copyRows(g, rowRange[0], rowRange[1]);
 		//*/
 
-		// make a copy of the params
+		// make a copy of the params, then narrow to the needed row range so the
+		// backprojector can load only those rows directly into GPU texture memory.
 		parameters chunk_params;
 		chunk_params = params;
 		chunk_params.numRows = rowRange[1] - rowRange[0] + 1;
 		chunk_params.numZ = numSlices;
+		chunk_params.projectionDataFirstRow = rowRange[0];
+		chunk_params.projectionDataStride = params.numRows;
 
 		chunk_params.centerRow = params.centerRow - rowRange[0];
 		if (params.mu != NULL)
@@ -1206,30 +1433,26 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 		int numViewChunks = std::max(1, int(ceil(float(params.numAngles) / float(numViewsPerChunk))));
 		if (numViewsPerChunk == params.numAngles)
 		{
-			LOG(logDEBUG, className, "") << "using volume slab size of " << numSlicesPerChunk << std::endl;
-
-			//*
-			float* g_chunk = NULL;
-			if (rowRange[0] == 0 && rowRange[1] == params.numRows - 1)
-				g_chunk = g;
-			else
-				g_chunk = copyRows(g, rowRange[0], rowRange[1]);
-			//*/
-
 			// Do Computation
 			if (doFBP)
 			{
 				LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": FBP: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
-				FBP.execute(g_chunk, f_chunk, &chunk_params, true);
+				if (!FBP.execute(g, f_chunk, &chunk_params, true, !has_unified_memory))
+					retVal = false;
 			}
 			else
 			{
 				LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
-				proj.backproject(g_chunk, f_chunk, &chunk_params, true);
+				if (!proj.backproject(g, f_chunk, &chunk_params, true, !has_unified_memory))
+					retVal = false;
 			}
-
-			if (g_chunk != g)
-				free(g_chunk);
+			
+			// In UMA, backproject/execute skip the internal pull; call it explicitly for FIHT/clipping/sync.
+			if (has_unified_memory)
+			{
+				if (!pullVolumeDataFromGPU(f_chunk, &chunk_params, f_chunk, chunk_params.whichGPU))
+					retVal = false;
+			}
 		}
 		else
 		{
@@ -1242,7 +1465,10 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 			cudaError_t cudaStatus;
 			cudaSetDevice(chunk_params.whichGPU);
 			float* dev_f = 0;
-			if ((cudaStatus = cudaMalloc((void**)&dev_f, uint64(chunk_params.numX) * uint64(chunk_params.numY) * uint64(chunk_params.numZ) * sizeof(float))) != cudaSuccess)
+			if (has_unified_memory)
+				dev_f = f_chunk;
+			// only allocate a new cuda volume if we aren't using unified memory
+			if (!has_unified_memory && (cudaStatus = cudaMalloc((void**)&dev_f, uint64(chunk_params.numX) * uint64(chunk_params.numY) * uint64(chunk_params.numZ) * sizeof(float))) != cudaSuccess)
 			{
 				fprintf(stderr, "cudaMalloc(volume) failed!\n");
 				//if (g_chunk != g)
@@ -1250,55 +1476,61 @@ bool tomographicModels::backproject_FBP_multiGPU(float* g, float* f, bool doFBP)
 				retVal = false;
 				//return false;
 			}
-
-			for (int ichunk_stage2 = 0; ichunk_stage2 < numViewChunks; ichunk_stage2++)
+			else
 			{
-				int firstView = ichunk_stage2 * numViewsPerChunk;
-				int lastView = std::min(firstView + numViewsPerChunk - 1, params.numAngles - 1);
-				int numViews = lastView - firstView + 1;
+				bool allSubChunksOk = true;
 
-				// make a copy of the relavent rows
-				//*
-				float* g_chunk_stage2 = NULL;
-				bool delete_g_chunk_stage2 = false;
-				if (rowRange[0] == 0 && rowRange[1] == params.numRows - 1)
-					g_chunk_stage2 = &g[uint64(firstView)*uint64(params.numRows)* uint64(params.numCols)];
+				for (int ichunk_stage2 = 0; ichunk_stage2 < numViewChunks; ichunk_stage2++)
+				{
+					int firstView = ichunk_stage2 * numViewsPerChunk;
+					int lastView = std::min(firstView + numViewsPerChunk - 1, params.numAngles - 1);
+					int numViews = lastView - firstView + 1;
+
+					// For the non-FBP branch the backprojector reads the strided host
+					// array directly via loadTexture_from_cpu(parameters*). For FBP
+					// we have to materialize a cropped contiguous host buffer below.
+					float* g_chunk_stage2 = &g[uint64(firstView) * uint64(params.numRows) * uint64(params.numCols)];
+
+					parameters chunk_params_stage2;
+					chunk_params_stage2 = chunk_params;
+					chunk_params_stage2.removeProjections(firstView, lastView);
+
+					bool accumulate = false;
+					if (ichunk_stage2 > 0)
+						accumulate = true;
+
+					// Do Computation
+					bool subChunkOk = true;
+					if (doFBP)
+					{
+						LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": FBP: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
+						if (!FBP.execute(g_chunk_stage2, dev_f, &chunk_params_stage2, true, false, accumulate))
+							subChunkOk = false;
+					}
+					else
+					{
+						LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
+						if (!proj.backproject(g_chunk_stage2, dev_f, &chunk_params_stage2, true, false, accumulate))
+							subChunkOk = false;
+					}
+
+					if (!subChunkOk) {
+						allSubChunksOk = false;
+						break;
+					}
+				}
+
+				if (allSubChunksOk)
+				{
+					if (!pullVolumeDataFromGPU(f_chunk, &chunk_params, dev_f, chunk_params.whichGPU))
+						retVal = false;
+				}
 				else
-				{
-					g_chunk_stage2 = copyRows(g, rowRange[0], rowRange[1], firstView, lastView);
-					delete_g_chunk_stage2 = true;
-				}
-				//*/
-
-				//float* g_chunk_stage2 = &g_chunk[uint64(firstView)* uint64(chunk_params.numRows*chunk_params.numCols)];
-
-				parameters chunk_params_stage2;
-				chunk_params_stage2 = chunk_params;
-				chunk_params_stage2.removeProjections(firstView, lastView);
-
-				bool accumulate = false;
-				if (ichunk_stage2 > 0)
-					accumulate = true;
-
-				// Do Computation
-				if (doFBP)
-				{
-					LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": FBP: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
-					FBP.execute(g_chunk_stage2, dev_f, &chunk_params_stage2, true, false, accumulate);
-				}
-				else
-				{
-					LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << "), rows = (" << rowRange[0] << ", " << rowRange[1] << ")" << std::endl;
-					proj.backproject(g_chunk_stage2, dev_f, &chunk_params_stage2, true, false, accumulate);
-				}
-
-				if (delete_g_chunk_stage2 && g_chunk_stage2 != NULL)
-					free(g_chunk_stage2);
+					retVal = false;
+				// if unified memory we don't wanna free it
+				if (dev_f != 0 && !has_unified_memory)
+					cudaFree(dev_f);
 			}
-
-			pullVolumeDataFromGPU(f_chunk, &chunk_params, dev_f, chunk_params.whichGPU);
-			if (dev_f != 0)
-				cudaFree(dev_f);
 		}
 
 		/* clean up
@@ -1338,7 +1570,17 @@ int tomographicModels::extraColumnsForOffsetScan()
 	return zeroPadForOffsetScan_numberOfColsToAdd(&params);
 }
 
-float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols, bool doFBP, int numViews)
+bool tomographicModels::need_all_rows_for_backprojection()
+{
+	int rowRange[2];
+	params.rowRangeNeededForBackprojection(0, params.numZ-1, rowRange);
+	if (rowRange[0] <= 0 && rowRange[1] >= params.numRows-1)
+		return true;
+	else
+		return false;
+}
+
+float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int extraCols, bool doFBP, int numViews, bool volumeOnCpu)
 {
 	float maxMemory = 0.0;
 
@@ -1346,6 +1588,8 @@ float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int e
 		numViews = params.numAngles;
 
 	float proj_size_scaling = float(numViews) / float(params.numAngles);
+
+	float volume_size_scaling = volumeOnCpu ? 1.0 : 0;
 
 	int numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
@@ -1361,12 +1605,12 @@ float tomographicModels::backproject_memoryRequired(int numSlicesPerChunk, int e
 		if (doFBP)
 		{
 			// projections are copied to the GPU for filtering, so cannot go directly from CPU memory to texture memory
-			float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + 2.0 * proj_size_scaling * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			float memoryNeeded = volume_size_scaling * float(numSlices) / float(params.numZ) * params.volumeDataSize() + 2.0 * proj_size_scaling * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
 			maxMemory = std::max(maxMemory, memoryNeeded);
 		}
 		else
 		{
-			float memoryNeeded = float(numSlices) / float(params.numZ) * params.volumeDataSize() + proj_size_scaling * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
+			float memoryNeeded = volume_size_scaling * float(numSlices) / float(params.numZ) * params.volumeDataSize() + proj_size_scaling * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
 			//float memoryNeeded_A = float(numSlices) / float(params.numZ) * params.volumeDataSize() + float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
 			//float memoryNeeded_B = 2.0 * float(numRows) / float(params.numRows) * params.projectionDataSize(extraCols);
 			//float memoryNeeded = std::max(memoryNeeded_A, memoryNeeded_B);
@@ -1415,10 +1659,28 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 	if (params.volumeDimensionOrder != parameters::ZYX || params.isSymmetric())
 		return false;
 
+	// Probed once on params.whichGPU; mixed-UMA configurations (one integrated UMA GPU
+	// + one discrete) are not supported here — every chunk is dispatched as if it shares
+	// this GPU's UMA state.
+	bool has_unified_memory = physically_shared_memory(params.whichGPU);
+
 	int numProjectionData = 1;
 	int numVolumeData = 1;
 	if (doFBP)
 		numProjectionData = 2; // need an extra for texture memory
+	if (has_unified_memory)
+		numVolumeData = 0; // if the GPU shares CPU memory we can avoid copying the volume
+
+	float memAvailable = getAvailableGPUmemory(params.whichGPUs);
+	LOG(logDEBUG, className, "") << "GPU memory available: " << memAvailable << " GB" << std::endl;
+
+	// Calculate the minimum number of slices one would like to calculate at a time before jobs are broken across views
+	// We want to make sure that this lower bound is set low enough so that the volume will still fit into memory
+	// and leave extra room for the projection data.  For now let's make it so it can't occupy more than half the memory
+	int minSlicesForChunking_local = std::min(minSlicesForChunking, params.numZ);
+	// 0.5*memAvailable >= params.volumeDataSize()*float(minSlicesForChunking_local) / float(params.numZ)
+	minSlicesForChunking_local = std::min(minSlicesForChunking_local, int(floor(0.5*memAvailable*float(params.numZ) / params.volumeDataSize())));
+	minSlicesForChunking_local = std::max(1, minSlicesForChunking_local);
 
 	// if there is sufficient memory for everything and either only one GPU is specified or is a small operation, don't separate into chunks
 	//int numSlicesPerChunk = std::min(64, params.numZ);
@@ -1433,8 +1695,11 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 		while (memAvailable < memNeeded)
 		{
 			numSlicesPerChunk = numSlicesPerChunk / 2;
-			if (numSlicesPerChunk <= 1)
-				return false;
+			if (numSlicesPerChunk <= minSlicesForChunking_local)
+			{
+				numSlicesPerChunk = minSlicesForChunking_local;
+				break;
+			}
 			memNeeded = backproject_memoryRequired_splitViews(numSlicesPerChunk, doFBP);
 		}
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
@@ -1448,13 +1713,15 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 		numChunks = std::max(1, int(ceil(float(params.numZ) / float(numSlicesPerChunk))));
 	}
 
-	if (numChunks <= 1)
+	if (numChunks <= 1 && params.hasSufficientGPUmemory(true, 0, numProjectionData, numVolumeData) == true)
 		return false;
 
 	//if (params.geometry != parameters::FAN && params.geometry != parameters::PARALLEL && params.geometry != parameters::CONE)
 	//	return false;
 
-	omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+	bool retVal = true;
+
+	omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 	#pragma omp parallel for schedule(dynamic)
 	for (int ichunk = 0; ichunk < numChunks; ichunk++)
 	{
@@ -1486,9 +1753,125 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 		chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 		chunk_params.whichGPUs.clear();
 
-		//printf("z_0: %f to %f\n", params.z_0(), chunk_params.z_0());
-		//printf("slices: (%d, %d); views: (%d, %d); GPU = %d...\n", firstSlice, lastSlice, viewRange[0], viewRange[1], chunk_params.whichGPU);
+
+		/////////////////////////////////////////////////////////////////
+		// Calculate the view chunking
+		float memForVolume = numVolumeData * params.volumeDataSize() * float(numSlices) / float(params.numZ);
+		float memForOneProjection = numProjectionData * params.projectionDataSize() / float(params.numAngles);
+
+		int totalViews = chunk_params.numAngles;
+		float maxViewsFit = floor((memAvailable - memForVolume - params.get_extraMemoryReserved()) / memForOneProjection);
+
+		if (totalViews <= int(maxViewsFit))
+		{
+			// chunk size will fit
+			// Do Computation
+			if (doFBP)
+			{
+				LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": FBP: z-slices: (" << firstSlice << ", " << lastSlice << "), views = (" << viewRange[0] << ", " << viewRange[1] << ")" << std::endl;
+				if (!FBP.execute(g_chunk, f_chunk, &chunk_params, true, !has_unified_memory))
+					retVal = false;
+			}
+			else
+			{
+				LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << "), views = (" << viewRange[0] << ", " << viewRange[1] << ")" << std::endl;
+				if (!proj.backproject(g_chunk, f_chunk, &chunk_params, true, !has_unified_memory))
+					retVal = false;
+			}
+			// In UMA mode volume_on_cpu=false above, so pullVolumeDataFromGPU is never called
+			//   inside backproject_VD/FBP.execute. Call it explicitly to apply FIHT and clipping.
+			if (has_unified_memory)
+			{
+				if (!pullVolumeDataFromGPU(f_chunk, &chunk_params, f_chunk, chunk_params.whichGPU))
+					retVal = false;
+			}
+		}
+		else
+		{
+			// need more sub-chunking
+			LOG(logDEBUG, className, "") << "*** Using 2-stage sub-chunking ***" << std::endl;
+
+			// Rebalance the chunk size using the same totalViews used above
+			int numViewsPerChunk = std::max(1, std::min(totalViews, int(maxViewsFit)));
+			int numViewChunks = std::max(1, int(ceil(float(totalViews) / float(numViewsPerChunk))));
+			numViewsPerChunk = std::max(1, int(ceil(float(totalViews) / float(numViewChunks))));
+			LOG(logDEBUG, className, "") << "using volume slab size of " << numSlicesPerChunk << " and number of angles: " << numViewsPerChunk << std::endl;
+			//LOG(logDEBUG, className, "") << "memForVolume = " << memForVolume << std::endl;
+			//LOG(logDEBUG, className, "") << "memForOneProjection = " << memForOneProjection << std::endl;
+
+			cudaError_t cudaStatus;
+			cudaSetDevice(chunk_params.whichGPU);
+			float* dev_f = 0;
+			if (has_unified_memory)
+				dev_f = f_chunk; // if the GPU shares CPU memory we can avoid copying the volume
+			// only attempt to allocate GPU memory for the volume if we don't have unified memory
+			if (!has_unified_memory && (cudaStatus = cudaMalloc((void**)&dev_f, uint64(chunk_params.numX) * uint64(chunk_params.numY) * uint64(chunk_params.numZ) * sizeof(float))) != cudaSuccess)
+			{
+				fprintf(stderr, "cudaMalloc(volume) failed!\n");
+				//if (g_chunk != g)
+				//	free(g_chunk);
+				retVal = false;
+				//return false;
+			}
+			else
+			{
+				bool allSubChunksOk = true;
+				for (int ichunk_stage2 = 0; ichunk_stage2 < numViewChunks; ichunk_stage2++)
+				{
+					int firstView = ichunk_stage2 * numViewsPerChunk;
+					if (firstView >= chunk_params.numAngles)
+						break;
+
+					int lastView = std::min(firstView + numViewsPerChunk - 1, chunk_params.numAngles - 1);
+					int numViews = lastView - firstView + 1;
+					if (numViews <= 0)
+						continue;
+
+					// make a copy of the relavent rows
+					float* g_chunk_stage2 = &g_chunk[uint64(firstView)*uint64(params.numRows)* uint64(params.numCols)];
+
+					parameters chunk_params_stage2;
+					chunk_params_stage2 = chunk_params;
+					chunk_params_stage2.removeProjections(firstView, lastView);
+
+					bool accumulate = false;
+					if (ichunk_stage2 > 0)
+						accumulate = true;
+
+					// Do Computation
+					bool subChunkOk;
+					if (doFBP)
+					{
+						LOG(logDEBUG, className, "") << "GPU " << chunk_params_stage2.whichGPU << ": FBP: z-slices: (" << firstSlice << ", " << lastSlice << ")" << std::endl;
+						subChunkOk = FBP.execute(g_chunk_stage2, dev_f, &chunk_params_stage2, true, false, accumulate);
+					}
+					else
+					{
+						LOG(logDEBUG, className, "") << "GPU " << chunk_params_stage2.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << ")" << std::endl;
+						subChunkOk = proj.backproject(g_chunk_stage2, dev_f, &chunk_params_stage2, true, false, accumulate);
+					}
+					if (!subChunkOk)
+					{
+						allSubChunksOk = false;
+						break;
+					}
+				}
+
+				if (allSubChunksOk)
+				{
+					if (!pullVolumeDataFromGPU(f_chunk, &chunk_params, dev_f, chunk_params.whichGPU))
+						retVal = false;
+				}
+				else
+					retVal = false;
+				// if unified memory its not cuda allocated
+				if (!has_unified_memory && dev_f != 0)
+					cudaFree(dev_f);
+			}
+		}
+		////////////////////////////////////////////////////////////////
 		
+		/*
 		// Do Computation
 		if (doFBP)
 		{
@@ -1500,11 +1883,43 @@ bool tomographicModels::backproject_FBP_multiGPU_splitViews(float* g, float* f, 
 			LOG(logDEBUG, className, "") << "GPU " << chunk_params.whichGPU << ": backprojection: z-slices: (" << firstSlice << ", " << lastSlice << "), views = (" << viewRange[0] << ", " << viewRange[1] << ")" << std::endl;
 			proj.backproject(g_chunk, f_chunk, &chunk_params, true);
 		}
+		//*/
 	}
-	return true;
+	return retVal;
 #else
 	return false;
 #endif
+}
+
+bool tomographicModels::DBP(float* g, float* f, bool data_on_cpu)
+{
+	bool doWeightedBackprojection_save = params.doWeightedBackprojection;
+	params.doWeightedBackprojection = true;
+
+	bool offsetScan_save = params.offsetScan;
+	params.offsetScan = false;
+
+	params.doDBP = true;
+
+	params.set_zFOV_peaks();
+
+	//printf("v range: %f to %f\n", params.v(0), params.v(params.numRows-1));
+	if (data_on_cpu == true && FBP_multiGPU(g, f) == true)
+	{
+		params.doWeightedBackprojection = doWeightedBackprojection_save;
+		params.offsetScan = offsetScan_save;
+		params.doDBP = false;
+		return true;
+	}
+	else
+	{
+		parameters params_local = params;
+		bool retVal = FBP.execute(g, f, &params_local, data_on_cpu);
+		params.doWeightedBackprojection = doWeightedBackprojection_save;
+		params.offsetScan = offsetScan_save;
+		params.doDBP = false;
+		return retVal;
+	}
 }
 
 bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
@@ -1516,27 +1931,40 @@ bool tomographicModels::doFBP(float* g, float* f, bool data_on_cpu)
 			params.offsetScan = false;
 	}
 	//*/
+
+	/*
 	if (params.helicalPitch != 0.0 && params.tiltAngle != 0.0)
 	{
 		printf("Error: current implementation of helical FBP cannot handle detector tilt!\n");
 		return false;
 	}
+	//*/
+
+	bool doWeightedBackprojection_save = params.doWeightedBackprojection;
+	params.doWeightedBackprojection = true;
+
+	params.set_zFOV_peaks();
 
 	//printf("v range: %f to %f\n", params.v(0), params.v(params.numRows-1));
 	if (data_on_cpu == true && FBP_multiGPU(g, f) == true)
+	{
+		params.doWeightedBackprojection = doWeightedBackprojection_save;
 		return true;
+	}
 	else
 	{
 		parameters params_local = params;
-		return FBP.execute(g, f, &params_local, data_on_cpu);
-		//return FBP.execute(g, f, &params, data_on_cpu);
+		bool retVal = FBP.execute(g, f, &params_local, data_on_cpu);
+		//bool retVal = FBP.execute(g, f, &params, data_on_cpu);
+		params.doWeightedBackprojection = doWeightedBackprojection_save;
+		return retVal;
 	}
 }
 
 bool tomographicModels::sensitivity(float* f, bool data_on_cpu)
 {
 #ifndef __USE_CPU
-	if (params.muSpecified() == true || params.isSymmetric() == true || (params.geometry == parameters::MODULAR && usingSFprojectorsForModularBeam(&params) == false))
+	if (params.muSpecified() == true || params.isSymmetric() == true || (params.geometry == parameters::MODULAR && params.modularbeamIsAxiallyAligned() == false))
 	{
 		if (params.whichGPU < 0 || data_on_cpu == true)
 		{
@@ -1636,7 +2064,7 @@ float tomographicModels::get_FBPscalar()
 	return FBPscalar(&params);
 }
 
-bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float tiltAngle, float helicalPitch)
+bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, float tau, float tiltAngle, float pitchAngle, float helicalPitch)
 {
 	params.geometry = parameters::CONE;
 	params.detectorType = parameters::FLAT;
@@ -1653,6 +2081,7 @@ bool tomographicModels::set_conebeam(int numAngles, int numRows, int numCols, fl
 	params.set_angles(phis, numAngles);
 	params.set_helicalPitch(helicalPitch);
 	params.set_tiltAngle(tiltAngle);
+	params.set_pitchAngle(pitchAngle);
 	if (params.geometryDefined())
 	{
 		params.set_offsetScan(params.offsetScan);
@@ -1925,6 +2354,19 @@ bool tomographicModels::set_projector(int which)
 		params.whichProjector = parameters::SEPARABLE_FOOTPRINT;
 	else if (which == parameters::VOXEL_DRIVEN)
 		params.whichProjector = parameters::VOXEL_DRIVEN;
+	else if (which == parameters::AUTO)
+	{
+		params.whichProjector = parameters::AUTO;
+		//*
+		if (params.volumeDefined(false) && params.geometryDefined(false))
+		{
+			if (params.useSF())
+				printf("SF\n");
+			else
+				printf("VD\n");
+		}
+		//*/
+	}
 	else
 	{
 		printf("Error: currently only SF and VD projectors are implemented!\n");
@@ -2015,6 +2457,187 @@ bool tomographicModels::flipAttenuationMapSign(bool data_on_cpu)
 		//scale(params.mu, -1.0, make_int3(params.numZ, params.numY, params.numX), params.whichGPU);
 	}
 	return true;
+}
+
+bool tomographicModels::inconsistency_sweep(float* g_in, float* shifts, int numShifts, float* tilts, int numTilts, int which_param, float* costValues, bool data_on_cpu)
+{
+	#ifndef __USE_CPU
+	if (g_in == NULL || shifts == NULL || numShifts <= 0 || tilts == NULL || numTilts <= 0 || costValues == NULL)
+	{
+		LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "invalid inputs" << endl;
+		return false;
+	}
+	else if (params.geometry != parameters::CONE || params.detectorType != parameters::FLAT || params.helicalPitch != 0.0)
+	{
+		LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "currently only implemented for flat panel axial cone-beam data" << endl;
+        return false;
+	}
+	else if (data_on_cpu == false)
+	{
+		LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "current implemention only works for data on the cpu" << endl;
+		return false;
+	}
+	/*
+	else if (params.numZ != 1)
+	{
+		LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "volume must be one z-slice" << endl;
+        return false;
+	}
+	//*/
+	/*
+	else if (params.whichGPU < 0)
+	{
+		LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "current implemention only works for gpu processing" << endl;
+		return false;
+	}
+	//*/
+
+	parameters params_save = params;
+
+	// These statements shrink the reconstruction FOV
+	// to the setting with the smallest FOV
+	float centerCol = params.centerCol;
+	float tau = params.tau;
+
+	params.offsetScan = false;
+	float rFOV = params.rFOV_min();
+	if (which_param == 0)
+	{
+		params.centerCol = shifts[0] + centerCol;
+		rFOV = min(rFOV, params.rFOV_min());
+		params.centerCol = shifts[numShifts-1] + centerCol;
+		rFOV = min(rFOV, params.rFOV_min());
+		params.centerCol = centerCol;
+	}
+	else
+	{
+		params.tau = shifts[0] + tau;
+		rFOV = min(rFOV, params.rFOV_min());
+		params.tau = shifts[numShifts-1] + tau;
+		rFOV = min(rFOV, params.rFOV_min());
+		params.tau = tau;
+	}
+	rFOV -= 0.5*params.voxelWidth;
+
+	params.rFOVspecified = rFOV;
+	params.offsetX = 0.0;
+	params.offsetY = 0.0;
+	params.numX = int(2.0*rFOV/params.voxelWidth);
+	params.numY = int(2.0*rFOV/params.voxelWidth);
+
+	// Determine which detector rows are needed and crop data
+	int rowRange[2];
+	params.rowRangeNeededForBackprojection(0, params.numZ-1, rowRange);
+
+	//*
+	if (params.whichGPUs.size() > 1)
+	{
+		float maxMem = getAvailableGPUmemory(params.whichGPUs[0]);
+		int maxInd = params.whichGPUs[0];
+		for (int i = 1; i < int(params.whichGPUs.size()); i++)
+		{
+			float curMem = getAvailableGPUmemory(params.whichGPUs[i]);
+			if (curMem > maxMem)
+			{
+				maxMem = curMem;
+				maxInd = params.whichGPUs[i];
+			}
+		}
+		params.whichGPU = maxInd;
+	}
+	//*/
+
+	uint64 numElements = uint64(params.numAngles)*uint64(rowRange[1]-rowRange[0]+1)*uint64(params.numCols);
+	int proj_ds = 1;
+	//*
+	if (params.whichGPU >= 0)
+	{
+		float memoryAvailable = getAvailableGPUmemory(params.whichGPU);
+		float memoryNeeded = double(numElements)*4.0/pow(2.0, 30.0);
+		if (memoryNeeded >= memoryAvailable)
+		{
+			//memoryNeeded/proj_ds < memoryAvailable
+			proj_ds = max(1, int(ceil(memoryNeeded / memoryAvailable)));
+		}
+		//LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "not enough GPU memory for this operation" << endl;
+		//LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "requires " << rowRange[1]-rowRange[0]+1 << " rows" << endl;
+		//LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "which is " << double(numElements)*4.0/pow(2.0, 30.0) << " GB" << endl;
+		//params.assign(params_save);
+		//return false;
+	}
+	//*/
+
+	float* g = nullptr;
+	if (proj_ds <= 1)
+	{
+		g = copyRows(g_in, rowRange[0], rowRange[1]);
+		params.numRows = rowRange[1] - rowRange[0] + 1;
+		params.centerRow = params.centerRow - rowRange[0];
+	}
+	else
+	{
+		printf("down-sampling projection angles by a factor of %d to fit onto the GPU\n", proj_ds);
+		float* phis = new float[params.numAngles];
+    	params.get_angles(phis, true);
+		int N_phis_new = int(ceil(float(params.numAngles) / float(proj_ds)));
+		float* phis_new = new float[N_phis_new];
+		for (int i = 0; i < N_phis_new; i++)
+			phis_new[i] = phis[i*proj_ds];
+		g = malloc_aligned(size_t(N_phis_new)*size_t(rowRange[1] - rowRange[0] + 1)*size_t(params.numCols)*sizeof(float));
+		if (!resampleProjectionAngles_cpu(g_in, &params, g, phis_new, N_phis_new, 0.0, rowRange[0], rowRange[1]))
+		{
+			free_aligned(g);
+			delete [] phis_new;
+			delete [] phis;
+			params.assign(params_save);
+			return false;
+		}
+		delete [] phis_new;
+		delete [] phis;
+
+		numElements = uint64(params.numAngles)*uint64(params.numRows)*uint64(params.numCols);
+	}
+	//float* g = g_in;
+	//printf("using row range: %d to %d (%d total rows)\n", rowRange[0], rowRange[1], params.numRows);
+
+	// Inconsistency Filtering
+	params.inconsistencyReconstruction = true;
+	bool retVal = filterProjections(g, g, data_on_cpu);
+	params.inconsistencyReconstruction = false;
+
+	// Weighted Backprojection
+	if (retVal)
+	{
+		params.doWeightedBackprojection = true;
+		params.doExtrapolation = true;
+		params.whichGPUs.clear();
+
+		if (params.whichGPU < 0 || double(numElements)*4.0/pow(2.0, 30.0) >= getAvailableGPUmemory(params.whichGPU))
+		{
+			printf("using CPU-based processing...\n");
+			retVal = backprojection_sweep_cpu(g, &params, shifts, numShifts, tilts, numTilts, which_param, costValues);
+		}
+		else
+		{
+			//printf("using GPU-based processing...\n");
+			retVal = backprojection_sweep(g, &params, shifts, numShifts, tilts, numTilts, which_param, costValues, data_on_cpu);
+		}
+	}
+
+	// Clean up and restore parameters
+	if (g != g_in)
+	{
+		if (proj_ds <= 1)
+			free_memory(g);
+		else
+			free_aligned(g);
+	}
+	params.assign(params_save);
+	return retVal;
+	#else
+	LOG(logERROR,"tomographicModels", "inconsistency_sweep") << "only included in the GPU release" << endl;
+	return false;
+	#endif
 }
 
 bool tomographicModels::projectFanBeam(float* g, float* f, bool data_on_cpu, int numAngles, int numRows, int numCols, float pixelHeight, float pixelWidth, float centerRow, float centerCol, float* phis, float sod, float sdd, int numX, int numY, int numZ, float voxelWidth, float voxelHeight, float offsetX, float offsetY, float offsetZ)
@@ -2231,6 +2854,16 @@ float tomographicModels::get_tiltAngle()
 	return params.tiltAngle;
 }
 
+bool tomographicModels::set_pitchAngle(float pitchAngle)
+{
+	return params.set_pitchAngle(pitchAngle);
+}
+
+float tomographicModels::get_pitchAngle()
+{
+	return params.pitchAngle;
+}
+
 float tomographicModels::get_helicalPitch()
 {
 	return params.helicalPitch;
@@ -2239,6 +2872,17 @@ float tomographicModels::get_helicalPitch()
 float tomographicModels::get_z_source_offset()
 {
 	return params.z_source_offset;
+}
+
+bool tomographicModels::set_z_source_offset(float z_offs)
+{
+	if (params.helicalPitch != 0.0)
+	{
+		params.z_source_offset = z_offs;
+		return true;
+	}
+	else
+		return false;
 }
 
 bool tomographicModels::get_sourcePositions(float* x)
@@ -2336,7 +2980,7 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 #endif
 	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
 
-	omp_set_num_threads(omp_get_num_procs());
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int i = 0; i < N_1; i++)
 	{
@@ -2353,13 +2997,17 @@ bool tomographicModels::applyTransferFunction(float* x, int N_1, int N_2, int N_
 					x_1D[k] = LUT[numSamples - 1] + slope * (curVal - lastSample);
 				}
 				else if (curVal <= firstSample)
-					x_1D[k] = firstSample;
+				{
+					float slope = (LUT[1] - LUT[0]) / sampleRate;
+					x_1D[k] = LUT[0] + slope * (curVal - firstSample);
+					//x_1D[k] = firstSample;
+				}
 				else
 				{
-					float ind = curVal / sampleRate - firstSample;
+					float ind = (curVal- firstSample) / sampleRate;
 					int ind_low = int(ind);
 					float d = ind - float(ind_low);
-					x_1D[k] = float((1.0 - d) * LUT[ind_low] + d * LUT[ind_low + 1]);
+					x_1D[k] = (1.0 - d) * LUT[ind_low] + d * LUT[ind_low + 1];
 				}
 			}
 		}
@@ -2397,7 +3045,7 @@ bool tomographicModels::beam_hardening_heel_effect(float* g, float* anode_normal
 
 	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
 
-	omp_set_num_threads(omp_get_num_procs());
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int i = 0; i < params.numAngles; i++)
 	{
@@ -2457,14 +3105,21 @@ bool tomographicModels::beam_hardening_heel_effect(float* g, float* anode_normal
 					x = (1.0 - dAngle) * x_lo + dAngle * x_hi;
 				}
 				else if (x <= firstSample)
-					x = firstSample;
+				{
+					//x = firstSample;
+					float slope_lo = (LUT_phi_lo[1] - LUT_phi_lo[0]) / sampleRate;
+					float slope_hi = (LUT_phi_hi[1] - LUT_phi_hi[0]) / sampleRate;
+					float x_lo = LUT_phi_lo[0] + slope_lo * (x - firstSample);
+					float x_hi = LUT_phi_hi[0] + slope_hi * (x - firstSample);
+					x = (1.0 - dAngle) * x_lo + dAngle * x_hi;
+				}
 				else
 				{
-					float ind = x / sampleRate - firstSample;
+					float ind = (x - firstSample) / sampleRate;
 					int ind_low = int(ind);
 					float d = ind - float(ind_low);
-					float x_lo = float((1.0 - d) * LUT_phi_lo[ind_low] + d * LUT_phi_lo[ind_low + 1]);
-					float x_hi = float((1.0 - d) * LUT_phi_hi[ind_low] + d * LUT_phi_hi[ind_low + 1]);
+					float x_lo = (1.0 - d) * LUT_phi_lo[ind_low] + d * LUT_phi_lo[ind_low + 1];
+					float x_hi = (1.0 - d) * LUT_phi_hi[ind_low] + d * LUT_phi_hi[ind_low + 1];
 					x = (1.0 - dAngle) * x_lo + dAngle * x_hi;
 				}
 
@@ -2478,7 +3133,7 @@ bool tomographicModels::beam_hardening_heel_effect(float* g, float* anode_normal
 	return true;
 }
 
-bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
+bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool scalar_LUT, bool data_on_cpu)
 {
 	if (x == NULL || y == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || LUT == NULL || sampleRate <= 0.0 || numSamples <= 0)
 	{
@@ -2492,6 +3147,11 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 	// This is a simple algorithm, so only run it on the GPU if the data is already there
 	if (data_on_cpu == false)
 	{
+		if (scalar_LUT)
+		{
+			printf("Error: unfortunately the GPU version of this function does not accept scalar look up tables!\n");
+				return false;
+		}
 		return applyDualTransferFunction_gpu(x, y, N_1, N_2, N_3, LUT, firstSample, sampleRate, numSamples, params.whichGPU, data_on_cpu);
 		//printf("Error: method currently only implemented for data on CPU!\n");
 		//return false;
@@ -2501,9 +3161,11 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
 
 	float* LUT_1 = &LUT[0];
-	float* LUT_2 = &LUT[numSamples * numSamples];
+	float* LUT_2 = nullptr;
+	if (scalar_LUT == false)
+		LUT_2 = &LUT[numSamples * numSamples];
 
-	omp_set_num_threads(omp_get_num_procs());
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int i = 0; i < N_1; i++)
 	{
@@ -2534,7 +3196,7 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 				}
 				else
 				{
-					float ind = curVal_1 / sampleRate - firstSample;
+					float ind = (curVal_1-firstSample) / sampleRate;
 					ind_lo_1 = int(ind);
 					ind_hi_1 = ind_lo_1 + 1;
 					d_1 = ind - float(ind_lo_1);
@@ -2556,7 +3218,7 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 				}
 				else
 				{
-					float ind = curVal_2 / sampleRate - firstSample;
+					float ind = (curVal_2-firstSample) / sampleRate;
 					ind_lo_2 = int(ind);
 					ind_hi_2 = ind_lo_2 + 1;
 					d_2 = ind - float(ind_lo_2);
@@ -2564,12 +3226,14 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 
 				float partA_1 = float((1.0 - d_2)* LUT_1[ind_lo_1 * numSamples + ind_lo_2] + d_2* LUT_1[ind_lo_1 * numSamples + ind_hi_2]);
 				float partB_1 = float((1.0 - d_2) * LUT_1[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_1[ind_hi_1 * numSamples + ind_hi_2]);
-
-				float partA_2 = float((1.0 - d_2) * LUT_2[ind_lo_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_lo_1 * numSamples + ind_hi_2]);
-				float partB_2 = float((1.0 - d_2) * LUT_2[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_hi_1 * numSamples + ind_hi_2]);
-
 				x_1D[k] = float((1.0 - d_1) * partA_1 + d_1 * partB_1);
-				y_1D[k] = float((1.0 - d_1) * partA_2 + d_1 * partB_2);
+
+				if (LUT_2 != nullptr)
+				{
+					float partA_2 = float((1.0 - d_2) * LUT_2[ind_lo_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_lo_1 * numSamples + ind_hi_2]);
+					float partB_2 = float((1.0 - d_2) * LUT_2[ind_hi_1 * numSamples + ind_lo_2] + d_2 * LUT_2[ind_hi_1 * numSamples + ind_hi_2]);
+					y_1D[k] = float((1.0 - d_1) * partA_2 + d_1 * partB_2);
+				}
 
 				/*
 				if (curVal_1 >= lastSample)
@@ -2593,7 +3257,126 @@ bool tomographicModels::applyDualTransferFunction(float* x, float* y, int N_1, i
 	return true;
 }
 
-bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool data_on_cpu)
+bool tomographicModels::applyThreeMaterialBHC(float* sum, float* w_1, float* w_2, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
+{
+	if (sum == NULL || w_1 == NULL || w_2 == NULL || LUT == NULL || sampleRate <= 0.0 || numSamples <= 0)
+	{
+		printf("Error: invalid input!\n");
+		printf("%f, %d\n", sampleRate, numSamples);
+		return false;
+	}
+	if (data_on_cpu == false)
+	{
+		printf("Error: applyThreeMaterialBHC only work for data on the CPU\n");
+		return false;
+	}
+
+	float lastSample = float(numSamples - 1) * sampleRate + firstSample;
+	float T_frac = 1.0 / double(numSamples - 1);
+
+	uint64 proj_sz = uint64(params.numRows) * uint64(params.numCols);
+
+	omp_set_num_threads(num_cpu_threads());
+	#pragma omp parallel for
+	for (int i = 0; i < params.numAngles; i++)
+	{
+		float* sum_2D = &sum[uint64(i) * proj_sz];
+		float* w_1_2D = &w_1[uint64(i) * proj_sz];
+		float* w_2_2D = &w_2[uint64(i) * proj_sz];
+		for (int j = 0; j < params.numRows; j++)
+		{
+			float* sum_1D = &sum_2D[uint64(j) * uint64(params.numCols)];
+			float* w_1_1D = &w_1_2D[uint64(j) * uint64(params.numCols)];
+			float* w_2_1D = &w_2_2D[uint64(j) * uint64(params.numCols)];
+			for (int k = 0; k < params.numCols; k++)
+			{
+				float sum_cur = sum_1D[k];
+				float w_1_cur = w_1_1D[k];
+				float w_2_cur = w_2_1D[k];
+
+				int isum_lo, isum_hi;
+				float d_sum;
+				if (sum_cur >= lastSample)
+				{
+					isum_lo = numSamples - 1;
+					isum_hi = numSamples - 1;
+					d_sum = 0.0;
+				}
+				else if (sum_cur <= firstSample)
+				{
+					isum_lo = 0;
+					isum_hi = 0;
+					d_sum = 0.0;
+				}
+				else
+				{
+					float ind = (sum_cur-firstSample) / sampleRate;
+					isum_lo = int(ind);
+					isum_hi = isum_lo + 1;
+					d_sum = ind - float(isum_lo);
+				}
+
+				int ifrac_1_lo, ifrac_1_hi;
+				float d_ifrac_1;
+				if (w_1_cur >= 1.0)
+				{
+					ifrac_1_lo = numSamples - 1;
+					ifrac_1_hi = numSamples - 1;
+					d_ifrac_1 = 0.0;
+				}
+				else if (w_1_cur <= 0.0)
+				{
+					ifrac_1_lo = 0;
+					ifrac_1_hi = 0;
+					d_ifrac_1 = 0.0;
+				}
+				else
+				{
+					float ind = w_1_cur / T_frac;
+					ifrac_1_lo = int(ind);
+					ifrac_1_hi = ifrac_1_lo + 1;
+					d_ifrac_1 = ind - float(ifrac_1_lo);
+				}
+
+				int ifrac_2_lo, ifrac_2_hi;
+				float d_ifrac_2;
+				if (w_2_cur >= 1.0)
+				{
+					ifrac_2_lo = numSamples - 1;
+					ifrac_2_hi = numSamples - 1;
+					d_ifrac_2 = 0.0;
+				}
+				else if (w_2_cur <= 0.0)
+				{
+					ifrac_2_lo = 0;
+					ifrac_2_hi = 0;
+					d_ifrac_2 = 0.0;
+				}
+				else
+				{
+					float ind = w_2_cur / T_frac;
+					ifrac_2_lo = int(ind);
+					ifrac_2_hi = ifrac_2_lo + 1;
+					d_ifrac_2 = ind - float(ifrac_2_lo);
+				}
+
+				//ifrac2*numSamples*numSamples + ifrac1*numSamples + isum
+				float* LUT_lo = &LUT[ifrac_2_lo*numSamples*numSamples];
+				float partA = (1.0 - d_ifrac_1)*((1.0-d_sum)*LUT_lo[ifrac_1_lo*numSamples + isum_lo] + d_sum*LUT_lo[ifrac_1_lo*numSamples + isum_hi]) 
+								   + d_ifrac_1 *((1.0-d_sum)*LUT_lo[ifrac_1_hi*numSamples + isum_lo] + d_sum*LUT_lo[ifrac_1_hi*numSamples + isum_hi]);
+
+				float* LUT_hi = &LUT[ifrac_2_hi*numSamples*numSamples];
+				float partB = (1.0 - d_ifrac_1)*((1.0-d_sum)*LUT_hi[ifrac_1_lo*numSamples + isum_lo] + d_sum*LUT_hi[ifrac_1_lo*numSamples + isum_hi]) 
+									+ d_ifrac_1 *((1.0-d_sum)*LUT_hi[ifrac_1_hi*numSamples + isum_lo] + d_sum*LUT_hi[ifrac_1_hi*numSamples + isum_hi]);
+
+				sum_1D[k] = (1.0 - d_ifrac_2) * partA + d_ifrac_2 * partB;
+			}
+		}
+	}
+	return true;
+}
+
+bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2, int N_3, float* sigma_L, float* sigma_H, bool constrain, bool data_on_cpu)
 {
 	if (f_L == NULL || f_H == NULL || N_1 <= 0 || N_2 <= 0 || N_3 <= 0 || sigma_L == NULL || sigma_H == NULL)
 	{
@@ -2608,7 +3391,15 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 		return false;
 	}
 
-	omp_set_num_threads(omp_get_num_procs());
+	float Ze_upper[] = {7.5, 10.475045, 14.069705, 15.229622, 23.731653};
+	float rho_upper[] = {0.0, 9.65e-04, 1.35e-03, 2.16e-03, 4.65e-03};
+	const int numUpper = int(sizeof(rho_upper) / sizeof(rho_upper[0]));
+
+	float Ze_min = 2.5;
+	if (constrain)
+		Ze_min = 6.0;
+
+	omp_set_num_threads(num_cpu_threads());
 	#pragma omp parallel for
 	for (int i = 0; i < N_1; i++)
 	{
@@ -2625,7 +3416,7 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 
 				if (mu_L <= 0.0 || mu_H <= 0.0)
 				{
-					line_L[k] = float(7.31231243248); // effective-Z of air
+					line_L[k] = float(7.5); // effective-Z of air
 					line_H[k] = 0.0;
 				}
 				else
@@ -2660,6 +3451,7 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 
 					d = std::max(float(0.0), std::min(float(1.0), d));
 					float Ze = float(Z) + float(1.0) - d;
+					Ze = max(float(Ze_min), Ze); // effectiveZ(LiH) \approx 2.64
 
 					int Z_lo = int(Ze);
 					int Z_hi = Z_lo + 1;
@@ -2668,10 +3460,46 @@ bool tomographicModels::convertToRhoeZe(float* f_L, float* f_H, int N_1, int N_2
 					float sigma_Ze_L = (float(1.0) - d) * sigma_L[Z_lo - 1] + d * sigma_L[Z_hi - 1];
 					float sigma_Ze_H = (float(1.0) - d) * sigma_H[Z_lo - 1] + d * sigma_H[Z_hi - 1];
 					float rhoe = (sigma_Ze_L * mu_L + sigma_Ze_H * mu_H) / (sigma_Ze_L * sigma_Ze_L + sigma_Ze_H * sigma_Ze_H);
-					if (mu_L == 0.0 || mu_H == 0.0)
+					if (mu_L == 0.0 || mu_H == 0.0 || isnan(rhoe))
+					{
 						rhoe = 0.0;
-					else if (isnan(rhoe) == 1)
-						rhoe = 0.0;
+						Ze = 7.5;
+					}
+
+					// Constrain Ze to lie at or below the piece-wise linear function
+					// joining the points (rho_upper, Ze_upper). If rhoe exceeds the
+					// largest tabulated rho_upper value, skip this constraint.
+					if (rhoe <= rho_upper[numUpper - 1] && constrain)
+					{
+						float Ze_max;
+						if (rhoe <= rho_upper[0])
+							Ze_max = Ze_upper[0];
+						else
+						{
+							int m = 1;
+							while (m < numUpper - 1 && rho_upper[m] < rhoe)
+								m++;
+							// rhoe lies within [rho_upper[m-1], rho_upper[m]]
+							float t = (rhoe - rho_upper[m - 1]) / (rho_upper[m] - rho_upper[m - 1]);
+							Ze_max = (float(1.0) - t) * Ze_upper[m - 1] + t * Ze_upper[m];
+						}
+						if (Ze > Ze_max)
+						{
+							Ze = Ze_max;
+
+							// re-calculate rho so that it staying consistent with the data
+							Z_lo = int(Ze);
+							Z_hi = Z_lo + 1;
+							d = Ze - float(Z_lo);
+
+							//mu_H = rho*sigma_H[Ze]
+
+							//sigma_Ze_L = (float(1.0) - d) * sigma_L[Z_lo - 1] + d * sigma_L[Z_hi - 1];
+							sigma_Ze_H = (float(1.0) - d) * sigma_H[Z_lo - 1] + d * sigma_H[Z_hi - 1];
+							//rhoe = (sigma_Ze_L * mu_L + sigma_Ze_H * mu_H) / (sigma_Ze_L * sigma_Ze_L + sigma_Ze_H * sigma_Ze_H);
+							rhoe = mu_H / sigma_Ze_H;
+						}
+					}
 
 					line_L[k] = Ze;
 					line_H[k] = rhoe;
@@ -2724,7 +3552,7 @@ bool tomographicModels::HighPassFilter2D(float* f, int N_1, int N_2, int N_3, fl
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -2742,6 +3570,42 @@ bool tomographicModels::HighPassFilter2D(float* f, int N_1, int N_2, int N_3, fl
 	}
 	else
 		return highPassFilter(f, N_1, N_2, N_3, FWHM, 2, 0, data_on_cpu, params.whichGPU);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::BlurFilter1D(float* f, int N_1, int N_2, int N_3, float FWHM, int axis, bool isPeriodic, bool data_on_cpu)
+{
+	#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+	//uint64 maxElements = 2147483646;
+
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	{
+		printf("Error: Insufficient GPU memory for this operation!\n");
+		return false;
+	}
+	else
+	{
+		if (isPeriodic)
+			return blurFilter1D_periodic(f, N_1, N_2, N_3, FWHM, axis, data_on_cpu, params.whichGPU);
+		else
+			return blurFilter(f, N_1, N_2, N_3, FWHM, 1, axis, data_on_cpu, params.whichGPU);
+	}
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -2790,7 +3654,7 @@ bool tomographicModels::BlurFilter2D(float* f, int N_1, int N_2, int N_3, float 
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -2819,9 +3683,12 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
-		printf("Error: this function is currently only implemented for GPU processing!\n");
-		return false;
+		int Ns[3] = {N_1, N_2, N_3};
+		return antialias_filter(f, Ns, FWHM);
+		//printf("Error: this function is currently only implemented for GPU processing!\n");
+		//return false;
 	}
+
 	float numVol = 1.0;
 	if (data_on_cpu)
 		numVol = 2.0;
@@ -2830,60 +3697,77 @@ bool tomographicModels::BlurFilter(float* f, int N_1, int N_2, int N_3, float FW
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	//uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	double memNeeded = double(numVol) * dataSize;
+	double memAvailable = getAvailableGPUmemory(params.whichGPU);
+	if (memAvailable <= memNeeded)
 	{
-		if (data_on_cpu == false || FWHM > 2.0)
+		if (!data_on_cpu)
 		{
-			printf("Error: Insufficient GPU memory for this operation!\n");
+			printf("Error: BlurFilter not enough GPU memory available for this operation!\n");
+			printf("GPU memory needed: %f GB\n", memNeeded);
+			printf("GPU memory available: %f GB\n", memAvailable);
+			printf("You can run this function if you transfer the volume to the CPU first\n");
 			return false;
 		}
-		else
+
+		// for data chunking, we will divide over the first dimension which is typically z
+		// one needs an extra floor(FWHM) slices above and below each slab for processing
+		uint64 numElements_per_slice = uint64(N_2)*uint64(N_3);
+		uint64 N_cap = int(floor(FWHM));
+
+		float* unfiltered_cap = new float[numElements_per_slice*N_cap];
+		float* filtered_cap = new float[numElements_per_slice*N_cap];
+		size_t cap_bytes = sizeof(float)*N_cap*numElements_per_slice;
+
+		//Find chunkSize such that: memNeeded * (chunkSize+2*N_cap) / double(N_1) < memAvailable
+		int chunkSize = int(floor(memAvailable * double(N_1) / memNeeded - 2*double(N_cap)));
+		int numChunks = int(ceil(double(N_1) / double(chunkSize)));
+		chunkSize = int(floor(double(N_1) / double(numChunks)));
+
+		for (int ichunk = 0; ichunk < numChunks; ichunk++)
 		{
-			float* f_out = f;
-			float* f_in = (float*)malloc(sizeof(float) * numElements);
-			equal_cpu(f_in, f_out, N_1, N_2, N_3);
+			int slice_start = ichunk * chunkSize;
+			int slice_end = std::min(N_1 - 1, slice_start + chunkSize - 1);
+			if (slice_end < slice_start)
+				break;
 
-			// do chunking
-			int numSlices = std::min(N_1, maxSlicesForChunking);
-			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			int slice_start_pad = std::max(0, slice_start - int(N_cap));
+			int slice_end_pad = std::min(N_1 - 1, slice_end + int(N_cap));
+
+			int slice_start_relative = slice_start - slice_start_pad;
+			int slice_end_relative = slice_start_relative + (slice_end - slice_start);
+
+			//printf("processing slices %d to %d\n", slice_start, slice_end);
+			//printf("  pad: %d to %d\n", slice_start_pad, slice_end_pad);
+			//printf("  pad relative: %d to %d\n", slice_start_relative, slice_end_relative);
+
+			// save filtered slices before they are temporarily replaced
+			if (ichunk > 0)
 			{
-				numSlices = numSlices / 2;
-				if (numSlices < 1)
-				{
-					numSlices = 1;
-					break;
-				}
+				memcpy(filtered_cap, &f[uint64(slice_start_pad)*numElements_per_slice], sizeof(float)*N_cap*numElements_per_slice); // save filtered data
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], unfiltered_cap, sizeof(float)*N_cap*numElements_per_slice); // replace with unfiltered
 			}
-			int numChunks = int(ceil(float(N_1) / float(numSlices)));
-
-			//printf("number of slices per chunk: %d\n", numSlices);
-
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
-			#pragma omp parallel for schedule(dynamic)
-			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			if (ichunk < numChunks-1)
 			{
-				int sliceStart = ichunk * numSlices;
-				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
-
-				int sliceStart_pad = std::max(0, sliceStart - 1);
-				int sliceEnd_pad = std::min(N_1 - 1, sliceEnd + 1);
-				int numSlices_pad = sliceEnd_pad - sliceStart_pad + 1;
-
-				int sliceStart_relative = sliceStart - sliceStart_pad;
-				int sliceEnd_relative = sliceStart_relative + (sliceEnd - sliceStart);
-
-				float* f_out_chunk = &f_out[uint64(sliceStart) * uint64(N_2 * N_3)];
-				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
-				int whichGPU = params.whichGPUs[omp_get_thread_num()];
-
-				blurFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				// save the unfiltered slices to be used for the next round
+				memcpy(unfiltered_cap, &f[(slice_end-N_cap+1)*numElements_per_slice], cap_bytes);
+				//printf("  saving slices %d to %d\n", slice_end-N_cap+1, slice_end);
 			}
-			free(f_in);
-
-			return true;
+			//guidedFilter(&f[uint64(slice_start_pad)*numElements_per_slice], slice_end_pad-slice_start_pad+1, N_2, N_3, r, epsilon, 1, data_on_cpu, params.whichGPU, slice_start_relative, slice_end_relative);
+			//blurFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+			blurFilter(&f[uint64(slice_start_pad)*numElements_per_slice], slice_end_pad-slice_start_pad+1, N_2, N_3, FWHM, 3, 0, true, params.whichGPU, slice_start_relative, slice_end_relative);
+			if (ichunk > 0)
+			{
+				// copy the saved filtered slices back
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], filtered_cap, sizeof(float)*N_cap*numElements_per_slice);
+			}
 		}
+
+		delete [] unfiltered_cap;
+		delete [] filtered_cap;
+
+		return true;
 	}
 	else
 		return blurFilter(f, N_1, N_2, N_3, FWHM, 3, 0, data_on_cpu, params.whichGPU);
@@ -2909,60 +3793,77 @@ bool tomographicModels::HighPassFilter(float* f, int N_1, int N_2, int N_3, floa
 
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
-	//uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	double memNeeded = double(numVol) * dataSize;
+	double memAvailable = getAvailableGPUmemory(params.whichGPU);
+	if (memAvailable <= memNeeded)
 	{
-		if (data_on_cpu == false || FWHM > 2.0)
+		if (!data_on_cpu)
 		{
-			printf("Error: Insufficient GPU memory for this operation!\n");
+			printf("Error: BlurFilter not enough GPU memory available for this operation!\n");
+			printf("GPU memory needed: %f GB\n", memNeeded);
+			printf("GPU memory available: %f GB\n", memAvailable);
+			printf("You can run this function if you transfer the volume to the CPU first\n");
 			return false;
 		}
-		else
+
+		// for data chunking, we will divide over the first dimension which is typically z
+		// one needs an extra floor(FWHM) slices above and below each slab for processing
+		uint64 numElements_per_slice = uint64(N_2)*uint64(N_3);
+		uint64 N_cap = int(floor(FWHM));
+
+		float* unfiltered_cap = new float[numElements_per_slice*N_cap];
+		float* filtered_cap = new float[numElements_per_slice*N_cap];
+		size_t cap_bytes = sizeof(float)*N_cap*numElements_per_slice;
+
+		//Find chunkSize such that: memNeeded * (chunkSize+2*N_cap) / double(N_1) < memAvailable
+		int chunkSize = int(floor(memAvailable * double(N_1) / memNeeded - 2*double(N_cap)));
+		int numChunks = int(ceil(double(N_1) / double(chunkSize)));
+		chunkSize = int(floor(double(N_1) / double(numChunks)));
+
+		for (int ichunk = 0; ichunk < numChunks; ichunk++)
 		{
-			float* f_out = f;
-			float* f_in = (float*)malloc(sizeof(float) * numElements);
-			equal_cpu(f_in, f_out, N_1, N_2, N_3);
+			int slice_start = ichunk * chunkSize;
+			int slice_end = std::min(N_1 - 1, slice_start + chunkSize - 1);
+			if (slice_end < slice_start)
+				break;
 
-			// do chunking
-			int numSlices = std::min(N_1, maxSlicesForChunking);
-			while (getAvailableGPUmemory(params.whichGPU) < numVol * double(numSlices) / double(N_1) * dataSize)
+			int slice_start_pad = std::max(0, slice_start - int(N_cap));
+			int slice_end_pad = std::min(N_1 - 1, slice_end + int(N_cap));
+
+			int slice_start_relative = slice_start - slice_start_pad;
+			int slice_end_relative = slice_start_relative + (slice_end - slice_start);
+
+			//printf("processing slices %d to %d\n", slice_start, slice_end);
+			//printf("  pad: %d to %d\n", slice_start_pad, slice_end_pad);
+			//printf("  pad relative: %d to %d\n", slice_start_relative, slice_end_relative);
+
+			// save filtered slices before they are temporarily replaced
+			if (ichunk > 0)
 			{
-				numSlices = numSlices / 2;
-				if (numSlices < 1)
-				{
-					numSlices = 1;
-					break;
-				}
+				memcpy(filtered_cap, &f[uint64(slice_start_pad)*numElements_per_slice], sizeof(float)*N_cap*numElements_per_slice); // save filtered data
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], unfiltered_cap, sizeof(float)*N_cap*numElements_per_slice); // replace with unfiltered
 			}
-			int numChunks = int(ceil(float(N_1) / float(numSlices)));
-
-			//printf("number of slices per chunk: %d\n", numSlices);
-
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
-			#pragma omp parallel for schedule(dynamic)
-			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			if (ichunk < numChunks-1)
 			{
-				int sliceStart = ichunk * numSlices;
-				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
-
-				int sliceStart_pad = std::max(0, sliceStart - 1);
-				int sliceEnd_pad = std::min(N_1 - 1, sliceEnd + 1);
-				int numSlices_pad = sliceEnd_pad - sliceStart_pad + 1;
-
-				int sliceStart_relative = sliceStart - sliceStart_pad;
-				int sliceEnd_relative = sliceStart_relative + (sliceEnd - sliceStart);
-
-				float* f_out_chunk = &f_out[uint64(sliceStart) * uint64(N_2 * N_3)];
-				float* f_in_chunk = &f_in[uint64(sliceStart_pad) * uint64(N_2 * N_3)];
-				int whichGPU = params.whichGPUs[omp_get_thread_num()];
-
-				highPassFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+				// save the unfiltered slices to be used for the next round
+				memcpy(unfiltered_cap, &f[(slice_end-N_cap+1)*numElements_per_slice], cap_bytes);
+				//printf("  saving slices %d to %d\n", slice_end-N_cap+1, slice_end);
 			}
-			free(f_in);
-
-			return true;
+			//guidedFilter(&f[uint64(slice_start_pad)*numElements_per_slice], slice_end_pad-slice_start_pad+1, N_2, N_3, r, epsilon, 1, data_on_cpu, params.whichGPU, slice_start_relative, slice_end_relative);
+			//blurFilter(f_in_chunk, numSlices_pad, N_2, N_3, FWHM, 3, 0, true, whichGPU, sliceStart_relative, sliceEnd_relative, f_out_chunk);
+			highPassFilter(&f[uint64(slice_start_pad)*numElements_per_slice], slice_end_pad-slice_start_pad+1, N_2, N_3, FWHM, 3, 0, true, params.whichGPU, slice_start_relative, slice_end_relative);
+			if (ichunk > 0)
+			{
+				// copy the saved filtered slices back
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], filtered_cap, sizeof(float)*N_cap*numElements_per_slice);
+			}
 		}
+
+		delete [] unfiltered_cap;
+		delete [] filtered_cap;
+
+		return true;
 	}
 	else
 		return highPassFilter(f, N_1, N_2, N_3, FWHM, 3, 0, data_on_cpu, params.whichGPU);
@@ -2979,8 +3880,7 @@ bool tomographicModels::badPixelCorrection(float* g, int N_1, int N_2, int N_3, 
 #ifndef __USE_CPU
 	if (params.whichGPU < 0)
 	{
-		printf("Error: this function is currently only implemented for GPU processing!\n");
-		return false;
+		return badPixelCorrection_cpu(g, N_1, N_2, N_3, badPixelMap, (w - 1) / 2);
 	}
 	float numProj = 1.0;
 	if (data_on_cpu)
@@ -3010,7 +3910,7 @@ bool tomographicModels::badPixelCorrection(float* g, int N_1, int N_2, int N_3, 
 
 		//printf("number of slices per chunk: %d\n", numSlices);
 
-		omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+		omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 		#pragma omp parallel for schedule(dynamic)
 		for (int ichunk = 0; ichunk < numChunks; ichunk++)
 		{
@@ -3044,8 +3944,9 @@ bool tomographicModels::badPixelCorrection(float* g, int N_1, int N_2, int N_3, 
 		return badPixelCorrection_gpu(g, &params_chunk, badPixelMap, w, data_on_cpu);
 	}
 #else
-	printf("Error: GPU routines not included in this release!\n");
-	return false;
+	return badPixelCorrection_cpu(g, N_1, N_2, N_3, badPixelMap, (w - 1) / 2);
+	//printf("Error: GPU routines not included in this release!\n");
+	//return false;
 #endif
 }
 
@@ -3091,7 +3992,7 @@ bool tomographicModels::MedianFilter2D(float* f, int N_1, int N_2, int N_3, floa
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -3123,6 +4024,8 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 		printf("Error: this function is currently only implemented for GPU processing!\n");
 		return false;
 	}
+
+	/*
 	float numVol = 1.0;
 	if (data_on_cpu)
 		numVol = 2.0;
@@ -3133,7 +4036,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	//uint64 maxElements = 2147483646;
 
-	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize /*|| numElements > maxElements*/)
+	if (getAvailableGPUmemory(params.whichGPU) < numVol * dataSize)
 	{
 		if (data_on_cpu == false)
 		{
@@ -3161,7 +4064,7 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -3188,6 +4091,96 @@ bool tomographicModels::MedianFilter(float* f, int N_1, int N_2, int N_3, float 
 	}
 	else
 		return medianFilter(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu, params.whichGPU);
+	//*/
+
+	if (params.whichGPU < 0)
+	{
+		printf("Error: this function is currently only implemented for GPU processing!\n");
+		return false;
+	}
+	
+	float numVol = 1.0;
+	if (data_on_cpu)
+		numVol = 2.0;
+	else
+		numVol = 1.0;
+
+	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+
+	double memNeeded = double(numVol) * dataSize;
+	double memAvailable = getAvailableGPUmemory(params.whichGPU);
+	if (memAvailable <= memNeeded)
+	{
+		if (!data_on_cpu)
+		{
+			printf("Error: MedianFilter not enough GPU memory available for this operation!\n");
+			printf("GPU memory needed: %f GB\n", memNeeded);
+			printf("GPU memory available: %f GB\n", memAvailable);
+			printf("You can run this function if you transfer the volume to the CPU first\n");
+			return false;
+		}
+
+		// for data chunking, we will divide over the first dimension which is typically z
+		// one needs an extra floor(FWHM) slices above and below each slab for processing
+		uint64 numElements_per_slice = uint64(N_2)*uint64(N_3);
+		//uint64 N_cap = std::max(1, std::min(2, (w - 1) / 2));
+		uint64 N_cap = 1;
+
+		float* unfiltered_cap = new float[numElements_per_slice*N_cap];
+		float* filtered_cap = new float[numElements_per_slice*N_cap];
+		size_t cap_bytes = sizeof(float)*N_cap*numElements_per_slice;
+
+		//Find chunkSize such that: memNeeded * (chunkSize+2*N_cap) / double(N_1) < memAvailable
+		int chunkSize = int(floor(memAvailable * double(N_1) / memNeeded - 2*double(N_cap)));
+		int numChunks = int(ceil(double(N_1) / double(chunkSize)));
+		chunkSize = int(floor(double(N_1) / double(numChunks)));
+
+		for (int ichunk = 0; ichunk < numChunks; ichunk++)
+		{
+			int slice_start = ichunk * chunkSize;
+			int slice_end = std::min(N_1 - 1, slice_start + chunkSize - 1);
+			if (slice_end < slice_start)
+				break;
+
+			int slice_start_pad = std::max(0, slice_start - int(N_cap));
+			int slice_end_pad = std::min(N_1 - 1, slice_end + int(N_cap));
+
+			int slice_start_relative = slice_start - slice_start_pad;
+			int slice_end_relative = slice_start_relative + (slice_end - slice_start);
+
+			//printf("processing slices %d to %d\n", slice_start, slice_end);
+			//printf("  pad: %d to %d\n", slice_start_pad, slice_end_pad);
+			//printf("  pad relative: %d to %d\n", slice_start_relative, slice_end_relative);
+
+			// save filtered slices before they are temporarily replaced
+			if (ichunk > 0)
+			{
+				memcpy(filtered_cap, &f[uint64(slice_start_pad)*numElements_per_slice], sizeof(float)*N_cap*numElements_per_slice); // save filtered data
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], unfiltered_cap, sizeof(float)*N_cap*numElements_per_slice); // replace with unfiltered
+			}
+			if (ichunk < numChunks-1)
+			{
+				// save the unfiltered slices to be used for the next round
+				memcpy(unfiltered_cap, &f[(slice_end-N_cap+1)*numElements_per_slice], cap_bytes);
+				//printf("  saving slices %d to %d\n", slice_end-N_cap+1, slice_end);
+			}
+			medianFilter(&f[uint64(slice_start_pad)*numElements_per_slice], slice_end_pad-slice_start_pad+1, N_2, N_3, threshold, w, signalThreshold, true, params.whichGPU, slice_start_relative, slice_end_relative);
+			if (ichunk > 0)
+			{
+				// copy the saved filtered slices back
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], filtered_cap, sizeof(float)*N_cap*numElements_per_slice);
+			}
+		}
+
+		delete [] unfiltered_cap;
+		delete [] filtered_cap;
+
+		return true;
+	}
+	else
+		return medianFilter(f, N_1, N_2, N_3, threshold, w, signalThreshold, data_on_cpu, params.whichGPU);
+
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -3240,7 +4233,7 @@ bool tomographicModels::MeanOrVarianceFilter(float* f, int N_1, int N_2, int N_3
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -3283,6 +4276,7 @@ bool tomographicModels::BilateralFilter(float* f, int N_1, int N_2, int N_3, flo
 		return false;
 	}
 
+	/*
 	int numVol;
 	if (data_on_cpu)
 		numVol = 2;
@@ -3302,6 +4296,92 @@ bool tomographicModels::BilateralFilter(float* f, int N_1, int N_2, int N_3, flo
 	}
 	else
 		return scaledBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, data_on_cpu, params.whichGPU);
+	//*/
+
+	int numVol;
+	if (data_on_cpu)
+		numVol = 2;
+	else
+		numVol = 1;
+	if (scale > 1.0)
+		numVol += 1;
+	double memNeeded = 4.0 * double(numVol) * double(N_1) * double(N_2) * double(N_3) / pow(2.0, 30.0);
+	double memAvailable = getAvailableGPUmemory(params.whichGPU);
+	if (memAvailable <= memNeeded)
+	{
+		if (!data_on_cpu)
+		{
+			printf("Error: BilateralFilter not enough GPU memory available for this operation!\n");
+			printf("GPU memory needed: %f GB\n", memNeeded);
+			printf("GPU memory available: %f GB\n", getAvailableGPUmemory(params.whichGPU));
+			printf("You can run this function if you transfer the volume to the CPU first\n");
+			return false;
+		}
+
+		// for data chunking, we will divide over the first dimension which is typically z
+		// one needs an extra slices above and below each slab for processing
+		uint64 numElements_per_slice = uint64(N_2)*uint64(N_3);
+
+		float sigma_d_sq = float(spatialFWHM / (2.0 * sqrt(2.0 * log(2.0))));
+		sigma_d_sq *= sigma_d_sq;
+		int w = std::max(1, int(ceil(sqrt(2.0 * log(10.0) * sigma_d_sq))));
+
+		uint64 N_cap = w;
+
+		float* unfiltered_cap = new float[numElements_per_slice*N_cap];
+		float* filtered_cap = new float[numElements_per_slice*N_cap];
+		size_t cap_bytes = sizeof(float)*N_cap*numElements_per_slice;
+
+		//Find chunkSize such that: memNeeded * (chunkSize+2*N_cap) / double(N_1) < memAvailable
+		int chunkSize = int(floor(memAvailable * double(N_1) / memNeeded - 2*double(N_cap)));
+		int numChunks = int(ceil(double(N_1) / double(chunkSize)));
+		chunkSize = int(floor(double(N_1) / double(numChunks)));
+
+		for (int ichunk = 0; ichunk < numChunks; ichunk++)
+		{
+			int slice_start = ichunk * chunkSize;
+			int slice_end = std::min(N_1 - 1, slice_start + chunkSize - 1);
+			if (slice_end < slice_start)
+				break;
+
+			int slice_start_pad = std::max(0, slice_start - int(N_cap));
+			int slice_end_pad = std::min(N_1 - 1, slice_end + int(N_cap));
+
+			int slice_start_relative = slice_start - slice_start_pad;
+			int slice_end_relative = slice_start_relative + (slice_end - slice_start);
+
+			//printf("processing slices %d to %d\n", slice_start, slice_end);
+			//printf("  pad: %d to %d\n", slice_start_pad, slice_end_pad);
+			//printf("  pad relative: %d to %d\n", slice_start_relative, slice_end_relative);
+
+			// save filtered slices before they are temporarily replaced
+			if (ichunk > 0)
+			{
+				memcpy(filtered_cap, &f[uint64(slice_start_pad)*numElements_per_slice], sizeof(float)*N_cap*numElements_per_slice); // save filtered data
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], unfiltered_cap, sizeof(float)*N_cap*numElements_per_slice); // replace with unfiltered
+			}
+			if (ichunk < numChunks-1)
+			{
+				// save the unfiltered slices to be used for the next round
+				memcpy(unfiltered_cap, &f[(slice_end-N_cap+1)*numElements_per_slice], cap_bytes);
+				//printf("  saving slices %d to %d\n", slice_end-N_cap+1, slice_end);
+			}
+			scaledBilateralFilter(&f[uint64(slice_start_pad)*numElements_per_slice], slice_end_pad-slice_start_pad+1, N_2, N_3, spatialFWHM, intensityFWHM, scale, data_on_cpu, params.whichGPU, slice_start_relative, slice_end_relative);
+			if (ichunk > 0)
+			{
+				// copy the saved filtered slices back
+				memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], filtered_cap, sizeof(float)*N_cap*numElements_per_slice);
+			}
+		}
+
+		delete [] unfiltered_cap;
+		delete [] filtered_cap;
+
+		return true;
+	}
+	else
+	return scaledBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, data_on_cpu, params.whichGPU);
+
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -3355,14 +4435,77 @@ bool tomographicModels::GuidedFilter(float* f, int N_1, int N_2, int N_3, int r,
 	else
 		numVol = 2;
 	double memNeeded = 4.0 * double(numVol) * double(N_1) * double(N_2) * double(N_3) / pow(2.0, 30.0);
-	if (getAvailableGPUmemory(params.whichGPU) < memNeeded)
+	double memAvailable = getAvailableGPUmemory(params.whichGPU);
+	if (memAvailable <= memNeeded)
 	{
-		printf("Error: GuidedFilter not enough GPU memory available for this operation!\n");
-		printf("GPU memory needed: %f GB\n", memNeeded);
-		printf("GPU memory available: %f GB\n", getAvailableGPUmemory(params.whichGPU));
-		printf("It is possible to break this calculation into smaller pieces which would enable this algorithm to work.\n");
-		printf("We plan to fix this in a future release, but if you encountered this error, please submit an issue on the github page.\n");
-		return false;
+		if (!data_on_cpu)
+		{
+			printf("Error: GuidedFilter not enough GPU memory available for this operation!\n");
+			printf("GPU memory needed: %f GB\n", memNeeded);
+			printf("GPU memory available: %f GB\n", getAvailableGPUmemory(params.whichGPU));
+			printf("You can run this function if you transfer the volume to the CPU first\n");
+			return false;
+		}
+
+		// for data chunking, we will divide over the first dimension which is typically z
+		// one needs an extra 3*r slices above and below each slab for processing
+		uint64 numElements_per_slice = uint64(N_2)*uint64(N_3);
+		uint64 N_cap = 3*r;
+
+		float* unfiltered_cap = new float[numElements_per_slice*N_cap];
+		float* filtered_cap = new float[numElements_per_slice*N_cap];
+		size_t cap_bytes = sizeof(float)*N_cap*numElements_per_slice;
+
+		//Find chunkSize such that: memNeeded * (chunkSize+2*N_cap) / double(N_1) < memAvailable
+		int chunkSize = int(floor(memAvailable * double(N_1) / memNeeded - 2*double(N_cap)));
+		int numChunks = int(ceil(double(N_1) / double(chunkSize)));
+		chunkSize = int(floor(double(N_1) / double(numChunks)));
+
+		for (int iter = 0; iter < numIter; iter++)
+		{
+			printf("iteration %d of %d\n", iter+1, numIter);
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int slice_start = ichunk * chunkSize;
+				int slice_end = std::min(N_1 - 1, slice_start + chunkSize - 1);
+				if (slice_end < slice_start)
+					break;
+
+				int slice_start_pad = std::max(0, slice_start - int(N_cap));
+				int slice_end_pad = std::min(N_1 - 1, slice_end + int(N_cap));
+
+				int slice_start_relative = slice_start - slice_start_pad;
+				int slice_end_relative = slice_start_relative + (slice_end - slice_start);
+
+				//printf("processing slices %d to %d\n", slice_start, slice_end);
+				//printf("  pad: %d to %d\n", slice_start_pad, slice_end_pad);
+				//printf("  pad relative: %d to %d\n", slice_start_relative, slice_end_relative);
+
+				// save filtered slices before they are temporarily replaced
+				if (ichunk > 0)
+				{
+					memcpy(filtered_cap, &f[uint64(slice_start_pad)*numElements_per_slice], sizeof(float)*N_cap*numElements_per_slice); // save filtered data
+					memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], unfiltered_cap, sizeof(float)*N_cap*numElements_per_slice); // replace with unfiltered
+				}
+				if (ichunk < numChunks-1)
+				{
+					// save the unfiltered slices to be used for the next round
+					memcpy(unfiltered_cap, &f[(slice_end-N_cap+1)*numElements_per_slice], cap_bytes);
+					//printf("  saving slices %d to %d\n", slice_end-N_cap+1, slice_end);
+				}
+				guidedFilter(&f[uint64(slice_start_pad)*numElements_per_slice], slice_end_pad-slice_start_pad+1, N_2, N_3, r, epsilon, 1, data_on_cpu, params.whichGPU, slice_start_relative, slice_end_relative);
+				if (ichunk > 0)
+				{
+					// copy the saved filtered slices back
+					memcpy(&f[uint64(slice_start_pad)*numElements_per_slice], filtered_cap, sizeof(float)*N_cap*numElements_per_slice);
+				}
+			}
+		}
+
+		delete [] unfiltered_cap;
+		delete [] filtered_cap;
+
+		return true;
 	}
 	else
 		return guidedFilter(f, N_1, N_2, N_3, r, epsilon, numIter, data_on_cpu, params.whichGPU);
@@ -3446,7 +4589,7 @@ float tomographicModels::TVcost(float* f, int N_1, int N_2, int N_3, float delta
 			int numChunks = int(ceil(float(N_1) / float(numSlices)));
 
 			float* costs = (float*)calloc(size_t(numChunks), sizeof(float));
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -3529,7 +4672,7 @@ bool tomographicModels::TVgradient(float* f, float* Df, int N_1, int N_2, int N_
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -3572,9 +4715,9 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 	}
 	float numVol = 1.0;
 	if (data_on_cpu)
-		numVol = 3.0;
+		numVol = 2.0;
 	else
-		numVol = 1.0;
+		numVol = 0.0;
 	
 	uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
@@ -3603,7 +4746,7 @@ float tomographicModels::TVquadForm(float* f, float* d, int N_1, int N_2, int N_
 			int numChunks = int(ceil(float(N_1) / float(numSlices)));
 
 			float* costs = (float*)calloc(size_t(numChunks), sizeof(float));
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -3697,6 +4840,139 @@ bool tomographicModels::TV_denoise(float* f, int N_1, int N_2, int N_3, float de
 #endif
 }
 
+bool tomographicModels::TV_fast(float* f, int N_1, int N_2, int N_3, float delta, float beta, float p, int numIter, bool data_on_cpu)
+{
+#ifndef __USE_CPU
+    if (params.whichGPU < 0)
+    {
+        printf("Error: this function is currently only implemented for GPU processing!\n");
+        return false;
+    }
+
+    float numVol = 1.0;
+    if (data_on_cpu)
+        numVol = 1.0;
+    else
+        numVol = 0.0;
+
+    uint64 numElements = uint64(N_1) * uint64(N_2) * uint64(N_3);
+    double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+
+    if (data_on_cpu == false || getAvailableGPUmemory(params.whichGPU) > numVol * dataSize)
+        return diffuse_sqs(f, N_1, N_2, N_3, beta, delta, p, numIter, data_on_cpu, params.whichGPU, params.numTVneighbors);
+    else
+    {
+        // Chunked CPU-to-GPU path.
+        // Each chunk is processed with one halo slice on either side.  The lower
+        // halo for chunks after the first must come from the pre-denoised state
+        // of the previous chunk's last slice, not from the already-written result.
+        const uint64 slice_size = uint64(N_2) * uint64(N_3);
+        const size_t slice_bytes = size_t(slice_size) * sizeof(float);
+
+        int numSlices = N_1;
+        while (numSlices > 1)
+        {
+            const int paddedSlices = numSlices + 2;
+            const double chunkDataSize = dataSize * double(paddedSlices) / double(N_1);
+            if (getAvailableGPUmemory(params.whichGPU) >= numVol * chunkDataSize)
+                break;
+            numSlices = numSlices / 2;
+        }
+        if (numSlices < 1)
+            numSlices = 1;
+
+        const int numChunks = int(ceil(float(N_1) / float(numSlices)));
+		printf("splitting the computation into %d chunks\n", numChunks);
+
+        const uint64 max_padded_elements = uint64(numSlices + 2) * slice_size;
+        float* f_chunk = (float*)malloc(size_t(max_padded_elements) * sizeof(float));
+        if (f_chunk == NULL)
+        {
+            printf("Error: failed to allocate TV chunk buffer!\n");
+            return false;
+        }
+
+        float* saved_lower_halo_for_next_chunk = (float*)malloc(slice_bytes);
+        if (saved_lower_halo_for_next_chunk == NULL)
+        {
+            printf("Error: failed to allocate TV saved halo buffer!\n");
+            free(f_chunk);
+            return false;
+        }
+
+        for (int iter = 0; iter < numIter; iter++)
+        {
+            for (int ichunk = 0; ichunk < numChunks; ichunk++)
+            {
+                const int slice_start = ichunk * numSlices;
+                const int slice_end = min(N_1 - 1, slice_start + numSlices - 1);
+                const int num_slices = slice_end - slice_start + 1;
+                const int padded_slices = num_slices + 2;
+
+                // Lower halo.  For the first global chunk, duplicate the first
+                // slice to preserve the same boundary behavior as the full-volume
+                // path.  For later chunks, use the saved pre-denoised last slice
+                // from the previous chunk.
+                if (slice_start == 0)
+                {
+                    memcpy(&f_chunk[uint64(0) * slice_size],
+                           &f[uint64(0) * slice_size],
+                           slice_bytes);
+                }
+                else
+                {
+                    memcpy(&f_chunk[uint64(0) * slice_size],
+                           saved_lower_halo_for_next_chunk,
+                           slice_bytes);
+                }
+
+                // Interior slices for this chunk.
+                memcpy(&f_chunk[uint64(1) * slice_size],
+                       &f[uint64(slice_start) * slice_size],
+                       size_t(num_slices) * slice_bytes);
+
+                // Upper halo.  This slice has not been denoised yet in the
+                // current pass, so it can be read directly from f.  At the global
+                // boundary, duplicate the final slice.
+                const int upper_halo_src = min(N_1 - 1, slice_end + 1);
+                memcpy(&f_chunk[uint64(num_slices + 1) * slice_size],
+                       &f[uint64(upper_halo_src) * slice_size],
+                       slice_bytes);
+
+                // Save this chunk's final interior slice before denoising.  The
+                // next chunk needs this as its lower halo; after diffuse_sqs, the
+                // slice in f will have been overwritten by its denoised value.
+                if (slice_end < N_1 - 1)
+                {
+                    memcpy(saved_lower_halo_for_next_chunk,
+                           &f[uint64(slice_end) * slice_size],
+                           slice_bytes);
+                }
+
+                if (diffuse_sqs(f_chunk, padded_slices, N_2, N_3, beta, delta, p, 1, true, params.whichGPU, params.numTVneighbors) == false)
+                {
+                    free(saved_lower_halo_for_next_chunk);
+                    free(f_chunk);
+                    return false;
+                }
+
+                // Copy only the non-halo interior slices back to the full volume.
+                memcpy(&f[uint64(slice_start) * slice_size],
+                       &f_chunk[uint64(1) * slice_size],
+                       size_t(num_slices) * slice_bytes);
+            }
+        }
+
+        free(saved_lower_halo_for_next_chunk);
+        free(f_chunk);
+        return true;
+    }
+#else
+    printf("Error: GPU routines not included in this release!\n");
+    return false;
+#endif
+}
+
 bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta, float p, int numIter, bool data_on_cpu)
 {
 #ifndef __USE_CPU
@@ -3749,7 +5025,169 @@ bool tomographicModels::Diffuse(float* f, int N_1, int N_2, int N_3, float delta
 #endif
 }
 
-bool tomographicModels::rayTrace(float* g, int oversampling, bool data_on_cpu)
+bool tomographicModels::voxelizeMesh(float* f, float val, bool data_on_cpu, int oversampling)
+{
+	#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: currently this function is only available for GPU processing!\n");
+		return false;
+	}
+	else
+	{
+		if (!params.volumeDefined())
+		{
+			printf("Error: volume parameters not specified\n");
+			return false;
+		}
+		if (geometricPhantom.meshes.size() == 0)
+			return true;
+
+		meshObject* mesh = geometricPhantom.meshes[geometricPhantom.meshes.size()-1];
+		int numTriangles = mesh->numTriangles;
+		double extraMemory = (4.0*9.0*numTriangles) / pow(2.0, 30.0);
+		//printf("extra memory required: %f GB\n", extraMemory);
+
+		float memoryAvailable = getAvailableGPUmemory(params.whichGPUs) - extraMemory;
+		if (memoryAvailable < 0.1)
+		{
+			printf("ERROR: not enough GPU memory for mesh voxelization\n");
+			return false;
+		}
+
+		int N_1 = params.numZ;
+
+		uint64 numElements = params.volumeData_numberOfElements();
+		double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+
+		if (data_on_cpu == true && (memoryAvailable < dataSize || params.whichGPUs.size() > 1))
+		{
+			// do chunking
+			//int numSlices = std::min(N_1, maxSlicesForChunking);
+			int numSlices = int(ceil(double(N_1) / double(int(params.whichGPUs.size()))));
+			while (memoryAvailable < double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			//printf("number of views per chunk: %d\n", numSlices);
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* f_chunk = &f[uint64(sliceStart) * uint64(params.numY * params.numX)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				parameters params_chunk = params;
+				params_chunk.numZ = sliceEnd - sliceStart + 1;
+				params_chunk.offsetZ += sliceStart * params.voxelHeight + params.z_0() - params_chunk.z_0();
+				params_chunk.whichGPU = whichGPU;
+
+				//printf("voxelizing: %f to %f\n", params_chunk.z_0(), params_chunk.z_0()+(params_chunk.numZ-1)*params_chunk.voxelHeight);
+
+				voxelizeMesh_gpu(f_chunk, &params_chunk, &geometricPhantom, val, data_on_cpu, oversampling);
+			}
+			return true;
+		}
+		else
+			return voxelizeMesh_gpu(f, &params, &geometricPhantom, val, data_on_cpu, oversampling);
+	}
+#else
+	printf("Error: currently this function is only available for GPU processing!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::rayTraceMesh(float* g, float* spectralResponse, float* energies, int N_energies, int oversampling, bool data_on_cpu)
+{
+	#ifndef __USE_CPU
+	if (params.whichGPU < 0)
+	{
+		printf("Error: currently this function is only available for GPU processing!\n");
+		return false;
+	}
+	else
+	{
+		if (params.geometry != parameters::CONE && params.geometry != parameters::MODULAR)
+		{
+			printf("Error: currently this function is only implemented for cone- and modular-beam geometries\n");
+			return false;
+		}
+		if (geometricPhantom.meshes.size() == 0)
+			return true;
+
+		int numTriangles = geometricPhantom.meshes[0]->numTriangles;
+		for (int i = 1; i < int(geometricPhantom.meshes.size()); i++)
+			numTriangles = max(numTriangles, geometricPhantom.meshes[i]->numTriangles);
+
+		double extraMemory = (4.0*100.0*numTriangles + 4.0*9.0*numTriangles) / pow(2.0, 30.0);
+		//printf("extra memory required: %f GB\n", extraMemory);
+
+		float memoryAvailable = getAvailableGPUmemory(params.whichGPUs) - extraMemory;
+		if (memoryAvailable < 0.1)
+		{
+			printf("ERROR: not enough GPU memory for ray tracing a mesh of this size\n");
+			return false;
+		}
+
+		int N_1 = params.numAngles;
+
+		uint64 numElements = params.projectionData_numberOfElements();
+		double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
+
+		if (data_on_cpu == true && (memoryAvailable < dataSize || params.whichGPUs.size() > 1))
+		{
+			// do chunking
+			int numSlices = int(ceil(double(N_1) / double(int(params.whichGPUs.size()))));
+			while (memoryAvailable < double(numSlices) / double(N_1) * dataSize)
+			{
+				numSlices = numSlices / 2;
+				if (numSlices < 1)
+				{
+					numSlices = 1;
+					break;
+				}
+			}
+			int numChunks = int(ceil(float(N_1) / float(numSlices)));
+
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
+			#pragma omp parallel for schedule(dynamic)
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int sliceStart = ichunk * numSlices;
+				int sliceEnd = std::min(N_1 - 1, sliceStart + numSlices - 1);
+
+				float* g_chunk = &g[uint64(sliceStart) * uint64(params.numRows * params.numCols)];
+				int whichGPU = params.whichGPUs[omp_get_thread_num()];
+
+				parameters params_chunk = params;
+				params_chunk.removeProjections(sliceStart, sliceEnd);
+				params_chunk.whichGPU = whichGPU;
+
+				rayTraceMesh_gpu(g_chunk, &params_chunk, &geometricPhantom, spectralResponse, energies, N_energies, data_on_cpu, oversampling);
+			}
+			return true;
+		}
+		else
+			return rayTraceMesh_gpu(g, &params, &geometricPhantom, spectralResponse, energies, N_energies, data_on_cpu, oversampling);
+	}
+#else
+	printf("Error: currently this function is only available for GPU processing!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::rayTrace(float* g, float* spectralResponse, float* energies, int N_energies, int oversampling, bool data_on_cpu)
 {
 	/*
 	analyticRayTracing simulator;
@@ -3776,12 +5214,12 @@ bool tomographicModels::rayTrace(float* g, int oversampling, bool data_on_cpu)
 		double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 		//uint64 maxElements = 2147483646;
 
-		if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize || params.whichGPUs.size() > 1))
+		if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPUs) < dataSize || params.whichGPUs.size() > 1))
 		{
 			// do chunking
 			//int numSlices = std::min(N_1, maxSlicesForChunking);
 			int numSlices = int(ceil(double(N_1) / double(int(params.whichGPUs.size()))));
-			while (getAvailableGPUmemory(params.whichGPU) < double(numSlices) / double(N_1) * dataSize)
+			while (getAvailableGPUmemory(params.whichGPUs) < double(numSlices) / double(N_1) * dataSize)
 			{
 				numSlices = numSlices / 2;
 				if (numSlices < 1)
@@ -3792,9 +5230,9 @@ bool tomographicModels::rayTrace(float* g, int oversampling, bool data_on_cpu)
 			}
 			int numChunks = int(ceil(float(N_1) / float(numSlices)));
 
-			//printf("number of slices per chunk: %d\n", numSlices);
+			//printf("number of views per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{
@@ -3809,12 +5247,12 @@ bool tomographicModels::rayTrace(float* g, int oversampling, bool data_on_cpu)
 				//params_chunk.numAngles = sliceEnd - sliceStart + 1;
 				params_chunk.whichGPU = whichGPU;
 
-				rayTrace_gpu(g_chunk, &params_chunk, &geometricPhantom, data_on_cpu, oversampling);
+				rayTrace_gpu(g_chunk, &params_chunk, &geometricPhantom, spectralResponse, energies, N_energies, data_on_cpu, oversampling);
 			}
 			return true;
 		}
 		else
-			return rayTrace_gpu(g, &params, &geometricPhantom, data_on_cpu, oversampling);
+			return rayTrace_gpu(g, &params, &geometricPhantom, spectralResponse, energies, N_energies, data_on_cpu, oversampling);
 	}
 #else
 	if (data_on_cpu == false)
@@ -3840,32 +5278,74 @@ bool tomographicModels::rebin_parallel(float* g, int order)
 	return rebinningRoutines.rebin_parallel(g, &params, order);
 }
 
-bool tomographicModels::sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize)
+bool tomographicModels::sinogram_replacement(float* g, float* priorSinogram, float* metalTrace, int* windowSize, int padSide)
 {
-	return sinogramReplacement(g, priorSinogram, metalTrace, &params, windowSize);
+	return sinogramReplacement(g, priorSinogram, metalTrace, &params, windowSize, padSide);
 }
 
-bool tomographicModels::down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, bool data_on_cpu)
+bool tomographicModels::down_sample(float* I, int* N, float* I_dn, int* N_dn, float* factors, int order, float* offset, float maxWidth, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (data_on_cpu)
-		return downSample_cpu(I, N, I_dn, N_dn, factors);
+		return downSample_cpu(I, N, I_dn, N_dn, factors, order, maxWidth, offset);
 	else
 		return downSample(I, N, I_dn, N_dn, factors, params.whichGPU);
 #else
-	return downSample_cpu(I, N, I_dn, N_dn, factors);
+	return downSample_cpu(I, N, I_dn, N_dn, factors, order, maxWidth, offset);
 #endif
 }
 
-bool tomographicModels::up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, bool data_on_cpu)
+bool tomographicModels::up_sample(float* I, int* N, float* I_up, int* N_up, float* factors, int order, int set_type, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (data_on_cpu)
-		return upSample_cpu(I, N, I_up, N_up, factors);
+	{
+		/*
+		// Copying to/from the GPU seems to be slower,
+		// so disabling this code until I figure out
+		// how to speed it up
+		// Need two copies of I (extra for texture memory)
+		float I_memory = 2.0*float(uint64(N[0]) * uint64(N[1]) * uint64(N[2])) * 4.0 / pow(2.0, 30.0);
+		float I_up_slice_memory = float(uint64(N_up[1]) * uint64(N_up[2])) * 4.0 / pow(2.0, 30.0);
+		float minSlices = float(min(N_up[0], 16));
+		float availableMemory = getAvailableGPUmemory(params.whichGPU);
+		if (I_memory + minSlices*I_up_slice_memory < availableMemory)
+		{
+			//chunkSize*I_up_slice_memory + I_memory <= availableMemory
+			int chunkSize = int(floor((availableMemory - I_memory) / I_up_slice_memory));
+			int numChunks = int(ceil(N_up[0]/chunkSize));
+			printf("chunkSize = %d\n", chunkSize);
+
+			float* I_dev = copy3DdataToGPU(I, make_int3(N[0], N[1], N[2]), params.whichGPU);
+			for (int ichunk = 0; ichunk < numChunks; ichunk++)
+			{
+				int firstSlice = ichunk*chunkSize;
+				int lastSlice = min(N_up[0]-1, firstSlice + chunkSize-1);
+
+				int3 N_up_chunk = make_int3(lastSlice-firstSlice+1, N_up[1], N_up[2]);
+				int N_up_chunk3[3];
+				N_up_chunk3[0] = lastSlice-firstSlice+1;
+				N_up_chunk3[1] = N_up[1];
+				N_up_chunk3[2] = N_up[2];
+				float* I_up_chunk = &I_up[uint64(firstSlice)*uint64(N_up[1])*uint64(N_up[2])];
+
+				float* I_up_dev = copy3DdataToGPU(I_up_chunk, N_up_chunk, params.whichGPU);
+				upSample(I_dev, N, I_up_dev, N_up_chunk3, factors, set_type, params.whichGPU);
+				pull3DdataFromGPU(I_up_chunk, N_up_chunk, I_up_dev, params.whichGPU);
+				cudaFree(I_up_dev);
+			}
+			cudaFree(I_dev);
+			return true;
+		}
+		else
+			return upSample_cpu(I, N, I_up, N_up, factors, set_type);
+		//*/
+		return upSample_cpu(I, N, I_up, N_up, factors, set_type, order);
+	}
 	else
-		return upSample(I, N, I_up, N_up, factors, params.whichGPU);
+		return upSample(I, N, I_up, N_up, factors, set_type, params.whichGPU);
 #else
-	return upSample_cpu(I, N, I_up, N_up, factors);
+	return upSample_cpu(I, N, I_up, N_up, factors, set_type, order);
 #endif
 }
 
@@ -3879,7 +5359,7 @@ bool tomographicModels::scatter_model(float* g, float* f, float* source, float* 
 		int numViewsPerChunk = std::max(1, int(ceil(float(params.numAngles) / double(numChunks))));
 		//printf("numChunks = %d\n", numChunks);
 
-		omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+		omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 		#pragma omp parallel for schedule(dynamic)
 		for (int ichunk = 0; ichunk < numChunks; ichunk++)
 		{
@@ -3898,6 +5378,9 @@ bool tomographicModels::scatter_model(float* g, float* f, float* source, float* 
 			chunk_params.whichGPU = params.whichGPUs[omp_get_thread_num()];
 			chunk_params.whichGPUs.clear();
 
+			if (params.geometry == parameters::CONE)
+				chunk_params.convert_conebeam_to_modularbeam();
+
 			//printf("full numAngles = %d, chunk numAngles = %d\n", params.numAngles, chunk_params.numAngles);
 			//printf("GPU %d: view range: (%d, %d)    slice range: (%d, %d)\n", chunk_params.whichGPU, firstView, lastView, sliceRange[0], sliceRange[1]);
 
@@ -3907,10 +5390,191 @@ bool tomographicModels::scatter_model(float* g, float* f, float* source, float* 
 		return true;
 	}
 	else
-		return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+	{
+		if (params.geometry == parameters::MODULAR)
+			return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+		else
+		{
+			parameters params_modular = params;
+			params_modular.convert_conebeam_to_modularbeam();
+			return simulateScatter_firstOrder_singleMaterial(g, f, &params_modular, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+		}
+	}
 	//*/
 
 	//return simulateScatter_firstOrder_singleMaterial(g, f, &params, source, energies, N_energies, detector, sigma, scatterDist, data_on_cpu, jobType);
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::scatter_simulation(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float reference_energy, const char** chemForms, int num_materials, float* densities, float* b_L, float* b_H, bool data_on_cpu, int num_photons_per_pixel, int min_scatters, int max_scatters)
+{
+	if (num_materials == 1)
+		return scatter_simulation_single_material(g, f, source, energies, N_energies, detector, reference_energy, chemForms[0], data_on_cpu, num_photons_per_pixel, min_scatters, max_scatters);
+	#ifndef __USE_CPU
+		if (params.geometry == parameters::MODULAR || params.geometry == parameters::CONE)
+		{
+			parameters params_modular = params;
+			if (params.geometry == parameters::CONE)
+				params_modular.convert_conebeam_to_modularbeam();
+			if (params_modular.whichGPUs.size() <= 1 || data_on_cpu == false)
+				return scatterSimulation_multimaterial(&params_modular, g, f, source, energies, N_energies, detector, reference_energy, chemForms, num_materials, densities, b_L, b_H, data_on_cpu, num_photons_per_pixel, min_scatters, max_scatters);
+			else
+			{
+				// Force load all cross-section and scatter-distribution tables before the parallel
+				// region; otherwise the GPU threads below race on their lazy, non-thread-safe
+				// initialization (which intermittently segfaults).
+				initializeXrayPhysicsTables();
+				int numGPUs = int(params_modular.whichGPUs.size());
+				num_photons_per_pixel = num_photons_per_pixel / numGPUs;
+
+				bool retVal = true;
+				
+				float** g_stack = new float*[numGPUs];
+				#pragma omp parallel for
+				for (int i = 0; i < numGPUs; i++)
+				{
+					parameters params_local = params_modular;
+	
+					params_local.whichGPU = params_modular.whichGPUs[i];
+					params_local.whichGPUs.clear();
+	
+					//printf("processing on GPU %d\n", params_local.whichGPU);
+					//printf("data size: %d x %d x %d\n", params_local.numAngles, params_local.numRows, params_local.numCols);
+	
+					float* g_local = allocate_projections();
+					if (g_local == NULL)
+					{
+						printf("failed to allocate\n");
+						retVal = false;
+					}
+					if (retVal)
+					{
+						scatterSimulation_multimaterial(&params_local, g_local, f, source, energies, N_energies, detector, reference_energy, chemForms, num_materials, densities, b_L, b_H, data_on_cpu, num_photons_per_pixel, min_scatters, max_scatters);
+						g_stack[i] = g_local;
+						//printf("processing on GPU %d completed\n", params_local.whichGPU);
+					}
+				}
+
+				for (int i = 0; i < numGPUs; i++)
+				{
+					float* g_local = g_stack[i];
+					if (i == 0)
+						equal_cpu(g, g_local, params.numAngles, params.numRows, params.numCols);
+					else
+						scalarAdd_cpu(g, 1.0, g_local, params.numAngles, params.numRows, params.numCols);
+					delete [] g_local;
+					g_stack[i] = NULL;
+				}
+				delete [] g_stack;
+				scale_cpu(g, 1.0/float(numGPUs), params.numAngles, params.numRows, params.numCols);
+				return retVal;
+			}
+		}
+		else
+		{
+			printf("Error: scatter_simulation only works for cone-beam and modular-beam!\n");
+			return false;
+		}
+	#else
+		printf("Error: GPU routines not included in this release!\n");
+		return false;
+	#endif
+}
+
+bool tomographicModels::scatter_simulation_single_material(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float reference_energy, const char* chemForm, bool data_on_cpu, int num_photons_per_pixel, int min_scatters, int max_scatters)
+{
+#ifndef __USE_CPU
+	if (params.geometry == parameters::MODULAR || params.geometry == parameters::CONE)
+	{
+		parameters params_modular = params;
+		if (params.geometry == parameters::CONE)
+			params_modular.convert_conebeam_to_modularbeam();
+		if (params_modular.whichGPUs.size() <= 1 || data_on_cpu == false)
+			return scatterSimulation(&params_modular, g, f, source, energies, N_energies, detector, chemForm, data_on_cpu, num_photons_per_pixel, min_scatters, max_scatters);
+		else
+		{
+			// Force load all cross-section and scatter-distribution tables before the parallel
+			// region; otherwise the GPU threads below race on their lazy, non-thread-safe
+			// initialization (which intermittently segfaults).
+			initializeXrayPhysicsTables();
+			int numGPUs = int(params_modular.whichGPUs.size());
+			num_photons_per_pixel = num_photons_per_pixel / numGPUs;
+			
+			float** g_stack = new float*[numGPUs];
+			#pragma omp parallel for
+			for (int i = 0; i < numGPUs; i++)
+			{
+				parameters params_local = params_modular;
+
+				params_local.whichGPU = params_modular.whichGPUs[i];
+				params_local.whichGPUs.clear();
+
+				//printf("processing on GPU %d\n", params_local.whichGPU);
+				//printf("data size: %d x %d x %d\n", params_local.numAngles, params_local.numRows, params_local.numCols);
+
+				float* g_local = allocate_projections();
+				if (g_local == NULL)
+					printf("failed to allocate\n");
+				scatterSimulation(&params_local, g_local, f, source, energies, N_energies, detector, chemForm, data_on_cpu, num_photons_per_pixel, min_scatters, max_scatters);
+				g_stack[i] = g_local;
+				//printf("processing on GPU %d completed\n", params_local.whichGPU);
+			}
+
+			for (int i = 0; i < numGPUs; i++)
+			{
+				float* g_local = g_stack[i];
+				if (i == 0)
+					equal_cpu(g, g_local, params.numAngles, params.numRows, params.numCols);
+				else
+					scalarAdd_cpu(g, 1.0, g_local, params.numAngles, params.numRows, params.numCols);
+				delete [] g_local;
+				g_stack[i] = NULL;
+			}
+			delete [] g_stack;
+			scale_cpu(g, 1.0/float(numGPUs), params.numAngles, params.numRows, params.numCols);
+			return true;
+		}
+	}
+	else
+	{
+		printf("Error: scatter_simulation only works for cone-beam and modular-beam!\n");
+		return false;
+	}
+#else
+	printf("Error: GPU routines not included in this release!\n");
+	return false;
+#endif
+}
+
+bool tomographicModels::detector_scatter_simulation(
+	float* events,
+	float thickness,
+	float mass_density,
+	float* source,
+	float* energies,
+	int N_energies,
+	const char* chemForm,
+	int num_photons,
+	int max_scatters,
+	float* direction)
+{
+#ifndef __USE_CPU
+	// `params` supplies GPU id and x-ray/physics table setup; CT scan geometry is not used by the slab simulation.
+	return detectorScatterSimulation(
+		&params,
+		thickness,
+		mass_density,
+		source,
+		energies,
+		N_energies,
+		chemForm,
+		events,
+		num_photons,
+		max_scatters,
+		direction);
 #else
 	printf("Error: GPU routines not included in this release!\n");
 	return false;
@@ -4000,7 +5664,7 @@ bool tomographicModels::Laplacian(float* g, int numDims, bool smooth, bool data_
 #endif
 }
 
-bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, bool data_on_cpu)
+bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H2, bool isAttenuationData, float FWHM, bool data_on_cpu)
 {
 #ifndef __USE_CPU
 	if (g == NULL || H == NULL || N_H1 <= 0 || N_H2 <= 0 || params.geometryDefined() == false)
@@ -4021,7 +5685,7 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 	double dataSize = 4.0 * double(numElements) / pow(2.0, 30.0);
 	//uint64 maxElements = 2147483646;
 
-	if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize /*|| numElements > maxElements*/))
+	if (data_on_cpu == true && (getAvailableGPUmemory(params.whichGPU) < dataSize || params.whichGPUs.size() > 1))
 	{
 		// do chunking
 		int numSlices = std::min(N_1, maxSlicesForChunking);
@@ -4038,7 +5702,7 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 
 		//printf("number of slices per chunk: %d\n", numSlices);
 
-		omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+		omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 		#pragma omp parallel for schedule(dynamic)
 		for (int ichunk = 0; ichunk < numChunks; ichunk++)
 		{
@@ -4052,14 +5716,14 @@ bool tomographicModels::transmissionFilter(float* g, float* H, int N_H1, int N_H
 			params_chunk.numAngles = sliceEnd - sliceStart + 1;
 			params_chunk.whichGPU = whichGPU;
 
-			transmissionFilter_gpu(g_chunk, &params_chunk, data_on_cpu, H, N_H1, N_H2, isAttenuationData);
+			transmissionFilter_gpu(g_chunk, &params_chunk, data_on_cpu, H, N_H1, N_H2, isAttenuationData, FWHM);
 		}
 
 		return true;
 	}
 	else
 	{
-		return transmissionFilter_gpu(g, &params, data_on_cpu, H, N_H1, N_H2, isAttenuationData);
+		return transmissionFilter_gpu(g, &params, data_on_cpu, H, N_H1, N_H2, isAttenuationData, FWHM);
 	}
 	//#####################################################################################################
 #else
@@ -4114,7 +5778,7 @@ bool tomographicModels::AzimuthalBlur(float* f, float FWHM, bool data_on_cpu)
 
 			//printf("number of slices per chunk: %d\n", numSlices);
 
-			omp_set_num_threads(std::min(int(params.whichGPUs.size()), omp_get_num_procs()));
+			omp_set_num_threads(std::min(int(params.whichGPUs.size()), num_cpu_threads()));
 			#pragma omp parallel for schedule(dynamic)
 			for (int ichunk = 0; ichunk < numChunks; ichunk++)
 			{

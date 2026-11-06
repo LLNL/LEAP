@@ -17,15 +17,42 @@ import imageio
 from sys import platform as _platform
 from numpy.ctypeslib import ndpointer
 import numpy as np
+
 try:
     import torch
     has_torch = True
 except:
     has_torch = False
-from leap_filter_sequence import *
-#testFS = filterSequence()
 
-class tomographicModels:
+
+def _is_numpy(a):
+    return isinstance(a, np.ndarray)
+
+
+def _is_torch(a):
+    return has_torch and isinstance(a, torch.Tensor)
+
+
+try:
+    from numba import jit, prange
+    @jit(nopython=True, parallel=True)
+    def poisson_helper(trans_rad, scalar):
+        minValue = 2.0**-16
+        for i in prange(trans_rad.shape[0]):
+            #modulate = (np.abs(i-trans_rad.shape[0]//2)*2.0/float(trans_rad.shape[0])*2.0)**2+1.0
+            for j in range(trans_rad.shape[1]):
+                for k in range(trans_rad.shape[2]):
+                    trans_rad[i, j, k] = max(minValue, np.random.poisson(scalar * trans_rad[i, j, k]) / (scalar))
+except:
+    def poisson_helper(trans_rad, scalar):
+        minValue = 2.0**-16
+        trans_rad[:] = np.random.poisson(scalar*trans_rad) / scalar
+        np.maximum(trans_rad, 2.0**-16, out=trans_rad)
+
+from xrayphysics import xrayPhysics
+from leap_filter_sequence import *
+
+class tomographicModels(xrayPhysics):
     """ Python class for tomographicModels bindings
     Usage Example:
     from leapctype import *
@@ -36,7 +63,7 @@ class tomographicModels:
     leapct.project(g,f)
     """
 
-    def __init__(self, param_id=None, lib_dir=""):
+    def __init__(self, param_id=None, lib_dir="", only_cpu=False):
         """Constructor
 
         The functions in this class can take as input and output data that is either on the CPU or the GPU.
@@ -72,105 +99,19 @@ class tomographicModels:
         Args:
             param_id (int): If no value is given, then a new parameter set is generated, otherwise one can specify a parameter set index to use, but this parameter index must already be in use
             lib_dir (string): Path to the LEAP dynamic library, default value is the same path as this file
-        
         """
-        if len(lib_dir) > 0:
-            current_dir = lib_dir
-        else:
-            current_dir = os.path.abspath(os.path.dirname(__file__))
-
-        if _platform == "linux" or _platform == "linux2":
-            import readline
-            from ctypes import cdll
-
-            #libdir = site.getsitepackages()[0]
-            #libname = glob.glob(os.path.join(libdir, "leapct*.so"))
-            libname = glob.glob(os.path.join(current_dir, "*leapct*.so"))
-            if len(libname) == 0:
-                fullPath = os.path.join(current_dir, 'libleapct.so')
-                fullPath_backup = os.path.join(current_dir, '../build/lib/libleapct.so')
-            elif len(libname) == 1:
-                fullPath = libname[0]
-                fullPath_backup = ""
-            elif len(libname) >= 2:
-                fullPath = libname[0]
-                fullPath_backup = libname[1]
-            
-            if os.path.isfile(fullPath):
-                self.libprojectors = cdll.LoadLibrary(fullPath)
-            elif os.path.isfile(fullPath_backup):
-                self.libprojectors = cdll.LoadLibrary(fullPath_backup)
-            else:
-                print('Error: could not find LEAP dynamic library at')
-                print(fullPath)
-                print('or')
-                print(fullPath_backup)
-                self.libprojectors = None
-            
-        elif _platform == "win32":
-            from ctypes import windll
-        
-            libname = glob.glob(os.path.join(current_dir, "*leapct*.dll"))
-            if len(libname) == 0:
-                fullPath = os.path.join(current_dir, 'libleapct.dll')
-                fullPath_backup = os.path.join(current_dir, r'..\win_build\bin\Release\libleapct.dll')
-            elif len(libname) == 1:
-                fullPath = libname[0]
-                fullPath_backup = ""
-            elif len(libname) >= 2:
-                fullPath = libname[0]
-                fullPath_backup = libname[1]
-        
-            if os.path.isfile(fullPath):
-                try:
-                    self.libprojectors = windll.LoadLibrary(fullPath)
-                except:
-                    self.libprojectors = ctypes.CDLL(fullPath, winmode=0)
-            elif os.path.isfile(fullPath_backup):
-                try:
-                    self.libprojectors = windll.LoadLibrary(fullPath_backup)
-                except:
-                    self.libprojectors = ctypes.CDLL(fullPath_backup, winmode=0)
-            else:
-                print('Error: could not find LEAP dynamic library at')
-                print(fullPath)
-                print('or')
-                print(fullPath_backup)
-                self.libprojectors = None
-        
-        elif _platform == "darwin":  # Darwin is the name for MacOS in Python's platform module
-            from ctypes import cdll
-            
-            libname = glob.glob(os.path.join(current_dir, "*leapct*.dylib"))
-            if len(libname) == 0:
-                fullPath = os.path.join(current_dir, 'libleapct.dylib')
-                fullPath_backup = os.path.join(current_dir, '../build/lib/libleapct.dylib')
-            elif len(libname) == 1:
-                fullPath = libname[0]
-                fullPath_backup = ""
-            elif len(libname) >= 2:
-                fullPath = libname[0]
-                fullPath_backup = libname[1]
-            
-            if os.path.isfile(fullPath):
-                self.libprojectors = cdll.LoadLibrary(fullPath)
-            elif os.path.isfile(fullPath_backup):
-                self.libprojectors = cdll.LoadLibrary(fullPath_backup)
-            else:
-                print('Error: could not find LEAP dynamic library at')
-                print(fullPath)
-                print('or')
-                print(fullPath_backup)
-                self.libprojectors = None
+        super().__init__(lib_dir, only_cpu)
         
         if self.libprojectors is None:
             self.param_id = -1
+            print('Error: could not find LEAP dynamic library')
         else:
             if param_id is not None:
                 self.param_id = param_id
             else:
                 self.param_id = self.create_new_model()
             self.set_model()
+
         self.print_cost = False
         self.print_warnings = True
         self.volume_mask = None
@@ -178,7 +119,16 @@ class tomographicModels:
         self.file_dtype = np.float32
         self.wmin = 0.0
         self.wmax = None
+        if param_id is None:
+            self.set_defaults()
 
+    def set_defaults(self):
+        self.use_mm()
+        self.set_truncatedScan(True)
+        self.set_projector('AUTO')
+        self.set_cornerPatching(True)
+        self.set_numRowsExtrapolate(1)
+    
     def test_script(self):
         self.libprojectors.test_script()
 
@@ -267,11 +217,22 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_maxSlicesForChunking(N)
 
+    def get_maxSlicesForChunking(self):
+        """Returns the current maximum number of slices per chunk used during GPU processing.
+
+        Returns:
+            int: the current chunk size
+        """
+        self.libprojectors.get_maxSlicesForChunking.restype = ctypes.c_int
+        self.libprojectors.get_maxSlicesForChunking.argtypes = []
+        self.set_model()
+        return self.libprojectors.get_maxSlicesForChunking()
+
     def create_new_model(self):
         self.libprojectors.create_new_model.restype = ctypes.c_int
         return self.libprojectors.create_new_model()
         
-    def copy_parameters(self, leapct):
+    def copy_parameters(self, leapct, copy_volume_parameters=True):
         """Copies the parameters from another instance of this class"""
         
         self.print_cost = leapct.print_cost
@@ -280,8 +241,15 @@ class tomographicModels:
         
         self.set_model()
         self.libprojectors.copy_parameters.restype = ctypes.c_bool
-        self.libprojectors.copy_parameters.argtypes = [ctypes.c_int]
-        return self.libprojectors.copy_parameters(leapct.param_id)
+        self.libprojectors.copy_parameters.argtypes = [ctypes.c_int, ctypes.c_bool]
+        return self.libprojectors.copy_parameters(leapct.param_id, copy_volume_parameters)
+    
+    def copy_volume_parameters(self, leapct):
+        """Copies the volume parameters from another instance of this class"""
+        self.set_model()
+        self.libprojectors.copy_volume_parameters.restype = ctypes.c_bool
+        self.libprojectors.copy_volume_parameters.argtypes = [ctypes.c_int]
+        return self.libprojectors.copy_volume_parameters(leapct.param_id)
 
     def reset(self):
         """reset
@@ -349,34 +317,74 @@ class tomographicModels:
         self.set_model()
         self.libprojectors.ct_volume_defined.restype = ctypes.c_bool
         return self.libprojectors.ct_volume_defined()
+
+    def verify_projection_data(self, g):
+        """ Verifies that the projection data (g) is compatible with the specified parameters """
+
+        if g is None:
+            print('Error: projection data is not defined')
+            return False
+
+        # check they are numpy array or torch.tensor
+        if not _is_numpy(g) and not _is_torch(g):
+            print('Error: projection data must be either a numpy array or a torch tensor')
+            return False
+
+        # check they are float32
+        if _is_torch(g):
+            if g.dtype != torch.float32:
+                print('Error: projection data must be float32 data type')
+                return False
+            if g.is_contiguous() == False:
+                print('Error: projection data must be contiguous')
+                return False
+        else:
+            if g.dtype != np.float32:
+                print('Error: projection data must be float32 data type')
+                return False
+            if g.data.c_contiguous == False:
+                print('Error: projection data must be contiguous')
+                return False
         
+        # check are they 3D arrays
+        if len(g.shape) != 3:
+            print('Error: projection data must be a 3D array')
+            return False
+        
+        # check the shape is correct
+        if g.shape[0] != self.get_numAngles() or g.shape[1] != self.get_numRows() or g.shape[2] != self.get_numCols():
+            print('Error: projection data dimensions do not agree with the LEAP CT geometry parameters')
+            return False
+        
+        return True
+
     def verify_inputs(self, g, f):
         """ Verifies that the projection data (g) and the volume data (f) are compatible with the specified parameters """
         #if f is None:
         #    f = g
     
-        # check they are the same type
-        if type(g) != type(f):
-            print('Error: projection and volume data must be the same type')
-            return False
-            
+        # Determine the array family with isinstance (not exact type) so that
+        # numpy subclasses such as np.memmap are treated as numpy arrays.
+        g_is_numpy = _is_numpy(g)
+        f_is_numpy = _is_numpy(f)
+        g_is_torch = _is_torch(g)
+        f_is_torch = _is_torch(f)
+
         # check they are numpy array or torch.tensor
-        if has_torch:
-            if type(g) is not np.ndarray and type(g) is not torch.Tensor:
-                print('Error: projection and volume data must be either numpy arrays or torch tensors')
-                return False
-                
-            if type(g) is torch.Tensor:
-                if g.is_cuda != f.is_cuda:
-                    print('Error: projection and volume data must either both be on the CPU or both be on the GPU')
-                    return False
-                
-        elif type(g) is not np.ndarray:
+        if not (g_is_numpy or g_is_torch) or not (f_is_numpy or f_is_torch):
             print('Error: projection and volume data must be either numpy arrays or torch tensors')
             return False
-            
+
+        # check they are the same kind (both numpy or both torch)
+        if g_is_torch != f_is_torch:
+            print('Error: projection and volume data must be the same type')
+            return False
+
         # check they are float32
-        if has_torch and type(g) is torch.Tensor:
+        if g_is_torch:
+            if g.is_cuda != f.is_cuda:
+                print('Error: projection and volume data must either both be on the CPU or both be on the GPU')
+                return False
             if g.dtype != torch.float32 or f.dtype != torch.float32:
                 print('Error: projection and volume data must be float32 data type')
                 return False
@@ -422,6 +430,57 @@ class tomographicModels:
             self.set_model()
             self.libprojectors.extraColumnsForOffsetScan.restype = ctypes.c_int
             return self.libprojectors.extraColumnsForOffsetScan()
+
+    def get_offsetScan_weights(self, add_padding=True):
+        extraCols = self.extraColumnsForOffsetScan()
+        if extraCols == 0 or self.get_numRows() == 0 or self.get_numCols() == 0:
+            return None
+        w = np.zeros((self.get_numRows(), self.get_numCols()),dtype=np.float32)
+
+        self.libprojectors.get_offsetScan_weights.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.get_offsetScan_weights.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.get_offsetScan_weights(w)
+
+        if add_padding:
+            w_pad = np.zeros((self.get_numRows(), self.get_numCols()+extraCols),dtype=np.float32)
+            if w[0,0] == 1.0:
+                w_pad[:,0:self.get_numCols()] = w[:,:]
+            else:
+                w_pad[:,extraCols:] = w[:,:]
+
+            return w_pad
+        else:
+            return w
+
+    def apply_projection_weights(self, g, w, expNeg_or_negLog=0):
+        r""" Essential does this: g[:] *= w[None,:,:]
+
+        The CT geometry information must be set prior to running this function
+
+        Args:
+            g (3D float32 numpy array or torch tensor): projection data
+            w (2D float32 numpy array or torch tensor): weights
+            expNeg_or_negLog: if -1, does g:=exp(-g)*w, if 1 does g:=-log(g*w)
+            otherwise does g:=g*w
+        """
+        if len(g.shape) != 3 or len(w.shape) != 2:
+            raise ValueError("unexpected number of dimensions")
+        if g.shape[0] != self.get_numAngles() or g.shape[1] != self.get_numRows() or g.shape[2] != self.get_numCols():
+            raise ValueError("unexpect input data size")
+        if w.shape[0] != g.shape[1] or w.shape[1] != g.shape[2]:
+            raise ValueError("unexpect weights size")
+        
+        self.libprojectors.apply_projection_weights.restype = ctypes.c_bool
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.apply_projection_weights.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.apply_projection_weights(g.data_ptr(), w.data_ptr(), expNeg_or_negLog, g.is_cuda == False)
+        else:
+            self.libprojectors.apply_projection_weights.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            self.set_model()
+            self.libprojectors.apply_projection_weights(g, w, expNeg_or_negLog, True)
+        
 
     ###################################################################################################################
     ###################################################################################################################
@@ -476,7 +535,7 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_coneparallel(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, helicalPitch)
     
-    def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0, tiltAngle=0.0):
+    def set_conebeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0, tiltAngle=0.0, pitchAngle=0.0):
         r"""Sets the parameters for a cone-beam CT geometry
         
         The origin of the coordinate system is always at the center of rotation.  The forward (P) and back (P*) projection operators are given by
@@ -517,12 +576,13 @@ class tomographicModels:
             sdd (float): source to detector distance, measured in mm
             tau (float): center of rotation offset
             helicalPitch (float): the helical pitch (mm/radians)
-            tiltAngle (float) the rotation of the detector around the optical axis (degrees)
+            tiltAngle (float): the rotation of the detector around the optical axis (degrees)
+            pitchAngle (float): the rotation of the detector around the column vector (degrees)
             
         Returns:
             True if the parameters were valid, false otherwise
         """
-        self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_conebeam.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.libprojectors.set_conebeam.restype = ctypes.c_bool
         if has_torch and type(phis) is torch.Tensor:
             phis = phis.cpu().detach().numpy()
@@ -533,9 +593,10 @@ class tomographicModels:
         if phis.size != numAngles:
             print('Error: phis.size != numAngles')
             return False
+        phis = phis.astype(np.float32)
             
         self.set_model()
-        return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, tiltAngle, helicalPitch)
+        return self.libprojectors.set_conebeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau, tiltAngle, pitchAngle, helicalPitch)
     
     def set_coneBeam(self, numAngles, numRows, numCols, pixelHeight, pixelWidth, centerRow, centerCol, phis, sod, sdd, tau=0.0, helicalPitch=0.0, tiltAngle=0.0):
         """Alias for set_conebeam
@@ -761,6 +822,20 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.set_tiltAngle(tiltAngle)
     
+    def set_pitchAngle(self, pitchAngle):
+        """Set the pitchAngle parameter
+        
+        Args:
+            pitchAngle (float): the rotation of the detector around the column vector (degrees)
+            
+        Returns:
+            True if the parameters were valid, false otherwise
+        """
+        self.libprojectors.set_pitchAngle.argtypes = [ctypes.c_float]
+        self.libprojectors.set_pitchAngle.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_pitchAngle(pitchAngle)
+    
     def set_helicalPitch(self, helicalPitch):
         r"""Set the helicalPitch parameter
         
@@ -807,14 +882,69 @@ class tomographicModels:
         self.libprojectors.set_normalizedHelicalPitch.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_normalizedHelicalPitch(normalizedHelicalPitch)
-        
+    
     def get_normalizedHelicalPitch(self):
         """Get the normalized helical pitch"""
         #self.libprojectors.get_normalizedHelicalPitch.argtypes = []
         self.libprojectors.get_normalizedHelicalPitch.restype = ctypes.c_float
         self.set_model()
         return self.libprojectors.get_normalizedHelicalPitch()
+    
+    def set_helicalFBPWeight(self, q):
+        r"""Set the helical FBP Q weight
         
+        Args:
+            q (float): the helical FBP weight
+            
+        Returns:
+            True if the parameter is valid, false otherwise
+        """
+        self.libprojectors.set_helicalFBPWeight.argtypes = [ctypes.c_float]
+        self.libprojectors.set_helicalFBPWeight.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_helicalFBPWeight(q)
+    
+    def get_helicalFBPWeight(self):
+        """Get the helical FBP Q weight"""
+        self.libprojectors.get_helicalFBPWeight.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_helicalFBPWeight()
+
+    def set_DBPparameter(self, epsilon):
+        """Sets the window width for the inverse finite Hilbert transform step of DBP"""
+        self.libprojectors.set_DBPparameter.restype = ctypes.c_bool
+        self.libprojectors.set_DBPparameter.argtypes = [ctypes.c_float]
+        self.set_model()
+        return self.libprojectors.set_DBPparameter(epsilon)
+        
+    def set_source_size(self, height, width = None):
+        """Sets the x-ray focal spot size
+        
+        Args:
+            height: the full height (mm) of the focal spot
+            width: the full width (mm) of the focal spot
+        """
+
+        if width is None:
+            width = height
+
+        self.libprojectors.set_source_size.argtypes = [ctypes.c_float, ctypes.c_float]
+        self.libprojectors.set_source_size.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_source_size(height, width)
+
+    def get_source_size(self):
+        """Gets the x-ray focal spot size
+        """
+
+        height_and_width = np.zeros(2, dtype=np.float32)
+        self.libprojectors.get_source_size.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        self.libprojectors.get_source_size.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.get_source_size(height_and_width)
+        return height_and_width[0], height_and_width[1]
+
+
     def set_flatDetector(self):
         """Set the detectorType to FLAT"""
         self.set_model()
@@ -1065,7 +1195,43 @@ class tomographicModels:
         else:
             self.libprojectors.consistency_cost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.consistency_cost(g, Delta_centerRow, Delta_centerCol, Delta_tau, Delta_tilt, True)
-        
+    def inconsistency_sweep(self, g, shifts, tilts=None, param='centerCol'):
+        """Performs inconsistency reconstruction and calculates the L2 norm of the result for a range of values
+
+        The CT geometry and CT volume must be set prior to running this function.
+        In addition the volume must be set to a single slice and the CT geometry
+        must be flat panel axial cone-beam.
+
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            shifts (C contiguous float32 numpy array): pointer to an array of shift values of centerCol or tau (deviate from the current value)
+            tilts (C contiguous float32 numpy array): pointer to an array of shift values of tiltAngle (degrees)
+            param (string): can be centerCol or tau
+
+        Returns:
+            if successfull the cost values of the metric, otherwise returns None
+        """
+        which_param = 0
+        if param == 'tau':
+            which_param = 1
+        if tilts is None:
+            tilts = np.array([0.0], dtype=np.float32)
+        costValues = np.zeros((tilts.size, shifts.size), dtype=np.float32)
+        self.set_model()
+        self.libprojectors.inconsistency_sweep.restype = ctypes.c_bool
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.inconsistency_sweep.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            if self.libprojectors.inconsistency_sweep(g.data_ptr(), shifts, shifts.size, tilts, tilts.size, which_param, costValues, g.is_cuda == False):
+                return costValues
+            else:
+                return None
+        else:
+            self.libprojectors.inconsistency_sweep.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            if self.libprojectors.inconsistency_sweep(g, shifts, shifts.size, tilts, tilts.size, which_param, costValues, True):
+                return costValues
+            else:
+                return None
+
     def set_centerRow(self, centerRow):
         """Set centerRow parameter"""
         self.set_model()
@@ -1235,7 +1401,7 @@ class tomographicModels:
         self.libprojectors.shift_detector.restype = ctypes.c_bool
         self.libprojectors.shift_detector.argtypes = [ctypes.c_float, ctypes.c_float]
         return self.libprojectors.shift_detector(r, c)
-        
+
     def rebin_curved(self, g, fanAngles, order=6):
         """ rebin data from a curved array of detector modules
         
@@ -1328,8 +1494,13 @@ class tomographicModels:
 
             self.libprojectors.rebin_parallel_sinogram.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
             numRays = self.libprojectors.rebin_parallel_sinogram(g.data_ptr(), sino.data_ptr(), order, iRow)
+
             if numRays != self.get_numCols():
-                sino = torch.reshape(sino, (self.get_numAngles()//2, 2*self.get_numCols()))
+                numEl = self.get_numAngles()//2 * 2*self.get_numCols()
+                sino_crop = torch.zeros(numEl, dtype=np.float32)
+                sino_crop[:] = sino.ravel()[0:numEl]
+                sino = torch.reshape(sino_crop, (self.get_numAngles()//2, 2*self.get_numCols()))
+
             return sino
         else:
             sino = np.zeros((self.get_numAngles(), self.get_numCols()), dtype=np.float32)
@@ -1337,29 +1508,41 @@ class tomographicModels:
             self.libprojectors.rebin_parallel_sinogram.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int]
             numRays = self.libprojectors.rebin_parallel_sinogram(g, sino, order, iRow)
             if numRays != self.get_numCols():
-                sino = np.reshape(sino, (self.get_numAngles()//2, 2*self.get_numCols()))
+                numEl = self.get_numAngles()//2 * 2*self.get_numCols()
+                sino_crop = np.zeros(numEl, dtype=np.float32)
+                sino_crop[:] = sino.ravel()[0:numEl]
+                sino = np.reshape(sino_crop, (self.get_numAngles()//2, 2*self.get_numCols()))
             return sino
 
-    def sinogram_replacement(self, g, priorSinogram, metalTrace, windowSize=None):
+    def sinogram_replacement(self, g, priorSinogram=None, metalTrace=None, windowSize=None, padSide=0):
         """ replaces specified region in projection data with other projection data
         
         This routine provides a robust solution to metal artifact reduction (MAR).
+        If priorSinogram and metalTrace are not given, then will perform sinogram replacement
+        by simply linear interpolating across each metal sinogram trace.  And in the case the metal
+        trace should be specified by NAN values in the measured data.
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data to alter
             priorSinogram (C contiguous float32 numpy array or torch tensor): projection data to use for patching
             metalTrace (C contiguous float32 numpy array or torch tensor): projection mask showing where to do the patching
             windowSize (3-element int array): window size in each of the three dimensions, default is [30, 1, 50]
+            padSide (int): if +1 the data has been zero-padded on the left, if -1 the data has been zero-padded
+            on the right, if 0 no zero-padding has been applied
             
         Returns:
             true if operation was sucessful, false otherwise
         """
         
         if windowSize is None:
-            windowSize = np.array([3, 1, 50], dtype=np.int32)
+            if priorSinogram is None:
+                windowSize = np.array([3, 5, 5], dtype=np.int32)
+            else:
+                windowSize = np.array([3, 5, 50], dtype=np.int32)
             
         self.set_model()
         self.libprojectors.sinogram_replacement.restype = ctypes.c_bool
+        self.libprojectors.sinogram_replacement_interp.restype = ctypes.c_bool
         if has_torch == True and type(g) is torch.Tensor:
         
             if g.is_cuda == True:
@@ -1370,13 +1553,36 @@ class tomographicModels:
             if type(windowSize) is torch.Tensor:
                 windowSize = windowSize.cpu().detach().numpy()
         
-            self.libprojectors.sinogram_replacement.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
-            return self.libprojectors.sinogram_replacement(g.data_ptr(), priorSinogram.data_ptr(), metalTrace.data_ptr(), windowSize)
+            if priorSinogram is None and metalTrace is None:
+                self.libprojectors.sinogram_replacement_interp.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+                return self.libprojectors.sinogram_replacement_interp(g.data_ptr(), windowSize, padSide)
+            else:
+                if metalTrace is None:
+                    metalTrace = g
+                self.libprojectors.sinogram_replacement.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+                return self.libprojectors.sinogram_replacement(g.data_ptr(), priorSinogram.data_ptr(), metalTrace.data_ptr(), windowSize, padSide)
         else:
-            self.libprojectors.sinogram_replacement.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
-            return self.libprojectors.sinogram_replacement(g, priorSinogram, metalTrace, windowSize)
-            
-    def down_sample(self, factors, I, dims=None):
+            if priorSinogram is None and metalTrace is None:
+                self.libprojectors.sinogram_replacement_interp.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+                return self.libprojectors.sinogram_replacement_interp(g, windowSize, padSide)
+            else:
+                if metalTrace is None:
+                    metalTrace = g
+                self.libprojectors.sinogram_replacement.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int]
+                return self.libprojectors.sinogram_replacement(g, priorSinogram, metalTrace, windowSize, padSide)
+    
+    def calculate_down_sampled_shape(self, factors, input_shape):
+        """ calculates the shape of the down-sampled data given the input shape and down-sampling
+        factors
+        Args:
+            factors: 3-element array of down-sampling factors
+            input_shape: 3-element array of the shape of the input data
+        Returns:
+            3-element tuple of the shape of the down-sampled data
+        """
+        return (int(input_shape[0]/factors[0]), int(input_shape[1]/factors[1]), int(input_shape[2]/factors[2]))
+
+    def down_sample(self, factors, I, dims=None, order=0, offset=None, maxWidth = -1.0):
         """down-samples the given 3D array
         
         Prior to down-sampling, an anti-alias filter is applied to each dimension.  This anti-aliasing filter
@@ -1390,6 +1596,27 @@ class tomographicModels:
             down-sampled array
         """
         
+        if I is None:
+            return None
+        
+        if len(I.shape) == 2:
+            shape = np.array((1, I.shape[0], I.shape[1]), dtype=np.int32)
+        elif len(I.shape) == 3:
+            shape = np.array(I.shape, dtype=np.int32)
+        else:
+            return None
+        
+        if isinstance(factors, (int, float)):
+            factors = np.array([factors, factors, factors], dtype=np.float32)
+        if isinstance(factors, (list, tuple)):
+            factors = np.asarray(factors, dtype=np.float32)
+            
+        if offset is None:
+            offset = np.zeros(3, dtype=np.float32)
+
+        if (factors == 1.0).all() and (offset == 0.0).all():
+            return I
+
         self.set_model()
         self.libprojectors.down_sample.restype = ctypes.c_bool
         if has_torch == True and type(I) is torch.Tensor:
@@ -1400,31 +1627,41 @@ class tomographicModels:
             #    factors = np.array(factors, dtype=np.float32)
             if factors.size != 3:
                 return None
+            for i in range(3):
+                factors[i] = min(factors[i], shape[i])
             
             if dims is None:
-                I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+                I_dn = np.zeros(self.calculate_down_sampled_shape(factors, shape), dtype=np.float32)
+            elif len(dims.shape) == 3 or len(dims.shape) == 2:
+                I_dn = dims
             else:
                 I_dn = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
             device = torch.device("cuda:" + str(self.get_gpu()))
             I_dn = torch.from_numpy(I_dn).to(device)
-            self.libprojectors.down_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.down_sample(I.data_ptr(), np.array(I.shape, dtype=np.int32), I_dn.data_ptr(), np.array(I_dn.shape, dtype=np.int32), factors, I.is_cuda == False)
+            self.libprojectors.down_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.down_sample(I.data_ptr(), shape, I_dn.data_ptr(), np.array(I_dn.shape, dtype=np.int32), factors, order, offset, maxWidth, I.is_cuda == False)
         else:
             #if type(factors) is not np.ndarray:
             #    factors = np.array(factors, dtype=np.float32)
             factors = np.array(factors, dtype=np.float32)
             if factors.size != 3:
                 return None
+            for i in range(3):
+                factors[i] = min(factors[i], shape[i])
                 
             if dims is None:
-                I_dn = np.zeros((int(I.shape[0]/factors[0]), int(I.shape[1]/factors[1]), int(I.shape[2]/factors[2])), dtype=np.float32)
+                I_dn = np.zeros(self.calculate_down_sampled_shape(factors, shape), dtype=np.float32)
+            elif len(dims.shape) == 3 or len(dims.shape) == 2:
+                I_dn = dims
             else:
                 I_dn = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
-            self.libprojectors.down_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.down_sample(I, np.array(I.shape, dtype=np.int32), I_dn, np.array(I_dn.shape, dtype=np.int32), factors, True)
+            self.libprojectors.down_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.down_sample(I, shape, I_dn, np.array(I_dn.shape, dtype=np.int32), factors, order, offset, maxWidth, True)
+        if len(I.shape) == 2:
+            I_dn = np.squeeze(I_dn)
         return I_dn
         
-    def up_sample(self, factors, I, dims=None):
+    def up_sample(self, factors, I, dims=None, set_type=0, order=0):
         """up-samples the given 3D array
         
         Up-sampling is performed using tri-linear interpolation.
@@ -1432,10 +1669,25 @@ class tomographicModels:
         Args:
             factors: 3-element array of up-sampling factors
             I (C contiguous float32 numpy array or torch tensor): data to up-sample
+            dims (3-element array or C contiguous float32 numpy array or torch tensor): if None
+            then dimensions of upsampled data are calculated by I and factors
+            if a 3-element array specifies the dimensions of the upsampled data, otherwise
+            should be a 3D array for the upsampled data
+            set_type (int): if 0 return value is just the upsampled input
+            if 1 return value the upsampled data is added to the current data
+            if 2 return value the upsampled data is multiplied to the current data
             
         Returns:
             up-sampled array
         """
+
+        if len(I.shape) == 2:
+            shape = np.array((1, I.shape[0], I.shape[1]), dtype=np.int32)
+        elif len(I.shape) == 3:
+            shape = np.array(I.shape, dtype=np.int32)
+        else:
+            print('Error: data to upsample must be 2D or 3D')
+            return None
         
         self.set_model()
         self.libprojectors.up_sample.restype = ctypes.c_bool
@@ -1449,13 +1701,25 @@ class tomographicModels:
                 return None
             
             if dims is None:
-                I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
-            else:
+                I_up = np.zeros((int(shape[0]*factors[0]), int(shape[1]*factors[1]), int(shape[2]*factors[2])), dtype=np.float32)
+            elif len(dims) == 3:
                 I_up = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
+            elif len(dims) == 2:
+                I_up = np.zeros((1, dims[0], dims[1]), dtype=np.float32)
+            elif len(dims.shape) == 3 or len(dims.shape) == 2:
+                I_up = dims
+            else:
+                return None
+            
+            if len(I_up.shape) == 2:
+                shape_up = np.array([1, I_up.shape[0], I_up.shape[1]], dtype=np.int32)
+            else:
+                shape_up = np.array([I_up.shape[0], I_up.shape[1], I_up.shape[2]], dtype=np.int32)
+
             device = torch.device("cuda:" + str(self.get_gpu()))
             I_up = torch.from_numpy(I_up).to(device)
-            self.libprojectors.up_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.up_sample(I.data_ptr(), np.array(I.shape, dtype=np.int32), I_up.data_ptr(), np.array(I_up.shape, dtype=np.int32), factors, I.is_cuda == False)
+            self.libprojectors.up_sample.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_void_p, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.up_sample(I.data_ptr(), shape, I_up.data_ptr(), shape_up, factors, order, set_type, I.is_cuda == False)
         else:
             if type(factors) is not np.ndarray:
                 factors = np.array(factors, dtype=np.float32)
@@ -1463,23 +1727,129 @@ class tomographicModels:
                 return None
                 
             if dims is None:
-                I_up = np.zeros((int(I.shape[0]*factors[0]), int(I.shape[1]*factors[1]), int(I.shape[2]*factors[2])), dtype=np.float32)
-            else:
+                I_up = np.zeros((int(shape[0]*factors[0]), int(shape[1]*factors[1]), int(shape[2]*factors[2])), dtype=np.float32)
+            elif len(dims) == 3:
                 I_up = np.zeros((dims[0], dims[1], dims[2]), dtype=np.float32)
-            self.libprojectors.up_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.up_sample(I, np.array(I.shape, dtype=np.int32), I_up, np.array(I_up.shape, dtype=np.int32), factors, True)
+            elif len(dims) == 2:
+                I_up = np.zeros((1, dims[0], dims[1]), dtype=np.float32)
+            elif len(dims.shape) == 3 or len(dims.shape) == 2:
+                I_up = dims
+            else:
+                return None
+            
+            if len(I_up.shape) == 2:
+                shape_up = np.array([1, I_up.shape[0], I_up.shape[1]], dtype=np.int32)
+            else:
+                shape_up = np.array([I_up.shape[0], I_up.shape[1], I_up.shape[2]], dtype=np.int32)
+
+            self.libprojectors.up_sample.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.up_sample(I, shape, I_up, shape_up, factors, order, set_type, True)
+        if len(I.shape) == 2:
+            I_up = np.squeeze(I_up)
         return I_up
+
+    def antialias_filter(self, volume, L=2.0, order=0, filter=None, axis=None):
+        """Applies a 3D/2D/1D antialias filter in-place
         
-    def scatter_model(self, f, source, energies, detector, sigma, scatterDist, jobType=-1):
+        Args:
+            volume (C contiguous float32 numpy array): input volume
+            L (float): FWHM of filter
+            order (int): order of the interpolation filter (0 to 16)
+            filter (C contiguous float32 numpy array): optional user-specified filter
+            axis (list): which axes to apply the filter; defaul is all
+        """
+        
+        if volume is None:
+            return None
+        if L <= 1.0:
+            return volume
+
+        if isinstance(axis, int):
+            axis = [axis]
+        
+        if len(volume.shape) == 2:
+            if axis is None:
+                axis = np.array([False, True, True], dtype='bool')
+            else:
+                axis = np.array([False, 0 in axis, 1 in axis], dtype='bool')
+            shape = np.array((1, volume.shape[0], volume.shape[1]), dtype=np.int32)
+        elif len(volume.shape) == 3:
+            if axis is None:
+                axis = np.array([True, True, True], dtype='bool')
+            else:
+                axis = np.array([0 in axis, 1 in axis, 2 in axis], dtype='bool')
+            shape = np.array(volume.shape, dtype=np.int32)
+        else:
+            return None
+
+        if type(filter) is np.ndarray:
+            filter_size = filter.size
+        else:
+            filter_size = 0
+            filter = np.zeros(1, dtype=np.float32)
+
+        self.set_model()
+        self.libprojectors.antialiasFilter.restype = ctypes.c_bool
+        if has_torch == True and type(volume) is torch.Tensor:
+            raise TypeError('Torch tensors not handled at this time')
+        else:
+            #bool antialiasFilter(float* volume, int* N, float L, int order, bool data_on_cpu);
+            self.libprojectors.antialiasFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_bool, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.antialiasFilter(volume, shape, L, order, filter, filter_size, axis, True)
+        return volume
+
+    def finite_difference(self, volume, order=2, shift=0, axis=None, scalar=1.0):
+        """Applies a 3D/2D/1D finite difference filter in-place
+        
+        Args:
+            volume (C contiguous float32 numpy array): input volume
+            order (int): order of the finite difference filter (0 to 16)
+            shift (int): -1 for backward difference, 0 for central difference, 1 for forward difference
+            axis (list): which axes to apply the filter; defaul is the last dimension
+            scalar (float): optional scaling value
+        """
+        
+        if volume is None:
+            return None
+
+        if isinstance(axis, int):
+            axis = [axis]
+        
+        if len(volume.shape) == 2:
+            if axis is None:
+                axis = np.array([False, False, True], dtype='bool')
+            else:
+                axis = np.array([False, 0 in axis, 1 in axis], dtype='bool')
+            shape = np.array((1, volume.shape[0], volume.shape[1]), dtype=np.int32)
+        elif len(volume.shape) == 3:
+            if axis is None:
+                axis = np.array([False, False, True], dtype='bool')
+            else:
+                axis = np.array([0 in axis, 1 in axis, 2 in axis], dtype='bool')
+            shape = np.array(volume.shape, dtype=np.int32)
+        else:
+            return None
+
+        self.set_model()
+        self.libprojectors.finiteDifference.restype = ctypes.c_bool
+        if has_torch == True and type(volume) is torch.Tensor:
+            raise TypeError('Torch tensors not handled at this time')
+        else:
+            #bool finiteDifference(float* volume, int* N, int order, int shift, bool* axis, float scalar, bool data_on_cpu);
+            self.libprojectors.finiteDifference.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_bool, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.finiteDifference(volume, shape, order, shift, axis, scalar, True)
+        return volume
+
+    def scatter_model(self, f, source, energies, detector, sigma, scatterDist, jobType=0):
         """simulates first order scatter through an object composed of a single material type (but variable density)
 
         This is a complicated function and one should refer to the demo script: d31_scatter_correction.py
         for a full working demonstration.
         
         This routine requires that one down-sample the CT detector pixels, volume voxels, and number of source spectra samples.
-        The volume should be no larger than 200^3 voxels
-        The projection data should be no larger than 256^2
-        The source spectra should have no more than 20 samples (we recommend about 10 samples)
+        The volume should be no larger than 256^2 pixels per slice
+        The projection data should be no larger than 400*256
+        The source spectra should have no more than 25 samples (we recommend about 10 samples)
         
         Note that source and energies are defined on a course grid and the number of samples has an almost
         linear effect on the computation time of these routines.
@@ -1499,20 +1869,20 @@ class tomographicModels:
             Returns gain factor or scatter transmission numpy array based on the jobType parameter
         """
         
-        if self.get_geometry() != 'MODULAR':
-            print('Error: this function only works for modular-beam geometries.  Please use the function\"convert_to_modularbeam()\" prior to running this algorithm to convert your geometry to modular-beam.')
+        if not self.initialize():
+            print("physics tables failed to initialize")
             return None
         if len(f.shape) != 3:
             print('Error: mass density argument must be a 3D numpy or torch tensor.')
             return None
-        if f.shape[0]*f.shape[1]*f.shape[2] > 200**3:
-            print('Error: number of voxels must be less than 200 x 200 x 200.  Please down-sample volume and try again.')
+        if f.shape[1]*f.shape[2] > 256**2:
+            print('Error: number of voxels must be less than N x 256 x 256.  Please down-sample volume and try again.')
             return None
-        if self.get_numCols() * self.get_numRows() > 256**2:
+        if self.get_numCols() * self.get_numRows() > 400*256:
             print('Error: number of detector pixels must be less than 256 x 256.  Please down-sample projections and try again.')
             return None
-        if source.size > 20:
-            print('Error: number of energy bins in source spectra must be less than 20.  Please down spectra and try again.')
+        if source.size > 25:
+            print('Error: number of energy bins in source spectra must be less than 25.  Please down spectra and try again.')
             return None
         if source.size != energies.size:
             print('Error: \"source\" spectra and \"energies\" must be the same size.')
@@ -1556,6 +1926,275 @@ class tomographicModels:
             self.libprojectors.scatter_model.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int]
             self.libprojectors.scatter_model(g, f, source, energies, energies.size, detector, sigma, scatterDist, True, jobType)
         return g
+    
+    def scatter_simulation(self, f, source, energies, detector, reference_energy, chemForm, num_photons_per_pixel=1000, min_scatters=1, max_scatters=10):
+        """performs a Monte-Carlo simulation of x-ray interactions through an object composed of a single material type (but variable density)
+
+        This is a complicated function and one should refer to the demo script: d31_scatter_correction.py
+        for a full working demonstration.
+        
+        This routine requires that one down-sample the CT detector pixels, volume voxels, and number of source spectra samples.
+        The volume should be no larger than 200^3 voxels
+        The projection data should be no larger than 256^2
+        The source spectra should have no more than 20 samples (we recommend about 10 samples)
+        
+        Note that source and energies are defined on a course grid and the number of samples has an almost
+        linear effect on the computation time of these routines.
+        But detector, sigma, scatterDist are sampled from 1 keV to int(ceil(energies[-1])) in 1 keV bins
+        These three arguments MUST be specified like this and the fine sampling here does not effect computation time
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): volume data in mass density units
+            source (numpy array): source spectra (including response due to filters)
+            energies (numpy array): energy samples for source spectra
+            detector (numpy array): detector response (sampled from 1 keV to int(ceil(energies[-1])) in 1 keV bins)
+            reference_energy (float): reference energy of the volume
+            num_photons_per_pixel (int): the number of photons to simulate per detector pixel
+            min_scatters (int), only record events that have at least this many scattering events
+            max_scatters (int), only record events that have at most this many scattering events
+        
+        Returns:
+            Returns not sure yet
+        """
+        
+        if len(f.shape) != 3:
+            print('Error: mass density argument must be a 3D numpy or torch tensor.')
+            return None
+        if f.shape[0]*f.shape[1]*f.shape[2] > (2*280)**3:
+            print('Error: number of voxels must be less than 280 x 280 x 280.  Please down-sample volume and try again.')
+            return None
+        if self.get_numCols() * self.get_numRows() > (2*280)**2:
+            print('Error: number of detector pixels must be less than 280 x 280.  Please down-sample projections and try again.')
+            print(self.get_numCols())
+            print(self.get_numRows())
+            return None
+        if source.size > 50:
+            print('Error: number of energy bins in source spectra must be less than 50.  Please down spectra and try again.')
+            return None
+        if source.size != energies.size:
+            print('Error: \"source\" spectra and \"energies\" must be the same size.')
+            return None
+        maxEnergy = int(np.ceil(energies[-1]))
+        if detector is None:
+            detector = np.array(range(1, maxEnergy + 1), dtype=np.float32)
+            detector[:] = 1.0
+        if detector.size == maxEnergy:
+            detector = np.insert(detector, 0, 0.0)
+        if detector.size != maxEnergy+1:
+            print('Error: \"detector\" must have exactly ' + str(maxEnergy+1) + ' bins')
+            return None
+
+        if isinstance(chemForm, str):
+            chemForm = [chemForm]
+        else:
+            # Copy so the in-place library-to-formula expansion below does not mutate the
+            # caller's list (e.g. PhysicsCorrections.materials), which would corrupt later
+            # density/effective-energy lookups on the original material names.
+            chemForm = list(chemForm)
+
+        # Look up densities from the user-provided names BEFORE expanding to chemical formulas.
+        # massDensity() knows the densities of library materials (e.g. 'HDPE' -> 0.95, 'water' ->
+        # 1.0) and elements, but returns 0 for an expanded formula like 'C2H4' or 'H2O'. Computing
+        # densities after the formula conversion below would silently yield 0, producing an
+        # all-zero multi-material simulation.
+        original_names = list(chemForm)
+
+        for n in range(len(chemForm)):
+            chemForm[n] = self.get_chemicalFormula_from_library(chemForm[n])
+
+        encoded = [s.encode("utf-8") for s in chemForm]
+        array_type = ctypes.c_char_p * len(encoded)
+        chemForm_c_array = array_type(*encoded)
+
+        #chemForm = self.get_chemicalFormula_from_library(chemForm)
+        #if sys.version_info[0] == 3:
+        #    chemForm = bytes(str(chemForm), 'ascii')
+
+        # ----- Multi-material SMB basis functions -----
+        # The C++ multi-material scatter routine builds the transfer-function knots and the
+        # per-material PE/CS/RS LAC component tables itself (from the chemical formulas, densities,
+        # and cross sections). The only quantities it cannot compute are the (SVD-derived) SMB basis
+        # functions and the per-material mass densities (no compound-density lookup exists in C++),
+        # so those are computed here:
+        #   b_L, b_H [maxEnergy+1] : total SMB basis functions (1 keV bins)
+        #   densities [num_materials] : mass density (g/cm^3) of each basis material
+        num_materials = len(chemForm)
+        if num_materials > 4:
+            print('Error: multi-material scatter simulation supports at most 4 basis materials.')
+            return None
+        if num_materials >= 2:
+            peak_energy = float(energies[-1])
+
+            # Tune the PCA to the energies that matter (the x-ray source spectrum range), but produce
+            # basis functions over the full 1 keV grid the C++ texture lookups need: PCAbases learns
+            # the material-space transformation from the cross sections over the source energies, then
+            # applies it to the cross sections defined over all energies. This avoids biasing the SVD
+            # toward the large low-energy cross sections (which contribute little since those photons
+            # are mostly absorbed) while still covering the scattered-photon energy range.
+            gammas_all = np.arange(1, maxEnergy + 1, dtype=np.float32)
+            fit_gammas = np.asarray(energies, dtype=np.float32)
+
+            b_1, b_2 = self.PCAbases(chemForm, gammas_all, fitGammas=fit_gammas)
+            b_L_fine, b_H_fine = self.convert_to_smb(b_1, b_2, gammas_all, [reference_energy, peak_energy])
+            b_L = np.zeros(maxEnergy + 1, dtype=np.float32)
+            b_H = np.zeros(maxEnergy + 1, dtype=np.float32)
+            b_L[1:maxEnergy + 1] = b_L_fine
+            b_H[1:maxEnergy + 1] = b_H_fine
+            b_L[0] = b_L_fine[0]
+            b_H[0] = b_H_fine[0]
+
+            densities = np.array([float(self.massDensity(original_names[i])) for i in range(num_materials)], dtype=np.float32)
+            if np.any(densities <= 0.0):
+                bad = [original_names[i] for i in range(num_materials) if densities[i] <= 0.0]
+                print('Error: could not determine the mass density of: ' + ', '.join(bad) + '. '
+                      'Specify a material from the library (e.g. \"HDPE\", \"water\") or provide the '
+                      'density explicitly.')
+                return None
+        else:
+            # Single-material path ignores these; pass valid (dummy) contiguous arrays.
+            b_L = np.zeros(1, dtype=np.float32)
+            b_H = np.zeros(1, dtype=np.float32)
+            densities = np.zeros(1, dtype=np.float32)
+
+        num_photons_per_pixel = max(100, min(10000000, num_photons_per_pixel))
+
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            g = self.allocate_projections(0.0, True)
+            
+            if f.is_cuda:
+                g = g.to(f.get_device())
+            
+            if type(source) is torch.Tensor:
+                source = source.cpu().detach().numpy()
+            if type(energies) is torch.Tensor:
+                energies = energies.cpu().detach().numpy()
+            if type(detector) is torch.Tensor:
+                detector = detector.cpu().detach().numpy()
+            
+            #scatter_simulation(float* g, float* f, float* source, float* energies, int N_energies, float* detector, float reference_energy, const char** chemForms, int num_materials, float* densities, float* b_L, float* b_H, bool data_on_cpu, int num_photons_per_pixel, int min_scatters, int max_scatters);
+            self.libprojectors.scatter_simulation.restype = ctypes.c_bool
+            self.libprojectors.scatter_simulation.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            self.libprojectors.scatter_simulation(g.data_ptr(), f.data_ptr(), source, energies, energies.size, detector, reference_energy, chemForm_c_array, len(chemForm), densities, b_L, b_H, g.is_cuda == False, num_photons_per_pixel, min_scatters, max_scatters)
+            
+        else:
+            g = self.allocate_projections()
+            self.libprojectors.scatter_simulation.restype = ctypes.c_bool
+            self.libprojectors.scatter_simulation.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.POINTER(ctypes.c_char_p), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            self.libprojectors.scatter_simulation(g, f, source, energies, energies.size, detector, reference_energy, chemForm_c_array, len(chemForm), densities, b_L, b_H, True, num_photons_per_pixel, min_scatters, max_scatters)
+        return g
+
+    def detector_scatter_simulation(
+        self,
+        source,
+        energies,
+        chemForm,
+        thickness,
+        mass_density,
+        num_photons,
+        max_scatters=10,
+        direction=None,
+    ):
+        """Monte-Carlo scintillator slab: pencil beam, polychromatic spectrum; stores interaction (x,y,z) and keV per event.
+
+        The output `events` buffer has size ``num_photons * max_scatters * 4`` (C order), each event is
+        (x, y, z, E_deposit) in mm and keV in a local frame (z into slab, entry at z=0).
+
+        Args:
+            source (np.ndarray): source weights (same length as energies)
+            energies (np.ndarray): energy sample points (keV) for each source bin
+            chemForm (str or library key): scintillator chemical formula (passed through ``get_chemicalFormula_from_library``)
+            thickness (float): scintillator thickness in mm
+            mass_density (float): bulk mean density in g/cm^3
+            num_photons (int): number of photon histories to run
+            max_scatters (int): maximum interactions stored per photon history
+            direction (3-element numpy array): the direction of the x-ray flux; (0,0,1) is normal
+
+        Returns:
+            np.ndarray, shape (num_photons, max_scatters, 4), float32; or None on error
+        """
+        if source is None or energies is None or chemForm is None:
+            print('Error: detector_scatter_simulation: source, energies, and chemForm are required.')
+            return None
+        if source.size != energies.size:
+            print('Error: "source" spectra and "energies" must be the same size.')
+            return None
+        if source.size > 50:
+            print('Error: number of energy bins in source spectra must be less than 50.')
+            return None
+        if mass_density is None:
+            mass_density = self.massDensity(chemForm)*1000.0
+        if thickness is None or thickness <= 0.0 or mass_density is None or mass_density <= 0.0:
+            print('Error: thickness and mass_density must be positive (mm and g/cm^3).')
+            return None
+        if int(num_photons) < 1:
+            print('Error: num_photons must be at least 1.')
+            return None
+
+        if direction is None:
+            direction = np.array([0.0, 0.0, 1.0], dtype=np.float32)
+        else:
+            direction = np.asarray(direction, dtype=np.float32)
+
+        if has_torch and type(source) is torch.Tensor:
+            source = source.cpu().detach().numpy()
+        if has_torch and type(energies) is torch.Tensor:
+            energies = energies.cpu().detach().numpy()
+
+        source = np.ascontiguousarray(source, dtype=np.float32)
+        energies = np.ascontiguousarray(energies, dtype=np.float32)
+        if source.ndim != 1 or energies.ndim != 1:
+            print('Error: source and energies must be 1D float32 arrays.')
+            return None
+
+        chemForm = self.get_chemicalFormula_from_library(chemForm)
+        if sys.version_info[0] == 3:
+            chemForm = bytes(str(chemForm), 'ascii')
+
+        max_scatters = int(min(max(0, max_scatters), 100))
+        if max_scatters < 1:
+            print('Error: max_scatters must be at least 1.')
+            return None
+        num_photons = int(num_photons)
+        if num_photons < 1:
+            return None
+        if num_photons > 100000000:
+            print('Error: num_photons unreasonably large; aborting.')
+            return None
+
+        events = np.ascontiguousarray(
+            np.zeros((num_photons * max_scatters * 4), dtype=np.float32)
+        )
+        self.set_model()
+        self.libprojectors.detector_scatter_simulation.restype = ctypes.c_bool
+        self.libprojectors.detector_scatter_simulation.argtypes = [
+            ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+            ctypes.c_float,
+            ctypes.c_float,
+            ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+            ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_int,
+            ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+        ]
+        ok = self.libprojectors.detector_scatter_simulation(
+            events,
+            float(thickness),
+            float(mass_density),
+            source,
+            energies,
+            energies.size,
+            chemForm,
+            num_photons,
+            max_scatters,
+            direction,
+        )
+        if not ok:
+            print('Error: detector_scatter_simulation failed on GPU.')
+            return None
+        return events.reshape((num_photons*max_scatters, 4))
     
     ###################################################################################################################
     ###################################################################################################################
@@ -1626,6 +2265,28 @@ class tomographicModels:
         """Alias for set_default_volume
         """
         return self.set_default_volume(scale)
+
+    def set_tight_volume(self, scale=1.0):
+        """Sets the default volume parameters
+        
+        This function is very similar to set_default_volume except it reduces numX and numY
+        so that it exactly matches the field of view
+        Note that the CT geometry parameters must be specified before running this function.
+        
+        Args:
+            scale (float): this value scales the voxel size by this value to create denser or sparser voxel representations (not recommended for fast reconstruction)
+
+        Returns:
+            True if the operation was successful, false otherwise (this usually happens if the CT geometry has not yet been set)
+        """
+        if self.set_default_volume(scale):
+            numX = 2*int(np.ceil(0.5*self.get_diameterFOV() / self.get_voxelWidth()))
+            if numX < self.get_numX():
+                self.set_numX(numX)
+                self.set_numY(numX)
+            return True
+        else:
+            return False
     
     def set_volumeDimensionOrder(self,which):
         """Sets the order of the dimensions of the volume
@@ -1703,7 +2364,12 @@ class tomographicModels:
         self.libprojectors.set_voxelWidth.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_voxelWidth(W)
-        
+
+    def default_voxelWidth(self):
+        self.libprojectors.default_voxelWidth.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.default_voxelWidth()
+
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS PROVIDE CONVENIENT ROUTINES TO MAKE THE PROJECTION DATA AND VOLUME DATA NUMPY ARRAYS
@@ -1809,36 +2475,39 @@ class tomographicModels:
         """
         return np.array([self.get_numAngles(),self.get_numRows(),self.get_numCols()],dtype=np.int32)
         
-    def allocate_volume(self, val=0.0, astensor=False):
+    def allocate_volume(self, val=0.0, astensor=False, fp=None):
         """Allocates reconstruction volume data
-        
+
         It is not necessary to use this function. It is included simply for convenience.
 
         Args:
             val (float): value to fill the array with
-            
+            fp (str): optional, if provided then create the volume as a memmap using that file as backing
+
         Returns:
             numpy array/ pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
         """
-        return self.allocateVolume(val, astensor)
+        return self.allocateVolume(val, astensor, memmap_fp=fp)
         
-    def allocateVolume(self, val=0.0, astensor=False):
+    def allocateVolume(self, val=0.0, astensor=False, memmap_fp=None):
         """Allocates reconstruction volume data
         
         It is not necessary to use this function. It is included simply for convenience.
 
         Args:
             val (float): value to fill the array with
+            memmap_fp (str): optional, if provided then create the volume as a memmap using that file as backing
             
         Returns:
             numpy array/ pytorch tensor if numAngles, numRows, and numCols are all positive, None otherwise
         """
         dim1, dim2, dim3 = self.get_volume_dim()
         if dim1 > 0 and dim2 > 0 and dim3 > 0:
-            if val == 0.0:
-                f = np.ascontiguousarray(np.zeros((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
+            if memmap_fp:
+                f = np.memmap(memmap_fp, dtype=np.float32, mode='w+', shape=(dim1, dim2, dim3))
+                f[:] = val
             else:
-                f = np.ascontiguousarray(val*np.ones((dim1,dim2,dim3),dtype=np.float32), dtype=np.float32)
+                f = np.ascontiguousarray(val*np.ones((dim1, dim2, dim3), dtype=np.float32), dtype=np.float32)
             if has_torch and astensor:
                 f = torch.from_numpy(f)
             return f
@@ -1948,6 +2617,26 @@ class tomographicModels:
         return x
             
             
+    def allocate_3D_array(self, N_1, N_2, N_3, pinned=False):
+        if N_1 > 0 and N_2 > 0 and N_3 > 0:
+            self.libprojectors.allocate_3D_array.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.allocate_3D_array.restype = ctypes.POINTER(ctypes.c_float)
+            ptr = self.libprojectors.allocate_3D_array(N_1, N_2, N_3, pinned)
+            x = np.ctypeslib.as_array(ptr, shape=(N_1, N_2, N_3))
+            return x
+        else:
+            return None
+
+    def free_3D_array(self, x, pinned=False):
+        if type(x) is np.ndarray:
+            #self.libprojectors.free_3D_array.argtypes = [ctypes.POINTER(ctypes.c_float)]
+            #ptr = x.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+            self.libprojectors.free_3D_array.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.free_3D_array.restype = ctypes.c_bool
+            self.libprojectors.free_3D_array(x, pinned)
+        else:
+            raise TypeError("input must be a numpy array")
+
     ###################################################################################################################
     ###################################################################################################################
     # THIS SECTION OF FUNCTIONS EXECUTE THE MAIN CPU/GPU ROUTINES IN LEAP
@@ -1989,7 +2678,7 @@ class tomographicModels:
                 self.libprojectors.project.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
                 self.libprojectors.project(g, f, True)
             return g
-        
+
     def project_cpu(self, g, f, param_id=None):
         """Calculate the forward projection of f and stores the result in g
         
@@ -2155,8 +2844,11 @@ class tomographicModels:
         else:
             print('Error: backproject_gpu requires that the data be pytorch tensors on the GPU')
         return f
-        
-    def filterProjections(self, g, g_out=None):
+
+    def filter_projections(self, g, g_out=None, inconsistency=False):
+        return self.filterProjections(g, g_out, inconsistency)
+
+    def filterProjections(self, g, g_out=None, inconsistency=False):
         r"""Filters the projection data, g, so that its (weighted) backprojection results in an FBP reconstruction.
         
         More specifically, the same results as the FBP function can be achieved by running the following functions
@@ -2191,33 +2883,71 @@ class tomographicModels:
         self.libprojectors.filterProjections.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.filterProjections.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.filterProjections(g.data_ptr(), g_out.data_ptr(), g.is_cuda == False)
+            self.libprojectors.filterProjections.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.filterProjections(g.data_ptr(), g_out.data_ptr(), inconsistency, g.is_cuda == False)
         else:
-            self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.filterProjections(g, g_out, True)
+            self.libprojectors.filterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.filterProjections(g, g_out, inconsistency, True)
         return g_out
+    
+    def DBP_filter(self, g):
+        self.libprojectors.DBP_filter.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            self.libprojectors.DBP_filter.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.DBP_filter(g.data_ptr(), g.is_cuda == False)
+        else:
+            self.libprojectors.DBP_filter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.DBP_filter(g, True)
+        return g
+
+    def DBP_filter_cpu(self, g):
+        self.libprojectors.DBP_filter_cpu.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            if g.is_cuda:
+                print('Error: pytorch tensor must be on CPU for this operation')
+                return None
+            self.libprojectors.DBP_filter_cpu.argtypes = [ctypes.c_void_p]
+            self.libprojectors.DBP_filter_cpu(g.data_ptr())
+        else:
+            self.libprojectors.DBP_filter_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            self.libprojectors.DBP_filter_cpu(g)
+        return g
         
-    def filterProjections_cpu(self, g):
+    def filterProjections_cpu(self, g, g_out=None, inconsistency=False):
+
+        if g_out is None:
+            if self.extraColumnsForOffsetScan() > 0:
+                if has_torch == True and type(g) is torch.Tensor:
+                    if g.is_cuda:
+                        g_out = self.allocateProjections_gpu(forOffsetScanFilteringStep=True)
+                    else:
+                        g_out = self.allocate_projections(astensor=True, forOffsetScanFilteringStep=True)
+                else:
+                    g_out = self.allocate_projections(forOffsetScanFilteringStep=True)
+            else:
+                g_out = g
+
         self.libprojectors.filterProjections_cpu.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
             if g.is_cuda:
                 print('Error: filterProjections_cpu requires the input be on the cpu')
             else:
-                self.libprojectors.filterProjections_cpu.argtypes = [ctypes.c_void_p]
-                self.libprojectors.filterProjections_cpu(g.data_ptr())
+                self.libprojectors.filterProjections_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+                self.libprojectors.filterProjections_cpu(g.data_ptr(), g_out.data_ptr(), inconsistency)
         else:
-            self.libprojectors.filterProjections_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
-            self.libprojectors.filterProjections_cpu(g)
-        return g
+            self.libprojectors.filterProjections_cpu.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.libprojectors.filterProjections_cpu(g, g_out, inconsistency)
+        return g_out
         
-    def filterProjections_gpu(self, g):
+    def filterProjections_gpu(self, g, inconsistency=False):
         self.libprojectors.filterProjections_gpu.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor and g.is_cuda == True:
-            self.libprojectors.filterProjections_gpu.argtypes = [ctypes.c_void_p]
-            self.libprojectors.filterProjections_gpu(g.data_ptr())
+            self.libprojectors.filterProjections_gpu.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+            self.libprojectors.filterProjections_gpu(g.data_ptr(), inconsistency)
         else:
             print('Error: filterProjections_gpu requires the input be a torch tensor on a gpu')
         return g
@@ -2308,7 +3038,7 @@ class tomographicModels:
             self.libprojectors.rampFilterProjections(g, True, scalar)
         return g
         
-    def HilbertFilterProjections(self, g):
+    def HilbertFilterProjections(self, g, sample_shift=0.0, do_inverse=False, leftSide=None):
         """Applies the Hilbert filter to the projection data, g, which is a subset of the operations in some reconstruction algorithms
         
         The CT geometry parameters must be set prior to running this function.
@@ -2317,21 +3047,44 @@ class tomographicModels:
         
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
+            sample_shift (float): shifts the output by the specified direction
+            do_inverse (bool): if true, applies the inverse finite Hilbert Transform
             
         Returns:
             g, the same as the input with the same name
         """
+
+        if do_inverse:
+            s = np.array(range(g.shape[2]),dtype=np.float32)-0.5*(g.shape[2]-1)
+            epsilon = 1
+            L = s[0]+epsilon
+            U = s[-1]-epsilon
+            ind = np.logical_and(L < s, s < U)
+            w = np.zeros_like(s)
+            w[ind] = np.sqrt((s[ind]-L)*(U-s[ind]))
+            g[:] *= w[None,None,:]
+
         self.libprojectors.HilbertFilterProjections.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.HilbertFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.HilbertFilterProjections(g.data_ptr(), g.is_cuda == False, 1.0)
+            self.libprojectors.HilbertFilterProjections.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.HilbertFilterProjections(g.data_ptr(), g.is_cuda == False, 1.0, sample_shift)
         else:
-            self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float]
-            self.libprojectors.HilbertFilterProjections(g, True, 1.0)
+            self.libprojectors.HilbertFilterProjections.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.HilbertFilterProjections(g, True, 1.0, sample_shift)
+        if do_inverse:
+            w[ind] = -1.0/w[ind]
+            if leftSide is not None:
+                #g := w*(g + c)
+                #leftSide = w[0]*(g[:,:,0] + c)
+                c = leftSide / w[0] - g[:,:,0]
+                g[:] = w[None,None,:] * (g + c)
+                #g[:] = w[None,None,:] * (g + leftSide)
+            else:
+                g[:] *= w[None,None,:]
         return g
     
-    def weightedBackproject(self,g,f):
+    def weightedBackproject(self, g, f=None, DBP=False, f_fp=None):
         """Calculate the weighted backprojection of g and stores the result in f
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -2349,6 +3102,7 @@ class tomographicModels:
         Args:
             g (C contiguous float32 numpy array or torch tensor): projection data
             f (C contiguous float32 numpy array or torch tensor): volume data
+            DBP (bool): if True, does DBP backprojection, otherwise (default) does FBP backprojection
             
         Returns:
             f, the same as the input with the same name
@@ -2356,11 +3110,24 @@ class tomographicModels:
         self.libprojectors.weightedBackproject.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.weightedBackproject.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.weightedBackproject(g.data_ptr(), f.data_ptr(), g.is_cuda == False)
+
+            if f is None:
+                f = self.allocate_volume(0.0,True,fp=f_fp)
+                f = f.to(g.get_device())
+
+            self.libprojectors.weightedBackproject.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool, ctypes.c_bool]
+            result = self.libprojectors.weightedBackproject(g.data_ptr(), f.data_ptr(), DBP, g.is_cuda == False)
+            if not result:
+                raise RuntimeError("LEAP weightedBackproject failed (possible GPU memory error)")
         else:
-            self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.weightedBackproject(g, f, True)
+
+            if f is None:
+                f = self.allocate_volume(fp=f_fp)
+
+            self.libprojectors.weightedBackproject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_bool]
+            result = self.libprojectors.weightedBackproject(g, f, DBP, True)
+            if not result:
+                raise RuntimeError("LEAP weightedBackproject failed (possible GPU memory error)")
         self.apply_volume_mask(f)
         return f
         
@@ -2440,8 +3207,918 @@ class tomographicModels:
             self.libprojectors.Laplacian.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
             self.libprojectors.Laplacian(g, numDims, smoothLaplacian, True)
         return g
+
+    def ring_removal(self, g, delta=0.01, beta=1.0e3, numIter=30, maxChange=0.05, angle_downsampling_factor=1):
+        """Correct for detector pixel gain corrections that cause ring artifacts in the reconstruction
         
-    def transmission_filter(self, g, H, isAttenuationData=True):
+        The CT geometry parameters must be set prior to running this function.
+        
+        Args:
+            g (contiguous float32 numpy array or torch tensor): attenuation projection data
+            delta (float): The delta parameter of the Total Variation Functional
+            beta (float): The strength of the regularization
+            numIter (int): Number of iterations
+            maxChange (float): An upper limit on the maximum difference that can be applied to a detector pixels
+            angle_downsampling_factor(int): larger numbers speed up computation, but may not perform as well
+        
+        Returns:
+            True if successful, False otherwise
+        
+        """
+
+        if self.get_numAngles() <= 0 or self.get_numRows() <= 0 or self.get_numCols() <= 0:
+            if len(g.shape) == 3:
+                numAngles, numRows, numCols = g.shape
+            elif len(g.shape) == 2:
+                numAngles, numCols = g.shape
+                numRows = 1
+            else:
+                return False
+            self.set_phis(self.setAngleArray(numAngles, 360.0))
+            self.set_numRows(numRows)
+            self.set_numCols(numCols)
+
+        self.libprojectors.ring_removal.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            if g.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return False
+        
+            self.libprojectors.ring_removal.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_int]
+            return self.libprojectors.ring_removal(g.data_ptr(), delta, beta, numIter, maxChange, angle_downsampling_factor)
+        else:
+            self.libprojectors.ring_removal.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_int]
+            return self.libprojectors.ring_removal(g, delta, beta, numIter, maxChange, angle_downsampling_factor)
+
+    def multiply(self, y, x, out=None):
+        r"""Multiplies two numpy arrays
+
+        This function may be applied to 1D, 2D, or 3D data.
+        
+        Args:
+            y (contiguous float32 numpy array or torch tensor): first array
+            x (contiguous float32 numpy array or torch tensor): second array
+            out (contiguous float32 numpy array or torch tensor): where to store the result
+        """
+        if out is None:
+            out = y
+        if y.shape != x.shape or y.shape != out.shape:
+            raise RuntimeError('array dimensions do not match')
+        if len(y.shape) == 3:
+            N_1, N_2, N_3 = y.shape
+        else:
+            out[:] = y[:] * x[:]
+            return out
+
+        self.libprojectors.multiply.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.multiply.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
+        self.libprojectors.multiply(out, y, x, N_1, N_2, N_3)
+        return out
+
+    def divide(self, numerator, denominator, divide_by_zero_value=0.0, skip_zero_denominator=False):
+        r"""Divides two numpy arrays, storing the result in the first argument
+
+        This function may be applied to 1D, 2D, or 3D data.
+        
+        Args:
+            numerator (1D, 2D. or 3D contiguous float32 numpy array or torch tensor): numerator
+            denominator (1D, 2D. or 3D contiguous float32 numpy array or torch tensor): denominator
+            divide_by_zero_value (float): the value to use when the denominator is zero
+            skip_zero_denominator (bool): if True and a value in the denominator is zero, this operation is skipped
+        """
+        if len(numerator.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = numerator.size
+        elif len(numerator.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = numerator.shape
+        elif len(numerator.shape) == 3:
+            N_1, N_2, N_3 = numerator.shape
+        else:
+            raise TypeError("Input must be 1, 2, or 3 dimensional")
+        if numerator.shape != denominator.shape:
+            raise TypeError("numerator and denominator must be the same shape")
+        
+        self.set_model()
+        self.libprojectors.divide.restype = ctypes.c_bool
+        if has_torch == True and type(numerator) is torch.Tensor:
+            self.libprojectors.divide.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.divide(numerator.data_ptr(), denominator.data_ptr(), N_1, N_2, N_3, divide_by_zero_value, skip_zero_denominator, numerator.is_cuda == False)
+        else:
+
+            self.libprojectors.divide.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.divide(numerator, denominator, N_1, N_2, N_3, divide_by_zero_value, skip_zero_denominator, True)
+
+    def reciprocal(self, x, divide_by_zero_value=1.0):
+        r"""Calculates the reciprocal of an array in-place
+
+        This function may be applied to 1D, 2D, or 3D data.
+        
+        Args:
+            x (1D, 2D. or 3D contiguous float32 numpy array or torch tensor): numerator
+            divide_by_zero_value (float): the value to use when the denominator is zero
+        """
+        if len(x.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = x.size
+        elif len(x.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = x.shape
+        elif len(x.shape) == 3:
+            N_1, N_2, N_3 = x.shape
+        else:
+            raise TypeError("Input must be 1, 2, or 3 dimensional")
+        
+        self.set_model()
+        self.libprojectors.reciprocal.restype = ctypes.c_bool
+        if has_torch == True and type(x) is torch.Tensor:
+            self.libprojectors.reciprocal.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.reciprocal(x.data_ptr(), N_1, N_2, N_3, divide_by_zero_value, x.is_cuda == False)
+        else:
+
+            self.libprojectors.reciprocal.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.reciprocal(x, N_1, N_2, N_3, divide_by_zero_value, True)
+        return x
+        
+    def has_nan_or_inf(self, I):
+        """
+        Fast multi-thread method to check if any element in a numpy array is a nan or inf
+        
+        :param I: float32 numpy array
+        :return: True if any element is nan or inf, False otherwise
+        """
+
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            raise TypeError("Input must be 1, 2, or 3 dimensional")
+
+        self.set_model()
+        self.libprojectors.has_nan_or_inf.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                raise TypeError('this routine is only implemented for data on the CPU')
+            self.libprojectors.has_nan_or_inf.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.has_nan_or_inf(I.data_ptr(), N_1, N_2, N_3)
+        else:
+            self.libprojectors.has_nan_or_inf.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.has_nan_or_inf(I, N_1, N_2, N_3)
+
+    def replaceNAN(self, I, newValue=0.0):
+        r"""Replaces NAN values in numpy array with alternate value
+
+        This function may be applied to 1D, 2D, or 3D data.
+        
+        Args:
+            I (1D, 2D. or 3D contiguous float32 numpy array or torch tensor): data to quantize
+            newValue (float): the value to replace the NAN values with
+        """
+
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            raise TypeError("Input must be 1, 2, or 3 dimensional")
+
+        self.set_model()
+        self.libprojectors.replaceNAN.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return
+            self.libprojectors.replaceNAN.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+            self.libprojectors.replaceNAN(I.data_ptr(), N_1, N_2, N_3, newValue)
+        else:
+
+            self.libprojectors.replaceNAN.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+            self.libprojectors.replaceNAN(I, N_1, N_2, N_3, newValue)
+
+    def bounding_box(self, I, boundary_type='POSITIVE'):
+        r"""Calculates the axis-aligned bounding box of 3D data
+
+        Args:
+            I (3D contiguous float32 numpy array or torch tensor): data
+            boundary_type (str): 'POSITIVE', 'NEGATIVE', or 'NAN'
+
+        Returns:
+            6-element int32 numpy array indices
+        """
+
+        if len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            raise TypeError("Input must be 3 dimensional")
+        
+        if boundary_type.upper() == 'POSITIVE':
+            boundary_type = 0
+        elif boundary_type.upper() == 'NEGATIVE':
+            boundary_type = 1
+        elif boundary_type.upper() == 'NAN':
+            boundary_type = 2
+        else:
+            raise ValueError("boundary_type must be \'POSITIVE\', \'NEGATIVE\', or \'NAN\'")
+
+        AABB = np.zeros(6, dtype=np.int32)
+
+        self.set_model()
+        self.libprojectors.boundingBox.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.boundingBox.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
+            if self.libprojectors.boundingBox(I.data_ptr(), N_1, N_2, N_3, boundary_type, AABB):
+                return AABB
+            else:
+                return None
+        else:
+
+            self.libprojectors.boundingBox.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_int, flags="C_CONTIGUOUS")]
+            if self.libprojectors.boundingBox(I, N_1, N_2, N_3, boundary_type, AABB):
+                return AABB
+            else:
+                return None
+
+    def heaviside(self, I, scale=1.0, shift=0.0):
+        r"""Calculates the heaviside function of the input
+
+        This function may be applied to 1D, 2D, or 3D data.
+        
+        Args:
+            I (1D, 2D. or 3D contiguous float32 numpy array or torch tensor): data
+            scale (float): optional scalar value applied to the input
+            shift(float): optional shift value applied to the input
+        """
+
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None
+    
+        self.set_model()
+        self.libprojectors.heaviside.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.heaviside.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.heaviside(I.data_ptr(), N_1, N_2, N_3, scale, shift)
+        else:
+            self.libprojectors.heaviside.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.heaviside(I, N_1, N_2, N_3, scale, shift)
+        return I
+
+    def dirac(self, I, scale=1.0, shift=0.0):
+        r"""Calculates the dirac delta function of the input
+
+        This function may be applied to 1D, 2D, or 3D data.
+        
+        Args:
+            I (1D, 2D. or 3D contiguous float32 numpy array or torch tensor): data
+            scale (float): optional scalar value applied to the input
+            shift(float): optional shift value applied to the input
+        """
+
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None
+    
+        self.set_model()
+        self.libprojectors.dirac.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.dirac.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.dirac(I.data_ptr(), N_1, N_2, N_3, scale, shift)
+        else:
+            self.libprojectors.dirac.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.dirac(I, N_1, N_2, N_3, scale, shift)
+        return I
+
+    
+    def quantize(self, I, targets, FWHM=1.0):
+        r"""Quantizes given array to nearest value from a list of values
+        
+        This function may be applied to 1D, 2D, or 3D data.
+        
+        Args:
+            I (1D, 2D. or 3D contiguous float32 numpy array or torch tensor): data to quantize
+            targets (contiguous float32 numpy array or torch tensor or int): if given as an integer, then uses K-means
+            to estimate the target values otherwise assumes these are the target values for which to quantize the array to
+            FWHM: the full width at half max of an optional low pass filter that is applied before quantizing the data
+        
+        Returns:
+            targets
+        """
+        
+        if targets is None:
+            print('Error: must provide quantization targets')
+            return None
+
+        if isinstance(targets, int):
+            targets = self.k_means(I, targets)
+            targets = np.array(np.unique(np.append(targets, 0.0)), dtype=np.float32)
+            #from sklearn.cluster import KMeans
+            #kmeans = KMeans(n_clusters=targets)
+            #kmeans.fit(I.reshape(I.size,1))
+            #targets = kmeans.cluster_centers_
+        else:
+            targets = np.unique(np.array(targets, dtype=np.float32))
+
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None
+    
+        if FWHM > 1.0:
+            self.BlurFilter(I, FWHM)
+
+        self.set_model()
+        self.libprojectors.quantize.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.quantize.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int]
+            self.libprojectors.quantize(I.data_ptr(), N_1, N_2, N_3, targets.data_ptr(), targets.size)
+        else:
+
+            if type(targets) is not np.ndarray:
+                targets = np.array(targets, dtype=np.float32)
+
+            self.libprojectors.quantize.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            self.libprojectors.quantize(I, N_1, N_2, N_3, targets, targets.size)
+        return targets
+
+    def inpaint(self, I):
+        r"""Performs 2D Telea inpainting
+        
+        This function may be applied to 2D or 3D data.
+        If 3D data is given, inpaining will be performed on each 2D slice individually.
+        Specify which pixels to inpaint by assigning them a NaN value, i.e., float("nan").
+        
+        Args:
+            I (2D or 3D contiguous float32 numpy array or torch tensor): data to inpaint
+        
+        Returns:
+            True if successful, False otherwise
+        
+        """
+        
+        if len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+            if N_2 == 1:
+                N_2 = N_1
+                N_1 = 1
+        else:
+            return False
+    
+        self.set_model()
+        self.libprojectors.inpaint.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return False
+            self.libprojectors.inpaint.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.inpaint(I.data_ptr(), N_1, N_2, N_3)
+        else:
+            self.libprojectors.inpaint.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.inpaint(I, N_1, N_2, N_3)
+
+    def threshold(self, I, value, greater_than = True, fill_type = 0, num_pixel_dilate = 0):
+        r"""Performs thresholding on input data
+        
+        This function may be applied to 2D or 3D data.
+        If 3D data is given, processing will be performed on each 2D slice individually.
+        Processing happens in-place
+        
+        Args:
+            I (2D or 3D contiguous float32 numpy array or torch tensor): data to process
+            value (float): the threshold value
+            greater_than (bool): if true labels those pixels that are great than or equal to the given threshold,
+                    if false labels those pixels that are less than or equal to the given threshold
+            fill_type (int): if 0, then gives the labeled pixels the value of NAN, all other pixels are unchanged
+                    if 1 then give the labeled pixels the value of 1.0 and all other pixels the value of 0.0
+                    if 2 then clips the sign of the pixel
+            num_pixel_dilate (int): dilate segmentation by this number of pixels
+        
+        Returns:
+            True if successful, False otherwise
+        
+        """
+        
+        if len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+            if N_2 == 1:
+                N_2 = N_1
+                N_1 = 1
+        else:
+            return False
+    
+        self.set_model()
+        self.libprojectors.threshold.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return False
+            self.libprojectors.threshold.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.threshold(I.data_ptr(), N_1, N_2, N_3, value, greater_than, fill_type, num_pixel_dilate)
+        else:
+            self.libprojectors.threshold.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.threshold(I, N_1, N_2, N_3, value, greater_than, fill_type, num_pixel_dilate)
+        
+    def region_growing(self, I, startThreshold, endThreshold, fill_type = 0, num_pixel_dilate = 0):
+        r"""Performs region growing on input data
+        
+        This function may be applied to 2D or 3D data.
+        If 3D data is given, processing will be performed on each 2D slice individually.
+        Processing happens in-place
+        
+        Args:
+            I (2D or 3D contiguous float32 numpy array or torch tensor): data to process
+            startThreshold (float): the threshold value for which to start the region growing
+            endThreshold (float): the threshold value for which to stop the region growing
+            fill_type (int): if 0, then gives the labeled pixels the value of NAN, all other pixels are unchanged
+                    if 1 then give the labeled pixels the value of 1.0 and all other pixels the value of 0.0
+                    if 2 then flips the sign of the pixel
+            num_pixel_dilate (int): dilate segmentation by this number of pixels
+        
+        Returns:
+            True if successful, False otherwise
+        
+        """
+        
+        if endThreshold is None or endThreshold == startThreshold:
+            return self.threshold(I, startThreshold, fill_type=fill_type, num_pixel_dilate=num_pixel_dilate)
+
+        if len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+            if N_2 == 1:
+                N_2 = N_1
+                N_1 = 1
+        else:
+            return False
+    
+        self.set_model()
+        self.libprojectors.region_growing.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return False
+            self.libprojectors.region_growing.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.region_growing(I.data_ptr(), N_1, N_2, N_3, startThreshold, endThreshold, fill_type, num_pixel_dilate)
+        else:
+            self.libprojectors.region_growing.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.region_growing(I, N_1, N_2, N_3, startThreshold, endThreshold, fill_type, num_pixel_dilate)
+        
+    def dilate(self, I, pixel_radius, fill_type = 0):
+        r"""performs a morphological dilate operation
+        
+        This function may be applied to 2D or 3D data.
+        If 3D data is given, processing will be performed on each 2D slice individually.
+        Processing happens in-place
+        
+        Args:
+            I (2D or 3D contiguous float32 numpy array or torch tensor): data to process
+            pixel_radius (int): dilate segmentation by this number of pixels
+            fill_type (int): if 0, then gives the labeled pixels the value of NAN, all other pixels are unchanged
+                    if 1 then give the labeled pixels the value of 1.0 and all other pixels the value of 0.0
+        
+        Returns:
+            True if successful, False otherwise
+        
+        """
+        
+        if len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+            if N_2 == 1:
+                N_2 = N_1
+                N_1 = 1
+        else:
+            return False
+    
+        self.set_model()
+        self.libprojectors.dilate.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return False
+            self.libprojectors.dilate.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.dilate(I.data_ptr(), N_1, N_2, N_3, pixel_radius, fill_type)
+        else:
+            self.libprojectors.dilate.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.dilate(I, N_1, N_2, N_3, pixel_radius, fill_type)
+    
+    def extrema(self, I):
+        minmax = np.zeros(2, dtype=np.float32)
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None, None
+        
+        self.set_model()
+        self.libprojectors.extrema.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.extrema.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            if self.libprojectors.extrema(I.data_ptr(), N_1, N_2, N_3, minmax):
+                return minmax[0], minmax[1]
+            else:
+                return None, None
+        else:
+            self.libprojectors.extrema.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            if self.libprojectors.extrema(I, N_1, N_2, N_3, minmax):
+                return minmax[0], minmax[1]
+            else:
+                return None, None
+    
+    def basic_stats(self, I):
+        stats = np.zeros(4, dtype=np.float32)
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None
+        
+        self.set_model()
+        self.libprojectors.basic_stats.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.basic_stats.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            if self.libprojectors.basic_stats(I.data_ptr(), N_1, N_2, N_3, stats):
+                return stats
+            else:
+                return None
+        else:
+            self.libprojectors.basic_stats.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+            if self.libprojectors.basic_stats(I, N_1, N_2, N_3, stats):
+                return stats
+            else:
+                return None
+    
+    def k_means(self, I, K):
+
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None
+        if K < 1:
+            return None
+        means = np.zeros(K, dtype=np.float32)
+
+        self.set_model()
+        self.libprojectors.k_means.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.k_means.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            self.libprojectors.k_means(I.data_ptr(), N_1, N_2, N_3, means, means.size)
+        else:
+            self.libprojectors.k_means.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            self.libprojectors.k_means(I, N_1, N_2, N_3, means, means.size)
+        if means.size == 1:
+            return means[0]
+        else:
+            return means
+
+    def Otsu_thresholds(self, I, K):
+
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None
+        if K < 1 or K > 4:
+            return None
+        thresholds = np.zeros(K, dtype=np.float32)
+
+        self.set_model()
+        self.libprojectors.Otsu_thresholds.restype = ctypes.c_bool
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.Otsu_thresholds.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            self.libprojectors.Otsu_thresholds(I.data_ptr(), N_1, N_2, N_3, thresholds, thresholds.size)
+        else:
+            self.libprojectors.Otsu_thresholds.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            self.libprojectors.Otsu_thresholds(I, N_1, N_2, N_3, thresholds, thresholds.size)
+        return thresholds
+
+    def percentile2D(self, I,  q):
+        """ Calculates the percentile of a 1D, 2D, or 3D array
+
+        if the input is a 1D or 2D array, calculates the percentile of the entire array
+        if the input is a 3D array, calculates the percentile of each 2D image and thus
+        returns a 1D array
+
+        This function operate similarly to the numpy.percentile function with
+        its default values
+
+        Args:
+            I (float32 C contiguous numpy array): data
+            q (float): the pencentile
+
+        """
+        if len(I.shape) == 1:
+            N_images = 1
+            N = I.size
+        elif len(I.shape) == 2:
+            N_images = 1
+            N = I.size
+        elif len(I.shape) == 3:
+            N_images = I.shape[0]
+            N = I.shape[1] * I.shape[2]
+        else:
+            return None
+        
+        percentiles = np.zeros(N_images, dtype=np.float32)
+        self.set_model()
+        self.libprojectors.percentile2D.restype = ctypes.c_bool
+        self.libprojectors.percentile2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        if self.libprojectors.percentile2D(I, N_images, N, q, percentiles):
+            return percentiles
+        else:
+            return None
+    
+    def histogram(self, I, numBins=None, range=None):
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            return None, None
+        if numBins is None:
+            numBins = int(np.ceil(np.cbrt(I.size)))
+        if numBins <= 0:
+            numBins = 5
+        
+        if I.dtype.itemsize == 1:
+            numBins = min(numBins, 2**8)
+        elif I.dtype.itemsize == 2:
+            numBins = min(numBins, 2**16)
+        
+        # When range=(rangeMin, rangeMax) is provided, the histogram bins span this
+        # interval and values outside of it are ignored. If range is None (or invalid),
+        # the bin range is determined from the data min/max. The C routines treat
+        # rangeMax > rangeMin as the signal that a custom range is in effect.
+        if range is None:
+            rangeMin = 0.0
+            rangeMax = 0.0
+        else:
+            rangeMin = float(range[0])
+            rangeMax = float(range[1])
+        
+        hist = np.zeros(numBins, dtype=np.float32)
+        bins = np.zeros(numBins, dtype=np.float32)
+
+        self.set_model()
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                print('Error: this routine is only implemented for data on the CPU')
+                return None
+            self.libprojectors.histogram3D.restype = ctypes.c_float
+            self.libprojectors.histogram3D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.histogram3D(I.data_ptr(), N_1, N_2, N_3, hist, bins, hist.size, rangeMin, rangeMax)
+        else:
+            if I.dtype == np.float32:
+                self.libprojectors.histogram3D.restype = ctypes.c_float
+                self.libprojectors.histogram3D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_float]
+                self.libprojectors.histogram3D(I, N_1, N_2, N_3, hist, bins, hist.size, rangeMin, rangeMax)
+            elif I.dtype == np.uint8:
+                self.libprojectors.histogram3D_uint8.restype = ctypes.c_float
+                self.libprojectors.histogram3D_uint8.argtypes = [ndpointer(ctypes.c_uint8, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_float]
+                self.libprojectors.histogram3D_uint8(I, N_1, N_2, N_3, hist, bins, hist.size, rangeMin, rangeMax)
+            elif I.dtype == np.int16:
+                self.libprojectors.histogram3D_int16.restype = ctypes.c_float
+                self.libprojectors.histogram3D_int16.argtypes = [ndpointer(ctypes.c_int16, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_float]
+                self.libprojectors.histogram3D_int16(I, N_1, N_2, N_3, hist, bins, hist.size, rangeMin, rangeMax)
+            elif I.dtype == np.uint16:
+                self.libprojectors.histogram3D_uint16.restype = ctypes.c_float
+                self.libprojectors.histogram3D_uint16.argtypes = [ndpointer(ctypes.c_uint16, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_float]
+                self.libprojectors.histogram3D_uint16(I, N_1, N_2, N_3, hist, bins, hist.size, rangeMin, rangeMax)
+            elif I.dtype == np.int32:
+                self.libprojectors.histogram3D_int32.restype = ctypes.c_float
+                self.libprojectors.histogram3D_int32.argtypes = [ndpointer(ctypes.c_int32, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_float]
+                self.libprojectors.histogram3D_int32(I, N_1, N_2, N_3, hist, bins, hist.size, rangeMin, rangeMax)
+            elif I.dtype == np.uint32:
+                self.libprojectors.histogram3D_uint32.restype = ctypes.c_float
+                self.libprojectors.histogram3D_uint32.argtypes = [ndpointer(ctypes.c_uint32, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_float]
+                self.libprojectors.histogram3D_uint32(I, N_1, N_2, N_3, hist, bins, hist.size, rangeMin, rangeMax)
+
+            else:
+                print(I.dtype)
+                raise TypeError('unsupport data type')
+
+        return hist, bins
+
+    def center_of_mass(self, I):
+        """Calculate the center of mass of a 3D float32 numpy array of values
+
+        The center of mass is calculated in voxel coordinates.
+        For example if I[i,j,k] = 1.0 and everywhere else I is zero, then
+        this function will return np.array([i,j,k], dtype=np.float32)
+
+        Args:
+            I (3D C contiguous float32 numpy array): input volume
+
+        Returns:
+            3-element numpy array of the center of mass
+        """
+        #bool center_of_mass(float* I, int, int, int, float, float*);
+
+        if type(I) is not np.ndarray or I.dtype != np.float32 or len(I.shape) != 3:
+            raise TypeError('input must be a 3D float32 numpy array')
+        N_1, N_2, N_3 = I.shape
+        
+        com = np.zeros(3, dtype=np.float32)
+        self.set_model()
+        self.libprojectors.center_of_mass.restype = ctypes.c_bool
+        self.libprojectors.center_of_mass.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        if self.libprojectors.center_of_mass(I, N_1, N_2, N_3, float('nan'), com) == False:
+            raise TypeError('center_of_mass calculation failed!')
+        return com
+            
+    
+    def valueMask(self, I, a, b, c, d, deriv=False):
+        """Masks values from given array and bounds
+
+        Args:
+            I (1D, 2D, or 3D C contiguous float32 numpy array or torch tensor): data
+            a (float): values less than this are reassigned as zero
+            b (float): lower end of mask
+            c (float): upper end of mask
+            d (float): values greater than this are reassign as zero
+            deriv (bool): if True calculates the derivative of the transfer function
+        """
+        if len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = I.shape
+        elif len(I.shape) == 3:
+            N_1, N_2, N_3 = I.shape
+        else:
+            raise ValueError("Input array must be 1D, 2D, or 3D")
+        if a > b or b > c or c > d:
+            raise ValueError("Given bounds must be non decreasing")
+        self.libprojectors.valueMask.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(I) is torch.Tensor:
+            if I.is_cuda:
+                raise ValueError("Input array must be on the CPU")
+            self.libprojectors.valueMask.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.valueMask(I.data_ptr(), N_1, N_2, N_3, a, b, c, d, deriv)
+        else:
+            self.libprojectors.valueMask.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.valueMask(I, N_1, N_2, N_3, a, b, c, d, deriv)
+
+    def sum_first_axis(self, I):
+        """Sums the first axis of a 3D float32 numpy array
+
+        Args:
+            I (3D C contiguous float32 numpy array): input array
+
+        Returns:
+            2D numpy array of the resulting sum
+        """
+        if not isinstance(I, np.ndarray):
+            raise TypeError('input must be a 3D float32 numpy array')
+        if I.dtype != np.float32 or len(I.shape) != 3:
+            raise TypeError('input must be a 3D float32 numpy array')
+        N_1, N_2, N_3 = I.shape
+        
+        sums = np.zeros((N_2, N_3), dtype=np.float32)
+        self.set_model()
+        self.libprojectors.sum_first_axis.restype = ctypes.c_bool
+        self.libprojectors.sum_first_axis.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS")]
+        if self.libprojectors.sum_first_axis(I, N_1, N_2, N_3, sums) == False:
+            raise RuntimeError('sum_first_axis calculation failed!')
+        return sums
+
+    def sum_axis(self, I, axis=0):
+        """Sums a 3D float32 numpy array along the given axis
+
+        Args:
+            I (3D C contiguous float32 numpy array): input array
+            axis (int): the axis to sum over (0, 1, or 2)
+
+        Returns:
+            2D numpy array of the resulting sum
+        """
+        if not isinstance(I, np.ndarray):
+            raise TypeError('input must be a 3D float32 numpy array')
+        if I.dtype != np.float32 or len(I.shape) != 3:
+            raise TypeError('input must be a 3D float32 numpy array')
+        if axis not in (0, 1, 2):
+            raise ValueError('axis must be 0, 1, or 2')
+        N_1, N_2, N_3 = I.shape
+
+        if axis == 0:
+            sums = np.zeros((N_2, N_3), dtype=np.float32)
+        elif axis == 1:
+            sums = np.zeros((N_1, N_3), dtype=np.float32)
+        else:
+            sums = np.zeros((N_1, N_2), dtype=np.float32)
+        self.set_model()
+        self.libprojectors.sum_axis.restype = ctypes.c_bool
+        self.libprojectors.sum_axis.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+        if self.libprojectors.sum_axis(I, N_1, N_2, N_3, sums, axis) == False:
+            raise RuntimeError('sum_axis calculation failed!')
+        return sums
+
+
+    def transmission_filter(self, g, H, isAttenuationData=True, FWHM=1.0):
         """Applies a 2D Filter to each transmission projection
         
         The CT geometry parameters must be set prior to running this function.
@@ -2460,11 +4137,11 @@ class tomographicModels:
         if has_torch == True and type(g) is torch.Tensor:
             if has_torch == True and type(H) is torch.Tensor:
                 H = H.cpu().detach().numpy()
-            self.libprojectors.transmissionFilter.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
-            self.libprojectors.transmissionFilter(g.data_ptr(), H, H.shape[0], H.shape[1], isAttenuationData, g.is_cuda == False)
+            self.libprojectors.transmissionFilter.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.transmissionFilter(g.data_ptr(), H, H.shape[0], H.shape[1], isAttenuationData, FWHM, g.is_cuda == False)
         else:
-            self.libprojectors.transmissionFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
-            self.libprojectors.transmissionFilter(g, H, H.shape[0], H.shape[1], isAttenuationData, True)
+            self.libprojectors.transmissionFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool, ctypes.c_float, ctypes.c_bool]
+            self.libprojectors.transmissionFilter(g, H, H.shape[0], H.shape[1], isAttenuationData, FWHM, True)
         return g
         
     def AzimuthalBlur(self, f, FWHM):
@@ -2592,7 +4269,7 @@ class tomographicModels:
             
             return f
 
-    def FBP(self, g, f=None, inplace=False):
+    def FBP(self, g, f=None, inplace=False, f_fp=None):
         """Performs a Filtered Backprojection (FBP) reconstruction of the projection data, g, and stores the result in f
         
         This function performs analytic reconstruction (i.e., FBP) of nearly all LEAP geometries: parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries,
@@ -2627,31 +4304,35 @@ class tomographicModels:
             else:
                 q = g
         
+        do_symmetric_fbp = self.is_symmetric()
+        if do_symmetric_fbp:
+            numCols_save = self.get_numCols()
+            centerCol_save = self.get_centerCol()
+            q = self.pad_and_mirror(q)
+
         self.libprojectors.FBP.restype = ctypes.c_bool
         if has_torch == True and type(q) is torch.Tensor:
             if f is None:
-                f = self.allocateVolume(0.0,True)
+                f = self.allocateVolume(0.0,True,memmap_fp=f_fp)
                 f = f.to(g.get_device())
             self.libprojectors.FBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
             self.set_model()
             isSuccessful = self.libprojectors.FBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
-            if isSuccessful == False:
-                #self.filterProjections(q)
-                #self.weightedBackproject(q,f)
-                return None
         else:
             if f is None:
-                f = self.allocateVolume()
+                f = self.allocateVolume(memmap_fp=f_fp)
             self.libprojectors.FBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             self.set_model()
             isSuccessful = self.libprojectors.FBP(q, f, True)
-            if isSuccessful == False:
-                #self.filterProjections(q)
-                #self.weightedBackproject(q,f)
-                return None
         if delete_q:
             del q
-        return f
+        if do_symmetric_fbp:
+            self.set_numCols(numCols_save)
+            self.set_centerCol(centerCol_save)
+        if isSuccessful:
+            return f
+        else:
+            return None
         
     def fbp_cpu(self, g, f, inplace=False):
         return self.FBP_cpu(g, f, inplace)
@@ -2687,7 +4368,13 @@ class tomographicModels:
             delete_q = True
         else:
             q = g
-            
+
+        do_symmetric_fbp = self.is_symmetric()
+        if do_symmetric_fbp:
+            numCols_save = self.get_numCols()
+            centerCol_save = self.get_centerCol()
+            q = self.pad_and_mirror(q)
+
         self.libprojectors.FBP_cpu.restype = ctypes.c_bool
         if has_torch == True and type(q) is torch.Tensor:
             self.libprojectors.FBP_cpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
@@ -2699,6 +4386,9 @@ class tomographicModels:
             self.libprojectors.FBP_cpu(q, f)
         if delete_q:
             del q
+        if do_symmetric_fbp:
+            self.set_numCols(numCols_save)
+            self.set_centerCol(centerCol_save)
         return f
         
     def FBP_gpu(self, g, f, inplace=False):
@@ -2734,6 +4424,12 @@ class tomographicModels:
         else:
             q = g
         
+        do_symmetric_fbp = self.is_symmetric()
+        if do_symmetric_fbp:
+            numCols_save = self.get_numCols()
+            centerCol_save = self.get_centerCol()
+            q = self.pad_and_mirror(q)
+
         if has_torch == True and type(q) is torch.Tensor:
             self.libprojectors.FBP_gpu.restype = ctypes.c_bool
             self.libprojectors.FBP_gpu.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
@@ -2741,6 +4437,9 @@ class tomographicModels:
             self.libprojectors.FBP_gpu(q.data_ptr(), f.data_ptr())
         if delete_q:
             del q
+        if do_symmetric_fbp:
+            self.set_numCols(numCols_save)
+            self.set_centerCol(centerCol_save)
         return f
     
     def fbp_adjoint(self, g, f):
@@ -2793,6 +4492,61 @@ class tomographicModels:
         self.project_gpu(g,f)
         self.filterProjections_gpu(g)
         return g
+
+    def DBP(self, g, f=None, inplace=False):
+        """Performs a Derivative Backprojection (DBP) reconstruction of the projection data, g, and stores the result in f
+        
+        This function performs analytic reconstruction (i.e., DBP) of nearly all LEAP geometries: parallel-, fan-, cone-, and (axially-aligned) modular-beam geometries,
+        including both flat and curved detectors, axial or helical scans, Attenuated Radon Transform, symmetric object, etc.
+        
+        The CT geometry parameters and the CT volume parameters must be set prior to running this function.
+        This function take the argument f and returns the same f.
+        Returning f is just there for nesting several algorithms.
+        
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            inplace(bool): if true, then the filtering operations will be done in-place (i.e., the value in g will be altered) to save on memory usage
+            
+        Returns:
+            f, the same as the input with the same name
+        """
+        
+        # Make a copy of g if necessary
+        delete_q = False
+        if has_torch == True and type(g) is torch.Tensor:
+            if inplace == False:
+                q = self.copyData(g)
+                delete_q = True
+            else:
+                q = g
+        else:
+            if self.get_gpu() < 0 and inplace == False:
+                q = self.copyData(g)
+                delete_q = True
+            else:
+                q = g
+        
+        self.libprojectors.DBP.restype = ctypes.c_bool
+        if has_torch == True and type(q) is torch.Tensor:
+            if f is None:
+                f = self.allocateVolume(0.0,True)
+                f = f.to(g.get_device())
+            self.libprojectors.DBP.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
+            self.set_model()
+            isSuccessful = self.libprojectors.DBP(q.data_ptr(), f.data_ptr(), q.is_cuda == False)
+        else:
+            if f is None:
+                f = self.allocateVolume()
+            self.libprojectors.DBP.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
+            self.set_model()
+            isSuccessful = self.libprojectors.DBP(q, f, True)
+        if delete_q:
+            del q
+        if isSuccessful:
+            return f
+        else:
+            return None
     
     def LT(self, g, f=None, inplace=False):
         """Performs a Lambda/Local Tomography (LT) reconstruction of the projection data, g, and stores the result in f
@@ -3043,7 +4797,7 @@ class tomographicModels:
         self.libprojectors.numRowsRequiredForBackprojectingSlab.restype = ctypes.c_bool
         return self.libprojectors.numRowsRequiredForBackprojectingSlab(numSlicesPerChunk)
         
-    def sliceRangeNeededForProjection(self, doClip=True):
+    def sliceRangeNeededForProjection(self, doClip=True, restrictToVolume=False):
         r"""Calculates the volume z-slices necessary to forward project the view seen by the detectors
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -3055,6 +4809,7 @@ class tomographicModels:
 
         Args:
             doClip (boolean): if True, clips the return values to be between 0 and numZ-1
+            restrictToVolume (boolean): if True, only considers those detector rows the affect the current volume
         
         Returns:
             slicesNeeded, a 2X1 numpy array where the values are the first and last z-slice index needed to project the volume.
@@ -3062,10 +4817,10 @@ class tomographicModels:
         """
         slicesNeeded = np.zeros(2,dtype=np.int32)
         slicesNeeded[1] = self.get_numZ()-1
-        self.libprojectors.sliceRangeNeededForProjection.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_bool]
+        self.libprojectors.sliceRangeNeededForProjection.argtypes = [ndpointer(ctypes.c_int, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_bool]
         self.libprojectors.sliceRangeNeededForProjection.restype = ctypes.c_bool
         self.set_model()
-        self.libprojectors.sliceRangeNeededForProjection(slicesNeeded, doClip)
+        self.libprojectors.sliceRangeNeededForProjection(slicesNeeded, doClip, restrictToVolume)
         return slicesNeeded
         
     def cropCols(self, colRange, g=None):
@@ -3113,7 +4868,7 @@ class tomographicModels:
     def cropRows(self, rowRange, g=None):
         return self.crop_rows(rowRange, g)
     
-    def crop_rows(self, rowRange, g=None):
+    def crop_rows(self, rowRange, g=None, update_geometry=True):
         """Crops rows from projection data
         
         This function crops rows from the projection data.
@@ -3123,6 +4878,7 @@ class tomographicModels:
         Args:
             rowRange (2-element numpy array): the range of detector column indices to keep, all other rows will be removed
             g (C contiguous float32 numpy array or torch tensor): projection data to operate on (optional)
+            update_geometry (bool): if True, the CT geometry parameters are updated
             
         Returns:
             If g is given, then a new numpy array is returned with the selected rows (the 2nd dimension) removed from the data
@@ -3134,11 +4890,13 @@ class tomographicModels:
             print('Error: cropRows invalid argument!')
             return None
         numRows = self.get_numRows()
-        self.set_numRows(rowRange[1]-rowRange[0]+1)
-        self.shift_detector(self.get_pixelHeight()*rowRange[0], 0.0)
-        if self.get_geometry() == 'PARALLEL' or self.get_geometry() == 'FAN':
-            self.set_numZ(self.get_numRows())
-            self.set_offsetZ(0.0)
+        if update_geometry:
+            self.set_numRows(rowRange[1]-rowRange[0]+1)
+            self.shift_detector(self.get_pixelHeight()*rowRange[0], 0.0)
+            if self.get_geometry() == 'PARALLEL' or self.get_geometry() == 'FAN':
+                self.set_numZ(self.get_numRows())
+                self.set_offsetZ(0.0)
+        
         if g is not None:
         
             if has_torch == True and type(g) is torch.Tensor:
@@ -3203,7 +4961,58 @@ class tomographicModels:
             g_crop = None
         return g_crop
     
-    def down_sample_projections(self, factors, g=None):
+    def remove_projections(self, viewRange_in, g=None):
+        if viewRange_in is None:
+            return None
+        viewRange = viewRange_in.copy()
+        if len(viewRange) == 2:
+            if isinstance(viewRange, np.ndarray):
+                viewRange=np.append(viewRange, 1)
+            else:
+                viewRange.append(1)
+        if len(viewRange) != 3 or viewRange[0] < 0 or viewRange[1] < viewRange[0] or viewRange[1] > self.get_numAngles()-1 or viewRange[2] < 1:
+            print('Error: remove_projections invalid argument!')
+            return None
+        temp = np.array(range(self.get_numAngles()))
+        dim1 = temp[viewRange[0]:viewRange[1]+1:viewRange[2]].shape[0]
+        if g is not None:
+            if has_torch == True and type(g) is torch.Tensor:
+                dim2 = self.get_numRows()
+                dim3 = self.get_numCols()
+                if g.is_cuda:
+                    g_crop = torch.zeros([dim1, dim2, dim3], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                else:
+                    g_crop = torch.zeros([dim1, dim2, dim3], dtype=torch.float32)
+                g_crop[:,:,:] = g[viewRange[0]:viewRange[1]+1:viewRange[2], :, :]
+            else:
+                g_crop = np.ascontiguousarray(g[viewRange[0]:viewRange[1]+1:viewRange[2], :, :], np.float32)
+        else:
+            g_crop = None
+        if self.get_geometry() == 'MODULAR':
+            sourcePositions = self.get_sourcePositions()
+            moduleCenters = self.get_moduleCenters()
+            rowVectors = self.get_rowVectors()
+            colVectors = self.get_colVectors()
+
+            sourcePositions_subset = np.ascontiguousarray(sourcePositions[viewRange[0]:viewRange[1]+1:viewRange[2],:], np.float32)
+            moduleCenters_subset = np.ascontiguousarray(moduleCenters[viewRange[0]:viewRange[1]+1:viewRange[2],:], np.float32)
+            rowVectors_subset = np.ascontiguousarray(rowVectors[viewRange[0]:viewRange[1]+1:viewRange[2],:], np.float32)
+            colVectors_subset = np.ascontiguousarray(colVectors[viewRange[0]:viewRange[1]+1:viewRange[2],:], np.float32)
+            numAngles = dim1
+            numRows = self.get_numRows()
+            numCols = self.get_numCols()
+            pixelHeight = self.get_pixelHeight()
+            pixelWidth = self.get_pixelWidth()
+            
+            self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions_subset, moduleCenters_subset, rowVectors_subset, colVectors_subset)
+        else:
+            phis = self.get_angles()
+            phis_subset = np.ascontiguousarray(phis[viewRange[0]:viewRange[1]+1:viewRange[2]], np.float32)
+            self.set_angles(phis_subset)
+        return g_crop
+
+
+    def down_sample_projections(self, factors, g=None, order=0):
         """down-samples the given projection data
 
         This function applies an anti-aliasing filter and down-samples projection data and updates the CT geometry parameters accordingly.
@@ -3216,14 +5025,32 @@ class tomographicModels:
         Returns:
             down-sampled array (if projection data was provided in the arguments)
         """
+
+        if isinstance(factors, (int, float)):
+            factors = np.array([1.0, factors, factors], dtype=np.float32)
+        if isinstance(factors, (list, tuple)):
+            factors = np.asarray(factors, dtype=np.float32)
+
         if factors[0] != 1.0:
             print('Error: cannot down-sample the projection angle dimension')
+            print('Please see the remove_projections function')
             return None
+
+        
+        factors[1] = min(self.get_numRows(), factors[1])
+        factors[2] = min(self.get_numCols(), factors[2])
+
+        if (factors == 1.0).all():
+            return g
+            #if g is not None:
+            #    return self.copyData(g)
+            #else:
+            #    return None
 
         pixelHeight = self.get_pixelHeight()*factors[1]
         pixelWidth = self.get_pixelWidth()*factors[2]        
         if g is not None:
-            g_dn = self.down_sample(factors, g)
+            g_dn = self.down_sample(factors, g, order=order)
             numRows = g_dn.shape[1]
             numCols = g_dn.shape[2]
         else:
@@ -3247,7 +5074,7 @@ class tomographicModels:
         
         return g_dn
         
-    def up_sample_projections(self, factors, g=None, dims=None):
+    def up_sample_projections(self, factors, g=None, dims=None, set_type=0, order=0):
         """up-samples the given projection data
 
         This function up-samples projection data and updates the CT geometry parameters accordingly.
@@ -3255,11 +5082,22 @@ class tomographicModels:
         
         Args:
             factors: 3-element array of up-sampling factors
-            g (C contiguous float32 numpy array or torch tensor): projection data to up-sample
+            I (C contiguous float32 numpy array or torch tensor): projection data to up-sample
+            dims (3-element array or C contiguous float32 numpy array or torch tensor): if None
+            then dimensions of upsampled data are calculated by I and factors
+            if a 3-element array specifies the dimensions of the upsampled data, otherwise
+            should be a 3D array for the upsampled data
+            set_type (int): if 0 return value is just the upsampled input
+            if 1 return value the upsampled data is added to the current data
+            if 2 return value the upsampled data is multiplied to the current data
             
         Returns:
             up-sampled array (if projection data was provided in the arguments)
         """
+
+        if isinstance(factors, (int, float)):
+            factors = np.array([1.0, factors, factors], dtype=np.float32)
+
         if factors[0] != 1.0:
             print('Error: cannot up-sample the projection angle dimension')
             return None
@@ -3267,13 +5105,31 @@ class tomographicModels:
         pixelHeight = self.get_pixelHeight()/factors[1]
         pixelWidth = self.get_pixelWidth()/factors[2]
         if g is not None:
-            g_dn = self.up_sample(factors, g, dims)
-            numRows = g_dn.shape[1]
-            numCols = g_dn.shape[2]
+            g_up = self.up_sample(factors, g, dims, set_type, order)
+            if len(g_up.shape) == 2:
+                numRows = g_up.shape[0]
+                numCols = g_up.shape[1]
+            elif len(g_up.shape) == 3:
+                numRows = g_up.shape[1]
+                numCols = g_up.shape[2]
         else:
-            g_dn = None
-            numRows = int(self.get_numRows()*factors[1])
-            numCols = int(self.get_numCols()*factors[2])
+            g_up = None
+            if dims is None:
+                numRows = int(self.get_numRows()*factors[1])
+                numCols = int(self.get_numCols()*factors[2])
+            elif len(dims) == 3:
+                numRows = dims[1]
+                numCols = dims[2]
+            elif len(dims) == 2:
+                numRows = dims[0]
+                numCols = dims[1]
+            else:
+                if len(dims.shape) == 2:
+                    numRows = dims.shape[0]
+                    numCols = dims.shape[1]
+                elif len(dims.shape) == 3:
+                    numRows = dims.shape[1]
+                    numCols = dims.shape[2]
             
         row_shift = (self.get_centerRow() - 0.5*float(self.get_numRows()-1))*self.get_pixelHeight()
         col_shift = (self.get_centerCol() - 0.5*float(self.get_numCols()-1))*self.get_pixelWidth()
@@ -3289,9 +5145,77 @@ class tomographicModels:
             self.set_centerRow(centerRow)
             self.set_centerCol(centerCol)
         
-        return g_dn
+        return g_up
+
+    def resample_projection_angles(self, phis, g=None):
+        """ Resamples the data with new projection angles
         
-    def down_sample_volume(self, factors, f=None):
+        Args:
+            phis (C contiguous float32 numpy array): new projection angles (degrees)
+            g (C contiguous float32 3D numpy array): projection data
+
+        Return:
+            if g is given, returns a new numpy array with the new angular sampling
+        """
+        phis = phis.astype(np.float32)
+        if g is None:
+            self.set_angles(phis)
+            return None
+        else:
+            g_new = np.zeros((phis.size, self.get_numRows(), self.get_numCols()),dtype=np.float32)
+            self.set_model()
+            self.libprojectors.resample_projection_angles.restype = ctypes.c_bool
+            self.libprojectors.resample_projection_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
+            if self.libprojectors.resample_projection_angles(g, g_new, phis, phis.size):
+                return g_new
+            else:
+                return None
+
+    def crop_volume(self, AABB, f=None):
+        """ Crops volume (updates CT volume parameters and crops numpy array)
+
+        Args:
+            AABB: 6-element array of indices for the new Axis-Aligned Bounding Box
+            f (C contiguous float32 numpy array or torch tensor): volume data to crop
+
+        Return:
+            cropped array (if volume data was provided in the arguments)
+        """
+        if len(AABB) == 6:
+            pass
+        elif len(AABB) == 2:
+            AABB = [AABB[0], AABB[1], 0, self.get_numY()-1, 0, self.get_numX()-1]
+        else:
+            return None
+        if self.ct_volume_defined() == False:
+            return None
+
+        x = self.x_samples()
+        y = self.y_samples()
+        z = self.z_samples()
+        numZ = AABB[1] - AABB[0] + 1
+        numY = AABB[3] - AABB[2] + 1
+        numX = AABB[5] - AABB[4] + 1
+        offsetZ = 0.5*(z[AABB[0]] + z[AABB[1]])
+        offsetY = 0.5*(y[AABB[2]] + y[AABB[3]])
+        offsetX = 0.5*(x[AABB[4]] + x[AABB[5]])
+        self.set_numZ(numZ)
+        self.set_numY(numY)
+        self.set_numX(numX)
+        self.set_offsetZ(offsetZ)
+        self.set_offsetY(offsetY)
+        self.set_offsetX(offsetX)
+
+        if f is not None:
+            if has_torch == True and type(f) is torch.Tensor:
+                f_crop = f[AABB[0]:AABB[1]+1,AABB[2]:AABB[3]+1,AABB[4]:AABB[5]+1].ascontiguous()
+            else:
+                f_crop = np.ascontiguousarray(f[AABB[0]:AABB[1]+1,AABB[2]:AABB[3]+1,AABB[4]:AABB[5]+1])
+            return f_crop
+        else:
+            return None
+
+    def down_sample_volume(self, factors, f=None, order=0):
         """down-samples the given volume data
 
         This function applies an anti-aliasing filter and down-samples volume data and updates the CT volume parameters accordingly.
@@ -3304,9 +5228,16 @@ class tomographicModels:
         Returns:
             down-sampled array (if volume data was provided in the arguments)
         """
+
+        if isinstance(factors, (int, float)):
+            factors = np.array([factors, factors, factors], dtype=np.float32)
+
         if factors[2] != factors[1]:
             print('Error: voxel pitch must be the same in x and y dimensions')
             return None
+        factors[0] = min(factors[0], self.get_numZ())
+        factors[1] = min(factors[1], min(self.get_numY(), self.get_numX()))
+        factors[2] = factors[1]
         #geomText = self.get_geometry()
         #if factors[2] != 1.0 and geomText == 'FAN' or geomText == 'PARALLEL':
         #    print('Error: cannot change the voxel pitch in the z dimension for parallel- and fan-beam')
@@ -3315,7 +5246,7 @@ class tomographicModels:
         voxelHeight = self.get_voxelHeight()*factors[0]
         voxelWidth = self.get_voxelWidth()*factors[1]
         if f is not None:
-            f_dn = self.down_sample(factors, f)
+            f_dn = self.down_sample(factors, f, order=order)
             numZ = f_dn.shape[0]
             numY = f_dn.shape[1]
             numX = f_dn.shape[2]
@@ -3333,7 +5264,7 @@ class tomographicModels:
         
         return f_dn
         
-    def up_sample_volume(self, factors, f=None, dims=None):
+    def up_sample_volume(self, factors, f=None, dims=None, set_type=0, order=0):
         """up-samples the given volume data
 
         This function up-samples volume data and updates the CT volume parameters accordingly.
@@ -3341,11 +5272,20 @@ class tomographicModels:
         
         Args:
             factors: 3-element array of up-sampling factors
-            f (C contiguous float32 numpy array or torch tensor): volume data to up-sample
+            f (C contiguous float32 numpy array or torch tensor): volume to up-sample
+            dims (3-element array or C contiguous float32 numpy array or torch tensor): if None
+            then dimensions of upsampled data are calculated by I and factors
+            if a 3-element array specifies the dimensions of the upsampled data, otherwise
+            should be a 3D array for the upsampled data
+            set_type (int): if 0 return value is just the upsampled input
+            if 1 return value the upsampled data is added to the current data
+            if 2 return value the upsampled data is multiplied to the current data
             
         Returns:
             up-sampled array (if volume data was provided in the arguments)
         """
+        if isinstance(factors, (int, float)):
+            factors = np.array([factors, factors, factors], dtype=np.float32)
         if factors[2] != factors[1]:
             print('Error: voxel pitch must be the same in x and y dimensions')
             return None
@@ -3357,10 +5297,10 @@ class tomographicModels:
         voxelHeight = self.get_voxelHeight()/factors[0]
         voxelWidth = self.get_voxelWidth()/factors[1]
         if f is not None:
-            f_up = self.up_sample(factors, f, dims)
-            numZ = f_dn.shape[0]
-            numY = f_dn.shape[1]
-            numX = f_dn.shape[2]
+            f_up = self.up_sample(factors, f, dims, set_type, order)
+            numZ = f_up.shape[0]
+            numY = f_up.shape[1]
+            numX = f_up.shape[2]
         else:
             f_up = None
             numZ = int(self.get_numZ()*factors[0])
@@ -3425,7 +5365,7 @@ class tomographicModels:
             no return value
         """
         if self.volume_mask_is_valid(f):
-            f[:,:,:] = f[:,:,:] * self.volume_mask[:,:,:]
+            f[:] = f[:] * self.volume_mask[:]
     
     ###################################################################################################################
     ###################################################################################################################
@@ -3433,7 +5373,9 @@ class tomographicModels:
     ###################################################################################################################
     ###################################################################################################################
     def isAllZeros(self, f):
-        if has_torch == True and type(f) is torch.Tensor:
+        if f is None:
+            return True
+        elif has_torch == True and type(f) is torch.Tensor:
             if torch.count_nonzero(f) == 0:
                 return True
             else:
@@ -3462,34 +5404,42 @@ class tomographicModels:
         else:
             return np.sum(x)
         
-    def abs(self, x):
+    def abs(self, x, out=None):
         if has_torch == True and type(x) is torch.Tensor:
-            return torch.abs(x)
+            return torch.abs(x, out=out)
         else:
-            return np.abs(x)
+            return np.abs(x, out=out)
             
-    def minimum(self, x, y):
+    def minimum(self, x, y, res=None):
         if has_torch == True and type(x) is torch.Tensor:
-            return torch.minimum(x, y)
+            return torch.minimum(x, y, out=res)
         else:
-            return np.minimum(x, y)
+            return np.minimum(x, y, out=res)
             
-    def maximum(self, x, y):
+    def maximum(self, x, y, res=None):
         if has_torch == True and type(x) is torch.Tensor:
-            return torch.maximum(x, y)
+            return torch.maximum(x, y, out=res)
         else:
-            return np.maximum(x, y)
+            return np.maximum(x, y, out=res)
+
+    def clip(self, x, clip_value=0.0):
+        if has_torch == True and type(x) is torch.Tensor:
+            return torch.maximum(torch.tensor(clip_value), x, out=x)
+        else:
+            return np.maximum(clip_value, x, out=x)
             
-    def sign(self, x):
+    def sign(self, x, out=None):
         if has_torch == True and type(x) is torch.Tensor:
-            return torch.sign(x)
+            return torch.sign(x, out=out)
         else:
-            return np.sign(x)
+            return np.sign(x, out=out)
                 
-    def expNeg(self, x):
+    def expNeg(self, x, gray_value = 1.0):
         """ Returns exp(-x), converting attenuation data to transmission data """
         if has_torch == True and type(x) is torch.Tensor:
             torch.exp(-x, out=x)
+            if gray_value != 1.0:
+                x *= gray_value
         else:
             if len(x.shape) == 1:
                 N_1 = 1
@@ -3502,19 +5452,128 @@ class tomographicModels:
                 N_1, N_2, N_3 = x.shape
             else:
                 np.exp(-x, out=x)
+                if gray_value != 1.0:
+                    x *= gray_value
                 return x
 
             self.libprojectors.expNeg.restype = ctypes.c_bool
             self.set_model()
-            self.libprojectors.expNeg.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int]
-            self.libprojectors.expNeg(x, N_1, N_2, N_3)
+            self.libprojectors.expNeg.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+            self.libprojectors.expNeg(x, N_1, N_2, N_3, gray_value)
 
         return x
-            
-    def negLog(self, x, gray_value = 1.0):
+    def scalar_add(self, y, a, x, do_clip=False, out=None):
+        """
+        This function performs the following operation on ND numpy arrays:
+        if do_clip:
+            out = max(0.0, y + a*x)
+        else:
+            out = y + a*x
+        """
+        if out is None:
+            out = y
+        if y.shape != x.shape or y.shape != out.shape:
+            raise RuntimeError('array dimensions do not match')
+        if len(y.shape) == 3:
+            N_1, N_2, N_3 = y.shape
+        else:
+            out[:] = y[:] + a*x[:]
+            if do_clip:
+                self.clip(out)
+            return out
+
+        self.libprojectors.scalar_add.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.scalar_add.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+        self.libprojectors.scalar_add(out, y, a, x, N_1, N_2, N_3, do_clip)
+        return out
+
+
+    def fmad(self, x, scale, shift=None, clip_low=None, clip_high=None):
+        r""" Fused multiply and add
+
+        This function performs the following operation in-place
+        x = scale * x + shift
+        in a multi-core C++ routine.
+        If clipping arguments are performed, then the output is clipped accordingly
+        after the multiply and add operations.
+
+        The scale and shift arguments may be used in broadcast.
+        For example if x is 3D and
+        if scale and shift are 2D
+            x = scale[None,:,:] * x + shift[None,:,:]
+        if scale and shift are 1D
+            x = scale[:,None,None] * x + shift[:,None,None]
+
+        Args:
+            x (float32 C contiguous 2D or 3D numpy array): data to scale and shift
+            scale (loat32 C contiguous 1D, 2D, or 3D numpy array): scale data
+            shift (loat32 C contiguous 1D, 2D, or 3D numpy array): shift data
+            clip_low (float): optional clipping low value
+            clip_high (float): optional clipping high value
+
+        """
+        if len(x.shape) == 2:
+            N_1 = 1
+            N_2, N_3 = x.shape
+        elif len(x.shape) == 3:
+            N_1, N_2, N_3 = x.shape
+        else:
+            print('Error: fmad only operate on 2D or 3D data')
+            return None
+        
+        if isinstance(scale, (int, float)):
+            scale = np.array([scale], dtype=np.float32)
+        if isinstance(shift, (int, float)):
+            shift = np.array([shift], dtype=np.float32)
+
+        if len(scale.shape) == 2:
+            M_1 = 1
+            M_2, M_3 = scale.shape
+        elif len(scale.shape) == 3:
+            M_1, M_2, M_3 = scale.shape
+        elif len(scale.shape) == 1:
+            M_1 = scale.size
+            M_2 = 1
+            M_3 = 1
+        else:
+            print('Error: scale and shape must be 1D, 2D, or 3D')
+            return None
+        
+        if shift is None:
+            shift = np.zeros_like(scale)
+
+        if scale.shape != shift.shape:
+            print('Error: scale and shift must be the same shape')
+            return None
+
+        if M_1 != 1 and M_1 != N_1:
+            print('Error: incompatible sizes')
+            return None
+        if M_2 != 1 and M_2 != N_2:
+            print('Error: incompatible sizes')
+            return None
+        if M_3 != 1 and M_3 != N_3:
+            print('Error: incompatible sizes')
+            return None
+        
+        if clip_low is None:
+            clip_low = float('nan')
+        if clip_high is None:
+            clip_high = float('nan')
+
+        self.libprojectors.fmad.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.fmad.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+        self.libprojectors.fmad(x, N_1, N_2, N_3, scale, shift, M_1, M_2, M_3, clip_low, clip_high)
+    
+    def negLog(self, x, gray_value = 1.0, clip_low=None, clip_high=None):
         """ Returns -log(x), converting transmission data to attenuation data """
         if has_torch == True and type(x) is torch.Tensor:
-            torch.log(x/gray_value, out=x)
+            if gray_value != 1.0:
+                torch.log(x/gray_value, out=x)
+            else:
+                torch.log(x, out=x)
             x *= -1.0
         else:
 
@@ -3531,11 +5590,16 @@ class tomographicModels:
                 np.log(x/gray_value, out=x)
                 x *= -1.0
                 return x
+            
+            if clip_low is None:
+                clip_low = float('nan')
+            if clip_high is None:
+                clip_high = float('nan')
 
             self.libprojectors.negLog.restype = ctypes.c_bool
             self.set_model()
-            self.libprojectors.negLog.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
-            self.libprojectors.negLog(x, N_1, N_2, N_3, gray_value)
+            self.libprojectors.negLog.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.negLog(x, N_1, N_2, N_3, gray_value, clip_low, clip_high)
 
         return x
     
@@ -3543,33 +5607,41 @@ class tomographicModels:
         if numSubsets <= 0 or len(g.shape) != 3:
             return None
         else:
-            N = g.shape[0]
             g_subsets = []
             for m in range(numSubsets):
-                if m == g.shape[0]-1:
-                    if has_torch == True and type(g) is torch.Tensor:
-                        if g.is_cuda:
-                            g_subset = torch.zeros([1, g.shape[1], g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
-                        else:
-                            g_subset = torch.zeros([1, g.shape[1], g.shape[2]], dtype=torch.float32)
-                    else:
-                        g_subset = np.zeros((1,g.shape[1],g.shape[2]),dtype=np.float32)
-                    g_subset[0,:,:] = g[m,:,:]
-                    g_subsets.append(g_subset)
-                else:
-                    if has_torch == True and type(g) is torch.Tensor:
-                        dim1 = g[m:N:numSubsets,0,0].shape[0]
-                        if g.is_cuda:
-                            g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
-                        else:
-                            g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32)
-                        g_subset[:,:,:] = g[m:N:numSubsets,:,:]
-                    else:
-                        g_subset = np.ascontiguousarray(g[m:N:numSubsets,:,:], np.float32)
-                    g_subsets.append(g_subset)
+                g_subset = self.breakIntoSubset(g, numSubsets, m)
+                g_subsets.append(g_subset)
             return g_subsets
+        
+    def breakIntoSubset(self, g, numSubsets, subsetIndex):
+        if numSubsets <= 0 or subsetIndex >= numSubsets or len(g.shape) != 3:
+            return None
+        else:
+            N = g.shape[0]
+            m = subsetIndex
+            if m == g.shape[0]-1:
+                if has_torch == True and type(g) is torch.Tensor:
+                    if g.is_cuda:
+                        g_subset = torch.zeros([1, g.shape[1], g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                    else:
+                        g_subset = torch.zeros([1, g.shape[1], g.shape[2]], dtype=torch.float32)
+                else:
+                    g_subset = np.zeros((1,g.shape[1],g.shape[2]),dtype=np.float32)
+                g_subset[0,:,:] = g[m,:,:]
+            else:
+                if has_torch == True and type(g) is torch.Tensor:
+                    dim1 = g[m:N:numSubsets,0,0].shape[0]
+                    if g.is_cuda:
+                        g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32, device=torch.device('cuda:'+str(self.get_gpu())))
+                    else:
+                        g_subset = torch.zeros([dim1, g.shape[1], g.shape[2]], dtype=torch.float32)
+                    g_subset[:,:,:] = g[m:N:numSubsets,:,:]
+                else:
+                    g_subset = np.ascontiguousarray(g[m:N:numSubsets,:,:], np.float32)
+            return g_subset
+
     
-    def space_carving(self, projection_mask, vol_mask):
+    def space_carving(self, projection_mask, vol_mask, mask_flipped=False):
         r"""Space Carving Segmentation-Reconstruction Algorithm
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -3591,14 +5663,17 @@ class tomographicModels:
             vol_mask, the same as the input with the same name
         
         """
-        projection_mask[:,:,:] = 1.0 - projection_mask[:,:,:]
+
+        if not mask_flipped:
+            projection_mask[:] = 1.0 - projection_mask[:]
         self.backproject(projection_mask, vol_mask)
-        projection_mask[:,:,:] = 1.0 - projection_mask[:,:,:]
+        if not mask_flipped:
+            projection_mask[:] = 1.0 - projection_mask[:]
         if type(vol_mask) is np.ndarray:
-            np.heaviside(vol_mask, 0.0, out=vol_mask)
+            self.dirac(vol_mask)
         elif has_torch and type(vol_mask) is torch.Tensor:
             torch.heaviside(vol_mask, vol_mask, out=vol_mask)
-        vol_mask[:,:,:] = 1.0 - vol_mask[:,:,:]
+            vol_mask[:] = 1.0 - vol_mask[:]
         self.windowFOV(vol_mask)
         return vol_mask
         
@@ -3643,7 +5718,7 @@ class tomographicModels:
         if self.isAllZeros(f) == True:
             f[:] = 1.0
         else:
-            f[f<0.0] = 0.0
+            self.clip(f)
  
         if mask is not None:
             Pstar1 = self.copyData(f)
@@ -3674,10 +5749,10 @@ class tomographicModels:
                         f_save = self.copyData(f)
                         filters.apply(f)
                         f[:] = filters.beta*f[:] + (1.0-filters.beta)*f_save[:]
-                        f[f<0.0] = 0.0
+                        self.clip(f)
                     elif filters.beta > 0.0:
                         filters.apply(f)
-                        f[f<0.0] = 0.0
+                        self.clip(f)
                 
         return f
     
@@ -3718,7 +5793,7 @@ class tomographicModels:
         if self.isAllZeros(f) == True:
             f[:] = 1.0
         else:
-            f[f<0.0] = 0.0
+            self.clip(f)
  
         numSubsets = min(numSubsets, self.get_numAngles())
         #if self.get_geometry() == 'MODULAR' and numSubsets > 1:
@@ -3853,7 +5928,7 @@ class tomographicModels:
                 self.backproject(Pd,d)
                 f += 0.9*d / Pstar1
                 if nonnegativityConstraint:
-                    f[f<0.0] = 0.0
+                    self.clip(f)
             return f
         else:
             P1 = self.allocateData(g)
@@ -3897,7 +5972,7 @@ class tomographicModels:
                     #print('d range: ' + str(np.min(d)) + ' to ' + str(np.max(d)))
                     f += 0.9*d / Pstar1
                     if nonnegativityConstraint:
-                        f[f<0.0] = 0.0
+                        self.clip(f)
             subsetParams.setSubset(-1)
             return f
             
@@ -3999,7 +6074,7 @@ class tomographicModels:
                 self.backproject(Pf_minus_g,d)
                 f -= 0.9*d / Pstar1
                 if nonnegativityConstraint:
-                    f[f<0.0] = 0.0
+                    self.clip(f)
             else:
                 for m in range(numSubsets):
                     #self.set_angles(phis_subsets[m])
@@ -4016,7 +6091,7 @@ class tomographicModels:
                     self.backproject(Pd,d)
                     f += 0.9*d / Pstar1
                     if nonnegativityConstraint:
-                        f[f<0.0] = 0.0
+                        self.clip(f)
                 subsetParams.setSubset(-1)
 
             # Calculate SART error sinogram and calculate cost            
@@ -4089,7 +6164,7 @@ class tomographicModels:
         return f
         
         
-    def LS(self, g, f, numIter, preconditioner=None, nonnegativityConstraint=True):
+    def LS(self, g, f, numIter, preconditioner=None, nonnegativityConstraint=True, conjGradRestart=50):
         r"""Least Squares reconstruction
 
         This function minimizes the Least Squares cost function using Preconditioned Conjugate Gradient.
@@ -4110,13 +6185,14 @@ class tomographicModels:
             numIter (int): number of iterations
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
             nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
+            conjGradRestart(int): number of iterations to perform until the conjugate gradient step is reduced to a gradient step; default is 50
         
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, None, 1.0, preconditioner, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, None, 1.0, preconditioner, nonnegativityConstraint, conjGradRestart)
         
-    def WLS(self, g, f, numIter, W=None, preconditioner=None, nonnegativityConstraint=True):
+    def WLS(self, g, f, numIter, W=None, preconditioner=None, nonnegativityConstraint=True, conjGradRestart=50):
         r"""Weighted Least Squares reconstruction
         
         This function minimizes the Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
@@ -4138,13 +6214,14 @@ class tomographicModels:
             W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
             nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
+            conjGradRestart(int): number of iterations to perform until the conjugate gradient step is reduced to a gradient step; default is 50
         
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, None, W, preconditioner, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, None, W, preconditioner, nonnegativityConstraint, conjGradRestart)
         
-    def RLS(self, g, f, numIter, filters=None, preconditioner=None, nonnegativityConstraint=True):
+    def RLS(self, g, f, numIter, filters=None, preconditioner=None, nonnegativityConstraint=True, conjGradRestart=50):
         r"""Regularized Least Squares reconstruction
         
         This function minimizes the Regularized Least Squares cost function using Preconditioned Conjugate Gradient.
@@ -4166,13 +6243,14 @@ class tomographicModels:
             filters (filterSequence object): list of differentiable regularization filters
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
             nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
+            conjGradRestart(int): number of iterations to perform until the conjugate gradient step is reduced to a gradient step; default is 50
         
         Returns:
             f, the same as the input with the same name
         """
-        return self.RWLS(g, f, numIter, filters, 1.0, preconditioner, nonnegativityConstraint)
+        return self.RWLS(g, f, numIter, filters, 1.0, preconditioner, nonnegativityConstraint, conjGradRestart)
        
-    def RWLS(self, g, f, numIter, filters=None, W=None, preconditioner=None, nonnegativityConstraint=True):
+    def RWLS(self, g, f, numIter, filters=None, W=None, preconditioner=None, nonnegativityConstraint=True, conjGradRestart=50):
         r"""Regularized Weighted Least Squares reconstruction
         
         This function minimizes the Regularized Weighted Least Squares cost function using Preconditioned Conjugate Gradient.
@@ -4195,6 +6273,7 @@ class tomographicModels:
             W (C contiguous float32 numpy array): weights, should be the same size as g, if not given, W:=exp(-g); can also be used to mask out bad data
             preconditioner (string): specifies the preconditioner as 'SQS', 'RAMP', or 'SARR'
             nonnegativityConstraint (bool): if true constrains values of reconstruction to be nonnegative
+            conjGradRestart(int): number of iterations to perform until the conjugate gradient step is reduced to a gradient step; default is 50
         
         Returns:
             f, the same as the input with the same name
@@ -4212,7 +6291,9 @@ class tomographicModels:
         if self.verify_inputs(g,f) == False:
             return None
         
-        conjGradRestart = 50
+        if conjGradRestart is None:
+            conjGradRestart = 50
+        conjGradRestart = max(1, conjGradRestart)
         if W is None:
             W = self.copyData(g)
             self.BlurFilter2D(W,3.0)
@@ -4222,7 +6303,7 @@ class tomographicModels:
         if self.isAllZeros(f) == False:
             # fix scaling
             if nonnegativityConstraint:
-                f[f<0.0] = 0.0
+                self.clip(f)
             self.project(Pf,f)
             Pf_dot_Pf = self.innerProd(Pf,Pf)
             g_dot_Pf = self.innerProd(g,Pf)
@@ -4235,18 +6316,20 @@ class tomographicModels:
         Pf_minus_g -= g
         
         grad = self.allocateData(f)
-        u = self.allocateData(f)
+        #u = self.allocateData(f)
         #Pu = self.allocateData(g)
         
-        d = self.allocateData(f)
+        #d = self.allocateData(f)
         Pd = self.allocateData(g)
         
         grad_old_dot_grad_old = 0.0
-        grad_old = self.allocateData(f)
+        #grad_old = self.allocateData(f)
         
-        if preconditioner == True:
+        if type(preconditioner) is np.ndarray:
+            Q = preconditioner
             preconditioner = 'SQS'
-        if preconditioner == 'SQS':
+        elif preconditioner == True or preconditioner == 'SQS':
+            preconditioner = 'SQS'
             # Calculate the SQS preconditioner
             # Reuse some of the memory allocated above
             #Q = 1.0 / P*WP1
@@ -4258,7 +6341,19 @@ class tomographicModels:
             Q[Q==0.0] = 1.0
             Q = 1.0 / Q
         else:
-            Q = 1.0
+            Q = None
+
+        if Q is not None or preconditioner == 'RAMP':
+            u = self.allocateData(f)
+        else:
+            u = grad
+
+        if conjGradRestart == 1 or numIter == 1:
+            d = u
+            grad_old = None
+        else:
+            d = self.allocateData(f)
+            grad_old = self.allocateData(f)
         
         for n in range(numIter):
             if self.print_warnings:
@@ -4269,6 +6364,8 @@ class tomographicModels:
                 WPf_minus_g *= W
             if preconditioner == 'SARR':
                 self.FBP(WPf_minus_g, grad)
+                if self.get_geometry() == 'CONE' and self.get_helicalPitch() == 0.0:
+                    self.BlurFilter(grad, 2.0)
             else:
                 self.backproject(WPf_minus_g, grad)
             if filters.beta > 0.0:
@@ -4288,16 +6385,18 @@ class tomographicModels:
 
                 #f[:] = grad[:] # FIXME
                 #return f # FIXME
-                
-            u[:] = grad[:]
-            u = Q*u
+
+            if Q is not None:
+                u[:] = grad[:]
+                u = Q*u
             if preconditioner == 'RAMP':
                 self.rampFilterVolume(u)
                 self.windowFOV(u)
             #self.project(Pu, u)
             
             if n == 0 or (n % conjGradRestart) == 0:
-                d[:] = u[:]
+                if conjGradRestart > 1:
+                    d[:] = u[:]
                 #Pd[:] = Pu[:]
             else:
                 gamma = (self.innerProd(u,grad) - self.innerProd(u,grad_old)) / grad_old_dot_grad_old
@@ -4311,8 +6410,9 @@ class tomographicModels:
                     d[:] = u[:]
                     #Pd[:] = Pu[:]
             
-            grad_old_dot_grad_old = self.innerProd(u,grad)
-            grad_old[:] = grad[:]
+            if conjGradRestart > 1 and numIter > 1:
+                grad_old_dot_grad_old = self.innerProd(u,grad)
+                grad_old[:] = grad[:]
             
             self.project(Pd, d)
             
@@ -4331,11 +6431,12 @@ class tomographicModels:
             
             f[:] = f[:] - stepSize*d[:]
             if nonnegativityConstraint:
-                f[f<0.0] = 0.0
+                self.clip(f)
                 self.project(Pf,f)
+                Pf_minus_g[:] = Pf[:] - g[:]
             else:
                 Pf[:] = Pf[:] - stepSize*Pd[:]
-            Pf_minus_g[:] = Pf[:] - g[:]
+            # Pf_minus_g[:] = Pf[:] - g[:]
             if self.print_cost:
                 dataFidelity = 0.5*self.innerProd(Pf_minus_g,Pf_minus_g,W)
                 if has_torch == True and type(dataFidelity) is torch.Tensor:
@@ -4394,7 +6495,7 @@ class tomographicModels:
         See documentation for RDLS because this is the same algorithm without the regularization.
         
         """
-        return self.RDLS(g, f, numIter, 0.0, 0.0, preconditionerFWHM, nonnegativityConstraint, dimDeriv)
+        return self.RDLS(g, f, numIter, None, preconditionerFWHM, nonnegativityConstraint, dimDeriv)
         
     def RDLS(self, g, f, numIter, filters=None, preconditionerFWHM=1.0, nonnegativityConstraint=False, dimDeriv=1):
         r"""Regularized Derivative Least Squares reconstruction
@@ -4444,7 +6545,7 @@ class tomographicModels:
         if self.isAllZeros(f) == False:
             # fix scaling
             if nonnegativityConstraint:
-                f[f<0.0] = 0.0
+                self.clip(f)
             self.project(Pf,f)
             Pf_dot_Pf = self.innerProd(Pf,Pf)
             g_dot_Pf = self.innerProd(g,Pf)
@@ -4512,7 +6613,7 @@ class tomographicModels:
             
             f[:] = f[:] - stepSize*d[:]
             if nonnegativityConstraint:
-                f[f<0.0] = 0.0
+                self.clip(f)
                 self.project(Pf,f)
                 Pf_minus_g[:] = Pf[:] - g[:]
             else:
@@ -4537,7 +6638,7 @@ class tomographicModels:
         self.Laplacian(LPd, dimDeriv, smoothLaplacian)
         LPd *= -1.0
         denomA = self.innerProd(LPd,Pd)
-        denomB = 0.0;
+        denomB = 0.0
         if filters.beta > 0.0:
             #denomB = self.TVquadForm(f, d, delta, beta)
             denomB = filters.quadForm(f, d)
@@ -4585,10 +6686,6 @@ class tomographicModels:
         Returns:
             f, the same as the input with the same name
         """
-        #if has_torch == True and type(f) is torch.Tensor:
-        #    print('ERROR: MLTR reconstruction algorithms not implemented for torch tensors!')
-        #    print('Please convert to numpy array prior to running this algorithm.')
-        #    return f
         if mask is not None and mask.shape != g.shape:
             print('Error: mask must be the same shape as the projection data!')
             return None
@@ -4612,7 +6709,7 @@ class tomographicModels:
         t = g
 
         if self.isAllZeros(f) == False:
-            f[f<=0.0] = 0.0
+            self.clip(f)
         
         d = self.allocateData(f)
         
@@ -4623,15 +6720,12 @@ class tomographicModels:
 
         SQS = self.allocateData(f)
         if numSubsets <= 1:
-            Pf = self.allocateData(g)
             
             transDiff = self.allocateData(g)
             for n in range(numIter):
                 if self.print_warnings:
                     print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
-                self.project(Pf,f)
-                
-                transDiff[:] = Pf[:]
+                self.project(transDiff,f)
                 self.expNeg(transDiff)
                 
                 if mask is not None:
@@ -4639,8 +6733,7 @@ class tomographicModels:
                 else:
                     transDiff[:] = transDiff[:] * P1[:]
                 self.backproject(transDiff, SQS)
-                SQS[SQS<=0.0] = 1.0
-                SQS[:] = 1.0 / SQS[:]
+                self.reciprocal(SQS)
                 
                 if mask is not None:
                     transDiff[:] = transDiff[:]/P1[:] - t[:]*mask[:]
@@ -4651,20 +6744,18 @@ class tomographicModels:
                 # Regularizer and divide by SQS
                 stepMultiplier = 1.0
                 if filters.beta > 0.0:
-                    #Sf1 = self.TVgradient(f, delta, beta)
                     Sf1 = filters.gradient(f)
                     d[:] -= Sf1[:]
                     grad_dot_descent = self.innerProd(d,d,SQS)
                 
                     d[:] = d[:] * SQS[:]
                 
-                    #stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
                     stepMultiplier = grad_dot_descent / (grad_dot_descent + filters.quadForm(f,d))
                 else:
                     d[:] = d[:] * SQS[:]
                 
                 f[:] = f[:] + stepMultiplier*d[:]
-                f[f<0.0] = 0.0
+                self.clip(f)
                 
         else:
             subsetParams = subsetParameters(self, numSubsets)
@@ -4677,47 +6768,45 @@ class tomographicModels:
             for n in range(numIter):
                 if self.print_warnings:
                     print('ML-TR iteration ' + str(n+1) + ' of ' + str(numIter))
+
                 for m in range(numSubsets):
+
                     subsetParams.setSubset(m)
+                    
                     transDiff = self.allocateData(t_subsets[m])
-                    Pf = self.allocateData(t_subsets[m])
-                    
-                    self.project(Pf,f)
-                    
-                    transDiff[:] = Pf[:]
+                    self.project(transDiff,f)
                     self.expNeg(transDiff)
                     
                     if mask_subsets is not None:
-                        transDiff[:] = transDiff[:] * P1_subsets[m][:] * mask_subsets[m][:]
+                        transDiff[:] = (transDiff[:] - t_subsets[m][:]) * mask_subsets[m][:]
                     else:
-                        transDiff[:] = transDiff[:] * P1_subsets[m][:]
-                    self.backproject(transDiff, SQS)
-                    SQS[SQS<=0.0] = 1.0
-                    SQS[:] = 1.0 / SQS[:]
-                    
-                    if mask_subsets is not None:
-                        transDiff[:] = transDiff[:]/P1_subsets[m][:] - t_subsets[m][:] * mask_subsets[m][:]
-                    else:
-                        transDiff[:] = transDiff[:]/P1_subsets[m][:] - t_subsets[m][:]
+                        transDiff[:] -= t_subsets[m][:]
                     self.backproject(transDiff, d)
+
+                    if mask_subsets is not None:
+                        transDiff[:] = (transDiff[:] + t_subsets[m][:] * mask_subsets[m][:]) * P1_subsets[m][:]
+                    else:
+                        transDiff[:] = (transDiff[:] + t_subsets[m][:]) * P1_subsets[m][:]
                     
                     # Regularizer and divide by SQS
                     stepMultiplier = 1.0
                     if filters.beta > 0.0:
-                        #Sf1 = self.TVgradient(f, delta, beta)
-                        Sf1 = filters.gradient(f)
+                        Sf1 = filters.gradient(f, out=SQS)
                         d[:] -= Sf1[:]
+
+                        self.backproject(transDiff, SQS)
+                        self.reciprocal(SQS)
                         grad_dot_descent = self.innerProd(d,d,SQS)
                     
                         d[:] = d[:] * SQS[:]
                     
-                        #stepMultiplier = grad_dot_descent / (grad_dot_descent + self.TVquadForm(f,d, delta, beta))
                         stepMultiplier = grad_dot_descent / (grad_dot_descent + filters.quadForm(f,d))
                     else:
-                        d[:] = d[:] * SQS[:]
+                        self.backproject(transDiff, SQS)
+                        self.divide(d,SQS,skip_zero_denominator=True)
                     
                     f[:] = f[:] + stepMultiplier*d[:]
-                    f[f<0.0] = 0.0
+                    self.clip(f)
         
             subsetParams.setSubset(-1)
         
@@ -4733,11 +6822,54 @@ class tomographicModels:
     # THIS SECTION OF FUNCTIONS EXECUTE LEAP'S GPU DENOISING FILTERS
     ###################################################################################################################
     ###################################################################################################################
+    def applyPolynomialBHC(self, g, coeff):
+        """Performs polynomial Beam Hardening Correction
+
+        This function does the following operation in-place
+        g = coeff[0] + coeff[1]*g + coeff[2]*g**2 + ...
+
+        Args:
+            g (1D, 2D, or 3D C contiguous float32 numpy array or torch tensor): attenuation radiograph data (input and output)
+            coeff (list of numpy array): list of BHC coefficients
+
+        """
+        if len(g.shape) == 1:
+            numAngles = 1
+            numRows = 1
+            numCols = g.size
+        elif len(g.shape) == 2:
+            numAngles = 1
+            numRows, numCols = g.shape
+        elif len(g.shape) == 3:
+            numAngles, numRows, numCols = g.shape
+        else:
+            raise ValueError("Error: applyPolynomialBHC input must be 1D, 2D, or 3D")
+
+        if not isinstance(coeff, np.ndarray):
+            coeff = np.array(coeff, dtype=np.float32)
+
+        self.libprojectors.apply_polynomial_bhc.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(g) is torch.Tensor:
+            if g.is_cuda:
+                raise TypeError("Error: this function is currently only implemented for CPU processing")
+            self.libprojectors.apply_polynomial_bhc.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            if self.libprojectors.apply_polynomial_bhc(g.data_ptr(), numAngles, numRows, numCols, coeff, coeff.size, True):
+                return g
+            else:
+                return None
+        else:
+            self.libprojectors.apply_polynomial_bhc.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+            if self.libprojectors.apply_polynomial_bhc(g, numAngles, numRows, numCols, coeff, coeff.size, True):
+                return g
+            else:
+                return None
+
     def applyTransferFunction(self, x,  LUT, sampleRate, firstSample=0.0):
-        """Applies a transfer function to arbitrary 3D data, i.e., x = LUT(x)
+        """Applies a transfer function to arbitrary 1D, 2D, or 3D data, i.e., x = LUT(x)
         
         Args:
-            x (2D or 3D C contiguous float32 numpy array or torch tensor): 3D data (input and output)
+            x (1D, 2D, or 3D C contiguous float32 numpy array or torch tensor): 3D data (input and output)
             LUT (C contiguous float32 numpy array or torch tensor): lookup table with transfer function values
             sampleRate (float): the step size between samples
             firstSample (float): the value of the first sample in the lookup table
@@ -4745,8 +6877,12 @@ class tomographicModels:
         Returns:            
             true if operation  was sucessful, false otherwise
         """
-        
-        if len(x.shape) == 2:
+
+        if len(x.shape) == 1:
+            numAngles = 1
+            numRows = 1
+            numCols = x.size
+        elif len(x.shape) == 2:
             numAngles = 1
             numRows, numCols = x.shape
         else:
@@ -4786,7 +6922,7 @@ class tomographicModels:
            self.set_model()
            return self.libprojectors.beam_hardening_heel_effect(g, anode_normal, LUT, takeOffAngles, LUT.shape[1], LUT.shape[0], sampleRate, firstSample, True)
     
-    def applyDualTransferFunction(self, x, y,  LUT, sampleRate, firstSample=0.0):
+    def applyDualScalarTransferFunction(self, x, y,  LUT, sampleRate, firstSample=0.0):
         """Applies a 2D transfer function to arbitrary 3D data pair, i.e., x,y = LUT(x,y)
         
         Args:
@@ -4800,6 +6936,39 @@ class tomographicModels:
             true if operation  was sucessful, false otherwise
         """
         
+        scalar_LUT = True
+        
+        if len(x.shape) == 2:
+            numAngles = 1
+            numRows, numCols = x.shape
+        else:
+            numAngles, numRows, numCols = x.shape
+        
+        #bool applyDualTransferFunction(float* x, float* y, int N_1, int N_2, int N_3, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
+        self.libprojectors.applyDualTransferFunction.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(x) is torch.Tensor:
+            self.libprojectors.applyDualTransferFunction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            return self.libprojectors.applyDualTransferFunction(x.data_ptr(), y.data_ptr(), numAngles, numRows, numCols, LUT.data_ptr(), firstSample, sampleRate, LUT.shape[1], scalar_LUT, x.is_cuda == False)
+        else:
+            self.libprojectors.applyDualTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            return self.libprojectors.applyDualTransferFunction(x, y, numAngles, numRows, numCols, LUT, firstSample, sampleRate, LUT.shape[1], scalar_LUT, True)
+
+    def applyDualTransferFunction(self, x, y,  LUT, sampleRate, firstSample=0.0):
+        """Applies a 2D transfer function to arbitrary 3D data pair, i.e., x,y = LUT(x,y)
+        
+        Args:
+            x (2D or 3D C contiguous float32 numpy array or torch tensor): 3D data of first component (input and output)
+            y (2D or 3D C contiguous float32 numpy array or torch tensor): 3D data of second component (input and output)
+            LUT (C contiguous float32 numpy array or torch tensor): lookup table with transfer function values
+            sampleRate (float): the step size between samples
+            firstSample (float): the value of the first sample in the lookup table
+
+        Returns:            
+            true if operation  was sucessful, false otherwise
+        """
+
+        scalar_LUT = False
         if len(LUT.shape) == 2:
             LUT_2d = LUT
             LUT = np.zeros((2,LUT.shape[0],LUT.shape[1]),dtype=np.float32)
@@ -4820,13 +6989,13 @@ class tomographicModels:
         self.libprojectors.applyDualTransferFunction.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(x) is torch.Tensor:
-            self.libprojectors.applyDualTransferFunction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.applyDualTransferFunction(x.data_ptr(), y.data_ptr(), numAngles, numRows, numCols, LUT.data_ptr(), firstSample, sampleRate, LUT.shape[1], x.is_cuda == False)
+            self.libprojectors.applyDualTransferFunction.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            return self.libprojectors.applyDualTransferFunction(x.data_ptr(), y.data_ptr(), numAngles, numRows, numCols, LUT.data_ptr(), firstSample, sampleRate, LUT.shape[1], scalar_LUT, x.is_cuda == False)
         else:
-            self.libprojectors.applyDualTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
-            return self.libprojectors.applyDualTransferFunction(x, y, numAngles, numRows, numCols, LUT, firstSample, sampleRate, LUT.shape[1], True)
+            self.libprojectors.applyDualTransferFunction.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            return self.libprojectors.applyDualTransferFunction(x, y, numAngles, numRows, numCols, LUT, firstSample, sampleRate, LUT.shape[1], scalar_LUT, True)
     
-    def convertToRhoeZe(self, f_L, f_H, sigma_L, sigma_H):
+    def convertToRhoeZe(self, f_L, f_H, sigma_L, sigma_H, constrain=False):
         """transforms a low and high energy pair to electron density and effective atomic number
         
         Args:
@@ -4850,12 +7019,50 @@ class tomographicModels:
         self.libprojectors.convertToRhoeZe.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f_L) is torch.Tensor:
-            self.libprojectors.convertToRhoeZe.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool]
-            self.libprojectors.convertToRhoeZe(f_L.data_ptr(), f_H.data_ptr(), numZ, numY, numX, sigma_L.data_ptr(), sigma_H.data_ptr(), f_L.is_cuda == False)
+            self.libprojectors.convertToRhoeZe.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.convertToRhoeZe(f_L.data_ptr(), f_H.data_ptr(), numZ, numY, numX, sigma_L.data_ptr(), sigma_H.data_ptr(), constrain, f_L.is_cuda == False)
         else:
-            self.libprojectors.convertToRhoeZe.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
-            self.libprojectors.convertToRhoeZe(f_L, f_H, numZ, numY, numX, sigma_L, sigma_H, True)
+            self.libprojectors.convertToRhoeZe.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool, ctypes.c_bool]
+            self.libprojectors.convertToRhoeZe(f_L, f_H, numZ, numY, numX, sigma_L, sigma_H, constrain, True)
         return f_L, f_H
+
+    def applyThreeMaterialBHC(self, sum, a_midZ, a_hiZ, LUT, sampleRate, firstSample=0.0, needs_transformation=True):
+        """
+        Applies triple-material BHC
+
+        Args:
+            sum (3D C contiguous float32 numpy array): projection data of the sum projections of all three materials
+            a_midZ (3D C contiguous float32 numpy array): projection data of the middle-Z material
+            a_hiZ (3D C contiguous float32 numpy array): projection data of the high-Z material
+            LUT (C contiguous float32 numpy array or torch tensor): lookup table with 3-material BHC transfer function values
+            sampleRate (float): the step size between samples
+            firstSample (float): the value of the first sample in the lookup table
+
+        Returns:
+            the beam hardening corrected attenuation radiograph stored in the sum argument
+        """
+
+        if sum.shape != a_midZ.shape or sum.shape != a_hiZ.shape:
+            raise ValueError('Input shapes do not match')
+
+        if needs_transformation:
+            a_midZ[:] = a_midZ[:] + a_hiZ[:]
+            self.divide(a_midZ, sum, 0.0)
+            frac_1 = a_midZ
+
+            self.divide(a_hiZ, sum, 0.0)
+            self.divide(a_hiZ, frac_1, 0.0)
+            frac_2 = a_hiZ
+        else:
+            frac_1 = a_midZ
+            frac_2 = a_hiZ
+
+        #bool applyThreeMaterialBHC(float* sum, float* w_1, float* w_2, float* LUT, float firstSample, float sampleRate, int numSamples, bool data_on_cpu)
+        self.libprojectors.applyThreeMaterialBHC.restype = ctypes.c_bool
+        self.set_model()
+        self.libprojectors.applyThreeMaterialBHC.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+        self.libprojectors.applyThreeMaterialBHC(sum, frac_1, frac_2, LUT, firstSample, sampleRate, LUT.shape[2], True)
+        return sum
     
     def synthesize_symmetry(self, f_radial):
         """Converts symmetric volume to a 3D volume
@@ -4913,6 +7120,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         #bool BlurFilter(float* f, int, int, int, float FWHM);
         self.libprojectors.BlurFilter.restype = ctypes.c_bool
@@ -4947,6 +7158,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         #bool HighPassFilter(float* f, int, int, int, float FWHM);
         self.libprojectors.HighPassFilter.restype = ctypes.c_bool
@@ -4985,6 +7200,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         #bool BlurFilter2D(float* f, int, int, int, float FWHM);
         self.libprojectors.BlurFilter2D.restype = ctypes.c_bool
@@ -5019,6 +7238,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         #bool HighPassFilter2D(float* f, int, int, int, float FWHM);
         self.libprojectors.HighPassFilter2D.restype = ctypes.c_bool
@@ -5029,7 +7252,47 @@ class tomographicModels:
         else:
             self.libprojectors.HighPassFilter2D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.HighPassFilter2D(f, N_1, N_2, N_3, FWHM, True)
-            
+
+    def BlurFilter1D(self, f, FWHM=2.0, axis=0, isPeriodic=False):
+        """Applies a 1D blurring filter to the provided numpy array or torch tensor
+        
+        The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
+        The filter is given by cos^2(pi/(2*FWHM) * i), i = -ceil(FWHM), ..., ceil(FWHM)
+        This filter is very simular to a Gaussian filter, but is a FIR
+        
+        Args:
+            f (C contiguous float32 numpy array): numpy array to smooth
+            FWHM (float): the full width at half maximum (in number of pixels) of the filter
+            axis (int): which axes to perform the filtering
+            isPeriodic (bool): if True, then does circular convolution
+        
+        Returns:
+            f, the same as the input
+        """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
+        
+        #bool BlurFilter2D(float* f, int, int, int, float FWHM);
+        self.libprojectors.BlurFilter1D.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.BlurFilter1D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            return self.libprojectors.BlurFilter1D(f.data_ptr(), N_1, N_2, N_3, FWHM, axis, isPeriodic, f.is_cuda == False)
+        else:
+            self.libprojectors.BlurFilter1D.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_bool, ctypes.c_bool]
+            return self.libprojectors.BlurFilter1D(f, N_1, N_2, N_3, FWHM, axis, isPeriodic, True)
+
     def MeanFilter(self, x, windowRadius=1):
         r"""Applies a 3D mean filter to the provided numpy array
         
@@ -5052,6 +7315,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = x.shape[0]
             N_3 = x.shape[1]
+        elif len(x.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = x.size
         
         self.libprojectors.MeanOrVarianceFilter.restype = ctypes.c_bool
         self.set_model()
@@ -5084,6 +7351,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = x.shape[0]
             N_3 = x.shape[1]
+        elif len(x.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = x.size
         
         self.libprojectors.MeanOrVarianceFilter.restype = ctypes.c_bool
         self.set_model()
@@ -5106,6 +7377,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         #bool MedianFilter(float* f, int, int, int, float threshold);
         self.libprojectors.MedianFilter.restype = ctypes.c_bool
@@ -5150,6 +7425,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.MedianFilter2D.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int, ctypes.c_float, ctypes.c_bool]
@@ -5200,6 +7479,10 @@ class tomographicModels:
             numAngles = 1
             numRows = g.shape[0]
             numCols = g.shape[1]
+        elif len(g.shape) == 1:
+            numAngles = 1
+            numRows = 1
+            numCols = g.size
         
         #if len(g.shape) != 3 or g.shape[0] != self.get_numAngles() or g.shape[1] != self.get_numRows() or g.shape[2] != self.get_numCols():
         #    print('Error: input data dimensions do not match CT data dimensions')
@@ -5207,15 +7490,30 @@ class tomographicModels:
         if len(badPixelMap.shape) != 2 or numRows != badPixelMap.shape[0] or numCols != badPixelMap.shape[1]:
             print('Error: bad pixel map dimensions do not match CT data dimensions')
             return False
-        if type(g) != type(badPixelMap):
-            print('Error: projection data and bad pixel map must be the same type')
+        use_torch = has_torch and isinstance(g, torch.Tensor)
+        if isinstance(g, np.ndarray):
+            if not isinstance(badPixelMap, np.ndarray):
+                print(
+                    "Error: bad pixel map must be a numpy array when projection data is a numpy array"
+                )
+                return False
+        elif use_torch:
+            if not isinstance(badPixelMap, torch.Tensor):
+                print(
+                    "Error: bad pixel map must be a torch tensor when projection data is a torch tensor"
+                )
+                return False
+        else:
+            print(
+                "Error: projection data must be a numpy array"
+                + (" or torch tensor" if has_torch else "")
+            )
             return False
         
         #bool MedianFilter2D(float* f, int, int, int, float threshold, int windowSize);
         self.libprojectors.badPixelCorrection.restype = ctypes.c_bool
         self.set_model()
-        if has_torch == True and type(g) is torch.Tensor:
-        
+        if use_torch:
             if g.is_cuda != badPixelMap.is_cuda:
                 print('Error: projection data and bad pixel map must both be on the cpu or both be on the same gpu')
                 return False
@@ -5226,7 +7524,7 @@ class tomographicModels:
             self.libprojectors.badPixelCorrection.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
             return self.libprojectors.badPixelCorrection(g, numAngles, numRows, numCols, badPixelMap, windowSize, True)
     
-    def PriorBilateralFilter(self, f, spatialFWHM, intensityFWHM, prior=None):
+    def PriorBilateralFilter(self, f, spatialFWHM=2.0, intensityFWHM=0.1, prior=None):
         """Performs 3D Bilateral Filter (BLF) denoising method where the intensity distance is measured against a prior image
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -5252,6 +7550,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         self.libprojectors.PriorBilateralFilter.restype = ctypes.c_bool
         self.set_model()
@@ -5262,7 +7564,7 @@ class tomographicModels:
             self.libprojectors.PriorBilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_bool]
             return self.libprojectors.PriorBilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, prior, True)
     
-    def BilateralFilter(self, f, spatialFWHM, intensityFWHM, scale=1.0):
+    def BilateralFilter(self, f, spatialFWHM=2.0, intensityFWHM=0.1, scale=1.0):
         """Performs 3D (Scaled) Bilateral Filter (BLF) denoising method
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -5285,6 +7587,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         self.libprojectors.BilateralFilter.restype = ctypes.c_bool
         self.set_model()
@@ -5295,7 +7601,7 @@ class tomographicModels:
             self.libprojectors.BilateralFilter.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.BilateralFilter(f, N_1, N_2, N_3, spatialFWHM, intensityFWHM, scale, True)
             
-    def GuidedFilter(self, f, r, epsilon, numIter=1):
+    def GuidedFilter(self, f, r=1, epsilon=0.02, numIter=1):
         """Performs 3D Guided Filter denoising method
         
         The provided input does not have to be projection or volume data. It can be any 3D numpy array of any size
@@ -5318,6 +7624,10 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+        elif len(f.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = f.size
         
         r = min(r,10)
         self.libprojectors.GuidedFilter.restype = ctypes.c_bool
@@ -5427,7 +7737,7 @@ class tomographicModels:
             self.libprojectors.TVcost.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             return self.libprojectors.TVcost(f, N_1, N_2, N_3, delta, beta, p, True)
         
-    def TVgradient(self, f, delta, beta=0.0, p=1.2):
+    def TVgradient(self, f, delta, beta=0.0, p=1.2, out=None):
         r"""Calculates the gradient of the anisotropic Total Variation (TV) functional of the provided numpy array
         
         This function uses a Huber-like loss function applied to the differences of neighboring samples (in 3D).
@@ -5449,6 +7759,7 @@ class tomographicModels:
             delta (float): parameter for the Huber-like loss function used in TV
             beta (float): TV multiplier (sometimes called the regularizaion strength)
             p (float): the exponent for the Huber-like loss function used in TV
+            out (C contiguous float32 numpy array): 3D numpy array for the output (optional)
         
         Returns:
             Df (C contiguous float32 numpy array): the gradient of the TV functional applied to the input
@@ -5462,18 +7773,27 @@ class tomographicModels:
             N_1 = 1
             N_2 = f.shape[0]
             N_3 = f.shape[1]
+
+        if out is not None and f.size != out.size:
+            raise ValueError('output must be the same size as the input')
         
         #bool TVgradient(float* f, float* Df, int N_1, int N_2, int N_3, float delta, float beta);
         self.libprojectors.TVgradient.restype = ctypes.c_bool
         
         if has_torch == True and type(f) is torch.Tensor:
-            Df = f.clone()
+            if out is None:
+                Df = f.clone()
+            else:
+                Df = out
             self.set_model()
             self.libprojectors.TVgradient.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             self.libprojectors.TVgradient(f.data_ptr(), Df.data_ptr(), N_1, N_2, N_3, delta, beta, p, f.is_cuda == False)
             return Df
         else:
-            Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
+            if out is None:
+                Df = np.ascontiguousarray(np.zeros(f.shape,dtype=np.float32), dtype=np.float32)
+            else:
+                Df = out
             self.set_model()
             self.libprojectors.TVgradient.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool]
             self.libprojectors.TVgradient(f, Df, N_1, N_2, N_3, delta, beta, p, True)
@@ -5615,11 +7935,86 @@ class tomographicModels:
             self.libprojectors.TV_denoise(f, N_1, N_2, N_3, delta, beta, p, numIter, meanOverFirstDim, True)
         return f
 
-    ###################################################################################################################
-    ###################################################################################################################
-    # THIS SECTION OF FUNCTIONS SET AND GET VARIOUS PARAMETERS, INCLUDING THOSE THAT SET HOW LEAP IS TO BE RUN
-    ###################################################################################################################
-    ###################################################################################################################
+    def TV_fast(self, f, delta=0.001, beta=1.0, numIter=1, p=1.1):
+        r"""Performs anisotropic Total Variation (TV) denoising to the provided 3D numpy array
+        
+        The provided inputs does not have to be projection or volume data. It can be any 3D numpy array of any size.
+        This function performs a specifies number of iterations of minimizing the sum of an L2 loss and aTV functional using gradient descent.
+        The step size calculation uses the method of Separable Quadratic Surrogate (see also TVquadForm).
+        
+        Args:
+            f (C contiguous float32 numpy array): 3D numpy array
+            delta (float): parameter for the Huber-like loss function used in TV
+            beta (float): regularization strength
+            numIter (int): number of iterations
+            p (float): the exponent for the Huber-like loss function used in TV
+        
+        Returns:
+            f, the same array as the input denoised
+        """
+        
+        if len(f.shape) == 3:
+            N_1 = f.shape[0]
+            N_2 = f.shape[1]
+            N_3 = f.shape[2]
+        elif len(f.shape) == 2:
+            N_1 = 1
+            N_2 = f.shape[0]
+            N_3 = f.shape[1]
+        
+        self.libprojectors.TV_fast.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.TV_fast.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.TV_fast(f.data_ptr(), N_1, N_2, N_3, delta, beta, p, numIter, f.is_cuda == False)
+        else:
+            self.libprojectors.TV_fast.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_int, ctypes.c_bool]
+            self.libprojectors.TV_fast(f, N_1, N_2, N_3, delta, beta, p, numIter, True)
+        return f
+
+    def set_max_cpu_threads(self, n):
+        self.libprojectors.set_max_cpu_threads.argtypes = [ctypes.c_int]
+        self.libprojectors.set_max_cpu_threads.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_max_cpu_threads(n)
+    
+    def set_max_threads(self, n):
+        return self.set_max_cpu_threads(n)
+
+    def set_max_gpu_memory(self, c):
+        self.libprojectors.set_max_gpu_memory.argtypes = [ctypes.c_float]
+        self.libprojectors.set_max_gpu_memory.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_max_gpu_memory(c)
+
+    def get_physically_shared_memory(self):
+        """Return True if the GPU physically shares memory with the CPU (e.g., NVIDIA GB10 / DGX Spark).
+
+        On such systems (UMA), cudaMemGetInfo drastically underreports available memory.
+        LEAP automatically uses OS-level memory queries for memory reporting when
+        this returns True.
+        """
+        try:
+            self.libprojectors.get_physically_shared_memory.restype = ctypes.c_bool
+            return self.libprojectors.get_physically_shared_memory()
+        except AttributeError:
+            return False
+
+    def get_available_system_memory(self):
+        """Return available system memory in GB.
+
+        Uses platform-specific APIs: /proc/meminfo on Linux, GlobalMemoryStatusEx
+        on Windows, and host_statistics64 on macOS.
+
+        This is the recommended way to query available memory on UMA systems
+        (e.g., NVIDIA GB10 / DGX Spark) where cudaMemGetInfo underreports.
+        """
+        try:
+            self.libprojectors.get_available_system_memory.restype = ctypes.c_float
+            return self.libprojectors.get_available_system_memory()
+        except AttributeError:
+            return 0.0
+
     def number_of_gpus(self):
         self.libprojectors.number_of_gpus.restype = ctypes.c_int
         return self.libprojectors.number_of_gpus()
@@ -5679,6 +8074,13 @@ class tomographicModels:
         self.libprojectors.get_GPU.restype = ctypes.c_int
         self.set_model()
         return self.libprojectors.get_GPU()
+
+    def get_available_gpu_memory(self, whichGPU=None):
+        if whichGPU is None:
+            whichGPU = self.get_gpu()
+        self.libprojectors.get_available_gpu_memory.argtypes = [ctypes.c_int]
+        self.libprojectors.get_available_gpu_memory.restype = ctypes.c_float
+        return self.libprojectors.get_available_gpu_memory(whichGPU)
         
     def set_diameterFOV(self, d):
         """Set the diameterFOV parameter
@@ -5709,14 +8111,27 @@ class tomographicModels:
         self.set_model()
         return 2.0*self.libprojectors.get_rFOV_min()
         
-    def get_diameterFOV(self):
+    def get_diameterFOV(self, get_default_value=False):
         """Gets the diameterFOV parameter
 
         """
-        #self.libprojectors.get_rFOV.argtypes = [ctypes.c_float]
+        self.libprojectors.get_rFOV.argtypes = [ctypes.c_bool]
         self.libprojectors.get_rFOV.restype = ctypes.c_float
         self.set_model()
-        return 2.0*self.libprojectors.get_rFOV()
+        return 2.0*self.libprojectors.get_rFOV(get_default_value)
+
+    def get_zFOV_min(self):
+        """Returns the least z-coordinate in the field of view on the axis of rotation"""
+        self.libprojectors.get_zFOV_min.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_zFOV_min()
+
+    def get_zFOV_max(self):
+        """Returns the largest z-coordinate in the field of view on the axis of rotation"""
+        self.libprojectors.get_zFOV_max.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_zFOV_max()
+
         
     def set_truncatedScan(self, aFlag):
         """Set the truncatedScan parameter
@@ -5735,6 +8150,13 @@ class tomographicModels:
         self.libprojectors.set_truncatedScan.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.set_truncatedScan(aFlag)
+        
+    def get_truncatedScan(self):
+        """Gets the truncatedScan setting (True or False)"""
+        self.libprojectors.get_truncatedScan.argtypes = []
+        self.libprojectors.get_truncatedScan.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.get_truncatedScan()
         
     def set_offsetScan(self, aFlag):
         """Set the offsetScan parameter
@@ -5763,6 +8185,35 @@ class tomographicModels:
         self.libprojectors.get_offsetScan.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.get_offsetScan()
+
+    def set_cornerPatching(self, aFlag):
+        """Set the cornerPatching parameter
+        """
+        self.libprojectors.set_cornerPatching.argtypes = [ctypes.c_bool]
+        self.libprojectors.set_cornerPatching.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_cornerPatching(aFlag)
+
+    def set_clipWeightedBackprojection(self, aFlag):
+        """Set whether weighted backprojection (used in FBP) should clip the volume values to zero"""
+        self.libprojectors.set_clipWeightedBackprojection.argtypes = [ctypes.c_bool]
+        self.libprojectors.set_clipWeightedBackprojection.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_clipWeightedBackprojection(aFlag)
+    
+    def get_clipWeightedBackprojection(self):
+        """Get whether weighted backprojection (used in FBP) should clip the volume values to zero"""
+        self.libprojectors.get_clipWeightedBackprojection.argtypes = []
+        self.libprojectors.get_clipWeightedBackprojection.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.get_clipWeightedBackprojection()
+
+    def set_numRowsExtrapolate(self, N):
+        """Set the number of detector rows to extrpolate for cone-beam backprojection"""
+        self.libprojectors.set_numRowsExtrapolate.argtypes = [ctypes.c_int]
+        self.libprojectors.set_numRowsExtrapolate.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_numRowsExtrapolate(N)
     
     def set_axisOfSymmetry(self,val):
         """Set the axisOfSymmetry parameter"""
@@ -5784,6 +8235,74 @@ class tomographicModels:
         self.libprojectors.clear_axisOfSymmetry.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.clear_axisOfSymmetry()
+
+    def is_symmetric(self):
+        if self.get_numAngles() == 1 and np.abs(self.get_axisOfSymmetry()) <= 30.0:
+            return True
+        else:
+            return False
+
+    def pad_and_mirror(self, g):
+        r"""If necessary pads and mirrors data for symmetric FBP reconstruction
+
+        Args:
+            g (C contiguous float32 numpy array or torch tensor): projection data
+        
+        Returns:
+            Padded data
+        """
+        if self.is_symmetric() == False:
+            return g
+        tau = self.get_tau()
+        if tau == 0.0:
+            return g
+        numCols = self.get_numCols()
+        center_projected_onto_detector = tau * self.get_sdd() / (self.get_pixelWidth() * self.get_sod()) + self.get_centerCol()
+
+        if tau < 0.0:
+            numPad = int(np.ceil(0.0-center_projected_onto_detector))
+        else:
+            numPad = int(np.ceil(center_projected_onto_detector - (self.get_numCols()-1)))
+        if numPad <= 0:
+            return g
+
+        if has_torch == True and type(g) is torch.Tensor:
+            projection = self.copy_to_host(g)
+        else:
+            projection = g
+        if len(projection.shape) == 3:
+            projection = projection.squeeze(axis=0)
+            projection = np.ascontiguousarray(projection, dtype=np.float32)
+        if tau < 0.0:
+                
+            g_pad = projection.copy()
+            g_pad = np.pad(g_pad, ((0,0),(numPad,0)), mode='constant', constant_values=0)
+
+            edge = np.squeeze(projection[:,0])
+            for i in range(numPad):
+                g_pad[:,i] = edge
+
+            g_pad = np.ascontiguousarray(np.concatenate((np.flip(g_pad,axis=1), g_pad),axis=1))
+
+            self.set_numCols(g_pad.shape[1])
+            self.set_centerCol(self.get_centerCol() + g_pad.shape[1]-projection.shape[1])
+            
+        else: # tau > 0.0
+                
+            g_pad = projection.copy()
+            g_pad = np.pad(g_pad, ((0,0),(0,numPad)), mode='constant', constant_values=0)
+
+            edge = np.squeeze(projection[:,-1])
+            for i in range(numPad):
+                g_pad[:,i+numCols] = edge
+
+            g_pad = np.ascontiguousarray(np.concatenate((g_pad, np.flip(g_pad,axis=1)),axis=1))
+            
+            self.set_numCols(g_pad.shape[1])
+
+        if has_torch == True and type(g) is torch.Tensor:
+            g_pad = g_pad.to(g.get_device())
+        return g_pad
         
     def set_projector(self, which='SF'):
         r"""Set which projector model to use
@@ -5798,12 +8317,14 @@ class tomographicModels:
         Returns:
             True is the input was valid, False otherwise
         """
-        
+
         if isinstance(which, str):
             if which == 'SF':
                 which = 2
             elif which == 'VD':
                 which = 3
+            elif which == 'AUTO':
+                which = 4
             else:
                 return False
         
@@ -5825,6 +8346,8 @@ class tomographicModels:
         self.set_model()
         if self.libprojectors.get_projector() == 2:
             return 'SF'
+        elif self.libprojectors.get_projector() == 4:
+            return 'AUTO'
         else:
             return 'VD'
         
@@ -5850,6 +8373,13 @@ class tomographicModels:
         self.libprojectors.get_rampID.restype = ctypes.c_int
         self.set_model()
         return self.libprojectors.get_rampID()
+
+    def set_helicalFilterParameter(self, epsilon):
+        """Sets the helical FBP parallel ray derivative parameter"""
+        self.libprojectors.set_helicalFilterParameter.argtypes = [ctypes.c_float]
+        self.libprojectors.set_helicalFilterParameter.restype = ctypes.c_bool
+        self.set_model()
+        return self.libprojectors.set_helicalFilterParameter(epsilon)
     
     def set_FBPlowpass(self, W=1.0):
         """Applies a low-pass filter of the specified FWHM to the ramp filter
@@ -5945,12 +8475,12 @@ class tomographicModels:
             return None
 
         
-    def get_angularRange(self):
+    def get_angularRange(self, get_sign=False):
         """Get the angular range of the projection angles (degrees)"""
-        #self.libprojectors.get_angularRange.argtypes = []
+        self.libprojectors.get_angularRange.argtypes = [ctypes.c_bool]
         self.libprojectors.get_angularRange.restype = ctypes.c_float
         self.set_model()
-        return self.libprojectors.get_angularRange()
+        return self.libprojectors.get_angularRange(get_sign)
         
     def set_phis(self,phis):
         """Set the projection angles"""
@@ -5958,6 +8488,7 @@ class tomographicModels:
         
     def set_angles(self,phis):
         """Set the projection angles"""
+        phis = phis.astype(np.float32)
         self.libprojectors.set_angles.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
         self.libprojectors.set_angles.restype = ctypes.c_bool
         self.set_model()
@@ -6032,6 +8563,10 @@ class tomographicModels:
         self.libprojectors.get_sdd.restype = ctypes.c_float
         self.set_model()
         return self.libprojectors.get_sdd()
+    
+    def get_odd(self):
+        """Get the object to detector distance parameter"""
+        return self.get_sdd() - self.get_sod()
         
     def get_helicalPitch(self):
         """Get the helicalPitch parameter"""
@@ -6044,6 +8579,13 @@ class tomographicModels:
         self.libprojectors.get_z_source_offset.restype = ctypes.c_float
         self.set_model()
         return self.libprojectors.get_z_source_offset()
+    
+    def set_z_source_offset(self, z_offs):
+        """Set the source position z-coordinate for the first projection"""
+        self.libprojectors.set_z_source_offset.restype = ctypes.c_bool
+        self.libprojectors.set_z_source_offset.argtypes = [ctypes.c_float]
+        self.set_model()
+        return self.libprojectors.set_z_source_offset(z_offs)
     
     def get_numAngles(self):
         """Get the numAngles parameter"""
@@ -6095,6 +8637,12 @@ class tomographicModels:
         self.libprojectors.get_tiltAngle.restype = ctypes.c_float
         self.set_model()
         return self.libprojectors.get_tiltAngle()
+    
+    def get_pitchAngle(self):
+        """Get the pitchAngle parameter"""
+        self.libprojectors.get_pitchAngle.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_pitchAngle()
         
     def get_sourcePositions(self):
         """Get the sourcePositions parameter (modular-beam only)"""
@@ -6199,6 +8747,30 @@ class tomographicModels:
         self.set_model()
         return self.libprojectors.get_z0()
 
+    def set_z0(self, z_0):
+        #z_0 = offsetZ - 0.5 * float(numZ - 1) * voxelHeight
+        self.set_offsetZ(z_0 + 0.5*(self.get_numZ()-1)*self.get_voxelHeight())
+
+    def get_y0(self):
+        """Get the y-coordinate of the first voxel"""
+        self.libprojectors.get_y0.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_y0()
+
+    def set_y0(self, y_0):
+        #y_0 = offsetY - 0.5 * float(numY - 1) * voxelWidth
+        self.set_offsetY(y_0 + 0.5*(self.get_numY()-1)*self.get_voxelWidth())
+
+    def get_x0(self):
+        """Get the x-coordinate of the first voxel"""
+        self.libprojectors.get_x0.restype = ctypes.c_float
+        self.set_model()
+        return self.libprojectors.get_x0()
+
+    def set_x0(self, x_0):
+        #x_0 = offsetX - 0.5 * float(numX - 1) * voxelWidth
+        self.set_offsetX(x_0 + 0.5*(self.get_numX()-1)*self.get_voxelWidth())
+
     
     ###################################################################################################################
     ###################################################################################################################
@@ -6242,6 +8814,19 @@ class tomographicModels:
             z,y,x = np.meshgrid(z,y,x, indexing='ij')
         return x,y,z
 
+    def volume_bounding_box(self):
+        """
+        Calculates and returns the axis aligned bounding box
+        for the CT volume
+        """
+        if not self.ct_volume_defined():
+            return None
+        z = self.z_samples()
+        y = self.y_samples()
+        x = self.x_samples()
+        AABB = np.array([z[0], z[-1], y[0], y[-1], x[0], x[-1]], dtype=np.float32)
+        return AABB
+
     def display(self,vol):
         """Uses napari to display the provided 3D data
         """
@@ -6276,7 +8861,7 @@ class tomographicModels:
         """
         self.sketch_system(whichView)
             
-    def sketch_system(self,whichView=None):
+    def sketch_system(self,whichView=None, plot_virtual=False):
         """ Uses matplot lib to sketch the CT geometry and CT volume
         
         The CT geometry parameters and the CT volume parameters must be set prior to running this function.
@@ -6294,10 +8879,10 @@ class tomographicModels:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         if whichView is None or isinstance(whichView, int):
-            self.drawCT(ax,whichView)
+            self.drawCT(ax,whichView,plot_virtual)
         else:
             for i in range(len(whichView)):
-                self.drawCT(ax,whichView[i])
+                self.drawCT(ax,whichView[i],plot_virtual)
         self.drawVolume(ax)
         
         ax.set_xlabel('X (mm)')
@@ -6327,7 +8912,7 @@ class tomographicModels:
         #ax.figure.set_size_inches(8, 8)
         plt.show()
     
-    def drawCT(self, ax, whichView=None):
+    def drawCT(self, ax, whichView=None, plot_virtual=False):
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
         import matplotlib.pyplot as plt
         
@@ -6362,6 +8947,10 @@ class tomographicModels:
             xs = np.array([detectorLeft, detectorRight, detectorRight, detectorLeft, detectorLeft])
             ys = np.array([-odd, -odd, -odd, -odd, -odd])
             zs = np.array([detectorBottom, detectorBottom, detectorTop, detectorTop, detectorBottom])
+
+            xs_virtual = R/D*xs
+            ys_virtual = 0.0*ys
+            zs_virtual = R/D*zs
             
             if tiltAngle != 0.0:
                 tiltAngle *= np.pi/180.0
@@ -6395,20 +8984,31 @@ class tomographicModels:
             #bottomLeft = np.array([detectorLeft, ys[2], detectorBottom])
             #bottomRight = np.array([detectorRight, ys[3], detectorBottom])
             
-            topLeft = np.array([xs[3], ys[0], zs[3]])
-            topRight = np.array([xs[2], ys[1], zs[2]])
-            bottomLeft = np.array([xs[0], ys[2], zs[0]])
-            bottomRight = np.array([xs[1], ys[3], zs[1]])
-            
-            Z = np.squeeze(np.array([topLeft.tolist(), topRight.tolist(), bottomRight.tolist(), bottomLeft.tolist(), bottomLeft.tolist(), bottomRight.tolist(), topRight.tolist(), topLeft.tolist()]))
-            ax.scatter3D(Z[:,0], Z[:,1], Z[:,2])
-            verts = [[Z[0],Z[1],Z[2],Z[3]],
-            [Z[4],Z[5],Z[6],Z[7]],
-            [Z[1],Z[2],Z[5],Z[6]],
-            [Z[0],Z[3],Z[4],Z[7]],
-            [Z[0],Z[1],Z[6],Z[7]],
-            [Z[2],Z[3],Z[4],Z[5]]]
-            ax.add_collection3d(Poly3DCollection(verts, facecolors='black', linewidths=1, edgecolors='k', alpha=.20))
+            for n in range(2):
+                if n == 1:
+                    if plot_virtual == False:
+                        break
+                    xs = xs_virtual
+                    ys = ys_virtual
+                    zs = zs_virtual
+
+                topLeft = np.array([xs[3], ys[0], zs[3]])
+                topRight = np.array([xs[2], ys[1], zs[2]])
+                bottomLeft = np.array([xs[0], ys[2], zs[0]])
+                bottomRight = np.array([xs[1], ys[3], zs[1]])
+                
+                Z = np.squeeze(np.array([topLeft.tolist(), topRight.tolist(), bottomRight.tolist(), bottomLeft.tolist(), bottomLeft.tolist(), bottomRight.tolist(), topRight.tolist(), topLeft.tolist()]))
+                ax.scatter3D(Z[:,0], Z[:,1], Z[:,2])
+                verts = [[Z[0],Z[1],Z[2],Z[3]],
+                [Z[4],Z[5],Z[6],Z[7]],
+                [Z[1],Z[2],Z[5],Z[6]],
+                [Z[0],Z[3],Z[4],Z[7]],
+                [Z[0],Z[1],Z[6],Z[7]],
+                [Z[2],Z[3],Z[4],Z[5]]]
+                if n == 0:
+                    ax.add_collection3d(Poly3DCollection(verts, facecolors='black', linewidths=1, edgecolors='k', alpha=.20))
+                else:
+                    ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
 
         elif geometryText == 'PARALLEL':
             tau = 0.0
@@ -6499,7 +9099,10 @@ class tomographicModels:
                 z_source_offset = 0.0
                 
             phis = np.pi/180.0*self.get_angles() - 0.5*np.pi
-            ax.plot(sod*np.cos(phis) + tau*np.sin(phis), sod*np.sin(phis)-tau*np.cos(phis), (pitch*phis+z_source_offset), '.', color='green')
+            if plot_virtual:
+                ax.plot(sod*np.cos(phis) + tau*np.sin(phis), sod*np.sin(phis)-tau*np.cos(phis), (pitch*phis+z_source_offset), '-', color='green')
+            else:
+                ax.plot(sod*np.cos(phis) + tau*np.sin(phis), sod*np.sin(phis)-tau*np.cos(phis), (pitch*phis+z_source_offset), '.', color='green')
     
     def drawVolume(self, ax):
         from mpl_toolkits.mplot3d.art3d import Poly3DCollection, Line3DCollection
@@ -6537,6 +9140,14 @@ class tomographicModels:
             [Z[0],Z[1],Z[6],Z[7]],
             [Z[2],Z[3],Z[4],Z[5]]]
             ax.add_collection3d(Poly3DCollection(verts, facecolors='magenta', linewidths=1, edgecolors='k', alpha=.20))
+        else:
+            dFOV = self.get_diameterFOV()
+            from matplotlib.patches import Circle
+            import mpl_toolkits.mplot3d.art3d as art3d
+            circle = Circle((0.0, 0.0), 0.5*dFOV, facecolor='magenta', edgecolor='black', alpha=0.5)
+            ax.add_patch(circle)
+            art3d.pathpatch_2d_to_3d(circle, z=0, zdir="z")
+
     
 
     ###################################################################################################################
@@ -6590,6 +9201,8 @@ class tomographicModels:
             phis = np.array([float(x.strip()) for x in phis_str.split(',')]).astype(np.float32)
         elif 'angularRange' in pdic.keys():
             phis = self.setAngleArray(int(pdic['numAngles']), pdic['angularRange'])
+            if 'initAngle' in pdic.keys():
+                phis += pdic['initAngle']
         else:
             if pdic['geometry'] == 'parallel' or pdic['geometry'] == 'fan' or pdic['geometry'] == 'cone':
                 print('ERROR: invalid LEAP parameter file')
@@ -6617,7 +9230,7 @@ class tomographicModels:
             self.set_conebeam(int(pdic['numAngles']), int(pdic['numRows']), int(pdic['numCols']), 
                                pdic['pixelHeight'], pdic['pixelWidth'], 
                                pdic['centerRow'], pdic['centerCol'], 
-                               phis, pdic['sod'], pdic['sdd'], pdic['tau'], pdic['helicalPitch'], pdic['tiltAngle'])
+                               phis, pdic['sod'], pdic['sdd'], pdic['tau'], pdic['helicalPitch'], pdic['tiltAngle'], pdic['pitchAngle'])
         elif pdic['geometry'] == 'modular':
         
             sourcePositions = np.array([float(x.strip()) for x in pdic['sourcePositions'].split(',')]).astype(np.float32)
@@ -6692,19 +9305,23 @@ class tomographicModels:
         
         return True
     
+    def create_folder_if_not_exists(self, fileName):
+        path = os.path.dirname(fileName)
+        if not os.path.exists(path):
+            os.makedirs(path)
+    
     def save_parameters(self, fileName):
         """Save the CT volume and CT geometry parameters to the provided file name"""
         return self.save_param(fileName)
     
     def save_param(self, fileName):
         """Save the CT volume and CT geometry parameters to file"""
+        self.create_folder_if_not_exists(fileName)
         if sys.version_info[0] == 3:
             fileName = bytes(str(fileName), 'ascii')
         self.libprojectors.saveParamsToFile.restype = ctypes.c_bool
         self.set_model()
         return self.libprojectors.saveParamsToFile(fileName)
-        
-        return self.leapct.save_param(fileName)
     
     def save_projections(self, fileName, g, sequence_offset=0, axis_split=0):
         """Save projection data to file (tif sequence, nrrd, or npy)
@@ -6919,12 +9536,16 @@ class tomographicModels:
                 wmax = self.wmax
             if wmax <= wmin:
                 wmax = wmin + 1.0
+
+        if isinstance(T, (int, float)):
+            T = [T, T]
         
         return self.libprojectors.save_tif(fileName, x, x.shape[0], x.shape[1], T[0], T[1], dtype, wmin, wmax)
     
     
     def save_data(self, fileName, x, T=1.0, offset_0=0.0, offset_1=0.0, offset_2=0.0, sequence_offset=0, axis_split=0):
         """Save 3D data to file (tif sequence, nrrd, or npy)"""
+        self.create_folder_if_not_exists(fileName)
         volFilePath, dontCare = os.path.split(fileName)
         if os.path.isdir(volFilePath) == False or os.access(volFilePath, os.W_OK) == False:
             print('Folder to save data either does not exist or not accessible!')
@@ -6960,11 +9581,11 @@ class tomographicModels:
                 if axis_split == 0:
                     for i in range(x.shape[0]):
                         im = x[i,:,:]
-                        self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+                        self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im, T)
                 else:
                     for i in range(x.shape[1]):
                         im = x[:,i,:]
-                        self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im)
+                        self.save_tif(baseName + '_' + str(int(i)+sequence_offset) + fileExtension, im, T)
             return True
             """
             try:
@@ -7067,7 +9688,7 @@ class tomographicModels:
             if len(fileList) == 0:
                 sequence_separator = ""
                 templateFile = baseFileName + '*' + fileExt
-                fileList = glob.glob(os.path.split(templateFile)[1])
+                fileList = glob.glob(templateFile)
                 if len(fileList) == 0:
                     print('file sequence does not exist')
                     return None
@@ -7090,22 +9711,23 @@ class tomographicModels:
         return fileList
     
     def load_data(self, fileName, x=None, fileRange=None, rowRange=None, colRange=None, axis_split=0):
-        """Load 3D data from file (tif sequence, nrrd, or npy)
+        """Load 3D data from file (tif sequence, nrrd, npy, or zarr)
 
         This function reads 3D data and stores it in a 3D numpy array.  We officially support
-        nrrd, npy, or a a sequence of tif/tiff files.  Note that fileRange, rowRange, and colRange arguments
-        only apply to tif sequences.
+        nrrd, npy, zarr, or a sequence of tif/tiff files.  Note that fileRange, rowRange, and colRange arguments
+        apply to tif sequences and zarr files.
         
-        A tif sequences must be in the following form: basename_XXXX.tif or (tiff).  The XXXX are the sequence numbers
-        which can be padded with zeros or not.  When calling this function be sure to specify the input as basename.tif,
-        i.e., do not include the underscore and digits when providing this file name to this function.
+        A tif sequence must be in one of the following forms: basename_XXXX.tif (tiff) or basenameXXXX.tif (tiff),
+        i.e., the underscore separator is optional.  The XXXX are the sequence numbers which can be padded with zeros
+        or not.  When calling this function be sure to specify the input as basename.tif, i.e., do not include the
+        (optional) underscore and digits when providing this file name to this function.
         
         Args:
-            fileName (string): full path to npy or nrrd file or sequence of tif files.
+            fileName (string): full path to npy, nrrd, zarr file or sequence of tif files.
             x (3D float32 numpy array): place to store the data (this argument is optional)
-            fileRange (list with two integers): the first and last files to read of a tif sequence
-            rowRange (list with two integers): the first and last rows to read in a tif sequence
-            colRange (list with two integers): the first and last columns to read in a tif sequence
+            fileRange (list with two integers): the first and last files to read of a tif sequence, or slice along first axis for zarr
+            rowRange (list with two integers): the first and last rows to read in a tif sequence, or slice along second axis for zarr
+            colRange (list with two integers): the first and last columns to read in a tif sequence, or slice along third axis for zarr
         
         Returns:
             3D numpy array of the data in the file(s); if x is given, just returns x
@@ -7149,6 +9771,74 @@ class tomographicModels:
             except:
                 print('Error: Failed to load nrrd library!')
                 print('To install this package do: pip install pynrrd')
+                return None
+        elif fileName.endswith('.zarr'):
+            try:
+                import zarr
+                if os.path.isdir(fileName) == False:
+                    print('directory does not exist')
+                    return None
+                z = zarr.open(fileName, mode='r')
+                
+                # Handle slicing based on provided ranges
+                slice_tuple = []
+                
+                # fileRange corresponds to first axis (analogous to file selection in TIFF sequence)
+                if fileRange is not None:
+                    if fileRange[1] >= z.shape[0]:
+                        print(f'Error: fileRange[1] ({fileRange[1]}) >= array shape[0] ({z.shape[0]})')
+                        return None
+                    slice_tuple.append(slice(fileRange[0], fileRange[1] + 1))
+                else:
+                    slice_tuple.append(slice(None))
+                
+                # rowRange corresponds to second axis (if exists)
+                if len(z.shape) > 1:
+                    if rowRange is not None:
+                        if rowRange[1] >= z.shape[1]:
+                            print(f'Error: rowRange[1] ({rowRange[1]}) >= array shape[1] ({z.shape[1]})')
+                            return None
+                        slice_tuple.append(slice(rowRange[0], rowRange[1] + 1))
+                    else:
+                        slice_tuple.append(slice(None))
+                
+                # colRange corresponds to third axis (if exists)
+                if len(z.shape) > 2:
+                    if colRange is not None:
+                        if colRange[1] >= z.shape[2]:
+                            print(f'Error: colRange[1] ({colRange[1]}) >= array shape[2] ({z.shape[2]})')
+                            return None
+                        slice_tuple.append(slice(colRange[0], colRange[1] + 1))
+                    else:
+                        slice_tuple.append(slice(None))
+                
+                # Add remaining dimensions as full slices
+                for i in range(3, len(z.shape)):
+                    slice_tuple.append(slice(None))
+                
+                # Load the sliced data and ensure it's a numpy array
+                print(f"Loading zarr file {fileName} with slice_tuple {slice_tuple}")
+                data = z[tuple(slice_tuple)]
+                print(f"Loading successful, data shape: {data.shape}, data type: {data.dtype}")
+
+                #check if this is a numpy array of float32 and otherwise error out
+                if not isinstance(data, np.ndarray) or data.dtype != np.float32:
+                    print('Zarr file does not contain a numpy array of float32, casting to float32')
+                    data = data.astype(np.float32)
+                else:
+                    print('Zarr file contains a numpy array of float32')
+                
+                if x is not None:
+                    x[:] = data
+                    return x
+                else:
+                    return data
+            except ImportError:
+                print('Error: Failed to load zarr library!')
+                print('To install this package do: pip install zarr')
+                return None
+            except Exception as e:
+                print(f'Error loading zarr file: {e}')
                 return None
         elif fileName.endswith('.tif') or fileName.endswith('.tiff'):
             
@@ -7249,7 +9939,7 @@ class tomographicModels:
             return x
             
         else:
-            print('Error: must be a tif, npy, or nrrd file!')
+            print('Error: must be a tif, npy, nrrd, or zarr file!')
             return None
     
     
@@ -7258,32 +9948,163 @@ class tomographicModels:
     # PHANTOM SPECIFICATION FUNCTIONS
     ###################################################################################################################
     ###################################################################################################################
-    def rayTrace(self, g=None, oversampling=1):
+    def rayTrace(self, g=None, spectralResponse=None, gammas=None, oversampling=1):
         """Performs analytic ray-tracing simulation through a phantom composed of geometrical objects
 
         See the addObject function for how to build the phantom description
-        The CT geometry parameters must be specified prior to running this functions
+        The CT geometry parameters must be specified prior to running this function
         
         Args:
             g (C contiguous float32 numpy array): CT projection data
+            spectralResponse (C contiguous float32 numpy array): optional argument for total system spectral response
+            gammas (C contiguous float32 numpy array): optional argument for energy samples (keV) for total system spectral response
             oversampling (int): the oversampling factor for each ray
             
         Returns:
             g
         
         """
+
+        if spectralResponse is not None:
+            if isinstance(spectralResponse, float):
+                spectralResponse = np.array([1.0], dtype=np.float32)
+            if not isinstance(spectralResponse, np.ndarray):
+                print('Error: spectralResponse must be a numpy array')
+                return None
+        if gammas is not None:
+            if isinstance(gammas, float):
+                gammas = np.array([gammas], dtype=np.float32)
+            if not isinstance(gammas, np.ndarray):
+                print('Error: gammas must be a numpy array')
+                return None
+        if spectralResponse is None and gammas is not None:
+            return None
+        elif spectralResponse is not None and gammas is None:
+            return None
+        if spectralResponse is not None and gammas is not None:
+            if spectralResponse.size != gammas.size:
+                print('Error: spectralResponse and gammas must be the same size')
+                return None
+
         if g is None:
             g = self.allocate_projections()
         self.set_model()
         if has_torch == True and type(g) is torch.Tensor:
-            self.libprojectors.rayTrace.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.rayTrace(g.data_ptr(), int(oversampling), g.is_cuda == False)
+            if spectralResponse is not None and gammas is not None:
+                self.libprojectors.rayTrace_polychromatic.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTrace_polychromatic(g.data_ptr(), spectralResponse, gammas, gammas.size, int(oversampling), g.is_cuda == False)
+            else:
+                self.libprojectors.rayTrace.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTrace(g.data_ptr(), int(oversampling), g.is_cuda == False)
         else:
-            self.libprojectors.rayTrace.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
-            self.libprojectors.rayTrace(g, int(oversampling), True)
+            if spectralResponse is not None and gammas is not None:
+                self.libprojectors.rayTrace_polychromatic.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTrace_polychromatic(g, spectralResponse, gammas, gammas.size, int(oversampling), True)
+            else:
+                self.libprojectors.rayTrace.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTrace(g, int(oversampling), True)
+        return g
+
+    def rayTraceMesh(self, g=None, spectralResponse=None, gammas=None, oversampling=1):
+        """Performs analytic ray-tracing simulation through a meshed surface
+
+        See the addMesh function for how to build the phantom description
+        The CT geometry parameters must be specified prior to running this function
+        
+        Args:
+            g (C contiguous float32 numpy array): CT projection data
+            spectralResponse (C contiguous float32 numpy array): optional argument for total system spectral response
+            gammas (C contiguous float32 numpy array): optional argument for energy samples (keV) for total system spectral response
+            oversampling (int): the oversampling factor for each ray
+            
+        Returns:
+            g
+        """
+
+        if spectralResponse is not None:
+            if isinstance(spectralResponse, float):
+                spectralResponse = np.array([1.0], dtype=np.float32)
+            if not isinstance(spectralResponse, np.ndarray):
+                print('Error: spectralResponse must be a numpy array')
+                return None
+        if gammas is not None:
+            if isinstance(gammas, float):
+                gammas = np.array([gammas], dtype=np.float32)
+            if not isinstance(gammas, np.ndarray):
+                print('Error: gammas must be a numpy array')
+                return None
+        if spectralResponse is None and gammas is not None:
+            return None
+        elif spectralResponse is not None and gammas is None:
+            return None
+        if spectralResponse is not None and gammas is not None:
+            if spectralResponse.size != gammas.size:
+                print('Error: spectralResponse and gammas must be the same size')
+                return None
+
+        if g is None:
+            g = self.allocate_projections()
+
+        self.set_model()
+
+        if has_torch == True and type(g) is torch.Tensor:
+            if spectralResponse is not None and gammas is not None:
+                self.libprojectors.rayTraceMesh_polychromatic.argtypes = [ctypes.c_void_p, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTraceMesh_polychromatic(g.data_ptr(), spectralResponse, gammas, gammas.size, int(oversampling), g.is_cuda == False)
+            else:
+                self.libprojectors.rayTraceMesh.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTraceMesh(g.data_ptr(), int(oversampling), g.is_cuda == False)
+        else:
+            if spectralResponse is not None and gammas is not None:
+                self.libprojectors.rayTraceMesh_polychromatic.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTraceMesh_polychromatic(g, spectralResponse, gammas, gammas.size, int(oversampling), True)
+            else:
+                self.libprojectors.rayTraceMesh.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_bool]
+                self.libprojectors.rayTraceMesh(g, int(oversampling), True)
         return g
     
-    def voxelize(self, f, oversampling=1):
+    def poisson(self, I, scalar=1.0, isAttenuationData=False):
+        """Runs a Poisson realization of the given 1D, 2D, or 3D numpy array
+
+        Args:
+            I (C contiguous float32 numpy array): data
+            scalar (float): optional scalar
+        """
+
+        if isAttenuationData:
+            self.expNeg(I)
+        """
+        I[:] = np.random.poisson(scalar*I) / scalar
+        self.clip(I, 2.0**-16)
+        #"""
+        poisson_helper(I, scalar)
+
+        # Remove C++ routine because it is too slow
+        # will revisit this later
+        """
+        if len(I.shape) == 3:
+            N_1 = I.shape[0]
+            N_2 = I.shape[1]
+            N_3 = I.shape[2]
+        elif len(I.shape) == 2:
+            N_1 = 1
+            N_2 = I.shape[0]
+            N_3 = I.shape[1]
+        elif len(I.shape) == 1:
+            N_1 = 1
+            N_2 = 1
+            N_3 = I.size
+        else:
+            return
+
+        self.set_model()
+        self.libprojectors.poisson.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+        self.libprojectors.poisson(I, N_1, N_2, N_3, scalar)
+        #"""
+        if isAttenuationData:
+            self.negLog(I)
+    
+    def voxelize(self, f=None, oversampling=1):
         r"""Voxelizes a phantom defined by geometric objects.
         
         One must have a phantom already defined before running this function.
@@ -7291,15 +10112,84 @@ class tomographicModels:
         Args:
             f (C contiguous float32 numpy array or torch tensor): volume data
             oversampling (int): the oversampling factor of the voxelization
+
+        Returns:
+            f
         """
-        self.libprojectors.addObject.restype = ctypes.c_bool
+        if f is None:
+            f = self.allocate_volume()
+        self.libprojectors.voxelize.restype = ctypes.c_bool
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
             self.libprojectors.voxelize.argtypes = [ctypes.c_void_p, ctypes.c_int]
-            return self.libprojectors.voxelize(f.data_ptr(), oversampling)
+            self.libprojectors.voxelize(f.data_ptr(), oversampling)
         else:
             self.libprojectors.voxelize.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
-            return self.libprojectors.voxelize(f, oversampling)
+            self.libprojectors.voxelize(f, oversampling)
+        return f
+
+    def voxelizeMesh(self, f=None, val=1.0, oversampling=1):
+        r"""Voxelizes a phantom defined by a triangular mesh
+        
+        One must have a phantom already defined before running this function.
+        
+        Args:
+            f (C contiguous float32 numpy array or torch tensor): volume data
+            val (float): value to fill mesh interior with
+            oversampling (int): the oversampling factor of the voxelization
+
+        Returns:
+            f
+        """
+        if f is None:
+            f = self.allocate_volume()
+        self.libprojectors.voxelizeMesh.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            self.libprojectors.voxelizeMesh.argtypes = [ctypes.c_void_p, ctypes.c_float, ctypes.c_int]
+            self.libprojectors.voxelizeMesh(f.data_ptr(), val, oversampling)
+        else:
+            self.libprojectors.voxelizeMesh.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ctypes.c_int]
+            self.libprojectors.voxelizeMesh(f, val, oversampling)
+        return f
+    
+    def addMesh(self, mesh, val=1.0):
+        """Adds a triangulared mesh to the phantom
+
+        See also rayTraceMesh
+        
+        Args:
+            mesh (N x 3 x 3 float32 numpy array): mesh describing the object
+            val (float): the values to ascribe inside this object
+        """
+        if isinstance(val, float) or isinstance(val, int):
+            chemForm = 'H2O'
+        elif isinstance(val, str):
+            chemForm = val
+            chemForm = self.get_chemicalFormula_from_library(chemForm)
+            val = self.massDensity(val)
+        elif isinstance(val, list):
+            chemForm = val[1]
+            val = val[0]
+        else:
+            print('Error: val must be float or list')
+            return False
+        
+        chemForm = self.get_chemicalFormula_from_library(chemForm)
+        if sys.version_info[0] == 3:
+            chemForm = bytes(str(chemForm), 'ascii')
+
+        if isinstance(mesh, str):
+            mesh_file = mesh
+            from stl import mesh
+            object_mesh = mesh.Mesh.from_file(mesh_file)
+            meshVerts = np.ascontiguousarray(object_mesh.vectors, dtype=np.float32)
+        else:
+            meshVerts = mesh
+
+        self.set_model()
+        self.libprojectors.addMesh.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_float, ctypes.c_char_p]
+        return self.libprojectors.addMesh(meshVerts, meshVerts.size//9, float(val), chemForm)
     
     def addObject(self, f, typeOfObject, c, r, val, A=None, clip=None, oversampling=1):
         """Adds a geometric object to the phantom
@@ -7331,9 +10221,48 @@ class tomographicModels:
             A[0,0] = 1.0
             A[1,1] = 1.0
             A[2,2] = 1.0
+        else:
+            A = np.ascontiguousarray(A.astype(np.float32))
         if clip is None:
             clip = np.zeros(3,dtype=np.float32)
+        if isinstance(val, float) or isinstance(val, int):
+            chemForm = 'H2O'
+        elif isinstance(val, str):
+            chemForm = val
+            chemForm = self.get_chemicalFormula_from_library(chemForm)
+            val = self.massDensity(val)
+        elif isinstance(val, list):
+            chemForm = val[1]
+            val = val[0]
+        else:
+            print('Error: val must be float or list')
+            return False
         
+        chemForm = self.get_chemicalFormula_from_library(chemForm)
+        if sys.version_info[0] == 3:
+            chemForm = bytes(str(chemForm), 'ascii')
+        
+        if isinstance(typeOfObject, str):
+            typeOfObject = typeOfObject.lower()
+            if typeOfObject == 'ball' or typeOfObject == 'sphere' or typeOfObject == 'ellipsoid':
+                typeOfObject = 0
+            elif typeOfObject == 'box' or typeOfObject == 'parallelepiped':
+                typeOfObject = 1
+            elif typeOfObject == 'can_x':
+                typeOfObject = 2
+            elif typeOfObject == 'can_y':
+                typeOfObject = 3
+            elif typeOfObject == 'can_z' or typeOfObject == 'can':
+                typeOfObject = 4
+            elif typeOfObject == 'cone_x':
+                typeOfObject = 5
+            elif typeOfObject == 'cone_y':
+                typeOfObject = 6
+            elif typeOfObject == 'cone_z' or typeOfObject == 'cone':
+                typeOfObject = 7
+            else:
+                print('Error: unknown object type')
+                return False
         if isinstance(c, int) or isinstance(c, float):
             c = [c, c, c]
         if isinstance(r, int) or isinstance(r, float):
@@ -7345,16 +10274,16 @@ class tomographicModels:
         clip = np.ascontiguousarray(clip, dtype=np.float32)
         self.set_model()
         if has_torch == True and type(f) is torch.Tensor:
-            self.libprojectors.addObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
-            return self.libprojectors.addObject(f.data_ptr(), int(typeOfObject), c, r, float(val), A, clip, oversampling)
+            self.libprojectors.addObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_char_p, ctypes.c_int]
+            return self.libprojectors.addObject(f.data_ptr(), int(typeOfObject), c, r, float(val), A, clip, chemForm, oversampling)
         elif f is None:
-            self.libprojectors.addObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
-            return self.libprojectors.addObject(f, int(typeOfObject), c, r, float(val), A, clip, oversampling)
+            self.libprojectors.addObject.argtypes = [ctypes.c_void_p, ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_char_p, ctypes.c_int]
+            return self.libprojectors.addObject(f, int(typeOfObject), c, r, float(val), A, clip, chemForm, oversampling)
         else:
-            self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int]
-            return self.libprojectors.addObject(f, int(typeOfObject), c, r, float(val), A, clip, oversampling)
+            self.libprojectors.addObject.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_float, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_char_p, ctypes.c_int]
+            return self.libprojectors.addObject(f, int(typeOfObject), c, r, float(val), A, clip, chemForm, oversampling)
         
-    def set_FORBILD(self, f=None, includeEar=True, oversampling=1):
+    def set_FORBILD(self, f=None, includeEar=True, oversampling=1, includeMetal=False):
         """Sets the FORBILD head phantom
         
         This function operates in two modes: (1) specifying a voxelized phantom and (2) specifying a phantom
@@ -7404,7 +10333,6 @@ class tomographicModels:
             #self.addObject(f, 0, 10.0*np.array([9.1, 0.0, 0.0]), 10.0*np.array([4.2, 1.8, 1.8]), 1.800*0.02, None, np.array([1.0, 0.0, 0.0]), oversampling)
             self.addObject(f, 0, 10.0*np.array([9.1, 0.0, 0.0]), 10.0*np.array([4.2, 1.8, 1.8]), 1.800*0.02, None, np.array([91.0, 0.0, 0.0]), oversampling)
 
-        #'''
         if includeEar:
             xyzs = np.array([8.80, -1.03920, -1.03920,  8.40, -1.03920, -1.03920,  8.0, -1.03920, -1.03920,  7.60, -1.03920, -1.03920,  8.60, -0.69280, -1.03920,  8.20, -0.69280, -1.03920,  7.80, -0.69280, -1.03920,  7.40, -0.69280, -1.03920,  7.0, -0.69280, -1.03920,  8.80, -0.34640, -1.03920,  8.40, -0.34640, -1.03920,  8.0, -0.34640, -1.03920,  7.60, -0.34640, -1.03920,  7.20, -0.34640, -1.03920,  6.80, -0.34640, -1.03920,  8.80, 1.03920, -1.03920,  8.40, 1.03920, -1.03920,  8.0, 1.03920, -1.03920,  7.60, 1.03920, -1.03920,  8.60, 0.69280, -1.03920,  8.20, 0.69280, -1.03920,  7.80, 0.69280, -1.03920,  7.40, 0.69280, -1.03920,  7.0, 0.69280, -1.03920,  8.80, 0.34640, -1.03920,  8.40, 0.34640, -1.03920,  8.0, 0.34640, -1.03920,  7.60, 0.34640, -1.03920,  7.20, 0.34640, -1.03920,  6.80, 0.34640, -1.03920,  8.60, 0.0, -1.03920,  8.20, 0.0, -1.03920,  7.80, 0.0, -1.03920,  7.40, 0.0, -1.03920,  7.0, 0.0, -1.03920,  6.60, 0.0, -1.03920,  8.80, -1.03920, 1.03920,  8.40, -1.03920, 1.03920,  8.0, -1.03920, 1.03920,  7.60, -1.03920, 1.03920,  8.60, -0.69280, 1.03920,  8.20, -0.69280, 1.03920,  7.80, -0.69280, 1.03920,  7.40, -0.69280, 1.03920,  7.0, -0.69280, 1.03920,  8.80, -0.34640, 1.03920,  8.40, -0.34640, 1.03920,  8.0, -0.34640, 1.03920,  7.60, -0.34640, 1.03920,  7.20, -0.34640, 1.03920,  6.80, -0.34640, 1.03920,  8.80, 1.03920, 1.03920,  8.40, 1.03920, 1.03920,  8.0, 1.03920, 1.03920,  7.60, 1.03920, 1.03920,  8.60, 0.69280, 1.03920,  8.20, 0.69280, 1.03920,  7.80, 0.69280, 1.03920,  7.40, 0.69280, 1.03920,  7.0, 0.69280, 1.03920,  8.80, 0.34640, 1.03920,  8.40, 0.34640, 1.03920,  8.0, 0.34640, 1.03920,  7.60, 0.34640, 1.03920,  7.20, 0.34640, 1.03920,  6.80, 0.34640, 1.03920,  8.60, 0.0, 1.03920,  8.20, 0.0, 1.03920,  7.80, 0.0, 1.03920,  7.40, 0.0, 1.03920,  7.0, 0.0, 1.03920,  6.60, 0.0, 1.03920,  8.60, -1.03920, -0.69280,  8.20, -1.03920, -0.69280,  7.80, -1.03920, -0.69280,  7.40, -1.03920, -0.69280,  7.0, -1.03920, -0.69280,  8.80, -0.69280, -0.69280,  8.40, -0.69280, -0.69280,  8.0, -0.69280, -0.69280,  7.60, -0.69280, -0.69280,  7.20, -0.69280, -0.69280,  6.80, -0.69280, -0.69280,  6.40, -0.69280, -0.69280,  8.60, -0.34640, -0.69280,  8.20, -0.34640, -0.69280,  7.80, -0.34640, -0.69280,  7.40, -0.34640, -0.69280,  7.0, -0.34640, -0.69280,  6.60, -0.34640, -0.69280,  6.20, -0.34640, -0.69280,  8.60, 1.03920, -0.69280,  8.20, 1.03920, -0.69280,  7.80, 1.03920, -0.69280,  7.40, 1.03920, -0.69280,  7.0, 1.03920, -0.69280,  8.80, 0.69280, -0.69280,  8.40, 0.69280, -0.69280,  8.0, 0.69280, -0.69280,  7.60, 0.69280, -0.69280,  7.20, 0.69280, -0.69280,  6.80, 0.69280, -0.69280,  6.40, 0.69280, -0.69280,  8.60, 0.34640, -0.69280,  8.20, 0.34640, -0.69280,  7.80, 0.34640, -0.69280,  7.40, 0.34640, -0.69280,  7.0, 0.34640, -0.69280,  6.60, 0.34640, -0.69280,  6.20, 0.34640, -0.69280,  8.80, 0.0, -0.69280,  8.40, 0.0, -0.69280,  8.0, 0.0, -0.69280,  7.60, 0.0, -0.69280,  7.20, 0.0, -0.69280,  6.80, 0.0, -0.69280,  6.40, 0.0, -0.69280,  6.0, 0.0, -0.69280,  8.60, -1.03920, 0.69280,  8.20, -1.03920, 0.69280,  7.80, -1.03920, 0.69280,  7.40, -1.03920, 0.69280,  7.0, -1.03920, 0.69280,  8.80, -0.69280, 0.69280,  8.40, -0.69280, 0.69280,  8.0, -0.69280, 0.69280,  7.60, -0.69280, 0.69280,  7.20, -0.69280, 0.69280,  6.80, -0.69280, 0.69280,  6.40, -0.69280, 0.69280,  8.60, -0.34640, 0.69280,  8.20, -0.34640, 0.69280,  7.80, -0.34640, 0.69280,  7.40, -0.34640, 0.69280,  7.0, -0.34640, 0.69280,  6.60, -0.34640, 0.69280,  6.20, -0.34640, 0.69280,  8.60, 1.03920, 0.69280,  8.20, 1.03920, 0.69280,  7.80, 1.03920, 0.69280,  7.40, 1.03920, 0.69280,  7.0, 1.03920, 0.69280,  8.80, 0.69280, 0.69280,  8.40, 0.69280, 0.69280,  8.0, 0.69280, 0.69280,  7.60, 0.69280, 0.69280,  7.20, 0.69280, 0.69280,  6.80, 0.69280, 0.69280,  6.40, 0.69280, 0.69280,  8.60, 0.34640, 0.69280,  8.20, 0.34640, 0.69280,  7.80, 0.34640, 0.69280,  7.40, 0.34640, 0.69280,  7.0, 0.34640, 0.69280,  6.60, 0.34640, 0.69280,  6.20, 0.34640, 0.69280,  8.80, 0.0, 0.69280,  8.40, 0.0, 0.69280,  8.0, 0.0, 0.69280,  7.60, 0.0, 0.69280,  7.20, 0.0, 0.69280,  6.80, 0.0, 0.69280,  6.40, 0.0, 0.69280,  6.0, 0.0, 0.69280,  8.80, -1.03920, -0.34640,  8.40, -1.03920, -0.34640,  8.0, -1.03920, -0.34640,  7.60, -1.03920, -0.34640,  7.20, -1.03920, -0.34640,  6.80, -1.03920, -0.34640,  8.60, -0.69280, -0.34640,  8.20, -0.69280, -0.34640,  7.80, -0.69280, -0.34640,  7.40, -0.69280, -0.34640,  7.0, -0.69280, -0.34640,  6.60, -0.69280, -0.34640,  6.20, -0.69280, -0.34640,  8.80, -0.34640, -0.34640,  8.40, -0.34640, -0.34640,  8.0, -0.34640, -0.34640,  7.60, -0.34640, -0.34640,  7.20, -0.34640, -0.34640,  6.80, -0.34640, -0.34640,  6.40, -0.34640, -0.34640,  6.0, -0.34640, -0.34640,  8.80, 1.03920, -0.34640,  8.40, 1.03920, -0.34640,  8.0, 1.03920, -0.34640,  7.60, 1.03920, -0.34640,  7.20, 1.03920, -0.34640,  6.80, 1.03920, -0.34640,  8.60, 0.69280, -0.34640,  8.20, 0.69280, -0.34640,  7.80, 0.69280, -0.34640,  7.40, 0.69280, -0.34640,  7.0, 0.69280, -0.34640,  6.60, 0.69280, -0.34640,  6.20, 0.69280, -0.34640,  8.80, 0.34640, -0.34640,  8.40, 0.34640, -0.34640,  8.0, 0.34640, -0.34640,  7.60, 0.34640, -0.34640,  7.20, 0.34640, -0.34640,  6.80, 0.34640, -0.34640,  6.40, 0.34640, -0.34640,  6.0, 0.34640, -0.34640,  8.60, 0.0, -0.34640,  8.20, 0.0, -0.34640,  7.80, 0.0, -0.34640,  7.40, 0.0, -0.34640,  7.0, 0.0, -0.34640,  6.60, 0.0, -0.34640,  6.20, 0.0, -0.34640,  5.80, 0.0, -0.34640,  8.80, -1.03920, 0.34640,  8.40, -1.03920, 0.34640,  8.0, -1.03920, 0.34640,  7.60, -1.03920, 0.34640,  7.20, -1.03920, 0.34640,  6.80, -1.03920, 0.34640,  8.60, -0.69280, 0.34640,  8.20, -0.69280, 0.34640,  7.80, -0.69280, 0.34640,  7.40, -0.69280, 0.34640,  7.0, -0.69280, 0.34640,  6.60, -0.69280, 0.34640,  6.20, -0.69280, 0.34640,  8.80, -0.34640, 0.34640,  8.40, -0.34640, 0.34640,  8.0, -0.34640, 0.34640,  7.60, -0.34640, 0.34640,  7.20, -0.34640, 0.34640,  6.80, -0.34640, 0.34640,  6.40, -0.34640, 0.34640,  6.0, -0.34640, 0.34640,  8.80, 1.03920, 0.34640,  8.40, 1.03920, 0.34640,  8.0, 1.03920, 0.34640,  7.60, 1.03920, 0.34640,  7.20, 1.03920, 0.34640,  6.80, 1.03920, 0.34640,  8.60, 0.69280, 0.34640,  8.20, 0.69280, 0.34640,  7.80, 0.69280, 0.34640,  7.40, 0.69280, 0.34640,  7.0, 0.69280, 0.34640,  6.60, 0.69280, 0.34640,  6.20, 0.69280, 0.34640,  8.80, 0.34640, 0.34640,  8.40, 0.34640, 0.34640,  8.0, 0.34640, 0.34640,  7.60, 0.34640, 0.34640,  7.20, 0.34640, 0.34640,  6.80, 0.34640, 0.34640,  6.40, 0.34640, 0.34640,  6.0, 0.34640, 0.34640,  8.60, 0.0, 0.34640,  8.20, 0.0, 0.34640,  7.80, 0.0, 0.34640,  7.40, 0.0, 0.34640,  7.0, 0.0, 0.34640,  6.60, 0.0, 0.34640,  6.20, 0.0, 0.34640,  5.80, 0.0, 0.34640,  8.60, -1.03920, 0.0,  8.20, -1.03920, 0.0,  7.80, -1.03920, 0.0,  7.40, -1.03920, 0.0,  7.0, -1.03920, 0.0,  6.60, -1.03920, 0.0,  8.80, -0.69280, 0.0,  8.40, -0.69280, 0.0,  8.0, -0.69280, 0.0,  7.60, -0.69280, 0.0,  7.20, -0.69280, 0.0,  6.80, -0.69280, 0.0,  6.40, -0.69280, 0.0,  6.0, -0.69280, 0.0,  8.60, -0.34640, 0.0,  8.20, -0.34640, 0.0,  7.80, -0.34640, 0.0,  7.40, -0.34640, 0.0,  7.0, -0.34640, 0.0,  6.60, -0.34640, 0.0,  6.20, -0.34640, 0.0,  5.80, -0.34640, 0.0,  8.60, 1.03920, 0.0,  8.20, 1.03920, 0.0,  7.80, 1.03920, 0.0,  7.40, 1.03920, 0.0,  7.0, 1.03920, 0.0,  6.60, 1.03920, 0.0,  8.80, 0.69280, 0.0,  8.40, 0.69280, 0.0,  8.0, 0.69280, 0.0,  7.60, 0.69280, 0.0,  7.20, 0.69280, 0.0,  6.80, 0.69280, 0.0,  6.40, 0.69280, 0.0,  6.0, 0.69280, 0.0,  8.60, 0.34640, 0.0,  8.20, 0.34640, 0.0,  7.80, 0.34640, 0.0,  7.40, 0.34640, 0.0,  7.0, 0.34640, 0.0,  6.60, 0.34640, 0.0,  6.20, 0.34640, 0.0,  5.80, 0.34640, 0.0,  8.80, 0.0, 0.0,  8.40, 0.0, 0.0,  8.0, 0.0, 0.0,  7.60, 0.0, 0.0,  7.20, 0.0, 0.0,  6.80, 0.0, 0.0,  6.40, 0.0, 0.0,  6.0, 0.0, 0.0,  5.60, 0.0, 0.0])
             for n in range(xyzs.size//3):
@@ -7412,7 +10340,20 @@ class tomographicModels:
                 y = xyzs[3*n+1]
                 z = xyzs[3*n+2]
                 self.addObject(f, 0, 10.0*np.array([x, y, z]), 10.0*np.array([0.15, 0.15, 0.15]), 0.0, None, None, oversampling)
-        #'''
+
+        if includeMetal:
+            self.addObject(f, 0, 10.0*np.array([-6.0, 6.03920, 0.0]), 10.0*0.40, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([-6.0, -6.0392, 0.0]), 10.0*0.40, 1.2140)
+            self.addObject(f, 0, 10.0*np.array([6.40, -6.0392, 0.0]), 10.0*0.05, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([5.80, -6.4000, 0.0]), 10.0*0.10, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([6.30, -5.6200, 0.0]), 10.0*0.05, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([5.90, -6.0392, 0.0]), 10.0*0.05, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([6.00, -5.7392, 0.0]), 10.0*0.10, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([6.50, -6.5200, 0.0]), 10.0*0.10, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([5.70, -5.2920, 0.0]), 10.0*0.05, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([5.60, -5.6920, 0.0]), 10.0*0.05, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([5.40, -6.2200, 0.0]), 10.0*0.05, 0.8106)
+            self.addObject(f, 0, 10.0*np.array([5.20, -6.4200, 0.0]), 10.0*0.05, 0.8106)
         
     def clearPhantom(self):
         """Clears all phantom objects"""
@@ -7431,7 +10372,7 @@ class tomographicModels:
             c_x = c
             c_y = c
             c_z = c
-        elif isinstance(c, np.ndarray) and c.size == 3:
+        elif isinstance(c, (np.ndarray, list)) and len(c) == 3:
             c_x = c[0]
             c_y = c[1]
             c_z = c[2]
@@ -7442,7 +10383,172 @@ class tomographicModels:
         self.libprojectors.scalePhantom.argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float]
         self.set_model()
         return self.libprojectors.scalePhantom(c_x, c_y, c_z)
+    
+    def shiftPhantom(self, c):
+        r"""Shift the phantom by the provided amount
         
+        One must have a phantom already defined before running this function.
+        
+        Args:
+            c (float or list of three float): the shift values
+        """
+        if isinstance(c, int) or isinstance(c, float):
+            c_x = 0.0
+            c_y = 0.0
+            c_z = c
+        elif isinstance(c, (np.ndarray, list)) and len(c) == 3:
+            c_x = c[0]
+            c_y = c[1]
+            c_z = c[2]
+        else:
+            return False
+            
+        self.libprojectors.shiftPhantom.restype = ctypes.c_bool
+        self.libprojectors.shiftPhantom.argtypes = [ctypes.c_float, ctypes.c_float, ctypes.c_float]
+        self.set_model()
+        return self.libprojectors.shiftPhantom(c_x, c_y, c_z)
+
+    def as_float_ptr(self, arr):
+        if arr is None:
+            return None
+        arr = np.asarray(arr, dtype=np.float32, order="C")
+        return arr.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
+    
+    def polychromatic_attenuation(self, spectralResponse, gammas, referenceEnergy, g_1, sigma_1, g_2=None, sigma_2=None, g_3=None, sigma_3=None, g_poly=None):
+        r"""
+
+        This function simulates polychromatic attenuation from monochromatic attenuation
+        of 1, 2, or 3 materials.
+
+        The CT geometry must be defined prior to running this algorithm.
+
+        Note that the output g_poly may be the same as one of the inputs, i.e.,
+        in-place operations are allowed.
+
+        Args:
+            spectralResponse (float32 C-contiguous numpy array): spectra model
+            gammas (float32 C-contiguous numpy array): energy bins
+            referenceEnergy (float): reference energy of the input projection data
+            g_1 (float32 C-contiguous 3D numpy array): attenuation radiographs of 1st material
+            sigma_1 (float32 C-contiguous numpy array): mass cross section of 1st material
+            g_2 (float32 C-contiguous 3D numpy array): attenuation radiographs of 2nd material
+            sigma_2 (float32 C-contiguous numpy array): mass cross section of 2nd material
+            g_3 (float32 C-contiguous 3D numpy array): attenuation radiographs of 3rd material
+            sigma_3 (float32 C-contiguous numpy array): mass cross section of 3rd material
+            g_poly (float32 C-contiguous 3D numpy array): polychromatic attenuation radiographs
+
+        Returns:
+            polychromatic attenuation radiographs
+        """
+        N = gammas.size
+        if spectralResponse.size != N or sigma_1.size != N:
+            raise ValueError('Error: energy-based arrays must be the same size')
+        if sigma_2 is not None and sigma_2.size != N:
+            raise ValueError('Error: energy-based arrays must be the same size')
+        if sigma_3 is not None and sigma_3.size != N:
+            raise ValueError('Error: energy-based arrays must be the same size')
+        if len(g_1.shape) != 3:
+            raise ValueError('Error: projection data must by a 3D numpy array')
+        if g_2 is not None and g_2.shape != g_1.shape:
+            raise ValueError('Error: projection data shapes must match')
+        if g_3 is not None and g_3.shape != g_1.shape:
+            raise ValueError('Error: projection data shapes must match')
+
+        N_1, N_2, N_3 = g_1.shape
+        if N_1 != self.get_numAngles() or N_2 != self.get_numRows() or N_3 != self.get_numCols():
+            raise ValueError('Error: projection data shapes does not match CT geometry')
+        
+        self.normalizeSpectrum(spectralResponse, gammas)
+        
+        if g_poly is None:
+            g_poly = self.allocate_projections()
+
+        self.libprojectors.polychromatic_attenuation.restype = ctypes.c_bool
+        self.libprojectors.polychromatic_attenuation.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+                                                                 ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+                                                                 ctypes.c_float,
+                                                                 ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+                                                                 ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+                                                                 ctypes.POINTER(ctypes.c_float),
+                                                                 ctypes.POINTER(ctypes.c_float),
+                                                                 ctypes.POINTER(ctypes.c_float),
+                                                                 ctypes.POINTER(ctypes.c_float),
+                                                                 ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"),
+                                                                 ctypes.c_int]
+
+        self.set_model()
+        self.libprojectors.polychromatic_attenuation(spectralResponse, gammas, referenceEnergy, g_1, sigma_1,
+                                                     self.as_float_ptr(g_2), self.as_float_ptr(sigma_2),
+                                                     self.as_float_ptr(g_3), self.as_float_ptr(sigma_3),
+                                                     g_poly, gammas.size)
+        return g_poly
+
+
+    def double_cone(self, H=None, beta=None, minimum_radius=None):
+        r"""Generates a double-cone indicator function which is used to mitigate cone-beam artifacts
+        
+        Args:
+            H (C contiguous float32 3D numpy array): array to store filter
+            beta (float): aperture (in degrees) of the cone
+            minimum_radius (float): the minimum radius to be included as part of the filter support
+        """
+
+        if H is None:
+            H = self.allocate_volume()
+        if H is None or len(H.shape) != 3:
+            raise TypeError('Input must be a 3D array')
+        N_1, N_2, N_3 = H.shape
+
+        if beta is None:
+            if not self.ct_geometry_defined():
+                raise TypeError('CT geometry must be defined or you must specify the cone aperture angle')
+            L = self.get_voxelWidth() / self.get_voxelHeight()
+            beta = min(0.25*np.pi, np.arctan(L*0.5*self.get_pixelHeight()*self.get_numRows()/self.get_sdd()))*180.0/np.pi
+
+        if minimum_radius is None:
+            minimum_radius = 5.0/H.shape[1]
+
+        self.libprojectors.double_cone.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(H) is torch.Tensor:
+
+            if H.is_cuda:
+                raise TypeError('Filter must be on the CPU')
+
+            self.libprojectors.double_cone.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.double_cone(H.data_ptr(), N_1, N_2, N_3, beta, minimum_radius)
+        else:
+            self.libprojectors.double_cone.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_float]
+            self.libprojectors.double_cone(H, N_1, N_2, N_3, beta, minimum_radius)
+        return H
+
+    def patch_corners(self, f, f_top, f_bot, window_width=5):
+        r"""Smoothly inserts new slices on top and bottom of a volume
+
+        CT volume parameters must be set prior to running this function
+
+        Args:
+            f (C contiguous float32 3D numpy array): full FOV reconstruction
+            f_top (C contiguous float32 3D numpy array): top slices of reconstruction
+            f_bot (C contiguous float32 3D numpy array): bottom slices of reconstruction
+            window_width (int): the width of the feathering
+        """
+
+        numZ_top = f_top.shape[0]
+        numZ_bot = f_bot.shape[0]
+
+        #bool patch_corners(float* f, float* f_top, int numZ_top, float* f_bot, int numZ_bot, int window_width);
+        self.libprojectors.patch_corners.restype = ctypes.c_bool
+        self.set_model()
+        if has_torch == True and type(f) is torch.Tensor:
+            if f.is_cuda:
+                raise TypeError('Filter must be on the CPU')
+            self.libprojectors.patch_corners.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.patch_corners(f.data_ptr(), f_top.data_ptr(), numZ_top, f_bot.data_ptr(), numZ_bot, window_width)
+        else:
+            self.libprojectors.patch_corners.argtypes = [ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ndpointer(ctypes.c_float, flags="C_CONTIGUOUS"), ctypes.c_int, ctypes.c_int]
+            return self.libprojectors.patch_corners(f, f_top, numZ_top, f_bot, numZ_bot, window_width)
+    
 class subsetParameters:
     def __init__(self, ctModel, numSubsets):
         self.numSubsets = numSubsets
@@ -7543,3 +10649,46 @@ class subsetParameters:
                 self.ctModel.set_modularBeam(numAngles, numRows, numCols, pixelHeight, pixelWidth, sourcePositions, moduleCenters, rowVectors, colVectors)
             else:
                 self.ctModel.set_angles(self.phis)
+
+class ct_volume_parameters():
+    def __init__(self, ctModel=None):
+        """
+        The purpose of this class is to provide a pure-python class
+        that tracks the LEAP CT volume parameters.
+        """
+
+        self.reset()
+        if ctModel is not None:
+            self.get(ctModel)
+
+    def reset(self):
+        self.numX = 0
+        self.numY = 0
+        self.numZ = 0
+        self.voxelWidth = 0.0
+        self.voxelHeight = 0.0
+        self.offsetX = 0.0
+        self.offsetY = 0.0
+        self.offsetZ = 0.0
+
+    def get(self, ctModel):
+        self.numX = ctModel.get_numX()
+        self.numY = ctModel.get_numY()
+        self.numZ = ctModel.get_numZ()
+        self.voxelWidth = ctModel.get_voxelWidth()
+        self.voxelHeight = ctModel.get_voxelHeight()
+        self.offsetX = ctModel.get_offsetX()
+        self.offsetY = ctModel.get_offsetY()
+        self.offsetZ = ctModel.get_offsetZ()
+
+    def set(self, ctModel):
+        ctModel.set_numX(self.numX)
+        ctModel.set_numY(self.numY)
+        ctModel.set_numZ(self.numZ)
+        ctModel.set_voxelWidth(self.voxelWidth)
+        ctModel.set_voxelHeight(self.voxelHeight)
+        ctModel.set_offsetX(self.offsetX)
+        ctModel.set_offsetY(self.offsetY)
+        ctModel.set_offsetZ(self.offsetZ)
+
+    

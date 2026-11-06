@@ -32,8 +32,8 @@ leapct.set_default_volume()
 
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f_true = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f_true = leapct.allocate_volume()
 
 
 # Specify simplified FORBILD head phantom
@@ -49,8 +49,7 @@ detectorGain = np.random.uniform(1.0-0.04,1.0+0.04,(numRows,numCols))
 g[:] = g[:] - np.log(detectorGain[None,:,:])
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+leapct.poisson(g, 50000.0, True)
 
 
 # Perform ring removal
@@ -64,7 +63,7 @@ ringRemoval(leapct, g, 1.0-0.99, 1.0e1, 30, 0.05)
 print('Ring Removal Elapsed Time: ' + str(time.time()-startTime))
 
 # Reconstruct the data
-f = leapct.allocateVolume()
+f = leapct.allocate_volume()
 leapct.FBP(g,f)
 
 

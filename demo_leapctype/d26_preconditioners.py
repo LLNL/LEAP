@@ -48,8 +48,8 @@ leapct.print_parameters()
 #leapct.sketch_system()
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f = leapct.allocate_volume()
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
@@ -67,8 +67,7 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#leapct.poisson(g, 50000.0, True)
 
 '''
 # Uncomment this section to enable processing completely on the GPU

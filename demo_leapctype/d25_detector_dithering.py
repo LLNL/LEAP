@@ -66,8 +66,8 @@ leapct.set_modularbeam(numAngles, numRows, numCols, pixelSize, pixelSize, source
 
 
 # Allocate space for the projections and the volume
-g = leapct.allocateProjections()
-f_true = leapct.allocateVolume()
+g = leapct.allocate_projections()
+f_true = leapct.allocate_volume()
 
 
 # Specify simplified FORBILD head phantom
@@ -84,8 +84,7 @@ g[:] = g[:] - np.log(detectorGain[None,:,:])
 
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 50000.0
-#g[:] = -np.log(np.random.poisson(I_0*np.exp(-g))/I_0)
+#leapct.poisson(g, 50000.0, True)
 
 
 # Reconstruct the data
@@ -93,8 +92,7 @@ I_0 = 50000.0
 # in the filtering and backprojection steps of the reconstruction.  These steps
 # do not use interpolation; they use the true detector and source positions, so
 # doing these shifts does not reduce the reconstructed resolution
-f = leapct.allocateVolume()
-leapct.FBP(g,f)
+f = leapct.FBP(g)
 
 
 # Display the result with napari

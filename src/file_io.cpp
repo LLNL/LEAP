@@ -41,12 +41,14 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	std::string centerRow = "proj_crow";
 	std::string centerCol = "proj_ccol";
 	std::string angularRange = "proj_arange";
+	std::string initAngle = "proj_initangle";
 	std::string phis = "proj_phis";
 	std::string sod = "proj_sod";
 	std::string sdd = "proj_sdd";
 	std::string tau = "proj_tau";
 	std::string helicalPitch = "proj_helicalpitch";
 	std::string tiltAngle = "proj_tiltAngle";
+	std::string pitchAngle = "proj_pitchAngle";
 	std::string axisOfSymmetry = "proj_axisofsymmetry";
 
 	std::string sourcePositions = "proj_srcpos";
@@ -75,12 +77,14 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	std::string centerRow = "centerRow";
 	std::string centerCol = "centerCol";
 	std::string angularRange = "angularRange";
+	std::string initAngle = "initAngle";
 	std::string phis = "phis";
 	std::string sod = "sod";
 	std::string sdd = "sdd";
 	std::string tau = "tau";
 	std::string helicalPitch = "helicalPitch";
 	std::string tiltAngle = "tiltAngle";
+	std::string pitchAngle = "pitchAngle";
 	std::string axisOfSymmetry = "axisOfSymmetry";
 
 	std::string sourcePositions = "sourcePositions";
@@ -159,6 +163,10 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 			param_file << angularRange << " = " << -params->angularRange << std::endl;
 		else
 			param_file << angularRange << " = " << params->angularRange << std::endl;
+		if (fabs(params->phis[0]+0.5*PI) > 1.0e-5)
+		{
+			param_file << initAngle << " = " << (params->phis[0]+0.5*PI)*180.0/PI << std::endl;
+		}
 	}
 	else
 	{
@@ -173,10 +181,12 @@ bool saveParametersToFile(const char* param_fn, parameters* params)
 	if (params->geometry == parameters::CONE && params->detectorType == parameters::FLAT)
 	{
 		param_file << tiltAngle << " = " << params->tiltAngle << std::endl;
+		param_file << pitchAngle << " = " << params->pitchAngle << std::endl;
 	}
 	else
 	{
 		param_file << tiltAngle << " = " << 0.0 << std::endl;
+		param_file << pitchAngle << " = " << 0.0 << std::endl;
 	}
 	if (params->geometry == parameters::CONE || params->geometry == parameters::CONE_PARALLEL)
 	{
@@ -302,6 +312,7 @@ FILE* read_header_leave_open(ImageHeader* h)
 	h->slope = 1.0;
 	h->offset = 0.0;
 	h->compressionType = 1; // no compression
+	size_t num_bytes;
 
 	if ((fptr = fopen(h->fileName, "rb")) == NULL)
 	{
@@ -309,17 +320,17 @@ FILE* read_header_leave_open(ImageHeader* h)
 		return NULL;
 	}
 
-	fread(cdata, sizeof(char), (size_t)2, fptr);
+	num_bytes = fread(cdata, sizeof(char), (size_t)2, fptr);
 	if (cdata[0] != 'I')
 		h->bigEndian = true;
 
-	fread(&n42, sizeof(short), (size_t)1, fptr);
+	num_bytes = fread(&n42, sizeof(short), (size_t)1, fptr);
 	if (h->bigEndian)
 		n42 = swapEndian(short(n42));
 	if (n42 != 42)
 		printf("ERROR:  Not a tif file (%s)!!!\n", h->fileName);
 
-	fread(&ifd_offset, sizeof(int), (size_t)1, fptr); //bytes 5-7: byte offset for first IFD
+	num_bytes = fread(&ifd_offset, sizeof(int), (size_t)1, fptr); //bytes 5-7: byte offset for first IFD
 	if (h->bigEndian)
 		ifd_offset = swapEndian(int(ifd_offset));
 
@@ -330,16 +341,16 @@ FILE* read_header_leave_open(ImageHeader* h)
 		return NULL;
 	}
 
-	fread(&nde, sizeof(short), (size_t)1, fptr); //2 byte count; # of directory entries
+	num_bytes = fread(&nde, sizeof(short), (size_t)1, fptr); //2 byte count; # of directory entries
 	if (h->bigEndian)
 		nde = swapEndian(short(nde));
 
 	for (int i = 0; i < nde; i++) //read through the directory entries
 	{
-		fread(&tag[i], sizeof(short), (size_t)1, fptr);
-		fread(&field_type[i], sizeof(short), (size_t)1, fptr);
-		fread(&ft_num_vals[i], sizeof(int), (size_t)1, fptr);
-		fread(&val_offset[i], sizeof(int), (size_t)1, fptr);
+		num_bytes = fread(&tag[i], sizeof(short), (size_t)1, fptr);
+		num_bytes = fread(&field_type[i], sizeof(short), (size_t)1, fptr);
+		num_bytes = fread(&ft_num_vals[i], sizeof(int), (size_t)1, fptr);
+		num_bytes = fread(&val_offset[i], sizeof(int), (size_t)1, fptr);
 		if (h->bigEndian)
 		{
 			tag[i] = swapEndian(short(tag[i]));
@@ -396,7 +407,7 @@ FILE* read_header_leave_open(ImageHeader* h)
 		if (tag[i] == 270)  //the comment line where slope offset is stored
 		{
 			fseek(fptr, val_offset[i], SEEK_SET);
-			fread(cdata, sizeof(char), (size_t)ft_num_vals[i], fptr);
+			num_bytes = fread(cdata, sizeof(char), (size_t)ft_num_vals[i], fptr);
 			//this is something like: slope = 2.3346E-005 '\13' offset = 0.00000E000
 			sscanf(cdata, "%s %s %f %s %s %f", cslope, cequals, &h->slope, coffset, cequals, &h->offset);
 			if (strcmp(cslope, "slope") != 0)
@@ -417,7 +428,7 @@ FILE* read_header_leave_open(ImageHeader* h)
 		if (tag[i] == 282)
 		{
 			fseek(fptr, val_offset[i], SEEK_SET);
-			fread(XRes, sizeof(unsigned int), (size_t)2, fptr);//tiff rational type; two ints
+			num_bytes = fread(XRes, sizeof(unsigned int), (size_t)2, fptr);//tiff rational type; two ints
 
 			if (h->bigEndian)
 			{
@@ -430,7 +441,7 @@ FILE* read_header_leave_open(ImageHeader* h)
 		if (tag[i] == 283)
 		{
 			fseek(fptr, val_offset[i], SEEK_SET);
-			fread(YRes, sizeof(unsigned int), (size_t)2, fptr);
+			num_bytes = fread(YRes, sizeof(unsigned int), (size_t)2, fptr);
 
 			if (h->bigEndian)
 			{
@@ -674,6 +685,8 @@ float* load_tif_cols(char* fileName, int firstCol, int lastCol, float* data)
 	if (fdes == NULL)
 		return NULL;
 
+	size_t num_bytes;
+
 	if (lastCol < 0)
 		lastCol = h->numCols - 1;
 
@@ -721,7 +734,7 @@ float* load_tif_cols(char* fileName, int firstCol, int lastCol, float* data)
 				if (fseek(fdes, skipLength, SEEK_CUR) != 0)
 					printf("error in fseek\n");
 			}
-			fread(&data[rowNum * length], sizeof(float), length, fdes);
+			num_bytes = fread(&data[rowNum * length], sizeof(float), length, fdes);
 		}
 
 		if (h->bigEndian)
@@ -747,7 +760,7 @@ float* load_tif_cols(char* fileName, int firstCol, int lastCol, float* data)
 				if (fseek(fdes, skipLength, SEEK_CUR) != 0)
 					printf("error in fseek\n");
 			}
-			fread(&data16r[rowNum * length], sizeof(uint16), length, fdes);
+			num_bytes = fread(&data16r[rowNum * length], sizeof(uint16), length, fdes);
 		}
 		int vxw = h->numRows * length;
 		if (h->bigEndian)
@@ -785,7 +798,7 @@ float* load_tif_cols(char* fileName, int firstCol, int lastCol, float* data)
 				if (fseek(fdes, skipLength, SEEK_CUR) != 0)
 					printf("error in fseek\n");
 			}
-			fread(&data8r[rowNum * length], sizeof(uint8), length, fdes);
+			num_bytes = fread(&data8r[rowNum * length], sizeof(uint8), length, fdes);
 		}
 		int vxw = h->numRows * length;
 		if (h->bigEndian)

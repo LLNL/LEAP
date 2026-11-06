@@ -18,6 +18,7 @@
 
 #include "leap_defines.h"
 #include <vector>
+#include <array>
 
 /**
  *  parameters class
@@ -44,7 +45,7 @@ public:
 	 * \fn          initialize
 	 * \brief       initialize all CT geometry and CT volume parameter values
 	 */
-	void initialize();
+	void initialize(bool sort_gpus = true);
 
 	/**
 	 * \fn          printAll
@@ -87,6 +88,13 @@ public:
 	bool offsetScan_has_adequate_angular_range();
 
 	/**
+	 * \fn          inconsistencyReconstruction_has_adequate_angular_range
+	 * \brief       returns whether angularRange + epsilon >= 180.0
+	 * \return      returns true if angularRange + epsilon >= 180.0, false otherwise
+	 */
+	bool inconsistencyReconstruction_has_adequate_angular_range();
+
+	/**
 	 * \fn          less_than_full_scan
 	 * \return      returns true if angularRange < min(359.0, 360.0 - fabs(T_phi()) * 180.0 / PI), false otherwise
 	 */
@@ -127,7 +135,7 @@ public:
 	 * \param[in]   numPhis the number of elements in the input array
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool set_angles(float* phis_in, int numPhis);
+	bool set_angles(float* phis_in, int numPhis, bool inputIsInDegrees = true);
 
 	/**
 	 * \fn          set_angles
@@ -142,7 +150,7 @@ public:
 	 * \param[in]   phis_in an array (degrees) of the projection angles
 	 * \return      true is operation  was sucessful, false otherwise
 	 */
-	bool get_angles(float* phis_in);
+	bool get_angles(float* phis_in, bool inDegrees = true);
 
 	/**
 	 * \fn          phaseShift
@@ -200,6 +208,27 @@ public:
 	 * \return      returns the location (in mm) of the first z-coordinate value
 	 */
 	float z_0();
+
+	/**
+	 * \fn          x_f
+	 * \brief       returns the location (in mm) of the last x-coordinate value
+	 * \return      returns the location (in mm) of the last x-coordinate value
+	 */
+	float x_f();
+
+	/**
+	 * \fn          y_f
+	 * \brief       returns the location (in mm) of the last y-coordinate value
+	 * \return      returns the location (in mm) of the last y-coordinate value
+	 */
+	float y_f();
+
+	/**
+	 * \fn          z_f
+	 * \brief       returns the location (in mm) of the last z-coordinate value
+	 * \return      returns the location (in mm) of the last z-coordinate value
+	 */
+	float z_f();
 
 	/**
 	 * \fn          furthestFromCenter
@@ -317,6 +346,23 @@ public:
 	bool set_tiltAngle(float tiltAngle_in);
 
 	/**
+	 * \fn          set_pitchAngle
+	 * \brief       sets pitchAngle
+	 * \param[in]   pitchAngle the value for pitchAngle (degrees)
+	 * \return      true if the value is valid, false otherwise
+	 */
+	bool set_pitchAngle(float pitchAngle_in);
+
+	/**
+	 * \fn          set_source_size
+	 * \brief       sets the x-ray source focal spot size (as a rectangle)
+	 * \param[in]   height: the full height (mm) of the focal spot
+	 * \param[in]   width: the full width (mm) of the focal spot
+	 * \return      true if the arguments are valid, false otherwise
+	 */
+	bool set_source_size(float height, float width);
+
+	/**
 	 * \fn          convert_conebeam_to_modularbeam
 	 * \brief       sets modular-beam parameters from a cone-beam specification
 	 * \return      true is successful, false otherwise
@@ -341,11 +387,14 @@ public:
 	float sod, sdd;
 	float pixelWidth, pixelHeight, angularRange;
 	int numCols, numRows, numAngles;
+	int projectionDataFirstRow; // row offset into the full projection array; 0 = no offset
+	int projectionDataStride;   // full array row count for pitch; 0 = same as numRows
 	float centerCol, centerRow;
 	float* phis;
-	float tau, tiltAngle;
+	float tau, tiltAngle, pitchAngle;
 	float helicalPitch;
 	float z_source_offset;
+	float source_size[2];
 	float helicalFBPWeight;
 
 	// Volume Parameters
@@ -401,6 +450,8 @@ public:
 
 	bool set_offsetScan(bool aFlag);
 	bool set_truncatedScan(bool aFlag);
+	bool set_cornerPatching(bool aFlag);
+	bool set_zFOV_peaks();
 
 	// Attenuated Radon Transform
 	float* mu;
@@ -418,8 +469,10 @@ public:
 	int whichProjector;
 	bool doWeightedBackprojection;
 	bool doExtrapolation;
+	bool clipWeightedBackprojection;
 	float rFOVspecified;
 	int rampID;
+	float helicalFilterParameter;
 	float FBPlowpass;
 	float colShiftFromFilter;
 	float rowShiftFromFilter;
@@ -427,9 +480,14 @@ public:
 	float chunkingMemorySizeThreshold;
 	bool offsetScan;
 	bool truncatedScan;
+	bool cornerPatching;
+	float zFOV_peaks[2];
 	bool inconsistencyReconstruction;
+	bool doDBP;
+	float DBPparameter;
 	bool lambdaTomography;
 	int numTVneighbors;
+	int numRowsExtrapolate;
     
 	/**
 	 * \fn          T_phi
@@ -470,7 +528,27 @@ public:
 	 * \return      returns the radius of the reconstructable field of view for offset scans
 	 */
 	float rFOV_max();
+
+	/**
+	 * \fn          zFOV_max
+	 * \return      returns the max z-coordinate of the reconstructable field of view
+	 */
+	float zFOV_max();
+
+	/**
+	 * \fn          zFOV_min
+	 * \return      returns the min z-coordinate of the reconstructable field of view
+	 */
+	float zFOV_min();
 	
+	/**
+	 * \fn          isTCT
+	 * \brief       returns whether or not the center of rotation is inside the FOV;
+	 				if it is not, this is refered to as a Tangential CT (TCT) scan
+	 * \return      returns true if the geometry defines a TCT scan, false otherwise
+	 */
+	bool isTCT();
+
 	/**
 	 * \fn          isSymmetric
 	 * \brief       returns whether or not the cylindrically symmetric projectors are enabled
@@ -527,9 +605,11 @@ public:
 	 * \fn          projectionDataSize
 	 * \brief       returns the number of GB of memory required for the projection data
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
+	 * \param[in]   useRowRangeNeeded whether or not to use the rowRangeNeededForBackprojection() function to determine 
+	 * 				the number of rows needed for processing
 	 * \return      returns the number of GB of memory required for the projection data
 	 */
-	float projectionDataSize(int extraCols = 0);
+	float projectionDataSize(int extraCols = 0, bool useRowRangeNeeded = false);
 
 	/**
 	 * \fn          volumeDataSize
@@ -544,8 +624,8 @@ public:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns projectionDataSize() + volumeDataSize()
 	 */
-	float requiredGPUmemory(int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
-	float requiredGPUmemory(int extraCols, float numProjectionData, float numVolumeData);
+	float requiredGPUmemory(int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1, bool useRowRangeNeeded = false);
+	float requiredGPUmemory(int extraCols, float numProjectionData, float numVolumeData, bool useRowRangeNeeded);
 
 	/**
 	 * \fn          hasSufficientGPUmemory
@@ -554,8 +634,8 @@ public:
 	 * \param[in]   extraCols the number of extra columns that will be needed to be added to the data for processing
 	 * \return      returns whether the amount of free GPU memory > projectionDataSize() + volumeDataSize()
 	 */
-	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1);
-	bool hasSufficientGPUmemory(bool useLeastGPUmemory, int extraCols, float numProjectionData, float numVolumeData);
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory=false, int extraCols = 0, int numProjectionData = 1, int numVolumeData = 1, bool useRowRangeNeeded = false);
+	bool hasSufficientGPUmemory(bool useLeastGPUmemory, int extraCols, float numProjectionData, float numVolumeData, bool useRowRangeNeeded);
 
 	/**
 	 * \fn          rowRangeNeededForBackprojection
@@ -616,11 +696,19 @@ public:
 	 */
 	bool set_numTVneighbors(int N);
 
+	/**
+	 * \fn          set_numRowsExtrapolate
+	 * \brief       sets the number of detector rows to extrapolate in the backprojector of axial cone-beam data
+	 * \param[in]   N the number of detector rows
+	 * \return      returns true if successful, false otherwise
+	 */
+	bool set_numRowsExtrapolate(int N);
+
 	// Enums
 	enum geometry_list { CONE = 0, PARALLEL = 1, FAN = 2, MODULAR = 3, CONE_PARALLEL = 4 };
 	enum volumeDimensionOrder_list { XYZ = 0, ZYX = 1 };
 	enum detectorType_list { FLAT = 0, CURVED = 1 };
-    enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2,VOXEL_DRIVEN=3};
+    enum whichProjector_list {SIDDON=0,JOSEPH=1,SEPARABLE_FOOTPRINT=2,VOXEL_DRIVEN=3, AUTO=4};
 
 	float get_extraMemoryReserved();
 
@@ -637,6 +725,8 @@ public:
 	int get_numAngles_full();
 	int get_phi_full_ind_offset();
 	bool is_partial_view_data();
+	
+	bool is_essentially_axial_scan();
 
 private:
 

@@ -5,7 +5,6 @@ import numpy as np
 from leapctype import *
 leapct = tomographicModels()
 sys.path.append(r'..\utils')
-from generateDictionary import *
 
 '''
 This sample script demonstrates how one can perform denoising with the bilateral filter (BLF).
@@ -40,8 +39,8 @@ leapct.print_parameters()
 # Allocate space for the projections and the volume
 # You don't have to use these functions; they are provided just for convenience
 # All you need is for the data to be C contiguous float32 arrays with the right dimensions
-g = leapct.allocateProjections() # shape is numAngles, numRows, numCols
-f = leapct.allocateVolume() # shape is numZ, numY, numX
+g = leapct.allocate_projections() # shape is numAngles, numRows, numCols
+f = leapct.allocate_volume() # shape is numZ, numY, numX
 
 # Specify simplified FORBILD head phantom
 # One could easily do this in Python, but Python is soooooo slow for these types of operations,
@@ -57,10 +56,8 @@ print('Forward Projection Elapsed Time: ' + str(time.time()-startTime))
 #leapct.display(g)
 
 # Add noise to the data (just for demonstration purposes)
-I_0 = 10000.0
-t = np.random.poisson(I_0*np.exp(-g))
-t[t<1.0] = 1.0
-g[:] = -np.log(t/I_0)
+leapct.poisson(g, 10000.0, True)
+
 
 # Reset the volume array to zero, otherwise iterative reconstruction algorithm will start their iterations
 # with the true result which is cheating
