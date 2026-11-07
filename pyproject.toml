@@ -1,0 +1,98 @@
+[build-system]
+requires = ["scikit-build-core>=1.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "leapct"
+dynamic = ["version"]
+description = "LivermorE AI Projector for Computed Tomography (LEAPCT)"
+authors = [
+    { name = "Kyle Champley", email = "champley@gmail.com" },
+    { name = "Hyojin Kim", email = "hkim@llnl.gov" }
+]
+readme = "README.md"
+license-files = ["LICENSE"]
+keywords = [
+    "Machine Learning", "ML", "AI", "Computed Tomography", "CT",
+    "Differentiable Project", "Forward Project", "Back Project"
+]
+requires-python = ">=3.10"
+dependencies = [
+    "imageio",
+    "matplotlib",
+    "numpy",
+    "scipy",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+torch = ["torch"]
+
+[project.urls]
+Homepage = "https://github.com/LLNL/LEAP"
+Repository = "https://github.com/LLNL/LEAP"
+Documentation = "https://leapct.readthedocs.io/"
+Issues = "https://github.com/LLNL/LEAP/issues"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+cmake.version = ">=3.23"
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
+sdist.inclusion-mode = "explicit"
+sdist.include = [
+    "src/**",
+    "cmake/**",
+    "scripts/**",
+    "docs/hipify-strategy.md",
+    "third_party/hipify_torch/**",
+    "CMakeLists.txt",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+]
+sdist.exclude = [
+    "demo_leapctype/**",
+    "demo_leaptorch/**",
+    "documentation/**",
+    "VAM/**",
+    "results/**",
+    "unitTests/**",
+    "utils/**",
+    "etc/**",
+    "src/cpu_CMakeLists.txt",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/*_backup",
+    "**/*_backup_working",
+]
+
+wheel.packages = [
+    "src/leapctype",
+    "src/leaptorch",
+    "src/leap_filter_sequence",
+    "src/leap_preprocessing_algorithms",
+    "src/xrayphysics",
+    "src/leapctserver",
+]
+wheel.py-api = "py3"
+# If we have to issue revised packages for the same software version,
+# we can increment a build number:
+wheel.build-tag = 0
+
+[tool.scikit-build.cmake.define]
+BUILD_TESTING = false
+
+[tool.setuptools_scm]
+# Ref https://setuptools-scm.readthedocs.io/en/latest/config/#configuration-parameters
+# WARNING: A fallback version allows the package to be built and installed without errors from a downloaded archive
+# (i.e. without using git to clone a repository), but the fallback version identifier then becomes an extra point
+# of maintenance.
+fallback_version = "2.0+untagged"
+# There are several packages. Is there an appropriate place to put a package version?
+#write_to = "src/leap/_version.py"
